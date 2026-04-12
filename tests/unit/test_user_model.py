@@ -39,9 +39,9 @@ class TestUserModel:
         pending_user = User(username="user2", email="u2@example.com", status=UserStatus.PENDING)
         banned_user = User(username="user3", email="u3@example.com", status=UserStatus.BANNED)
         
-        assert active_user.is_active() is True
-        assert pending_user.is_active() is False
-        assert banned_user.is_active() is False
+        assert active_user.is_active is True
+        assert pending_user.is_active is False
+        assert banned_user.is_active is False
     
     def test_has_permission(self):
         admin = User(username="admin", email="a@example.com", role=UserRole.ADMIN)

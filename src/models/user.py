@@ -41,13 +41,12 @@ class User:
     """User entity representing a system user."""
     username: str
     email: str
-    role: Role
+    role: UserRole = UserRole.USER
     id: Optional[int] = None
     full_name: Optional[str] = None
     status: UserStatus = UserStatus.PENDING
     bio: Optional[str] = None
     tags: list = field(default_factory=list)
-    is_active: bool = True
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -63,43 +62,44 @@ class User:
             self.bio = None
         if self.tags is None:
             self.tags = []
-        if self.is_active is None:
-            self.is_active = True
         if self.created_at is None:
             self.created_at = datetime.utcnow()
         if self.updated_at is None:
             self.updated_at = datetime.utcnow()
 
+    @property
     def is_active(self) -> bool:
         """Check if user is active based on status."""
         return self.status == UserStatus.ACTIVE
 
-    def has_permission(self, required_role: Role) -> bool:
+    def has_permission(self, required_role) -> bool:
         """Check if user has permission for given role."""
         role_hierarchy = {
-            Role.GUEST: 0,
-            Role.VIEWER: 1,
-            Role.USER: 2,
-            Role.SUPPORT: 3,
-            Role.SALES: 4,
-            Role.MANAGER: 5,
-            Role.ADMIN: 6,
+            'guest': 0,
+            'viewer': 1,
+            'user': 2,
+            'support': 3,
+            'sales': 4,
+            'manager': 5,
+            'admin': 6,
         }
-        return role_hierarchy.get(self.role, 0) >= role_hierarchy.get(required_role, 0)
+        user_level = role_hierarchy.get(self.role.value if hasattr(self.role, 'value') else self.role, 0)
+        required_level = role_hierarchy.get(required_role.value if hasattr(required_role, 'value') else required_role, 0)
+        return user_level >= required_level
 
     def to_dict(self) -> dict:
         """Convert user to dictionary representation."""
-        def extract_value(val, enum_cls):
-            if isinstance(val, enum_cls):
+        def extract_value(val):
+            if hasattr(val, 'value'):
                 return val.value
             return val
         return {
             'id': self.id,
             'username': self.username,
             'email': self.email,
-            'role': extract_value(self.role, Role),
+            'role': extract_value(self.role),
             'full_name': self.full_name,
-            'status': extract_value(self.status, UserStatus),
+            'status': extract_value(self.status),
             'bio': self.bio,
             'tags': self.tags,
             'is_active': self.is_active,
@@ -112,9 +112,9 @@ class User:
         """Create user instance from dictionary."""
         role_value = data.get('role')
         if isinstance(role_value, str):
-            role = Role(role_value)
+            role = UserRole(role_value)
         else:
-            role = role_value or Role.VIEWER
+            role = role_value or UserRole.VIEWER
 
         created_at = data.get('created_at')
         if isinstance(created_at, str):
@@ -145,7 +145,6 @@ class User:
             status=status,
             bio=data.get('bio'),
             tags=data.get('tags', []),
-            is_active=data.get('is_active', True),
             created_at=created_at,
             updated_at=updated_at,
         )
