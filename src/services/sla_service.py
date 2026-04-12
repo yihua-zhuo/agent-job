@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import List, Literal
 
-from models.ticket import Ticket, SLALevel, SLA_CONFIGS
+from src.models.ticket import Ticket, SLALevel, SLA_CONFIGS
 
 
 class SLAService:

@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
 from typing import Optional, List
 
-from models.ticket import (
+from src.models.ticket import (
     Ticket,
     TicketReply,
     TicketStatus,

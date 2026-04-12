@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
-from math_utils import add, subtract, multiply, divide, power, sqrt
+from src.math_utils import add, subtract, multiply, divide, power, sqrt
 
 
 class TestBasicOperations:
