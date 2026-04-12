@@ -56,7 +56,7 @@ class ActivityService:
                 return {'success': True, 'data': {'id': activity_id}, 'message': '活动记录删除成功'}
         return {'success': False, 'data': None, 'message': '活动记录不存在'}
 
-    def list_activities(self, customer_id: int = None, activity_type: str = None, page: int = 1, page_size: int = 20) -> Dict:
+    def list_activities(self, customer_id: Optional[int] = None, activity_type: Optional[str] = None, page: int = 1, page_size: int = 20) -> Dict:
         """活动列表"""
         filtered = self._activities_db
         if customer_id is not None:
@@ -83,7 +83,7 @@ class ActivityService:
         activities.sort(key=lambda x: x.created_at, reverse=True)
         return [a.to_dict() for a in activities]
 
-    def search_activities(self, keyword: str, filters: Dict = None) -> List[Dict]:
+    def search_activities(self, keyword: str, filters: Optional[Dict] = None) -> List[Dict]:
         """搜索活动"""
         keyword_lower = keyword.lower()
         results = [a for a in self._activities_db if keyword_lower in a.content.lower()]
@@ -100,7 +100,7 @@ class ActivityService:
 
         return [a.to_dict() for a in results]
 
-    def get_activity_summary(self, customer_id: int, start_date: datetime = None, end_date: datetime = None) -> Dict:
+    def get_activity_summary(self, customer_id: int, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Dict:
         """获取活动摘要"""
         activities = [a for a in self._activities_db if a.customer_id == customer_id]
 
@@ -109,7 +109,7 @@ class ActivityService:
         if end_date:
             activities = [a for a in activities if a.created_at <= end_date]
 
-        summary = {
+        summary: dict = {
             'total': len(activities),
             'by_type': {},
             'recent_activities': [a.to_dict() for a in sorted(activities, key=lambda x: x.created_at, reverse=True)[:5]]

@@ -83,8 +83,10 @@ class User:
             'manager': 5,
             'admin': 6,
         }
-        user_level = role_hierarchy.get(self.role.value if hasattr(self.role, 'value') else self.role, 0)
-        required_level = role_hierarchy.get(required_role.value if hasattr(required_role, 'value') else required_role, 0)
+        role_val = self.role.value if hasattr(self.role, 'value') else str(self.role)
+        required_val = required_role.value if hasattr(required_role, 'value') else str(required_role)
+        user_level = role_hierarchy.get(role_val, 0)
+        required_level = role_hierarchy.get(required_val, 0)
         return user_level >= required_level
 
     def to_dict(self) -> dict:

@@ -3,14 +3,7 @@ from functools import wraps
 from typing import Any, Optional
 
 # 假设 AppError 在同级的 errors 模块中定义
-try:
-    from ..utils.errors import AppError
-except ImportError:
-    class AppError(Exception):
-        def __init__(self, code: int, message: str):
-            self.code = code
-            self.message = message
-            super().__init__(message)
+from ..pkg.errors.errors import AppError
 
 
 class TenantMiddleware:
@@ -23,7 +16,7 @@ class TenantMiddleware:
         """设置当前租户ID"""
         self.current_tenant_id = tenant_id
 
-    def get_tenant_id(self) -> int:
+    def get_tenant_id(self) -> Optional[int]:
         """获取当前租户ID"""
         return self.current_tenant_id
 

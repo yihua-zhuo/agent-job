@@ -54,6 +54,8 @@ class Ticket:
         """检查是否SLA超时"""
         if self.resolved_at:
             return False
+        if self.response_deadline is None:
+            return False
         return datetime.now() > self.response_deadline
 
 
