@@ -1,6 +1,6 @@
 """Pipeline model for CRM system."""
 from dataclasses import dataclass, field
-from enum import Enum
+
 from typing import Optional, List
 
 # Import Stage from opportunity module to avoid duplication
