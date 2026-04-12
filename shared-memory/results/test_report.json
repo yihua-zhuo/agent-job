@@ -1,0 +1,11 @@
+{
+  "agent": "test-agent",
+  "tests_run": true,
+  "total_tests": 45,
+  "passed": 45,
+  "failed": 0,
+  "failed_tests": [],
+  "coverage": "N/A (pytest-cov not installed)",
+  "recommendation": "通过",
+  "notes": "所有 45 个单元测试全部通过。集成测试 tests/integration/test_system.py 因缺少 requests 依赖无法运行（已忽略）。建议：安装 requests 后重新运行集成测试。"
+}

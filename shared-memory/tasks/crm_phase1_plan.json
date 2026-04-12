@@ -1,0 +1,57 @@
+# Enterprise CRM System - Phase 1 MVP 任务计划
+
+## 目标
+完成客户管理和销售漏斗核心功能
+
+## 模块分解
+
+### 1. 数据库设计 (db-agent)
+- [ ] customer 表设计
+- [ ] opportunity 表设计  
+- [ ] pipeline 表设计
+- [ ] user 表设计（RBAC）
+- [ ] activity 表设计
+- [ ] 索引和约束
+
+### 2. 客户管理模块 (customer-agent)
+- [ ] Customer 模型
+- [ ] CustomerService 服务层
+- [ ] CRUD API 路由
+- [ ] 标签系统
+- [ ] 客户生命周期（Lead→Opportunity→Customer）
+- [ ] 客户去重逻辑
+
+### 3. 销售流程模块 (sales-agent)
+- [ ] Pipeline 模型
+- [ ] Opportunity 模型
+- [ ] Stage 枚举
+- [ ] SalesService 服务层
+- [ ] 销售漏斗 API
+- [ ] 跟进记录 API
+
+### 4. 权限认证模块 (auth-agent)
+- [ ] User 模型 + Role 枚举
+- [ ] AuthService
+- [ ] JWT 认证中间件
+- [ ] RBAC 权限装饰器
+
+### 5. 单元测试 (test-agent)
+- [ ] Customer 模块测试
+- [ ] Sales 模块测试
+- [ ] Auth 模块测试
+
+## 技术栈
+- Python 3.11 + Flask
+- PostgreSQL
+- Redis (缓存)
+- JWT Auth
+
+## 目录结构
+```
+src/
+├── models/          # 数据模型
+├── services/        # 业务逻辑
+├── api/             # REST 路由
+├── middleware/      # 中间件
+└── utils/           # 工具函数
+```

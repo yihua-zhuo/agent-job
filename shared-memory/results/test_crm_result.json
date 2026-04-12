@@ -1,0 +1,7 @@
+{
+  "test_count": 38,
+  "passed_count": 38,
+  "failed_count": 0,
+  "failed_tests": [],
+  "summary": "All 38 tests passed (16 customer_service + 13 sales_service + 5 customer_model + 4 opportunity_model)"
+}

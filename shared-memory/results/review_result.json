@@ -1,0 +1,130 @@
+{
+  "review_items": [
+    {
+      "file": "src/models/user.py",
+      "issue": "UserRole 和 UserStatus 未在 user.py 中定义，但 user_service.py 导入了这两个类，运行时会抛出 AttributeError",
+      "severity": "high",
+      "suggestion": "在 src/models/user.py 中添加 UserRole 和 UserStatus 枚举定义，或修正 user_service.py 的导入"
+    },
+    {
+      "file": "src/services/user_service.py",
+      "issue": "导入 UserRole, UserStatus 失败 - 这些类不存在于 models/user.py 中",
+      "severity": "high",
+      "suggestion": "在 src/models/user.py 中添加: class UserRole(Enum): ADMIN='admin' ... ; class UserStatus(Enum): ACTIVE='active' PENDING='pending' ..."
+    },
+    {
+      "file": "src/services/customer_service.py",
+      "issue": "ApiResponse 类重复定义 - 在 sales_service.py 和 models/response.py 中都有定义",
+      "severity": "medium",
+      "suggestion": "删除 customer_service.py 和 sales_service.py 中的 ApiResponse 定义，统一使用 src/models/response.py 中的版本"
+    },
+    {
+      "file": "src/services/sales_service.py",
+      "issue": "ApiResponse 类重复定义",
+      "severity": "medium",
+      "suggestion": "删除 sales_service.py 中的 ApiResponse 定义，统一使用 src/models/response.py 中的版本"
+    },
+    {
+      "file": "src/pkg/errors/errors.py",
+      "issue": "ErrorCode 重复定义 - 在 models/response.py 中也有 ErrorCode 枚举",
+      "severity": "medium",
+      "suggestion": "统一错误码定义，删除其中一个或合并使用"
+    },
+    {
+      "file": "src/app.py",
+      "issue": "硬编码密钥 'dev-secret-key' 直接写在代码中，存在安全风险",
+      "severity": "high",
+      "suggestion": "使用环境变量: app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key')"
+    },
+    {
+      "file": "src/internal/middleware/auth.py",
+      "issue": "硬编码 JWT_SECRET = 'your-secret-key'，敏感信息泄露风险",
+      "severity": "high",
+      "suggestion": "从环境变量或配置文件加载密钥: JWT_SECRET = os.getenv('JWT_SECRET', 'your-secret-key')"
+    },
+    {
+      "file": "src/internal/repository/",
+      "issue": "repository 层为空目录，无任何实现",
+      "severity": "high",
+      "suggestion": "为每个服务添加对应的 repository 层实现，如 CustomerRepository, SalesRepository"
+    },
+    {
+      "file": "src/internal/service/",
+      "issue": "service 层为空目录，internal/service/ 只有 __init__.py",
+      "severity": "high",
+      "suggestion": "实现 internal/service/ 下的服务层，与 api/ 层对应"
+    },
+    {
+      "file": "src/internal/domain/",
+      "issue": "domain 层为空目录，无领域模型实现",
+      "severity": "medium",
+      "suggestion": "添加领域实体和值对象的定义"
+    },
+    {
+      "file": "src/internal/api/sales/",
+      "issue": "sales 子目录为空，只有 __init__.py",
+      "severity": "medium",
+      "suggestion": "添加 internal/api/sales/ 的 sales_dto.py 和路由注册"
+    },
+    {
+      "file": "src/api/customers.py",
+      "issue": "API 层缺少输入验证，request.get_json() 返回的 data 未做字段验证",
+      "severity": "medium",
+      "suggestion": "使用 DTO 或 schema validation (如 marshmallow/pydantic) 验证请求数据"
+    },
+    {
+      "file": "src/api/sales.py",
+      "issue": "API 层缺少输入验证",
+      "severity": "medium",
+      "suggestion": "添加请求数据验证"
+    },
+    {
+      "file": "src/middleware/tenant.py",
+      "issue": "TenantMiddleware.filter_by_tenant 方法使用假设的 query.filter，可能导致运行时错误",
+      "severity": "medium",
+      "suggestion": "确保 query 参数有 filter 方法，或实现真正的 SQL 过滤逻辑"
+    },
+    {
+      "file": "src/models/ticket.py",
+      "issue": "TicketService 导入 'from models.ticket import ...' 但文件位置需要 src. 前缀",
+      "severity": "high",
+      "suggestion": "修改 ticket_service.py 中导入为 'from src.models.ticket import ...'"
+    },
+    {
+      "file": "src/services/customer_service.py",
+      "issue": "CustomerService 是占位实现，所有方法返回假数据，无实际业务逻辑",
+      "severity": "medium",
+      "suggestion": "实现真实的客户管理业务逻辑"
+    },
+    {
+      "file": "src/services/sales_service.py",
+      "issue": "SalesService 是占位实现，所有方法返回假数据，无实际业务逻辑",
+      "severity": "medium",
+      "suggestion": "实现真实的销售管道和商机业务逻辑"
+    },
+    {
+      "file": "src/internal/middleware/auth.py",
+      "issue": "require_permission 装饰器在检查权限时直接使用字符串比较，roles 是列表但 permission 是字符串",
+      "severity": "medium",
+      "suggestion": "修正权限检查逻辑: if permission not in g.roles (g.roles 应为列表)"
+    },
+    {
+      "file": "src/services/",
+      "issue": "ActivityService 存在但无 API 端点，无法通过 HTTP 访问活动记录",
+      "severity": "medium",
+      "suggestion": "添加 /api/v1/activities 端点"
+    },
+    {
+      "file": "src/models/response.py",
+      "issue": "Response 辅助类与 ApiResponse 混用，容易造成混淆",
+      "severity": "low",
+      "suggestion": "统一使用 ApiResponse 类，删除 Response 辅助类或明确其用途"
+    }
+  ],
+  "summary": {
+    "total_issues": 20,
+    "high": 8,
+    "medium": 9,
+    "low": 3
+  }
+}

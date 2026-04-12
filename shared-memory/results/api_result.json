@@ -1,0 +1,157 @@
+{
+  "created_files": [
+    "src/api/__init__.py",
+    "src/api/customers.py",
+    "src/api/sales.py",
+    "src/app.py",
+    "src/services/__init__.py",
+    "src/services/customer_service.py",
+    "src/services/sales_service.py"
+  ],
+  "routes": [
+    {
+      "method": "POST",
+      "path": "/api/v1/customers",
+      "endpoint": "create_customer",
+      "blueprint": "customers"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customers",
+      "endpoint": "list_customers",
+      "blueprint": "customers"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customers/<int:customer_id>",
+      "endpoint": "get_customer",
+      "blueprint": "customers"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/customers/<int:customer_id>",
+      "endpoint": "update_customer",
+      "blueprint": "customers"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/customers/<int:customer_id>",
+      "endpoint": "delete_customer",
+      "blueprint": "customers"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/customers/search",
+      "endpoint": "search_customers",
+      "blueprint": "customers"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customers/<int:customer_id>/tags",
+      "endpoint": "add_tag",
+      "blueprint": "customers"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v1/customers/<int:customer_id>/tags/<tag>",
+      "endpoint": "remove_tag",
+      "blueprint": "customers"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/customers/<int:customer_id>/status",
+      "endpoint": "change_status",
+      "blueprint": "customers"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/customers/<int:customer_id>/owner",
+      "endpoint": "assign_owner",
+      "blueprint": "customers"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/customers/import",
+      "endpoint": "bulk_import",
+      "blueprint": "customers"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/pipelines",
+      "endpoint": "create_pipeline",
+      "blueprint": "sales"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/pipelines",
+      "endpoint": "list_pipelines",
+      "blueprint": "sales"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/pipelines/<int:pipeline_id>",
+      "endpoint": "get_pipeline",
+      "blueprint": "sales"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/pipelines/<int:pipeline_id>/stats",
+      "endpoint": "get_pipeline_stats",
+      "blueprint": "sales"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/pipelines/<int:pipeline_id>/funnel",
+      "endpoint": "get_pipeline_funnel",
+      "blueprint": "sales"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v1/opportunities",
+      "endpoint": "create_opportunity",
+      "blueprint": "sales"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/opportunities",
+      "endpoint": "list_opportunities",
+      "blueprint": "sales"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/opportunities/<int:opp_id>",
+      "endpoint": "get_opportunity",
+      "blueprint": "sales"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/opportunities/<int:opp_id>",
+      "endpoint": "update_opportunity",
+      "blueprint": "sales"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/v1/opportunities/<int:opp_id>/stage",
+      "endpoint": "change_stage",
+      "blueprint": "sales"
+    },
+    {
+      "method": "GET",
+      "path": "/api/v1/forecast",
+      "endpoint": "get_forecast",
+      "blueprint": "sales"
+    }
+  ],
+  "api_endpoint_count": 21,
+  "blueprints": {
+    "customers": {
+      "prefix": "/api/v1/customers",
+      "endpoints": 11
+    },
+    "sales": {
+      "prefix": "/api/v1",
+      "endpoints": 10
+    }
+  },
+  "base_path": "/home/node/.openclaw/workspace/dev-agent-system"
+}

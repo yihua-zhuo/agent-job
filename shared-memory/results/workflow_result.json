@@ -1,0 +1,28 @@
+{
+  "implemented_methods": 11,
+  "preset_rules_count": 4,
+  "workflow_service_methods": [
+    "create_workflow",
+    "get_workflow",
+    "update_workflow",
+    "activate_workflow",
+    "pause_workflow",
+    "delete_workflow",
+    "list_workflows",
+    "execute_workflow",
+    "evaluate_conditions",
+    "execute_actions",
+    "get_execution_history"
+  ],
+  "automation_rules": [
+    "new_customer_welcome",
+    "opportunity_stage_changed",
+    "inactive_customer_alert",
+    "deal_won_celebration"
+  ],
+  "files_created": [
+    "src/models/workflow.py",
+    "src/services/workflow_service.py",
+    "src/services/automation_rules.py"
+  ]
+}
