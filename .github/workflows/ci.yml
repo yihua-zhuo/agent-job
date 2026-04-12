@@ -89,4 +89,5 @@ jobs:
     needs: build
     if: github.ref == 'refs/heads/master'
     steps:
+      - uses: actions/checkout@v4
       - run: echo "Deploy triggered" && python3 scripts/deploy.py
