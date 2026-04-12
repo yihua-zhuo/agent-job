@@ -1,0 +1,35 @@
+[BASIC]
+good-names=_  # allow single-char underscore variables
+
+[MESSAGES CONTROL]
+disable=
+    E0401,      # Unable to import (CI has no third-party deps)
+    C0411,      # standard import order (not critical)
+    W0621,      # Redefining name from outer scope
+    R0912,      # Too many branches
+    R0913,      # Too many arguments
+    R0914,      # Too many local variables
+    R0911,      # Too many return statements
+    R0917,      # Too many positional arguments
+    R0902,      # Too many instance attributes
+    R0801,      # Duplicate code
+    R1705,      # Unnecessary elif after return
+    C0301,      # Line too long
+    C0303,      # Trailing whitespace
+    W0611,      # Unused import
+    W0612,      # Unused variable
+    W0613,      # Unused argument
+    W0404,      # Reimport
+    C0415,      # Import outside toplevel
+    C0325,      # Unnecessary parens
+    W0718,      # Catching too general Exception
+    W0511,      # TODO/FIXME comments
+    W0108,      # Unnecessary lambda
+    W0212,      # Protected access
+    C0114,      # Missing module docstring
+    C0115,      # Missing class docstring
+    C0116,      # Missing function/method docstring
+
+[REPORTS]
+output-format=text
+score=no
