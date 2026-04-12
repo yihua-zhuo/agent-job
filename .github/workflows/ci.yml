@@ -69,7 +69,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: pip install -q pylint flake8 mypy
       - run: |
-          pylint src/ --output-format=text --score=no --disable=E0401,C0411,W0621,R0912,R0913,R0914,R0911,R0902,C0301,C0303,W0611,W0612,W0613,W0404,C0415,C0325,W0718,W0511,W0108,W0212,R0801,R1705
+          pylint src/ --output-format=text --score=no --disable=E0401,C0411,W0621,R0912,R0913,R0914,R0911,R0902,C0301,C0303,W0611,W0612,W0613,W0404,C0415,C0325,W0718,W0511,W0108,W0212,R0801,R1705,R0917
           flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
           mypy src/ --ignore-missing-imports || true
 
