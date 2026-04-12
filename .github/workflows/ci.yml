@@ -37,21 +37,38 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: unit-test
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: test_db
+          POSTGRES_USER: test_user
+          POSTGRES_PASSWORD: test_pass
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
+      mock-api:
+        image: nginx:alpine
+        ports:
+          - 8080:80
+        volumes:
+          - ./configs/mock-api.conf:/etc/nginx/conf.d/default.conf
+        options: >-
+          --health-cmd wget --no-verbose --tries=1 --spider http://localhost/health || exit 0
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - name: Start Docker
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y docker.io docker-compose-plugin
-          sudo systemctl start docker || true
-      - run: pip install -q pytest pytest-cov requests
-      - name: Start Mock Services
-        run: docker compose -f configs/docker-compose.test.yml up -d
-      - run: sleep 5 && pytest tests/integration/ -v
-      - run: docker compose -f configs/docker-compose.test.yml down
+      - run: pip install -q pytest pytest-cov requests psycopg2-binary
+      - run: sleep 10 && pytest tests/integration/ -v
 
   code-review:
     name: Code Review
