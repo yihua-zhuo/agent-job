@@ -59,6 +59,6 @@ def require_permission(permission: str):
     return decorator
 
 
-def get_current_tenant_id() -> str:
+def get_current_tenant_id() -> Optional[int]:
     """获取当前租户 ID"""
     return getattr(g, "tenant_id", None)

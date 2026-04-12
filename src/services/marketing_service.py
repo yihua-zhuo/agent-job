@@ -45,7 +45,8 @@ class MarketingService:
         )
         self._campaigns[self._next_id] = campaign
         self._next_id += 1
-        self._events[campaign.id] = []
+        if campaign.id is not None:
+            self._events[campaign.id] = []
         return campaign
 
     def get_campaign(self, campaign_id: int) -> Optional[Campaign]:

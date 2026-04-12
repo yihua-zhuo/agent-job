@@ -161,7 +161,7 @@ class WorkflowService:
                 if not (context_value and context_value <= value):
                     return False
             elif operator == "contains":
-                if value not in str(context_value):
+                if context_value is None or value not in str(context_value):  # type: ignore[operator]
                     return False
 
         return True

@@ -56,7 +56,7 @@ class TicketService:
         self._replies[self._next_id] = []
         self._next_id += 1
 
-        if assigned_to is None:
+        if assigned_to is None and ticket.id is not None:
             self.auto_assign(ticket.id)
 
         return ticket

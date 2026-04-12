@@ -130,16 +130,16 @@ class ApiResponse(Generic[T]):
             page_size=page_size,
             total_pages=total_pages
         )
-        return cls(
+        return cls(  # type: ignore[return-value]
             status=ResponseStatus.SUCCESS,
             message=message,
-            data=paginated_data,
+            data=paginated_data,  # type: ignore[arg-type]
             meta={"total": total, "page": page, "page_size": page_size}
         )
     
     def to_dict(self) -> dict:
         """转换为字典"""
-        result = {
+        result: dict[str, Any] = {
             "status": self.status.value,
             "message": self.message,
             "timestamp": self.timestamp

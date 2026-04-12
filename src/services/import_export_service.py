@@ -5,7 +5,7 @@ import csv
 import json
 import openpyxl
 from io import BytesIO, StringIO
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, cast, Any
 from datetime import datetime
 from src.utils.file_helper import FileHelper
 
@@ -231,7 +231,7 @@ class ImportExportService:
             return self.generate_pdf_report(sample_report, f"{report_type}报表")
         else:
             # CSV 或 Excel 格式
-            return self._export_data(sample_report.get("details", []), {}, file_format)
+            return self._export_data(cast(List[Dict[Any, Any]], sample_report.get("details", [])), {}, file_format)
 
     def generate_pdf_report(self, report_data: Dict, title: str) -> bytes:
         """生成PDF报表"""

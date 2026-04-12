@@ -1,7 +1,7 @@
 """Authentication service for JWT token generation and verification."""
 import jwt
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import cast, Optional
 
 
 class AuthService:
@@ -75,4 +75,5 @@ class AuthService:
         if not all([user_id, username, role]):
             return None
 
-        return self.generate_token(user_id, username, role)
+        # Type assertions since mypy can't infer from all() check
+        return self.generate_token(cast(int, user_id), cast(str, username), cast(str, role))
