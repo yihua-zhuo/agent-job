@@ -1,0 +1,56 @@
+{
+  "implemented_methods_count": 14,
+  "ai_features": {
+    "ChurnPredictionService": {
+      "description": "Customer churn risk prediction using weighted rule-based model",
+      "methods": [
+        "calculate_churn_score",
+        "predict_churn",
+        "get_churn_risk_factors",
+        "get_high_risk_customers",
+        "recommend_actions"
+      ],
+      "capabilities": [
+        "Calculate churn risk score (0-100)",
+        "Batch predict churn for multiple customers",
+        "Get detailed risk factor analysis",
+        "Identify high-risk customers above threshold",
+        "Recommend retention actions based on risk factors"
+      ]
+    },
+    "SalesRecommendationService": {
+      "description": "Sales recommendation using collaborative filtering + rules",
+      "methods": [
+        "get_next_best_action",
+        "recommend_cross_sell",
+        "recommend_up_sell",
+        "get_similar_customers",
+        "predict_conversion_probability"
+      ],
+      "capabilities": [
+        "Get next best action for customer",
+        "Cross-sell product recommendations based on history and similar customers",
+        "Up-sell recommendations based on usage and tier",
+        "Find similar customers for case studies",
+        "Predict opportunity conversion probability with market sentiment and competition analysis"
+      ]
+    },
+    "SmartCategorizationService": {
+      "description": "Smart lead scoring and customer segmentation using decision tree rules",
+      "methods": [
+        "categorize_lead",
+        "score_lead",
+        "auto_tag_customer",
+        "segment_customers"
+      ],
+      "capabilities": [
+        "Categorize leads into hot/warm/cold/disqualified",
+        "Score leads based on source, company size, title, and engagement",
+        "Auto-tag customers based on behavior and transaction data",
+        "Segment customers using RFM model (Recency, Frequency, Monetary)"
+      ]
+    }
+  },
+  "total_methods": 14,
+  "model_type": "Rule-based (production can be replaced with ML models)"
+}

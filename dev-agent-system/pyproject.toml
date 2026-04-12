@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dev-agent-system"
+version = "0.1.0"
+description = "Multi-Agent Development System with CI, Testing, and Code Review"
+requires-python = ">=3.11"
+dependencies = ["pytest>=7.0", "requests>=2.28"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+
+[tool.pylint]
+max-line-length = 120
+disable = ["C0111", "R0903"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true

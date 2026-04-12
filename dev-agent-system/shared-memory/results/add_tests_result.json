@@ -1,0 +1,95 @@
+{
+  "created_test_files": 5,
+  "test_files": [
+    "tests/unit/test_marketing_service.py",
+    "tests/unit/test_ticket_service.py",
+    "tests/unit/test_workflow_service.py",
+    "tests/unit/test_churn_prediction.py",
+    "tests/unit/test_import_export_service.py"
+  ],
+  "total_test_cases": 134,
+  "breakdown": {
+    "test_marketing_service": {
+      "methods_tested": [
+        "create_campaign",
+        "get_campaign",
+        "update_campaign",
+        "launch_campaign",
+        "pause_campaign",
+        "list_campaigns",
+        "get_campaign_stats",
+        "record_event",
+        "get_user_events",
+        "setup_trigger",
+        "get_trigger_config"
+      ],
+      "test_count": 26
+    },
+    "test_ticket_service": {
+      "methods_tested": [
+        "create_ticket",
+        "get_ticket",
+        "update_ticket",
+        "assign_ticket",
+        "add_reply",
+        "change_status",
+        "get_customer_tickets",
+        "list_tickets",
+        "get_sla_breaches",
+        "auto_assign"
+      ],
+      "test_count": 26,
+      "note": "delete_ticket method does not exist in TicketService; tests adjusted to verify deletion behavior through get_ticket returning None"
+    },
+    "test_workflow_service": {
+      "methods_tested": [
+        "create_workflow",
+        "get_workflow",
+        "update_workflow",
+        "activate_workflow",
+        "pause_workflow",
+        "delete_workflow",
+        "list_workflows",
+        "execute_workflow",
+        "evaluate_conditions",
+        "execute_actions",
+        "get_execution_history"
+      ],
+      "test_count": 23
+    },
+    "test_churn_prediction": {
+      "methods_tested": [
+        "calculate_churn_score",
+        "predict_churn",
+        "get_churn_risk_factors",
+        "get_high_risk_customers",
+        "recommend_actions"
+      ],
+      "test_count": 19
+    },
+    "test_import_export_service": {
+      "methods_tested": [
+        "import_customers",
+        "import_opportunities",
+        "import_leads",
+        "export_customers",
+        "export_opportunities",
+        "export_report",
+        "generate_pdf_report",
+        "validate_import_data"
+      ],
+      "test_count": 40
+    }
+  },
+  "requirements_met": {
+    "each_method_at_least_one_normal_test": true,
+    "each_service_at_least_3_edge_case_tests": true,
+    "pytest_framework_used": true,
+    "pytest_fixtures_used": true,
+    "tests_in_tests_unit_directory": true
+  },
+  "execution_summary": {
+    "command": "PYTHONPATH=/home/node/.openclaw/workspace/dev-agent-system/src:. .venv/bin/pytest tests/unit/test_marketing_service.py tests/unit/test_ticket_service.py tests/unit/test_workflow_service.py tests/unit/test_churn_prediction.py tests/unit/test_import_export_service.py -v",
+    "result": "All 134 tests passed in 1.08s"
+  }
+}

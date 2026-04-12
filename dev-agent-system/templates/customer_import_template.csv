@@ -1,0 +1,4 @@
+name,email,phone,company,industry,address,status,notes
+张三,zhangsan@example.com,13800138000,科技有限公司,互联网,北京市朝阳区,活跃,重要客户
+李四,lisi@example.com,13900139000,贸易有限公司,贸易,上海市浦东新区,活跃,
+王五,wangwu@example.com,13700137000,制造集团,制造业,广州市天河区,待激活,潜在客户

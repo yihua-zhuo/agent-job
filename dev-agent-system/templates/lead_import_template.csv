@@ -1,0 +1,4 @@
+name,email,phone,company,source,status,assigned_to,notes
+赵六,zhaoliu@example.com,13600136000,咨询公司,官网表单,新线索,张三,关注
+钱七,qianqi@example.com,13500135000,广告公司,展会,已分配,李四,
+孙八,sunba@example.com,13400134000,金融公司,朋友推荐,已联系,王五,高意向

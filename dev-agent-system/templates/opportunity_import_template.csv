@@ -1,0 +1,4 @@
+name,customer_id,amount,stage,probability,expected_close_date,sales_owner,notes
+项目A-云服务采购,1,100000,提案,50,2024-06-30,张三,大型项目
+项目B-软件升级,2,50000,谈判,75,2024-05-15,李四,续约客户
+项目C-新系统建设,3,200000,需求分析,30,2024-09-30,王五,新客户

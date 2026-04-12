@@ -1,0 +1,140 @@
+{
+  "success": true,
+  "task": "CRM Database Schema Design",
+  "output_file": "/home/node/.openclaw/workspace/dev-agent-system/sql/001_schema.sql",
+  "summary": {
+    "total_tables": 51,
+    "total_indexes": 268,
+    "file_size_bytes": null
+  },
+  "modules": {
+    "1_tenant_org": {
+      "tables": 8,
+      "list": [
+        "tenants",
+        "organizations",
+        "departments",
+        "users",
+        "roles",
+        "permissions",
+        "role_permissions",
+        "user_roles"
+      ]
+    },
+    "2_customer_core": {
+      "tables": 10,
+      "list": [
+        "customers",
+        "customer_contacts",
+        "customer_addresses",
+        "customer_tags",
+        "tags",
+        "customer_owner_history",
+        "customer_merge_log",
+        "customer_followers",
+        "customer_custom_fields",
+        "customer_field_values"
+      ]
+    },
+    "3_sales_opportunity": {
+      "tables": 10,
+      "list": [
+        "leads",
+        "lead_sources",
+        "lead_assignments",
+        "opportunities",
+        "opportunity_stages",
+        "opportunity_stage_history",
+        "opportunity_products",
+        "quotes",
+        "quote_items",
+        "contracts"
+      ]
+    },
+    "4_followup_tasks": {
+      "tables": 10,
+      "list": [
+        "activities",
+        "activity_types",
+        "tasks",
+        "task_comments",
+        "meetings",
+        "call_logs",
+        "email_logs",
+        "reminders",
+        "calendar_events",
+        "event_attendees"
+      ]
+    },
+    "5_marketing_automation": {
+      "tables": 8,
+      "list": [
+        "campaigns",
+        "campaign_members",
+        "email_templates",
+        "email_sends",
+        "email_events",
+        "sms_sends",
+        "marketing_segments",
+        "segment_filters"
+      ]
+    },
+    "6_support_tickets": {
+      "tables": 5,
+      "list": [
+        "tickets",
+        "ticket_comments",
+        "ticket_status_history",
+        "ticket_sla",
+        "ticket_assignments"
+      ]
+    }
+  },
+  "design_compliance": {
+    "multi_tenant_isolation": "所有表均包含 tenant_id BIGINT NOT NULL",
+    "soft_delete": "所有表均包含 deleted_at TIMESTAMP NULL",
+    "audit_fields": "所有表均包含 created_at, updated_at, created_by, updated_by",
+    "primary_key": "所有表使用 BIGINT PRIMARY KEY AUTO_INCREMENT",
+    "indexes": "为外键和常用查询字段创建了索引",
+    "naming_convention": "统一使用 snake_case 命名"
+  },
+  "constraints_and_indexes": {
+    "unique_constraints": [
+      "tenants(code)",
+      "users(tenant_id, username)",
+      "users(tenant_id, email)",
+      "roles(tenant_id, code)",
+      "permissions(code)",
+      "customers(tenant_id, customer_no)",
+      "leads(tenant_id, lead_no)",
+      "opportunities(tenant_id, opportunity_no)",
+      "quotes(tenant_id, quote_no)",
+      "contracts(tenant_id, contract_no)",
+      "tasks(tenant_id, task_no)",
+      "meetings(tenant_no)",
+      "tickets(tenant_id, ticket_no)",
+      "campaigns(tenant_id, campaign_no)",
+      "role_permissions(role_id, permission_id)",
+      "user_roles(user_id, role_id)",
+      "customer_tags(customer_id, tag_id)",
+      "customer_field_values(customer_id, field_id)"
+    ],
+    "foreign_keys_note": "索引已创建，外键约束未显式声明（应用层维护）",
+    "fulltext_indexes": [
+      "customers(name, short_name, description)",
+      "leads(name, company, description)",
+      "tickets(subject, content)",
+      "call_logs(summary)"
+    ]
+  },
+  "notes": [
+    "数据库引擎: InnoDB",
+    "字符集: utf8mb4",
+    "排序规则: utf8mb4_unicode_ci",
+    "软删除采用 deleted_at TIMESTAMP NULL 方式",
+    "JSON 类型字段用于灵活扩展 (settings, tags, attachments 等)",
+    "审计字段 created_by/updated_by 存储用户 ID",
+    "多租户隔离通过 tenant_id 字段 + 索引实现"
+  ],
+  "created_at": "2026-04-12T10:07:00Z"
+}
