@@ -5,7 +5,7 @@
     "dockerfilePath": "Dockerfile"
   },
   "deploy": {
-    "port": 3000,
+    "port": 8080,
     "numReplicas": 1,
     "healthCheckPath": "/",
     "healthCheckTimeout": 30,
