@@ -25,3 +25,43 @@
 - 严格、客观
 - 具体指出问题和改进建议
 - 附上参考案例和修复代码示例
+
+## 多伦Review模式
+
+支持多人协作审查，同一代码可经多个审查者独立评审：
+
+### 审查类型
+- **代码质量审查 (Code Quality)**: 规范、命名、可读性
+- **安全审查 (Security)**: SQL注入、XSS、权限、敏感信息
+- **性能审查 (Performance)**: 数据库查询、循环、内存
+- **架构审查 (Architecture)**: 设计模式、耦合度、SOLID原则
+
+### 工作方式
+1. 接收任务时识别审查类型（单一或组合）
+2. 对每种类型独立执行审查并记录
+3. 汇总所有审查结果生成综合报告
+
+### 输出格式
+每次审查输出独立结果，最终汇总为多伦报告：
+```json
+{
+  "review_id": "uuid",
+  "timestamp": "ISO时间",
+  "file": "文件路径",
+  "review_type": "quality|security|performance|architecture",
+  "severity": "critical|warning|suggestion",
+  "issues": [
+    {
+      "type": "issue_type",
+      "line": 行号,
+      "message": "问题描述",
+      "suggestion": "修复建议"
+    }
+  ]
+}
+```
+
+## 触发条件
+- Git push 到 master/develop 分支
+- Pull Request 创建/更新
+- 手动触发（通过 coordinator）
