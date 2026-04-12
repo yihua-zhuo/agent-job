@@ -1,0 +1,26 @@
+#!/bin/bash
+# Pre-commit hook: run lint checks before commit (non-blocking)
+
+set -e
+
+echo "🔍 Running pre-commit lint checks..."
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Run flake8 (only if installed)
+if command -v flake8 &>/dev/null; then
+    echo "=== flake8 ==="
+    flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
+else
+    echo "⚠️  flake8 not installed, skipping"
+fi
+
+# Run mypy (only if installed)
+if command -v mypy &>/dev/null; then
+    echo "=== mypy ==="
+    mypy src/ --ignore-missing-imports 2>&1 | head -50 || true
+else
+    echo "⚠️  mypy not installed, skipping"
+fi
+
+echo "✅ Pre-commit lint checks complete (warnings are non-blocking)"

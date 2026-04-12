@@ -1,0 +1,27 @@
+#!/bin/bash
+# Pre-push hook: run lint checks before push (strict - fails on errors)
+
+set -e
+
+echo "🔍 Running pre-push lint checks..."
+
+cd "$(git rev-parse --show-toplevel)"
+
+# Only run if tools are available (don't try to install)
+if command -v flake8 &>/dev/null; then
+    echo "=== flake8 ==="
+    flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+    echo "✅ flake8 passed"
+else
+    echo "⚠️  flake8 not installed, skipping"
+fi
+
+if command -v mypy &>/dev/null; then
+    echo "=== mypy ==="
+    mypy src/ --ignore-missing-imports --no-error-summary
+    echo "✅ mypy passed"
+else
+    echo "⚠️  mypy not installed, skipping"
+fi
+
+echo "✅ Pre-push lint checks complete"
