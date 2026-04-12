@@ -46,9 +46,9 @@ jobs:
       - run: pip install -q pytest pytest-cov requests
       - run: pytest tests/integration/ -v
       - name: Start Mock Services
-        run: docker-compose -f configs/docker-compose.test.yml up -d
+        run: docker compose -f configs/docker-compose.test.yml up -d
       - run: sleep 5 && pytest tests/integration/ -v
-      - run: docker-compose -f configs/docker-compose.test.yml down
+      - run: docker compose -f configs/docker-compose.test.yml down
 
   code-review:
     name: Code Review
