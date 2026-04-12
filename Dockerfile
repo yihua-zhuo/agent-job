@@ -7,9 +7,11 @@ RUN pip install --no-cache-dir flask gunicorn python-dotenv pymysql
 
 COPY src/ ./src/
 
-ENV PORT=5000
+ENV PORT=3000
 ENV HOST=0.0.0.0
 
-EXPOSE 5000
+EXPOSE 3000
 
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "src.app:create_app"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD curl -f http://localhost:3000/ || exit 1
+
+CMD ["gunicorn", "--bind", "0.0.0.0:3000", "src.app:create_app"]
