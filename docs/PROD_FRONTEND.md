@@ -392,17 +392,49 @@ Campaign (营销活动)
 ```javascript
 const API_BASE = 'https://agent-job-production.up.railway.app/api/v1';
 
-// Axios 配置示例
-import axios from 'axios';
+// 统一错误处理函数
+async function apiRequest(url, options = {}) {
+  try {
+    const response = await fetch(`${API_BASE}${url}`, {
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+      ...options,
+    });
 
-const api = axios.create({
-  baseURL: API_BASE,
-  headers: {
-    'Content-Type': 'application/json',
-    'Authorization': `Bearer ${token}` // 如需认证
-  },
-  timeout: 10000
-});
+    const data = await response.json();
+
+    if (!response.ok) {
+      // 根据错误码处理
+      const error = new Error(data.message || '请求失败');
+      error.code = data.code;
+      throw error;
+    }
+
+    return data;
+  } catch (error) {
+    // 错误码分支处理
+    switch (error.code) {
+      case 1000:
+        alert(`参数错误: ${error.message}`);
+        break;
+      case 2000:
+        alert(`业务错误: ${error.message}`);
+        break;
+      case 3000:
+        alert(`权限不足: ${error.message}`);
+        break;
+      case 5000:
+        alert('系统繁忙，请稍后重试');
+        break;
+      default:
+        if (error.message) alert(`请求失败: ${error.message}`);
+        break;
+    }
+    throw error;
+  }
+}
 ```
 
 ### 5.2 API 调用示例
@@ -410,52 +442,104 @@ const api = axios.create({
 ```javascript
 // 获取客户列表
 async function getCustomers(page = 1, pageSize = 20) {
-  const response = await api.get('/customers', {
-    params: { page, page_size: pageSize }
-  });
-  return response.data;
+  const data = await apiRequest(
+    `/customers?page=${page}&page_size=${pageSize}`
+  );
+  return data.data;
 }
 
 // 创建客户
-async function createCustomer(data) {
-  const response = await api.post('/customers', data);
-  return response.data;
+async function createCustomer(customerData) {
+  const data = await apiRequest('/customers', {
+    method: 'POST',
+    body: JSON.stringify(customerData),
+  });
+  return data.data;
 }
 
 // 更新客户状态
 async function updateCustomerStatus(id, status) {
-  const response = await api.put(`/customers/${id}/status`, { status });
-  return response.data;
+  const data = await apiRequest(`/customers/${id}/status`, {
+    method: 'PUT',
+    body: JSON.stringify({ status }),
+  });
+  return data.data;
+}
+
+// 搜索客户
+async function searchCustomers(keyword) {
+  const data = await apiRequest(`/customers/search?keyword=${encodeURIComponent(keyword)}`);
+  return data.data;
+}
+
+// 获取销售管道
+async function getPipelines() {
+  const data = await apiRequest('/pipelines');
+  return data.data;
+}
+
+// 获取商机列表
+async function getOpportunities(pipelineId) {
+  const url = pipelineId ? `/opportunities?pipeline_id=${pipelineId}` : '/opportunities';
+  const data = await apiRequest(url);
+  return data.data;
+}
+
+// 创建商机
+async function createOpportunity(oppData) {
+  const data = await apiRequest('/opportunities', {
+    method: 'POST',
+    body: JSON.stringify(oppData),
+  });
+  return data.data;
 }
 ```
 
-### 5.3 错误处理
+### 5.3 认证 Header（可选）
+
+如需认证，在请求头中加入 Token：
 
 ```javascript
-async function apiRequest(fn) {
-  try {
-    return await fn();
-  } catch (error) {
-    if (error.response) {
-      const { code, message } = error.response.data;
-      switch (code) {
-        case 1000: // 参数错误
-          alert(`参数错误: ${message}`);
-          break;
-        case 2000: // 业务错误
-          alert(`业务错误: ${message}`);
-          break;
-        case 3000: // 权限错误
-          alert(`权限不足: ${message}`);
-          break;
-        case 5000: // 系统错误
-          alert(`系统繁忙，请稍后重试`);
-          break;
-      }
-    } else {
-      alert('网络错误，请检查连接');
-    }
-  }
+// 方式一：全局配置
+const API_BASE = 'https://agent-job-production.up.railway.app/api/v1';
+const AUTH_TOKEN = localStorage.getItem('crm_token'); // 根据实际存储方式调整
+
+async function apiRequest(url, options = {}) {
+  const headers = {
+    'Content-Type': 'application/json',
+    ...(AUTH_TOKEN && { 'Authorization': `Bearer ${AUTH_TOKEN}` }),
+    ...options.headers,
+  };
+
+  const response = await fetch(`${API_BASE}${url}`, { ...options, headers });
+  // ...后续处理相同
+}
+
+// 方式二：单次请求
+async function getCustomers() {
+  return apiRequest('/customers', {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
+}
+```
+
+### 5.4 FormData 上传（客户导入）
+
+```javascript
+// 上传 CSV 文件导入客户
+async function importCustomers(file) {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch(`${API_BASE}/customers/import`, {
+    method: 'POST',
+    body: formData,
+    // 注意：不需要 Content-Type，fetch 会自动设置 enctype
+  });
+
+  const data = await response.json();
+  if (data.code !== 0) throw new Error(data.message);
+  return data.data;
 }
 ```
 
