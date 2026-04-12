@@ -58,7 +58,7 @@ jobs:
       - name: Run Code Review Agent
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python3 agents/code_review/review_agent.py
+        run: python3 docs/agents/code_review/review_agent.py
 
   quality-check:
     name: Quality Control

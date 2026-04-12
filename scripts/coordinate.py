@@ -12,10 +12,10 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 AGENTS = {
-    "coordinator": "agents/coordinator/coordinator_agent.py",
-    "code_review": "agents/code_review/review_agent.py",
-    "test": "agents/test/test_agent.py",
-    "qc": "agents/qc/qc_agent.py"
+    "coordinator": "docs/agents/coordinator/coordinator_agent.py",
+    "code_review": "docs/agents/code_review/review_agent.py",
+    "test": "docs/agents/test/test_agent.py",
+    "qc": "docs/agents/qc/qc_agent.py"
 }
 
 class AgentCoordinator:
