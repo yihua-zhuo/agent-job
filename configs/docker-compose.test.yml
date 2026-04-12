@@ -6,7 +6,7 @@ services:
     ports:
       - "8080:80"
     volumes:
-      - ./configs/mock-api.conf:/etc/nginx/conf.d/default.conf
+      - ./mock-api.conf:/etc/nginx/conf.d/default.conf
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost/health"]
       interval: 10s

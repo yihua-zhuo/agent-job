@@ -37,7 +37,6 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: unit-test
-    if: false  # Disabled - requires Docker-in-Docker (not supported in GitHub Actions)
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -45,8 +44,8 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -q pytest pytest-cov requests
       - run: docker compose -f configs/docker-compose.test.yml up -d
-      - run: sleep 5 && pytest tests/integration/ -v || true
-      - run: docker compose -f configs/docker-compose.test.yml down || true
+      - run: sleep 5 && pytest tests/integration/ -v
+      - run: docker compose -f configs/docker-compose.test.yml down
 
   code-review:
     name: Code Review
