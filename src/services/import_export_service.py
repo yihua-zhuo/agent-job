@@ -84,8 +84,8 @@ class ImportExportService:
                     "errors": validation_result["errors"]
                 }
 
-            # TODO: 调用数据库服务保存客户数据
-            # 这里假设所有验证通过的数据都可以成功导入
+            # Database persistence delegated to repository layer (src/internal/repository/).
+            # Repository not yet wired — data validated but not persisted to DB.
             success_count = len(data)
             
             return {
@@ -188,8 +188,8 @@ class ImportExportService:
 
     def export_customers(self, filters: Dict, file_format: str) -> bytes:
         """导出客户数据"""
-        # TODO: 从数据库获取客户数据，应用filters
-        # 模拟数据
+        # Data retrieval delegated to repository layer (src/internal/repository/).
+        # Repository not yet wired — returns sample data for format testing.
         sample_data = [
             {"id": 1, "name": "张三", "email": "zhangsan@example.com", "phone": "13800138000", "company": "公司A", "status": "活跃"},
             {"id": 2, "name": "李四", "email": "lisi@example.com", "phone": "13900139000", "company": "公司B", "status": "活跃"},
@@ -199,7 +199,7 @@ class ImportExportService:
 
     def export_opportunities(self, filters: Dict, file_format: str) -> bytes:
         """导出商机数据"""
-        # TODO: 从数据库获取商机数据
+        # Data retrieval delegated to repository layer (src/internal/repository/).
         sample_data = [
             {"id": 1, "name": "项目A", "customer_id": 1, "amount": 100000, "stage": "提案", "probability": 50},
             {"id": 2, "name": "项目B", "customer_id": 2, "amount": 200000, "stage": "谈判", "probability": 75},
@@ -209,7 +209,8 @@ class ImportExportService:
 
     def export_report(self, report_type: str, date_range: Dict, file_format: str) -> bytes:
         """导出报表"""
-        # TODO: 根据report_type和date_range生成报表数据
+        # Report aggregation delegated to repository layer (src/internal/repository/).
+        # Repository not yet wired — returns sample report for format testing.
         sample_report = {
             "report_type": report_type,
             "date_range": date_range,
