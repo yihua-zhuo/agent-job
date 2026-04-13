@@ -5,7 +5,7 @@ import sys
 import pytest
 
 
-# Stub jwt before importing auth_service so AuthService loads without PyJWT installed.
+# Install fake jwt before auth_service imports it.
 class _ExpiredSignatureError(Exception):
     pass
 
@@ -15,30 +15,19 @@ class _InvalidTokenError(Exception):
 
 
 class _FakeJWT:
-    """Minimal fake jwt for environments without PyJWT."""
-
     @staticmethod
     def encode(payload: dict, key: str, algorithm: str) -> str:
-        header = json.dumps({"alg": algorithm, "typ": "JWT"}, separators=(",", ":")).encode()
-        payload_encoded = base64.urlsafe_b64encode(json.dumps(payload, default=str, separators=(",", ":")).encode())
+        header = base64.urlsafe_b64encode(
+            json.dumps({"alg": algorithm, "typ": "JWT"}, separators=(",", ":")).encode()
+        ).rstrip(b"=")
+        payload_encoded = base64.urlsafe_b64encode(
+            json.dumps(payload, default=str, separators=(",", ":")).encode()
+        ).rstrip(b"=")
         sig = base64.urlsafe_b64encode(b"fake-sig").rstrip(b"=")
-        return (
-            base64.urlsafe_b64encode(header).rstrip(b"=").decode()
-            + "."
-            + payload_encoded.rstrip(b"=").decode()
-            + "."
-            + sig.decode()
-        )
+        return f"{header.decode()}.{payload_encoded.decode()}.{sig.decode()}"
 
     @staticmethod
-    def decode(
-        token: str,
-        key: str,
-        algorithms: list,
-        issuer=None,
-        audience=None,
-        options=None,
-    ):
+    def decode(token: str, key: str, algorithms: list, issuer=None, audience=None, options=None):
         parts = token.split(".")
         if len(parts) != 3:
             raise _InvalidTokenError()
@@ -57,35 +46,29 @@ class _FakeJWT:
     InvalidTokenError = _InvalidTokenError
 
 
-# Install fake before auth_service imports jwt.
 sys.modules["jwt"] = _FakeJWT  # type: ignore[assign]
 
-from src.services.auth_service import AuthService, is_valid_email  # noqa: E402
+from src.services.auth_service import AuthService, is_valid_email
 
 
 @pytest.fixture
 def auth_service():
-    """Create an AuthService instance with a known test secret."""
     return AuthService(secret_key="test-secret-key")
 
 
+@pytest.mark.asyncio
 class TestAuthService:
-    """Tests for AuthService."""
-
-    def test_generate_token_returns_string(self, auth_service):
-        """Test generate_token returns a non-empty string."""
+    async def test_generate_token_returns_string(self, auth_service):
         token = auth_service.generate_token(1, "alice", "admin", tenant_id=1)
         assert isinstance(token, str)
         assert len(token) > 0
 
-    def test_generate_token_without_tenant(self, auth_service):
-        """Test generate_token works without a tenant_id."""
+    async def test_generate_token_without_tenant(self, auth_service):
         token = auth_service.generate_token(2, "bob", "user")
         assert isinstance(token, str)
         assert len(token) > 0
 
-    def test_verify_token_valid(self, auth_service):
-        """Test verify_token round-trips correctly."""
+    async def test_verify_token_valid(self, auth_service):
         token = auth_service.generate_token(1, "alice", "admin", tenant_id=1)
         payload = auth_service.verify_token(token)
         assert payload is not None
@@ -93,37 +76,30 @@ class TestAuthService:
         assert payload["username"] == "alice"
         assert payload["role"] == "admin"
 
-    def test_verify_token_invalid(self, auth_service):
-        """Test verify_token returns None for an invalid token."""
+    async def test_verify_token_invalid(self, auth_service):
         result = auth_service.verify_token("not.a.valid.token")
         assert result is None
 
-    def test_verify_token_tampered(self, auth_service):
-        """Test verify_token returns None for a malformed token."""
-        # A truly malformed token (not three parts) should return None.
+    async def test_verify_token_tampered(self, auth_service):
         result = auth_service.verify_token("not.even.close")
         assert result is None
 
-    def test_refresh_token_valid(self, auth_service):
-        """Test refresh_token returns a new valid token."""
+    async def test_refresh_token_valid(self, auth_service):
         old_token = auth_service.generate_token(1, "alice", "admin", tenant_id=1)
         new_token = auth_service.refresh_token(old_token)
         assert new_token is not None
         assert isinstance(new_token, str)
         assert new_token != old_token
-        # Verify the refreshed token is valid
         payload = auth_service.verify_token(new_token)
         assert payload is not None
         assert payload["user_id"] == 1
         assert payload["username"] == "alice"
 
-    def test_refresh_token_invalid(self, auth_service):
-        """Test refresh_token returns None for an invalid token."""
+    async def test_refresh_token_invalid(self, auth_service):
         result = auth_service.refresh_token("bad.token.here")
         assert result is None
 
-    def test_is_valid_email(self):
-        """Test is_valid_email with various inputs."""
+    async def test_is_valid_email(self):
         assert is_valid_email("alice@example.com") is True
         assert is_valid_email("user+tag@domain.co.uk") is True
         assert is_valid_email("invalid") is False
