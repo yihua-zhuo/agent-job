@@ -1,0 +1,8 @@
+[2026-04-13T06:03:50.404180Z] [qc] $ python3 -m ruff check src
+[2026-04-13T06:03:50.418010Z] [qc] $ python3 -c import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)
+[2026-04-13T06:03:50.456121Z] [qc] $ python3 -m mypy src
+[2026-04-13T06:03:50.473931Z] [qc] status=pass checks={'syntax': 0, 'mypy': 'skipped', 'readme': 0}
+[2026-04-13T06:03:54.023934Z] [qc] $ python3 -m ruff check src
+[2026-04-13T06:03:54.037200Z] [qc] $ python3 -c import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)
+[2026-04-13T06:03:54.057960Z] [qc] $ python3 -m mypy src
+[2026-04-13T06:03:54.070870Z] [qc] status=pass checks={'syntax': 0, 'mypy': 'skipped', 'readme': 0}

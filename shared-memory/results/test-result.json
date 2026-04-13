@@ -1,0 +1,16 @@
+{
+  "agent": "test",
+  "status": "pass",
+  "generated_at": "2026-04-13T06:03:53.985267Z",
+  "details": {
+    "returncode": 0,
+    "tail": [
+      "  /Users/yihuazhuo/Desktop/git/github/agent-job/src/models/user.py:133: DeprecationWarning: datetime.datetime.utcnow() is deprecated and scheduled for removal in a future version. Use timezone-aware objects to represent datetimes in UTC: datetime.datetime.now(datetime.UTC).",
+      "    updated_at = datetime.utcnow()",
+      "",
+      "-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html",
+      "====================== 166 passed, 229 warnings in 0.07s ======================="
+    ],
+    "stderr_tail": []
+  }
+}

@@ -52,5 +52,5 @@ class SLAService:
         if ticket.resolved_at:
             return timedelta(0)
 
-        remaining = ticket.response_deadline - datetime.now()
+        remaining = ticket.response_deadline - datetime.utcnow()
         return remaining if remaining.total_seconds() > 0 else timedelta(0)

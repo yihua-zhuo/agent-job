@@ -182,6 +182,14 @@ class CustomerService:
             if not data.get('name'):
                 errors.append({"index": i, "error": "客户名称不能为空"})
                 continue
+
+            status_value = data.get('status', 'lead')
+            if isinstance(status_value, str):
+                try:
+                    status_value = CustomerStatus(status_value)
+                except ValueError:
+                    status_value = CustomerStatus.LEAD
+
             customer = Customer(
                 id=self._next_id,
                 tenant_id=tenant_id,
@@ -189,7 +197,7 @@ class CustomerService:
                 email=data.get('email'),
                 phone=data.get('phone'),
                 company=data.get('company'),
-                status='active',
+                status=status_value,
                 owner_id=data.get('owner_id', 0),
                 tags=data.get('tags', []),
             )
