@@ -32,13 +32,19 @@ class TriggerService:
 
         # 检查所有活动，找到匹配触发类型的活动
         if self._marketing_service:
-            campaigns = self._marketing_service.list_campaigns(
+            campaigns_response = self._marketing_service.list_campaigns(
                 page=1, page_size=1000
-            ).get("items", [])
+            )
+            # campaigns_response is an ApiResponse; extract items from data.paginated_data
+            if campaigns_response.data is not None:
+                campaigns = campaigns_response.data.items
+            else:
+                campaigns = []
 
             for campaign_data in campaigns:
-                if campaign_data.get("trigger_type") == trigger_type.value:
-                    triggered_campaign_ids.append(campaign_data["id"])
+                campaign_trigger = getattr(campaign_data, "trigger_type", None)
+                if campaign_trigger is not None and campaign_trigger == trigger_type.value:
+                    triggered_campaign_ids.append(campaign_data.id)
 
         return triggered_campaign_ids
 
@@ -47,10 +53,11 @@ class TriggerService:
         if not self._marketing_service:
             return {"success": False, "message": "Marketing service not configured"}
 
-        campaign = self._marketing_service.get_campaign(campaign_id)
-        if not campaign:
+        campaign_response = self._marketing_service.get_campaign(campaign_id)
+        if not campaign_response or not campaign_response.data:
             return {"success": False, "message": "Campaign not found"}
 
+        campaign = campaign_response.data
         if campaign.trigger_type is None:
             return {"success": False, "message": "No trigger configured"}
 
@@ -58,12 +65,12 @@ class TriggerService:
         sent_count = 0
 
         for customer_id in customer_ids:
-            event = self._marketing_service.record_event(
+            event_response = self._marketing_service.record_event(
                 campaign_id=campaign_id,
                 customer_id=customer_id,
                 event_type="sent",
             )
-            if event:
+            if event_response and event_response.status.value == "success":
                 sent_count += 1
 
         return {

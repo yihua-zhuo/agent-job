@@ -183,7 +183,7 @@ class UserService:
                 )
 
         # 更新字段
-        allowed_fields = ["email", "bio", "avatar_url", "status"]
+        allowed_fields = ["email", "bio", "full_name", "status"]
         for field in allowed_fields:
             if field in kwargs:
                 setattr(user, field, kwargs[field])

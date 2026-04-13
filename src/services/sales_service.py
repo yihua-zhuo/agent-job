@@ -123,6 +123,8 @@ class SalesService:
 
     def list_opportunities(self, tenant_id: int, page=1, page_size=20, pipeline_id=None, stage=None, owner_id=None) -> ApiResponse:
         """List opportunities with filters"""
+        if tenant_id <= 0:
+            return ApiResponse.error(message="无效的租户ID", code=1404)
         filtered = [o for o in self._opportunities.values() if o.tenant_id == tenant_id]
 
         if pipeline_id:
@@ -159,7 +161,7 @@ class SalesService:
         if not opp or opp.tenant_id != tenant_id:
             return ApiResponse.error(message="商机不存在", code=3001)
 
-        for key in ['name', 'customer_id', 'pipeline_id', 'amount', 'probability', 'owner_id']:
+        for key in ['name', 'customer_id', 'amount', 'probability', 'owner_id']:
             if key in data:
                 setattr(opp, key, data[key])
 
@@ -187,7 +189,7 @@ class SalesService:
         pipeline_forecasts = {}
         for pid in pipeline_ids:
             pipeline_opps = [o for o in self._opportunities.values() if o.pipeline_id == pid and o.tenant_id == tenant_id]
-            total_amount = sum(o.amount for o in pipeline_opps if o.stage not in [Stage.CLOSED_WON, Stage.CLOSED_LOST])
+            total_amount = sum(float(o.amount) for o in pipeline_opps if o.stage not in [Stage.CLOSED_WON, Stage.CLOSED_LOST])
             pipeline_forecasts[pid] = float(total_amount)
 
         return ApiResponse.success(

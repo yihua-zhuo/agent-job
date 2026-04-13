@@ -1,13 +1,9 @@
-from flask import Blueprint, request, jsonify, g
+from flask import Blueprint, request, jsonify
 from src.services.customer_service import CustomerService
-from src.middleware.auth import AuthMiddleware
-import os
+from src.internal.middleware.auth import require_auth, get_current_tenant_id
 
 customer_bp = Blueprint('customers', __name__, url_prefix='/api/v1/customers')
 service = CustomerService()
-
-# Initialize auth middleware with JWT_SECRET from environment
-_auth = AuthMiddleware(secret_key=os.environ.get('JWT_SECRET_KEY'))
 
 
 class _MissingTenantError(Exception):
@@ -21,9 +17,7 @@ def _get_tenant_id() -> int:
     tenant; treating it as 0 would silently bypass tenant isolation in the
     service layer, so we raise instead.
     """
-    if not hasattr(g, 'current_user'):
-        raise _MissingTenantError("No authenticated user in request context")
-    tenant_id = g.current_user.get('tenant_id')
+    tenant_id = get_current_tenant_id()
     if not isinstance(tenant_id, int) or tenant_id <= 0:
         raise _MissingTenantError("Token is missing a valid tenant_id")
     return tenant_id
@@ -44,32 +38,32 @@ def _validate_pagination(page, page_size):
 
 
 @customer_bp.route('', methods=['POST'])
-@_auth.require_auth
+@require_auth
 def create_customer():
     data = request.get_json()
     if not data:
         return jsonify({"code": 1001, "message": "Request body is required"}), 400
-    
+
     # Basic input validation
     if not data.get('name') or not data.get('name').strip():
         return jsonify({"code": 1001, "message": "客户名称不能为空"}), 400
     if data.get('email') and not _is_valid_email(data.get('email')):
         return jsonify({"code": 1001, "message": "邮箱格式不正确"}), 400
-    
+
     response = service.create_customer(data, tenant_id=_get_tenant_id())
     return jsonify(response.to_dict())
 
 
 @customer_bp.route('', methods=['GET'])
-@_auth.require_auth
+@require_auth
 def list_customers():
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('page_size', 20, type=int)
-    
+
     valid, error = _validate_pagination(page, page_size)
     if not valid:
         return jsonify(error), 400
-    
+
     status = request.args.get('status')
     owner_id = request.args.get('owner_id', type=int)
     tags = request.args.get('tags')
@@ -81,7 +75,7 @@ def list_customers():
 
 
 @customer_bp.route('/<int:customer_id>', methods=['GET'])
-@_auth.require_auth
+@require_auth
 def get_customer(customer_id):
     response = service.get_customer(customer_id, tenant_id=_get_tenant_id())
     status_code = 200 if response.status.value == "success" else 404
@@ -89,7 +83,7 @@ def get_customer(customer_id):
 
 
 @customer_bp.route('/<int:customer_id>', methods=['PUT'])
-@_auth.require_auth
+@require_auth
 def update_customer(customer_id):
     data = request.get_json()
     if not data:
@@ -99,14 +93,14 @@ def update_customer(customer_id):
 
 
 @customer_bp.route('/<int:customer_id>', methods=['DELETE'])
-@_auth.require_auth
+@require_auth
 def delete_customer(customer_id):
     response = service.delete_customer(customer_id, tenant_id=_get_tenant_id())
     return jsonify(response.to_dict())
 
 
 @customer_bp.route('/search', methods=['GET'])
-@_auth.require_auth
+@require_auth
 def search_customers():
     keyword = request.args.get('keyword', '')
     # Sanitize keyword to prevent XSS
@@ -116,7 +110,7 @@ def search_customers():
 
 
 @customer_bp.route('/<int:customer_id>/tags', methods=['POST'])
-@_auth.require_auth
+@require_auth
 def add_tag(customer_id):
     data = request.get_json()
     tag = data.get('tag')
@@ -129,7 +123,7 @@ def add_tag(customer_id):
 
 
 @customer_bp.route('/<int:customer_id>/tags/<tag>', methods=['DELETE'])
-@_auth.require_auth
+@require_auth
 def remove_tag(customer_id, tag):
     # Sanitize tag
     tag = _sanitize_string(tag)
@@ -138,7 +132,7 @@ def remove_tag(customer_id, tag):
 
 
 @customer_bp.route('/<int:customer_id>/status', methods=['PUT'])
-@_auth.require_auth
+@require_auth
 def change_status(customer_id):
     data = request.get_json()
     status = data.get('status')
@@ -150,7 +144,7 @@ def change_status(customer_id):
 
 
 @customer_bp.route('/<int:customer_id>/owner', methods=['PUT'])
-@_auth.require_auth
+@require_auth
 def assign_owner(customer_id):
     data = request.get_json()
     owner_id = data.get('owner_id')
@@ -161,7 +155,7 @@ def assign_owner(customer_id):
 
 
 @customer_bp.route('/import', methods=['POST'])
-@_auth.require_auth
+@require_auth
 def bulk_import():
     data = request.get_json()
     customers = data.get('customers', [])
