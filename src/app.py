@@ -2,6 +2,8 @@ from flask import Flask, jsonify
 import os
 import secrets
 from src.api import register_routes
+from src.internal.middleware.auth import require_auth, get_current_tenant_id
+from src.internal.middleware.tenant import tenant_isolation_middleware, require_tenant
 
 
 def create_app():
@@ -18,6 +20,9 @@ def create_app():
     app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secret_key
     app.config['JWT_ALGORITHM'] = 'HS256'
 
+    # 注册租户隔离中间件（全局）
+    app.before_request(tenant_isolation_middleware())
+
     # CORS 配置 - 生产环境禁止通配符
     from flask_cors import CORS
     cors_origins = os.environ.get('CORS_ORIGINS')
@@ -29,6 +34,10 @@ def create_app():
 
     # 注册路由和中间件
     register_routes(app)
+
+    # 导出 require_auth 和 require_tenant 供路由使用
+    app.require_auth = require_auth
+    app.require_tenant = require_tenant
 
     @app.route('/')
     def health():
