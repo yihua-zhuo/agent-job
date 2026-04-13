@@ -7,39 +7,42 @@ from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-_async_engine = None
-_async_session_factory = None
+# Lazily-initialised singletons exposed as public module-level names.
+# Use `reset_engine()` to re-initialise (e.g. in test conftest fixtures).
+engine: AsyncSession = None
+async_session_maker: async_sessionmaker = None
 
 
-def _get_async_engine():
-    """Lazily create and return the singleton async engine."""
-    global _async_engine
-    if _async_engine is None:
+def _build_engine(url: str):
+    """Create the async engine from *url*."""
+    # Ensure the URL uses the asyncpg driver.
+    if url.startswith("postgresql://"):
+        url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+    elif url.startswith("postgres://"):
+        url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+    return create_async_engine(url, pool_pre_ping=True, pool_size=5)
+
+
+def _init_engine(url: str):
+    global engine, async_session_maker
+    engine = _build_engine(url)
+    async_session_maker = async_sessionmaker(
+        bind=engine,
+        class_=AsyncSession,
+        autoflush=False,
+        autocommit=False,
+        expire_on_commit=False,
+    )
+
+
+def _lazy_init():
+    """Initialise the singletons from DATABASE_URL on first use."""
+    global engine, async_session_maker
+    if engine is None:
         url = os.environ.get("DATABASE_URL", "").strip()
         if not url:
             raise ValueError("DATABASE_URL environment variable is required")
-        # Ensure the URL uses the asyncpg driver.
-        if url.startswith("postgresql://"):
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        elif url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-        _async_engine = create_async_engine(url, pool_pre_ping=True, pool_size=5)
-    return _async_engine
-
-
-def _get_session_factory() -> async_sessionmaker:
-    """Lazily create and return the singleton async session factory."""
-    global _async_session_factory
-    if _async_session_factory is None:
-        engine = _get_async_engine()
-        _async_session_factory = async_sessionmaker(
-            bind=engine,
-            class_=AsyncSession,
-            autoflush=False,
-            autocommit=False,
-            expire_on_commit=False,
-        )
-    return _async_session_factory
+        _init_engine(url)
 
 
 @asynccontextmanager
@@ -53,8 +56,8 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         async with get_db_session() as session:
             result = await session.execute(select(UserModel).where(...))
     """
-    factory = _get_session_factory()
-    session: AsyncSession = factory()
+    _lazy_init()
+    session: AsyncSession = async_session_maker()
     try:
         yield session
         await session.commit()
@@ -63,3 +66,13 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         raise
     finally:
         await session.close()
+
+
+def reset_engine(database_url: str):
+    """Reinitialise the engine and session maker with *database_url*.
+
+    Call this in test conftest fixtures *before* any service code runs so that
+    all subsequent ``async with get_db_session()`` calls use the test database.
+    """
+    global engine, async_session_maker
+    _init_engine(database_url)

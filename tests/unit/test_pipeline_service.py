@@ -1,5 +1,6 @@
 """Unit tests for PipelineService."""
 import pytest
+import pytest_asyncio
 from src.services.pipeline_service import PipelineService
 
 
@@ -8,14 +9,14 @@ def pipeline_service():
     return PipelineService()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_pipeline():
     svc = PipelineService()
-    result = await svc.create_pipeline(tenant_id=1, data={"name": "Test Pipeline"})
+    result = await svc.create_pipeline(tenant_id=1, data={"Name": "Test Pipeline"})
     return result.data["id"]
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_pipeline_2():
     svc = PipelineService()
     result = await svc.create_pipeline(tenant_id=2, data={"name": "Tenant 2 Pipeline"})

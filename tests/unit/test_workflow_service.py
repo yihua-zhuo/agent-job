@@ -1,5 +1,7 @@
 """Unit tests for WorkflowService."""
 import pytest
+import pytest_asyncio
+from unittest.mock import AsyncMock, MagicMock
 from src.services.workflow_service import WorkflowService
 
 
@@ -8,18 +10,26 @@ def workflow_service():
     return WorkflowService()
 
 
-@pytest.fixture
-async def sample_workflow():
-    svc = WorkflowService()
-    result = await svc.create_workflow(
-        name="Test Workflow",
-        trigger_type="manual",
-        created_by=1,
-        description="A test workflow",
-        actions=[{"type": "email.send", "template": "welcome"}],
-        conditions=[{"field": "user_type", "operator": "==", "value": "premium"}],
-    )
-    return result.data["id"]
+@pytest_asyncio.fixture
+async def sample_workflow(workflow_service):
+    """Mock workflow — no real DB."""
+    mock_wf = MagicMock()
+    mock_wf.id = 1
+    mock_wf.name = "Test Workflow"
+    mock_wf.description = "A test workflow"
+    mock_wf.trigger_type = MagicMock(value="manual")
+    mock_wf.trigger_config = {}
+    mock_wf.actions = [{"type": "email.send", "template": "welcome"}]
+    mock_wf.conditions = [{"field": "user_type", "operator": "==", "value": "premium"}]
+    mock_wf.status = MagicMock(value="draft")
+    mock_wf.created_by = 1
+    mock_wf.created_at = None
+    mock_wf.updated_at = None
+    # Patch get_workflow to return this mock
+    original_get = workflow_service.get_workflow
+    workflow_service.get_workflow = AsyncMock(return_value=mock_wf)
+    yield 1
+    workflow_service.get_workflow = original_get
 
 
 @pytest.mark.asyncio

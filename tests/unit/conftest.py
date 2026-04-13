@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
+from contextlib import asynccontextmanager
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from dotenv import load_dotenv
@@ -14,13 +16,328 @@ load_dotenv(_dotenv_path)
 # Silence SQLAlchemy 2.0 warnings during tests
 import warnings
 
-warnings.filterwarnings("ignore", category=warnings.SQLAlchemyWarning)
+try:
+    warnings.filterwarnings("ignore", category=warnings.SQLAlchemyWarning)
+except AttributeError:
+    pass
 
 # Ensure project root is on sys.path so "src" imports resolve
 _project_root = Path(__file__).resolve().parents[2]
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
+
+# ---------------------------------------------------------------------------
+# Mock SQLAlchemy Result object (returned by session.execute).
+# Supports both .fetchone() (sync raw SQL) and .scalars() (async ORM).
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# Mock SQLAlchemy Result object (returned by session.execute).
+# Supports both .fetchone() (sync raw SQL) and .scalars() (async ORM).
+# ---------------------------------------------------------------------------
+
+
+class MockRow:
+    """Simulates a SQLAlchemy Row returned by result.fetchone() / scalars()."""
+
+    def __init__(self, mapping: dict):
+        # _mapping is the dict the service reads via row._mapping
+        self._mapping = mapping
+
+    def __getitem__(self, key):
+        return self._mapping[key]
+
+    def __contains__(self, key):
+        return key in self._mapping
+
+    def keys(self):
+        return self._mapping.keys()
+
+    def get(self, key, default=None):
+        return self._mapping.get(key, default)
+
+    def __repr__(self):
+        return f"MockRow({self._mapping!r})"
+
+
+class MockResult:
+    """Simulates a SQLAlchemy Result object returned by session.execute()."""
+
+    def __init__(self, rows=None):
+        self._rows = rows or []
+
+    # sync: for raw SQL via result.fetchone()
+    def fetchone(self):
+        return self._rows[0] if self._rows else None
+
+    def fetchall(self):
+        return self._rows
+
+    # async: for ORM via result.scalars()
+    def scalars(self):
+        return MagicMock(
+            first=MagicMock(return_value=self._rows[0] if self._rows else None),
+            all=MagicMock(return_value=self._rows),
+        )
+
+    def scalar_one_or_none(self):
+        return self._rows[0] if self._rows else None
+
+    def scalar_one(self):
+        return self._rows[0]
+
+    # sync: for scalar()
+    def scalar(self):
+        return self._rows[0] if self._rows else None
+
+    # for count queries
+    def __iter__(self):
+        return iter(self._rows)
+
+
+# ---------------------------------------------------------------------------
+# Smart mock session: inspects the SQL text to return appropriate mock rows.
+# ---------------------------------------------------------------------------
+
+
+def _make_mock_session():
+    session = MagicMock(spec=[
+        "execute", "add", "delete", "commit", "rollback",
+        "close", "flush", "refresh", "scalars", "scalar_one_or_none",
+        "scalar_one", "get", "result",
+    ])
+
+    def _execute_side_effect(sql, params=None):
+        """Return MockResult with data based on the SQL statement."""
+        sql_text = str(sql).lower().strip()
+        params = params or {}
+
+        if "insert into customers" in sql_text:
+            # Simulate INSERT RETURNING *
+            row = MockRow({
+                "id": 42,
+                "tenant_id": params.get("tenant_id", 0),
+                "name": params.get("name", "Test"),
+                "email": params.get("email"),
+                "phone": params.get("phone"),
+                "company": params.get("company"),
+                "status": params.get("status", "lead"),
+                "owner_id": params.get("owner_id", 0),
+                "tags": params.get("tags", []),
+                "created_at": params.get("created_at"),
+                "updated_at": params.get("updated_at"),
+            })
+            return MockResult([row])
+
+        if "insert into pipelines" in sql_text:
+            row = MockRow({
+                "id": 1, "tenant_id": params.get("tenant_id", 0),
+                "name": params.get("name", "Pipeline"),
+                "description": params.get("description"),
+                "is_active": True,
+                "created_at": params.get("created_at"),
+                "updated_at": params.get("updated_at"),
+            })
+            return MockResult([row])
+
+        if "insert into opportunities" in sql_text:
+            row = MockRow({
+                "id": 1, "tenant_id": params.get("tenant_id", 0),
+                "customer_id": 1, "title": params.get("title", "Opportunity"),
+                "amount": params.get("amount", 1000),
+                "stage": "qualification",
+                "probability": 20,
+                "owner_id": params.get("owner_id", 0),
+                "expected_close_date": params.get("expected_close_date"),
+                "created_at": params.get("created_at"),
+                "updated_at": params.get("updated_at"),
+            })
+            return MockResult([row])
+
+        if "insert into tickets" in sql_text:
+            row = MockRow({
+                "id": 1, "tenant_id": params.get("tenant_id", 0),
+                "subject": params.get("subject", "Ticket"),
+                "description": params.get("description"),
+                "status": "open",
+                "priority": params.get("priority", "medium"),
+                "customer_id": 1,
+                "assignee_id": params.get("assignee_id"),
+                "created_at": params.get("created_at"),
+                "updated_at": params.get("updated_at"),
+            })
+            return MockResult([row])
+
+        if "insert into campaigns" in sql_text:
+            row = MockRow({
+                "id": 1, "tenant_id": params.get("tenant_id", 0),
+                "name": params.get("name", "Campaign"),
+                "campaign_type": params.get("campaign_type", "email"),
+                "status": "draft",
+                "created_by": params.get("created_by"),
+                "created_at": params.get("created_at"),
+                "updated_at": params.get("updated_at"),
+            })
+            return MockResult([row])
+
+        if "insert into users" in sql_text:
+            row = MockRow({
+                "id": 1, "tenant_id": params.get("tenant_id", 0),
+                "username": params.get("username"),
+                "email": params.get("email"),
+                "full_name": params.get("full_name"),
+                "role": params.get("role", "user"),
+                "is_active": True,
+                "created_at": params.get("created_at"),
+            })
+            return MockResult([row])
+
+        if "select" in sql_text and "count" in sql_text:
+            # COUNT query → return a scalar
+            return MockResult([3])
+
+        if "select" in sql_text and "from customers" in sql_text:
+            tenant_filter = params.get("tenant_id", 0)
+            rows = [
+                MockRow({
+                    "id": 1, "tenant_id": tenant_filter,
+                    "name": "Customer A", "email": "a@test.com",
+                    "phone": "123", "company": "Acme",
+                    "status": "lead", "owner_id": 1,
+                    "tags": [], "created_at": None, "updated_at": None,
+                }),
+                MockRow({
+                    "id": 2, "tenant_id": tenant_filter,
+                    "name": "Customer B", "email": "b@test.com",
+                    "phone": "456", "company": "Beta",
+                    "status": "customer", "owner_id": 1,
+                    "tags": [], "created_at": None, "updated_at": None,
+                }),
+            ]
+            if tenant_filter == 2:
+                rows = []
+            return MockResult(rows)
+
+        if "from customers" in sql_text:
+            return MockResult([MockRow({
+                "id": 1, "tenant_id": params.get("id", 1),
+                "name": "Customer A", "email": "a@test.com",
+                "phone": "123", "company": "Acme",
+                "status": "lead", "owner_id": 1,
+                "tags": [], "created_at": None, "updated_at": None,
+            })])
+
+        if "from pipelines" in sql_text:
+            return MockResult([MockRow({
+                "id": 1, "tenant_id": 1,
+                "name": "Pipeline A", "description": "Desc",
+                "is_active": True, "created_at": None, "updated_at": None,
+            })])
+
+        if "from opportunities" in sql_text:
+            return MockResult([MockRow({
+                "id": 1, "tenant_id": 1,
+                "customer_id": 1, "title": "Opportunity A",
+                "amount": 1000, "stage": "qualification",
+                "probability": 20, "owner_id": 1,
+                "expected_close_date": None,
+                "created_at": None, "updated_at": None,
+            })])
+
+        if "from tickets" in sql_text:
+            return MockResult([MockRow({
+                "id": 1, "tenant_id": 1,
+                "subject": "Issue A", "description": "Desc",
+                "status": "open", "priority": "medium",
+                "customer_id": 1, "assignee_id": 1,
+                "created_at": None, "updated_at": None,
+            })])
+
+        if "from campaigns" in sql_text:
+            return MockResult([MockRow({
+                "id": 1, "tenant_id": 1,
+                "name": "Campaign A", "campaign_type": "email",
+                "status": "draft", "created_by": 1,
+                "created_at": None, "updated_at": None,
+            })])
+
+        if "from users" in sql_text:
+            return MockResult([MockRow({
+                "id": 1, "tenant_id": 1,
+                "username": "testuser",
+                "email": "test@test.com",
+                "full_name": "Test User",
+                "role": "user",
+                "is_active": True,
+                "created_at": None,
+            })])
+
+        # Default: empty result
+        return MockResult([])
+
+    session.execute = AsyncMock(side_effect=_execute_side_effect)
+    session.add = MagicMock()
+    session.delete = MagicMock()
+    session.commit = AsyncMock()
+    session.rollback = AsyncMock()
+    session.close = AsyncMock()
+    session.flush = AsyncMock()
+    session.refresh = AsyncMock()
+    session.get = AsyncMock(return_value=None)
+    session.scalars = MagicMock()
+    session.scalar_one_or_none = MagicMock()
+    session.scalar_one = MagicMock()
+    session.result = MagicMock()
+    return session
+
+
+# ---------------------------------------------------------------------------
+# Auto-use fixture: patches get_db_session in every service module so tests
+# never need a real DATABASE_URL or database connection.
+# ---------------------------------------------------------------------------
+
+@pytest.fixture(autouse=True)
+def mock_get_db_session(monkeypatch):
+    import os
+
+    os.environ.setdefault(
+        "DATABASE_URL", "postgresql://test:test@localhost/test"
+    )
+
+    session = _make_mock_session()
+
+    @asynccontextmanager
+    async def _mock_context():
+        yield session
+
+    targets = [
+        "src.db.connection",
+        "src.services.activity_service",
+        "src.services.analytics_service",
+        "src.services.auth_service",
+        "src.services.churn_prediction",
+        "src.services.customer_service",
+        "src.services.import_export_service",
+        "src.services.marketing_service",
+        "src.services.pipeline_service",
+        "src.services.sales_service",
+        "src.services.ticket_service",
+        "src.services.tenant_service",
+        "src.services.user_service",
+        "src.services.workflow_service",
+    ]
+
+    for target in targets:
+        monkeypatch.setattr(f"{target}.get_db_session", _mock_context, raising=False)
+
+    yield session
+
+
+# ---------------------------------------------------------------------------
+# Tenant fixtures
+# ---------------------------------------------------------------------------
 
 @pytest.fixture
 def tenant_id() -> int:

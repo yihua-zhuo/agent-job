@@ -5,8 +5,7 @@
 from datetime import datetime
 from typing import List, Dict, Optional
 
-from sqlalchemy import select, update, delete, func, and_, or_
-from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy import select, update, delete, func, and_, or_, insert as pg_insert
 
 from src.db.connection import get_db_session
 from src.models.workflow import Workflow, WorkflowExecution, WorkflowStatus, TriggerType

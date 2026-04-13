@@ -1,5 +1,6 @@
 """Unit tests for SalesService (pipeline + opportunity CRUD)."""
 import pytest
+import pytest_asyncio
 from src.services.sales_service import SalesService
 from src.models.opportunity import Stage
 
@@ -9,7 +10,7 @@ def sales_service():
     return SalesService()
 
 
-@pytest.fixture
+@pytest_asyncio.fixture
 async def sample_pipeline(sales_service):
     result = await sales_service.create_pipeline(1, {"name": "Test Pipeline"})
     return result.data["id"]
