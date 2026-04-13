@@ -67,7 +67,7 @@ class Ticket:
             return False
         if self.response_deadline is None:
             return False
-        return datetime.now() > self.response_deadline
+        return datetime.utcnow() > self.response_deadline
 
 
 @dataclass

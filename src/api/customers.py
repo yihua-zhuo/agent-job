@@ -10,11 +10,28 @@ service = CustomerService()
 _auth = AuthMiddleware(secret_key=os.environ.get('JWT_SECRET_KEY'))
 
 
+class _MissingTenantError(Exception):
+    """Raised when authenticated user has no valid tenant_id in the token."""
+
+
 def _get_tenant_id() -> int:
-    """Extract tenant_id from current request context."""
-    if hasattr(g, 'current_user'):
-        return g.current_user.get('tenant_id', 0) or 0
-    return 0
+    """Extract tenant_id from the current request context.
+
+    A missing or non-positive tenant_id means the token is not scoped to a
+    tenant; treating it as 0 would silently bypass tenant isolation in the
+    service layer, so we raise instead.
+    """
+    if not hasattr(g, 'current_user'):
+        raise _MissingTenantError("No authenticated user in request context")
+    tenant_id = g.current_user.get('tenant_id')
+    if not isinstance(tenant_id, int) or tenant_id <= 0:
+        raise _MissingTenantError("Token is missing a valid tenant_id")
+    return tenant_id
+
+
+@customer_bp.errorhandler(_MissingTenantError)
+def _handle_missing_tenant(e):
+    return jsonify({"code": 401, "message": "Tenant context required"}), 401
 
 
 def _validate_pagination(page, page_size):
@@ -159,7 +176,7 @@ def bulk_import():
 def _is_valid_email(email: str) -> bool:
     """Basic email validation"""
     import re
-    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'
+    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
     return bool(re.match(pattern, email))
 
 
@@ -170,5 +187,5 @@ def _sanitize_string(s: str) -> str:
     # Remove HTML tags and control characters
     import re
     s = re.sub(r'<[^>]*>', '', s)
-    s = re.sub(r'[\\x00-\\x1f\\x7f-\\x9f]', '', s)
+    s = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s)
     return s.strip()

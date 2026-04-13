@@ -1,0 +1,4 @@
+[2026-04-13T06:03:47.384053Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py
+[2026-04-13T06:03:47.667495Z] [test] pytest returncode=0
+[2026-04-13T06:03:53.783828Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py
+[2026-04-13T06:03:53.985595Z] [test] pytest returncode=0

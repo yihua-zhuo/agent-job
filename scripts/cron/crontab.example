@@ -1,0 +1,42 @@
+# ----------------------------------------------------------------------------
+# Multi-agent pipeline cron schedule
+#
+# Install:
+#     crontab scripts/cron/crontab.example
+# Inspect:
+#     crontab -l
+#
+# Every line invokes scripts/cron/pipeline.py <agent>. The script handles
+# locking, logging, and cross-agent gating (e.g. deploy only runs if QC
+# passed earlier in the same day).
+#
+# Gating chain:
+#     test   (every 15 min)
+#        |-> code-review   (hourly, needs test green in last 24h)
+#              |-> qc      (every 2h, needs review green in last 24h)
+#                    |-> deploy (daily 03:10, needs qc green today)
+#
+# manager is an independent heartbeat; orchestrator is a daily "do the whole
+# pipeline in one serial pass" safety net in case the staggered jobs drift.
+# ----------------------------------------------------------------------------
+
+REPO=/Users/yihuazhuo/Desktop/git/github/agent-job
+PY=/usr/bin/env python3
+
+# Heartbeat: snapshot every 10 minutes
+*/10 * * * *  cd $REPO && $PY scripts/cron/pipeline.py manager
+
+# Fast inner loop: unit tests every 15 minutes
+*/15 * * * *  cd $REPO && $PY scripts/cron/pipeline.py test
+
+# Code review at :05 every hour (gated on test)
+5 * * * *     cd $REPO && $PY scripts/cron/pipeline.py code-review
+
+# QC every 2 hours at :20 (gated on code-review)
+20 */2 * * *  cd $REPO && $PY scripts/cron/pipeline.py qc
+
+# Full serial orchestrator run nightly at 02:00 as a safety net
+0 2 * * *     cd $REPO && $PY scripts/cron/pipeline.py orchestrator
+
+# Deploy at 03:10 (gated on QC green today) - weekdays only
+10 3 * * 1-5  cd $REPO && $PY scripts/cron/pipeline.py deploy

@@ -20,3 +20,4 @@ shared-memory/locks/
 shared-memory/results/
 shared-memory/reports/
 .worktrees/
+.idea
