@@ -16,7 +16,8 @@ def create_app():
 
     # CORS 配置
     from flask_cors import CORS
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    cors_origins = os.environ.get('CORS_ORIGINS', '*')
+    CORS(app, resources={r"/api/*": {"origins": cors_origins}})
 
     register_routes(app)
 

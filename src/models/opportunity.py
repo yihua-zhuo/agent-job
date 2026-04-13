@@ -26,6 +26,7 @@ class Opportunity:
     probability: int
     expected_close_date: datetime
     owner_id: int
+    pipeline_id: int
     id: Optional[int] = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
@@ -107,6 +108,7 @@ class Opportunity:
             probability=data.get('probability', 0),
             expected_close_date=expected_close_date,
             owner_id=data['owner_id'],
+            pipeline_id=data.get('pipeline_id', 0),
             created_at=created_at,
             updated_at=updated_at,
         )
