@@ -14,11 +14,20 @@ def create_app():
         secret_key = secrets.token_hex(32)
     app.config['SECRET_KEY'] = secret_key
 
-    # CORS 配置
-    from flask_cors import CORS
-    cors_origins = os.environ.get('CORS_ORIGINS', '*')
-    CORS(app, resources={r"/api/*": {"origins": cors_origins}})
+    # JWT 配置
+    app.config['JWT_SECRET_KEY'] = os.environ.get('JWT_SECRET_KEY') or secret_key
+    app.config['JWT_ALGORITHM'] = 'HS256'
 
+    # CORS 配置 - 生产环境禁止通配符
+    from flask_cors import CORS
+    cors_origins = os.environ.get('CORS_ORIGINS')
+    if not cors_origins:
+        if os.environ.get('FLASK_ENV') == 'production':
+            raise ValueError("CORS_ORIGINS environment variable is required in production")
+        cors_origins = 'localhost'
+    CORS(app, resources={r"/api/*": {"origins": cors_origins}}, supports_credentials=True)
+
+    # 注册路由和中间件
     register_routes(app)
 
     @app.route('/')
