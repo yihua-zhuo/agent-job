@@ -7,13 +7,25 @@ import json
 import re
 from datetime import datetime
 from decimal import Decimal
+from io import BytesIO
 from typing import List, Dict, Optional, cast, Any
 
-from sqlalchemy import select, update, delete, func, and_, or_
+from sqlalchemy import select, update, delete, func, and_, or_, table, column
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.connection import get_db_session
 from utils.file_helper import FileHelper
+
+# Lightweight Table descriptors for raw-style queries that don't yet have ORM
+# mappings. Keeps SQL building type-safe enough for pylint and SQLAlchemy.
+_customers_t = table(
+    "customers",
+    column("id"), column("tenant_id"), column("status"), column("company"),
+)
+_opportunities_t = table(
+    "opportunities",
+    column("id"), column("tenant_id"), column("stage"), column("pipeline_id"),
+)
 
 
 class ImportExportService:
@@ -289,17 +301,15 @@ class ImportExportService:
     ) -> bytes:
         """导出客户数据"""
         async with get_db_session() as session:
-            stmt = select(
-                "customers"
-            ).where(
+            stmt = select(_customers_t).where(
                 and_(
-                    "customers".c.tenant_id == tenant_id,
+                    _customers_t.c.tenant_id == tenant_id,
                 )
             )
             # Apply filters
             for key, value in filters.items():
                 if key in ["status", "company"]:
-                    stmt = stmt.where(getattr("customers".c, key) == value)
+                    stmt = stmt.where(getattr(_customers_t.c, key) == value)
             result = await session.execute(stmt)
             rows = result.fetchall()
             sample_data = [dict(row._mapping) for row in rows]
@@ -334,14 +344,12 @@ class ImportExportService:
     ) -> bytes:
         """导出商机数据"""
         async with get_db_session() as session:
-            stmt = select(
-                "opportunities"
-            ).where(
-                "opportunities".c.tenant_id == tenant_id
+            stmt = select(_opportunities_t).where(
+                _opportunities_t.c.tenant_id == tenant_id
             )
             for key, value in filters.items():
                 if key in ["stage", "pipeline_id"]:
-                    stmt = stmt.where(getattr("opportunities".c, key) == value)
+                    stmt = stmt.where(getattr(_opportunities_t.c, key) == value)
             result = await session.execute(stmt)
             rows = result.fetchall()
             sample_data = [dict(row._mapping) for row in rows]

@@ -29,6 +29,19 @@ disable=
     C0114,      # Missing module docstring
     C0115,      # Missing class docstring
     C0116,      # Missing function/method docstring
+    C0304,      # Missing final newline (cosmetic)
+    E1102,      # not-callable: false positive on sqlalchemy.func.* (count, now, etc.)
+    E1136,      # unsubscriptable-object: false positive on SQLAlchemy 2.0 Mapped[T]
+    R0903,      # Too few public methods (ORM models are intentionally lean)
+    W0107,      # Unnecessary pass statement
+    W1309,      # f-string without interpolation
+    C0103,      # invalid-name: db singletons (engine, async_session_maker)
+    W0602,      # global-variable-not-assigned: intentional singleton pattern
+    W0603,      # global-statement: intentional singleton pattern
+
+[TYPECHECK]
+# Tell pylint about runtime-generated SQLAlchemy attributes.
+generated-members=sqlalchemy.func.*,sqlalchemy.text.*
 
 [REPORTS]
 output-format=text

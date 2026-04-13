@@ -311,7 +311,7 @@ class AnalyticsService:
                 placeholders = ", ".join([f":d{i}" for i in range(len(periods))])
                 params = {f"d{i}": periods[i] for i in range(len(periods))}
                 revenue_stmt = text(
-                    f"""
+                    """
                     SELECT DATE(created_at) as day, COALESCE(SUM(amount), 0) as revenue
                     FROM opportunities
                     WHERE created_at >= :start AND created_at <= :end AND stage NOT IN ('closed_won','closed_lost')

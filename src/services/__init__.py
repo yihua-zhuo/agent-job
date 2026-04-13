@@ -41,7 +41,6 @@ __all__ = [
     "is_cross_tenant_safe",
     "MarketingService",
     "NotificationService",
-    "PaginatedData",
     "Permission",
     "RBACService",
     "ReportService",
