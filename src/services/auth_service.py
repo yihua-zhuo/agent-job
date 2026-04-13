@@ -8,7 +8,7 @@ from typing import cast, Optional, Dict
 
 from sqlalchemy import text
 
-from src.db.connection import get_db_session
+from db.connection import get_db_session
 
 
 class AuthService:
@@ -154,7 +154,7 @@ class AuthService:
         Returns:
             Dict with 'success', 'data', and 'message' keys.
         """
-        from src.services.user_service import UserService
+        from services.user_service import UserService
 
         user_svc = UserService()
         return await user_svc.create_user(

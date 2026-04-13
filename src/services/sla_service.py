@@ -4,8 +4,8 @@ from typing import List, Literal, Optional
 
 from sqlalchemy import text
 
-from src.db.connection import get_db_session
-from src.models.ticket import Ticket, SLALevel, SLA_CONFIGS
+from db.connection import get_db_session
+from models.ticket import Ticket, SLALevel, SLA_CONFIGS
 
 
 class SLAService:
@@ -82,7 +82,7 @@ class SLAService:
         # Columns: id, subject, description, status, priority, channel,
         #          customer_id, sla_level, tenant_id, assigned_to,
         #          created_at, updated_at, resolved_at, first_response_at, response_deadline
-        from src.models.ticket import (
+        from models.ticket import (
             TicketStatus, TicketPriority, TicketChannel,
         )
 

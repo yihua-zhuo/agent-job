@@ -21,10 +21,11 @@ try:
 except AttributeError:
     pass
 
-# Ensure project root is on sys.path so "src" imports resolve
+# Ensure src/ is on sys.path so top-level package imports resolve
 _project_root = Path(__file__).resolve().parents[2]
-if str(_project_root) not in sys.path:
-    sys.path.insert(0, str(_project_root))
+_src_root = _project_root / "src"
+if str(_src_root) not in sys.path:
+    sys.path.insert(0, str(_src_root))
 
 
 # ---------------------------------------------------------------------------
@@ -313,20 +314,20 @@ def mock_get_db_session(monkeypatch):
         yield session
 
     targets = [
-        "src.db.connection",
-        "src.services.activity_service",
-        "src.services.analytics_service",
-        "src.services.auth_service",
-        "src.services.churn_prediction",
-        "src.services.customer_service",
-        "src.services.import_export_service",
-        "src.services.marketing_service",
-        "src.services.pipeline_service",
-        "src.services.sales_service",
-        "src.services.ticket_service",
-        "src.services.tenant_service",
-        "src.services.user_service",
-        "src.services.workflow_service",
+        "db.connection",
+        "services.activity_service",
+        "services.analytics_service",
+        "services.auth_service",
+        "services.churn_prediction",
+        "services.customer_service",
+        "services.import_export_service",
+        "services.marketing_service",
+        "services.pipeline_service",
+        "services.sales_service",
+        "services.ticket_service",
+        "services.tenant_service",
+        "services.user_service",
+        "services.workflow_service",
     ]
 
     for target in targets:

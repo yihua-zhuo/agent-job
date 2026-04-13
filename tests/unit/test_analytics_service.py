@@ -1,6 +1,6 @@
 """Unit tests for AnalyticsService."""
 import pytest
-from src.services.analytics_service import AnalyticsService
+from services.analytics_service import AnalyticsService
 
 
 @pytest.fixture

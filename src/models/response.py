@@ -111,6 +111,8 @@ class ApiResponse(Generic[T]):
             1404: ResponseStatus.NOT_FOUND,
             1001: ResponseStatus.VALIDATION_ERROR,
             1500: ResponseStatus.SERVER_ERROR,
+            2001: ResponseStatus.NOT_FOUND,   # USER_NOT_FOUND
+            3001: ResponseStatus.NOT_FOUND,   # RESOURCE_NOT_FOUND
         }
         return cls(
             status=status_map.get(code, ResponseStatus.ERROR),

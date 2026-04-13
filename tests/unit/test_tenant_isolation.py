@@ -1,6 +1,6 @@
 """Unit tests for TenantService and data isolation."""
 import pytest
-from src.services.tenant_service import TenantService
+from services.tenant_service import TenantService
 
 
 @pytest.mark.asyncio
@@ -73,7 +73,7 @@ class TestTenantService:
 @pytest.mark.asyncio
 class TestDataIsolation:
     async def test_customer_isolation_between_tenants(self):
-        from src.services.customer_service import CustomerService
+        from services.customer_service import CustomerService
 
         cs_a = CustomerService()
         cs_b = CustomerService()

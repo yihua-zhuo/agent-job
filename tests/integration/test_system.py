@@ -1,25 +1,26 @@
 """
-Integration tests using a real PostgreSQL database on Supabase.
+Integration tests using a real PostgreSQL database.
+
+All service calls use the current class-based service APIs. Each test
+exercises a full code path against the test database via get_db_session()
+(see conftest.py for how this is wired to the test DB).
 
 Run with:  pytest tests/integration/ -v
-All tests use async/await with the real DB via pytest-asyncio + async_session.
 """
 from __future__ import annotations
 
 import uuid
 
 import pytest
-import pytest_asyncio
-from sqlalchemy import select, text
 
-from src.services import (
-    auth_service,
-    customer_service,
-    pipeline_service,
-    sales_service,
-    ticket_service,
-    user_service,
-)
+from models.response import ResponseStatus
+from models.ticket import TicketChannel, TicketPriority, TicketStatus
+from services.auth_service import AuthService
+from services.customer_service import CustomerService
+from services.pipeline_service import PipelineService
+from services.sales_service import SalesService
+from services.ticket_service import TicketService
+from services.user_service import UserService
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -29,72 +30,52 @@ from src.services import (
 class TestPipelineIntegration:
     """Full pipeline lifecycle via the real DB."""
 
-    async def test_create_and_get_pipeline(self, async_session, tenant_id):
-        result = await pipeline_service.create_pipeline(
-            async_session,
+    async def test_create_and_get_pipeline(self, db_schema, tenant_id):
+        svc = PipelineService()
+        result = await svc.create_pipeline(
             tenant_id=tenant_id,
-            name="Deal Pipeline",
-            description="Main sales pipeline",
+            data={"name": "Deal Pipeline", "description": "Main sales pipeline"},
         )
-        assert result.status == 201, f"Expected 201, got {result.status}"
+        assert result.status == ResponseStatus.SUCCESS, f"Got: {result.status}, {result.message}"
         data = result.data
         assert data["name"] == "Deal Pipeline"
         assert data["tenant_id"] == tenant_id
 
-        # Fetch it back
-        fetched = await pipeline_service.get_pipeline(
-            async_session, tenant_id, data["id"]
-        )
-        assert fetched.status == 200
+        fetched = await svc.get_pipeline(tenant_id, data["id"])
+        assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data["name"] == "Deal Pipeline"
 
     async def test_pipeline_cross_tenant_isolation(
-        self, async_session, tenant_id, tenant_id_2
+        self, db_schema, tenant_id, tenant_id_2
     ):
-        p1 = await pipeline_service.create_pipeline(
-            async_session,
-            tenant_id=tenant_id,
-            name="Tenant 1 Pipeline",
-        )
-        p2 = await pipeline_service.create_pipeline(
-            async_session,
-            tenant_id=tenant_id_2,
-            name="Tenant 2 Pipeline",
-        )
-        assert p1.status == 201
-        assert p2.status == 201
+        svc = PipelineService()
+        p1 = await svc.create_pipeline(tenant_id=tenant_id, data={"name": "Tenant 1 Pipeline"})
+        p2 = await svc.create_pipeline(tenant_id=tenant_id_2, data={"name": "Tenant 2 Pipeline"})
+        assert p1.status == ResponseStatus.SUCCESS
+        assert p2.status == ResponseStatus.SUCCESS
 
-        # Tenant 1 should NOT see Tenant 2's pipeline
-        list_t1 = await pipeline_service.list_pipelines(async_session, tenant_id)
-        ids_t1 = [p["id"] for p in list_t1.data["pipelines"]]
+        list_t1 = await svc.list_pipelines(tenant_id)
+        ids_t1 = [p["id"] for p in list_t1.data.items]
         assert p2.data["id"] not in ids_t1
 
-        # Tenant 2 should NOT see Tenant 1's pipeline
-        list_t2 = await pipeline_service.list_pipelines(async_session, tenant_id_2)
-        ids_t2 = [p["id"] for p in list_t2.data["pipelines"]]
+        list_t2 = await svc.list_pipelines(tenant_id_2)
+        ids_t2 = [p["id"] for p in list_t2.data.items]
         assert p1.data["id"] not in ids_t2
 
-    async def test_update_and_delete_pipeline(self, async_session, tenant_id):
-        created = await pipeline_service.create_pipeline(
-            async_session,
-            tenant_id=tenant_id,
-            name="Original Name",
-        )
+    async def test_update_and_delete_pipeline(self, db_schema, tenant_id):
+        svc = PipelineService()
+        created = await svc.create_pipeline(tenant_id=tenant_id, data={"name": "Original Name"})
         pid = created.data["id"]
 
-        updated = await pipeline_service.update_pipeline(
-            async_session, tenant_id, pid, name="Updated Name"
-        )
-        assert updated.status == 200
+        updated = await svc.update_pipeline(tenant_id, pid, data={"name": "Updated Name"})
+        assert updated.status == ResponseStatus.SUCCESS
         assert updated.data["name"] == "Updated Name"
 
-        deleted = await pipeline_service.delete_pipeline(
-            async_session, tenant_id, pid
-        )
-        assert deleted.status == 200
+        deleted = await svc.delete_pipeline(tenant_id, pid)
+        assert deleted.status == ResponseStatus.SUCCESS
 
-        gone = await pipeline_service.get_pipeline(async_session, tenant_id, pid)
-        assert gone.status == 404
+        gone = await svc.get_pipeline(tenant_id, pid)
+        assert gone.status == ResponseStatus.NOT_FOUND
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -104,48 +85,45 @@ class TestPipelineIntegration:
 class TestCustomerIntegration:
     """Full customer CRUD via the real DB."""
 
-    async def test_create_and_get_customer(self, async_session, tenant_id):
-        result = await customer_service.create_customer(
-            async_session,
+    async def test_create_and_get_customer(self, db_schema, tenant_id):
+        svc = CustomerService()
+        result = await svc.create_customer(
+            data={
+                "name": "Acme Corp",
+                "email": "acme@example.com",
+                "phone": "+1-555-0001",
+            },
             tenant_id=tenant_id,
-            name="Acme Corp",
-            email="acme@example.com",
-            phone="+1-555-0001",
         )
-        assert result.status == 201
+        assert result.status == ResponseStatus.SUCCESS
         data = result.data
         assert data["name"] == "Acme Corp"
 
-        fetched = await customer_service.get_customer(
-            async_session, tenant_id, data["id"]
-        )
-        assert fetched.status == 200
+        fetched = await svc.get_customer(customer_id=data["id"], tenant_id=tenant_id)
+        assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data["email"] == "acme@example.com"
 
-    async def test_customer_not_found_returns_404(self, async_session, tenant_id):
-        result = await customer_service.get_customer(
-            async_session, tenant_id, str(uuid.uuid4())
-        )
-        assert result.status == 404
+    async def test_customer_not_found_returns_404(self, db_schema, tenant_id):
+        svc = CustomerService()
+        result = await svc.get_customer(customer_id=999_999_999, tenant_id=tenant_id)
+        assert result.status == ResponseStatus.NOT_FOUND
 
     async def test_customer_cross_tenant_isolation(
-        self, async_session, tenant_id, tenant_id_2
+        self, db_schema, tenant_id, tenant_id_2
     ):
-        c1 = await customer_service.create_customer(
-            async_session,
+        svc = CustomerService()
+        c1 = await svc.create_customer(
+            data={"name": "Customer One", "email": "c1@example.com"},
             tenant_id=tenant_id,
-            name="Customer One",
-            email="c1@example.com",
         )
-        c2 = await customer_service.create_customer(
-            async_session,
+        c2 = await svc.create_customer(
+            data={"name": "Customer Two", "email": "c2@example.com"},
             tenant_id=tenant_id_2,
-            name="Customer Two",
-            email="c2@example.com",
         )
-        list_t1 = await customer_service.list_customers(async_session, tenant_id)
-        ids = [c["id"] for c in list_t1.data["customers"]]
+        list_t1 = await svc.list_customers(tenant_id=tenant_id)
+        ids = [c["id"] for c in list_t1.data.items]
         assert c2.data["id"] not in ids
+        assert c1.data["id"] in ids
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -155,42 +133,41 @@ class TestCustomerIntegration:
 class TestUserIntegration:
     """Full user lifecycle via the real DB."""
 
-    async def test_register_and_authenticate_user(self, async_session, tenant_id):
-        reg = await user_service.register_user(
-            async_session,
-            tenant_id=tenant_id,
-            username="testuser",
-            email="test@example.com",
-            password="Test@Pass1234",
-        )
-        assert reg.status == 201, f"Expected 201, got {reg.status}: {reg.data}"
+    async def test_register_and_authenticate_user(self, db_schema, tenant_id):
+        user_svc = UserService()
+        auth_svc = AuthService()
+        suffix = uuid.uuid4().hex[:8]
+        username = f"user_{suffix}"
+        email = f"user_{suffix}@example.com"
 
-        auth = await auth_service.authenticate(
-            async_session,
-            tenant_id=tenant_id,
-            email="test@example.com",
+        reg = await user_svc.create_user(
+            username=username,
+            email=email,
             password="Test@Pass1234",
-        )
-        assert auth.status == 200, f"Auth failed: {auth.data}"
-        assert "token" in auth.data or "access_token" in auth.data
-
-    async def test_login_wrong_password_returns_401(
-        self, async_session, tenant_id
-    ):
-        await user_service.register_user(
-            async_session,
             tenant_id=tenant_id,
-            username="wrongpw",
-            email="wrongpw@example.com",
+        )
+        assert reg.status == ResponseStatus.SUCCESS, f"Registration failed: {reg.message}"
+
+        auth = await auth_svc.authenticate_user(
+            username=username, password="Test@Pass1234"
+        )
+        assert auth is not None, "authenticate_user should return a user dict on success"
+        assert auth["username"] == username
+
+    async def test_login_wrong_password_returns_none(self, db_schema, tenant_id):
+        user_svc = UserService()
+        auth_svc = AuthService()
+        suffix = uuid.uuid4().hex[:8]
+        username = f"wrongpw_{suffix}"
+
+        await user_svc.create_user(
+            username=username,
+            email=f"{username}@example.com",
             password="CorrectPass@1",
-        )
-        auth = await auth_service.authenticate(
-            async_session,
             tenant_id=tenant_id,
-            email="wrongpw@example.com",
-            password="WrongPassword",
         )
-        assert auth.status == 401
+        auth = await auth_svc.authenticate_user(username=username, password="WrongPassword")
+        assert auth is None
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -200,50 +177,63 @@ class TestUserIntegration:
 class TestSalesIntegration:
     """Opportunity CRUD via the real DB."""
 
-    async def test_create_and_get_opportunity(self, async_session, tenant_id):
-        cust = await customer_service.create_customer(
-            async_session,
+    async def _setup_pipeline_and_customer(self, tenant_id):
+        cust_svc = CustomerService()
+        pipe_svc = PipelineService()
+        suffix = uuid.uuid4().hex[:8]
+        cust = await cust_svc.create_customer(
+            data={"name": f"Opp Cust {suffix}", "email": f"opp_{suffix}@example.com"},
             tenant_id=tenant_id,
-            name="Opp Customer",
-            email="opp@example.com",
         )
-        cid = cust.data["id"]
+        pipe = await pipe_svc.create_pipeline(
+            tenant_id=tenant_id, data={"name": f"Sales Pipeline {suffix}"}
+        )
+        assert cust.status == ResponseStatus.SUCCESS
+        assert pipe.status == ResponseStatus.SUCCESS
+        return cust.data["id"], pipe.data["id"]
 
-        opp = await sales_service.create_opportunity(
-            async_session,
-            tenant_id=tenant_id,
-            customer_id=cid,
-            title="Big Deal",
-            amount=50000.0,
-        )
-        assert opp.status == 201
+    async def test_create_and_get_opportunity(self, db_schema, tenant_id):
+        sales_svc = SalesService()
+        cid, pid = await self._setup_pipeline_and_customer(tenant_id)
 
-        fetched = await sales_service.get_opportunity(
-            async_session, tenant_id, opp.data["id"]
+        opp = await sales_svc.create_opportunity(
+            tenant_id=tenant_id,
+            data={
+                "name": "Big Deal",
+                "customer_id": cid,
+                "pipeline_id": pid,
+                "stage": "qualified",
+                "amount": 50000.0,
+                "owner_id": 1,
+            },
         )
-        assert fetched.status == 200
-        assert fetched.data["title"] == "Big Deal"
+        assert opp.status == ResponseStatus.SUCCESS, f"Failed: {opp.message}"
 
-    async def test_update_opportunity_stage(self, async_session, tenant_id):
-        cust = await customer_service.create_customer(
-            async_session,
+        fetched = await sales_svc.get_opportunity(tenant_id, opp.data["id"])
+        assert fetched.status == ResponseStatus.SUCCESS
+        assert fetched.data["name"] == "Big Deal"
+
+    async def test_update_opportunity_stage(self, db_schema, tenant_id):
+        sales_svc = SalesService()
+        cid, pid = await self._setup_pipeline_and_customer(tenant_id)
+
+        opp = await sales_svc.create_opportunity(
             tenant_id=tenant_id,
-            name="Stage Test",
-            email="stage@example.com",
-        )
-        opp = await sales_service.create_opportunity(
-            async_session,
-            tenant_id=tenant_id,
-            customer_id=cust.data["id"],
-            title="Moving Opp",
-            amount=1000.0,
+            data={
+                "name": "Moving Opp",
+                "customer_id": cid,
+                "pipeline_id": pid,
+                "stage": "qualified",
+                "amount": 1000.0,
+                "owner_id": 1,
+            },
         )
         oid = opp.data["id"]
 
-        updated = await sales_service.update_opportunity(
-            async_session, tenant_id, oid, stage="closed_won"
+        updated = await sales_svc.update_opportunity(
+            tenant_id, oid, data={"stage": "closed_won"}
         )
-        assert updated.status == 200
+        assert updated.status == ResponseStatus.SUCCESS
         assert updated.data["stage"] == "closed_won"
 
 
@@ -254,58 +244,76 @@ class TestSalesIntegration:
 class TestTicketIntegration:
     """Ticket CRUD via the real DB."""
 
-    async def test_create_and_get_ticket(self, async_session, tenant_id):
-        result = await ticket_service.create_ticket(
-            async_session,
+    async def _ensure_customer(self, tenant_id) -> int:
+        svc = CustomerService()
+        result = await svc.create_customer(
+            data={"name": "Ticket Cust", "email": f"tc_{uuid.uuid4().hex[:8]}@example.com"},
             tenant_id=tenant_id,
-            title="Critical Bug",
+        )
+        return result.data["id"]
+
+    async def test_create_and_get_ticket(self, db_schema, tenant_id):
+        svc = TicketService()
+        cid = await self._ensure_customer(tenant_id)
+
+        result = await svc.create_ticket(
+            subject="Critical Bug",
             description="App is down",
-            priority="high",
-        )
-        assert result.status == 201
-        assert result.data["status"] == "open"
-
-        fetched = await ticket_service.get_ticket(
-            async_session, tenant_id, result.data["id"]
-        )
-        assert fetched.status == 200
-        assert fetched.data["priority"] == "high"
-
-    async def test_update_ticket_status(self, async_session, tenant_id):
-        tkt = await ticket_service.create_ticket(
-            async_session,
+            customer_id=cid,
+            channel=TicketChannel.EMAIL,
+            priority=TicketPriority.HIGH,
             tenant_id=tenant_id,
-            title="Issue",
+        )
+        assert result.status == ResponseStatus.SUCCESS
+        assert result.data.status == TicketStatus.OPEN
+
+        fetched = await svc.get_ticket(ticket_id=result.data.id, tenant_id=tenant_id)
+        assert fetched.status == ResponseStatus.SUCCESS
+        assert fetched.data.priority == TicketPriority.HIGH
+
+    async def test_update_ticket_status(self, db_schema, tenant_id):
+        svc = TicketService()
+        cid = await self._ensure_customer(tenant_id)
+
+        tkt = await svc.create_ticket(
+            subject="Issue",
             description="Needs fix",
-            priority="medium",
-        )
-        oid = tkt.data["id"]
-
-        updated = await ticket_service.update_ticket(
-            async_session, tenant_id, oid, status="closed"
-        )
-        assert updated.status == 200
-        assert updated.data["status"] == "closed"
-
-    async def test_list_tickets_with_filters(self, async_session, tenant_id):
-        await ticket_service.create_ticket(
-            async_session,
+            customer_id=cid,
+            channel=TicketChannel.EMAIL,
+            priority=TicketPriority.MEDIUM,
             tenant_id=tenant_id,
-            title="P1 Bug",
-            description="",
-            priority="high",
         )
-        await ticket_service.create_ticket(
-            async_session,
-            tenant_id=tenant_id,
-            title="P2 Bug",
+        oid = tkt.data.id
+
+        updated = await svc.update_ticket(
+            ticket_id=oid, tenant_id=tenant_id, status=TicketStatus.CLOSED
+        )
+        assert updated.status == ResponseStatus.SUCCESS
+        assert updated.data.status == TicketStatus.CLOSED
+
+    async def test_list_tickets_with_filters(self, db_schema, tenant_id):
+        svc = TicketService()
+        cid = await self._ensure_customer(tenant_id)
+
+        await svc.create_ticket(
+            subject="P1 Bug",
             description="",
-            priority="low",
+            customer_id=cid,
+            channel=TicketChannel.EMAIL,
+            priority=TicketPriority.HIGH,
+            tenant_id=tenant_id,
+        )
+        await svc.create_ticket(
+            subject="P2 Bug",
+            description="",
+            customer_id=cid,
+            channel=TicketChannel.EMAIL,
+            priority=TicketPriority.LOW,
+            tenant_id=tenant_id,
         )
 
-        # Filter by priority
-        result = await ticket_service.list_tickets(
-            async_session, tenant_id, priority="high"
+        result = await svc.list_tickets(
+            tenant_id=tenant_id, priority=TicketPriority.HIGH
         )
-        assert result.status == 200
-        assert all(t["priority"] == "high" for t in result.data["tickets"])
+        assert result.status == ResponseStatus.SUCCESS
+        assert all(t.priority == TicketPriority.HIGH for t in result.data.items)

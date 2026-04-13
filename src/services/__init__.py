@@ -1,11 +1,11 @@
 """Services package for CRM system."""
-from src.services.activity_service import ActivityService
-from src.services.analytics_service import AnalyticsService
-from src.services.auth_service import AuthService, is_valid_email, sanitize_string, validate_id
-from src.services.automation_rules import AutomationRules
-from src.services.churn_prediction import ChurnPredictionService
-from src.services.customer_service import CustomerService
-from src.services.data_isolation import (
+from services.activity_service import ActivityService
+from services.analytics_service import AnalyticsService
+from services.auth_service import AuthService, is_valid_email, sanitize_string, validate_id
+from services.automation_rules import AutomationRules
+from services.churn_prediction import ChurnPredictionService
+from services.customer_service import CustomerService
+from services.data_isolation import (
     DataIsolationError,
     TenantScope,
     is_cross_tenant_safe,
@@ -13,20 +13,20 @@ from src.services.data_isolation import (
     sanitize_tenant_write,
     get_cross_tenant_fields,
 )
-from src.services.import_export_service import ImportExportService
-from src.services.marketing_service import MarketingService
-from src.services.notification_service import NotificationService
-from src.services.report_service import ReportService
-from src.services.rbac_service import RBACService, Permission
-from src.services.sales_recommendation import SalesRecommendationService
-from src.services.sales_service import SalesService
-from src.services.smart_categorization import SmartCategorizationService
-from src.services.sla_service import SLAService
-from src.services.task_service import TaskService
-from src.services.tenant_service import TenantService
-from src.services.trigger_service import TriggerService
-from src.services.user_service import UserService
-from src.services.workflow_service import WorkflowService
+from services.import_export_service import ImportExportService
+from services.marketing_service import MarketingService
+from services.notification_service import NotificationService
+from services.report_service import ReportService
+from services.rbac_service import RBACService, Permission
+from services.sales_recommendation import SalesRecommendationService
+from services.sales_service import SalesService
+from services.smart_categorization import SmartCategorizationService
+from services.sla_service import SLAService
+from services.task_service import TaskService
+from services.tenant_service import TenantService
+from services.trigger_service import TriggerService
+from services.user_service import UserService
+from services.workflow_service import WorkflowService
 
 __all__ = [
     "ActivityService",

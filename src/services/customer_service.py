@@ -1,11 +1,21 @@
 """Customer service layer - handles customer business logic via PostgreSQL/SQLAlchemy async."""
+import json
 from datetime import datetime
 from typing import Optional, List, Dict
 from sqlalchemy import select, update, delete, func, text
-from src.db.connection import get_db_session
-from src.db.models.customer import CustomerModel
-from src.models.response import ApiResponse
-from src.models.customer import Customer, CustomerStatus
+from db.connection import get_db_session
+from db.models.customer import CustomerModel
+from models.response import ApiResponse
+from models.customer import Customer, CustomerStatus
+
+
+def _dumps_tags(tags) -> str:
+    """Serialize tags to a JSON string for PostgreSQL jsonb insertion."""
+    if tags is None:
+        return "[]"
+    if isinstance(tags, str):
+        return tags
+    return json.dumps(tags)
 
 
 class CustomerService:
@@ -38,7 +48,7 @@ class CustomerService:
             INSERT INTO customers (tenant_id, name, email, phone, company, status,
                                    owner_id, tags, created_at, updated_at)
             VALUES (:tenant_id, :name, :email, :phone, :company, :status,
-                    :owner_id, :tags::jsonb, :created_at, :updated_at)
+                    :owner_id, CAST(:tags AS jsonb), :created_at, :updated_at)
             RETURNING *
         """)
         now = datetime.utcnow()
@@ -54,7 +64,7 @@ class CustomerService:
                     "company": company,
                     "status": status_value.value,
                     "owner_id": owner_id,
-                    "tags": tags,
+                    "tags": _dumps_tags(tags),
                     "created_at": now,
                     "updated_at": now,
                 },
@@ -178,8 +188,8 @@ class CustomerService:
             params["status"] = status_val.value
 
         if 'tags' in data:
-            update_fields.append("tags = :tags::jsonb")
-            params["tags"] = data["tags"]
+            update_fields.append("tags = CAST(:tags AS jsonb)")
+            params["tags"] = _dumps_tags(data["tags"])
 
         if not update_fields:
             return ApiResponse.error(message="没有需要更新的字段", code=1001)
@@ -274,11 +284,11 @@ class CustomerService:
 
             now = datetime.utcnow()
             update_sql = text(
-                "UPDATE customers SET tags = :tags::jsonb, updated_at = :updated_at "
+                "UPDATE customers SET tags = CAST(:tags AS jsonb), updated_at = :updated_at "
                 "WHERE id = :id RETURNING *"
             )
             upd_result = await session.execute(
-                update_sql, {"tags": existing_tags, "updated_at": now, "id": customer_id}
+                update_sql, {"tags": _dumps_tags(existing_tags), "updated_at": now, "id": customer_id}
             )
             upd_result.fetchone()
 
@@ -310,11 +320,11 @@ class CustomerService:
 
             now = datetime.utcnow()
             update_sql = text(
-                "UPDATE customers SET tags = :tags::jsonb, updated_at = :updated_at "
+                "UPDATE customers SET tags = CAST(:tags AS jsonb), updated_at = :updated_at "
                 "WHERE id = :id RETURNING *"
             )
             await session.execute(
-                update_sql, {"tags": existing_tags, "updated_at": now, "id": customer_id}
+                update_sql, {"tags": _dumps_tags(existing_tags), "updated_at": now, "id": customer_id}
             )
 
         return ApiResponse.success(data={"id": customer_id, "tag": tag}, message="标签移除成功")
@@ -432,7 +442,7 @@ class CustomerService:
                 INSERT INTO customers (tenant_id, name, email, phone, company, status,
                                        owner_id, tags, created_at, updated_at)
                 VALUES (:tenant_id, :name, :email, :phone, :company, :status,
-                        :owner_id, :tags::jsonb, :created_at, :updated_at)
+                        :owner_id, CAST(:tags AS jsonb), :created_at, :updated_at)
                 RETURNING id
             """)
 
@@ -448,7 +458,7 @@ class CustomerService:
                             "company": data.get('company'),
                             "status": status_value.value,
                             "owner_id": data.get('owner_id', 0),
-                            "tags": tags,
+                            "tags": _dumps_tags(tags),
                             "created_at": now,
                             "updated_at": now,
                         },

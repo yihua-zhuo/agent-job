@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify
-from src.services.customer_service import CustomerService
-from src.internal.middleware.auth import require_auth, get_current_tenant_id
+from services.customer_service import CustomerService
+from internal.middleware.auth import require_auth, get_current_tenant_id
 
 customer_bp = Blueprint('customers', __name__, url_prefix='/api/v1/customers')
 service = CustomerService()

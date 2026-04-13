@@ -48,7 +48,7 @@ class _FakeJWT:
 
 sys.modules["jwt"] = _FakeJWT  # type: ignore[assign]
 
-from src.services.auth_service import AuthService, is_valid_email
+from services.auth_service import AuthService, is_valid_email
 
 
 @pytest.fixture

@@ -19,7 +19,7 @@ class TestEngineCreation:
         """create_engine_from_env raises ValueError when DATABASE_URL is unset."""
         # Reload the module with DATABASE_URL removed from env.
         import importlib
-        import src.internal.db.engine as eng_module
+        import internal.db.engine as eng_module
 
         # Save state.
         orig_engine = eng_module._engine
@@ -37,7 +37,7 @@ class TestEngineCreation:
 
     def test_base_is_declarative(self):
         """Base is a declarative class with a metadata attribute."""
-        from src.internal.db.engine import Base
+        from internal.db.engine import Base
 
         assert Base is not None
         assert hasattr(Base, "metadata")
@@ -50,14 +50,14 @@ class TestSessionScope:
 
     def test_session_scope_commits(self, db_session):
         """session_scope commits a transaction on normal exit."""
-        from src.internal.db.engine import get_engine
+        from internal.db.engine import get_engine
 
         eng = get_engine()
         with eng.connect() as conn:
             conn.execute(text("SELECT 1"))  # Warm up.
 
         # Use a separate connection to verify commit visibility.
-        from src.internal.db import session_scope
+        from internal.db import session_scope
 
         with session_scope() as s:
             s.execute(text("SELECT 1 AS a"))
@@ -68,7 +68,7 @@ class TestSessionScope:
     def test_session_scope_rollback_on_exception(self):
         """session_scope rolls back when an exception is raised inside."""
         import random
-        from src.internal.db import session_scope
+        from internal.db import session_scope
 
         table_name = f"rollback_test_{random.randint(10000, 99999)}"
 

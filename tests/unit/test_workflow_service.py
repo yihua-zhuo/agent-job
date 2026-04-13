@@ -2,7 +2,7 @@
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock
-from src.services.workflow_service import WorkflowService
+from services.workflow_service import WorkflowService
 
 
 @pytest.fixture

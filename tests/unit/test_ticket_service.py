@@ -1,7 +1,7 @@
 """Unit tests for TicketService."""
 import pytest
 import pytest_asyncio
-from src.services.ticket_service import TicketService
+from services.ticket_service import TicketService
 
 
 @pytest.fixture

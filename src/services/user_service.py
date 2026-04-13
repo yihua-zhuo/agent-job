@@ -10,10 +10,10 @@ from typing import Optional, Tuple
 import bcrypt
 from sqlalchemy import select, update, delete, func
 
-from src.db.connection import get_db_session
-from src.db.models.user import UserModel
-from src.models.user import User, UserRole, UserStatus
-from src.models.response import ApiResponse, PaginatedData, ApiError
+from db.connection import get_db_session
+from db.models.user import UserModel
+from models.user import User, UserRole, UserStatus
+from models.response import ApiResponse, PaginatedData, ApiError
 
 
 class ValidationError(Exception):
@@ -90,6 +90,9 @@ class UserService:
         email: str,
         password: str,
         role: UserRole = UserRole.USER,
+        tenant_id: int = 0,
+        full_name: Optional[str] = None,
+        **kwargs,
     ) -> ApiResponse[User]:
         """创建用户"""
         # Validate username
@@ -147,11 +150,13 @@ class UserService:
 
             now = datetime.utcnow()
             row = UserModel(
+                tenant_id=tenant_id,
                 username=username,
                 email=email,
                 password_hash=self._hash_password(password),
-                role=role.value,
+                role=role.value if hasattr(role, "value") else role,
                 status=initial_status.value,
+                full_name=full_name,
                 created_at=now,
                 updated_at=now,
             )

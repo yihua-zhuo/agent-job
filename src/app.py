@@ -1,9 +1,9 @@
 from flask import Flask, jsonify
 import os
 import secrets
-from src.api import register_routes
-from src.internal.middleware.auth import require_auth, get_current_tenant_id
-from src.internal.middleware.tenant import tenant_isolation_middleware, require_tenant
+from api import register_routes
+from internal.middleware.auth import require_auth, get_current_tenant_id
+from internal.middleware.tenant import tenant_isolation_middleware, require_tenant
 
 
 def create_app():

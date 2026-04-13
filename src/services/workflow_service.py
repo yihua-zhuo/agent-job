@@ -7,8 +7,8 @@ from typing import List, Dict, Optional
 
 from sqlalchemy import select, update, delete, func, and_, or_, insert as pg_insert
 
-from src.db.connection import get_db_session
-from src.models.workflow import Workflow, WorkflowExecution, WorkflowStatus, TriggerType
+from db.connection import get_db_session
+from models.workflow import Workflow, WorkflowExecution, WorkflowStatus, TriggerType
 
 
 class WorkflowService:

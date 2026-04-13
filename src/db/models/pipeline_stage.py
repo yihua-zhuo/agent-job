@@ -4,7 +4,7 @@ from datetime import datetime
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from src.db.base import Base
+from db.base import Base
 
 
 class PipelineStageModel(Base):

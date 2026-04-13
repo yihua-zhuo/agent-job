@@ -1,7 +1,7 @@
 from flask import Blueprint, request, jsonify, g
-from src.services.sales_service import SalesService
-from src.internal.middleware.auth import require_auth, get_current_tenant_id
-from src.pkg.errors import AppError
+from services.sales_service import SalesService
+from internal.middleware.auth import require_auth, get_current_tenant_id
+from pkg.errors import AppError
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/api/v1')
 service = SalesService()
