@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Optional, List
@@ -35,20 +35,31 @@ class SLALevel(Enum):
 
 @dataclass
 class Ticket:
-    id: Optional[int]
     subject: str
     description: str
     status: TicketStatus
     priority: TicketPriority
     channel: TicketChannel
     customer_id: int
-    assigned_to: Optional[int]
     sla_level: SLALevel
-    created_at: datetime
-    updated_at: datetime
-    resolved_at: Optional[datetime]
-    first_response_at: Optional[datetime]
-    response_deadline: Optional[datetime]
+    id: Optional[int] = None
+    tenant_id: int = 0
+    assigned_to: Optional[int] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    resolved_at: Optional[datetime] = None
+    first_response_at: Optional[datetime] = None
+    response_deadline: Optional[datetime] = None
+
+    def __post_init__(self) -> None:
+        if self.id is None:
+            self.id = None
+        if self.assigned_to is None:
+            self.assigned_to = None
+        if self.created_at is None:
+            self.created_at = datetime.utcnow()
+        if self.updated_at is None:
+            self.updated_at = datetime.utcnow()
 
     def check_sla_breach(self) -> bool:
         """检查是否SLA超时"""
@@ -61,12 +72,19 @@ class Ticket:
 
 @dataclass
 class TicketReply:
-    id: Optional[int]
     ticket_id: int
     content: str
     is_internal: bool  # 内部备注，不对客户可见
     created_by: int
-    created_at: datetime
+    id: Optional[int] = None
+    tenant_id: int = 0
+    created_at: Optional[datetime] = None
+
+    def __post_init__(self) -> None:
+        if self.id is None:
+            self.id = None
+        if self.created_at is None:
+            self.created_at = datetime.utcnow()
 
 
 @dataclass

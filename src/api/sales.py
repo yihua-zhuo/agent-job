@@ -1,4 +1,4 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, g
 from src.services.sales_service import SalesService
 from src.middleware.auth import AuthMiddleware
 import os
@@ -8,6 +8,13 @@ service = SalesService()
 
 # Initialize auth middleware with JWT_SECRET from environment
 _auth = AuthMiddleware(secret_key=os.environ.get('JWT_SECRET_KEY'))
+
+
+def _get_tenant_id() -> int:
+    """Extract tenant_id from current request context."""
+    if hasattr(g, 'current_user'):
+        return g.current_user.get('tenant_id', 0) or 0
+    return 0
 
 
 def _validate_pagination(page, page_size):
@@ -27,21 +34,21 @@ def create_pipeline():
         return jsonify({"code": 1001, "message": "Request body is required"}), 400
     if not data.get('name') or not data.get('name').strip():
         return jsonify({"code": 1001, "message": "管道名称不能为空"}), 400
-    response = service.create_pipeline(data)
+    response = service.create_pipeline(_get_tenant_id(), data)
     return jsonify(response.to_dict())
 
 
 @sales_bp.route('/pipelines', methods=['GET'])
 @_auth.require_auth
 def list_pipelines():
-    response = service.list_pipelines()
+    response = service.list_pipelines(_get_tenant_id())
     return jsonify(response.to_dict())
 
 
 @sales_bp.route('/pipelines/<int:pipeline_id>', methods=['GET'])
 @_auth.require_auth
 def get_pipeline(pipeline_id):
-    response = service.get_pipeline(pipeline_id)
+    response = service.get_pipeline(_get_tenant_id(), pipeline_id)
     status_code = 200 if response.status.value == "success" else 404
     return jsonify(response.to_dict()), status_code
 
@@ -49,7 +56,7 @@ def get_pipeline(pipeline_id):
 @sales_bp.route('/pipelines/<int:pipeline_id>/stats', methods=['GET'])
 @_auth.require_auth
 def get_pipeline_stats(pipeline_id):
-    response = service.get_pipeline_stats(pipeline_id)
+    response = service.get_pipeline_stats(_get_tenant_id(), pipeline_id)
     status_code = 200 if response.status.value == "success" else 404
     return jsonify(response.to_dict()), status_code
 
@@ -57,7 +64,7 @@ def get_pipeline_stats(pipeline_id):
 @sales_bp.route('/pipelines/<int:pipeline_id>/funnel', methods=['GET'])
 @_auth.require_auth
 def get_pipeline_funnel(pipeline_id):
-    response = service.get_pipeline_funnel(pipeline_id)
+    response = service.get_pipeline_funnel(_get_tenant_id(), pipeline_id)
     status_code = 200 if response.status.value == "success" else 404
     return jsonify(response.to_dict()), status_code
 
@@ -75,7 +82,7 @@ def create_opportunity():
     if missing:
         return jsonify({"code": 1002, "message": f"缺少必填字段: {', '.join(missing)}"}), 400
     
-    response = service.create_opportunity(data)
+    response = service.create_opportunity(_get_tenant_id(), data)
     return jsonify(response.to_dict())
 
 
@@ -92,14 +99,14 @@ def list_opportunities():
     pipeline_id = request.args.get('pipeline_id', type=int)
     stage = request.args.get('stage')
     owner_id = request.args.get('owner_id', type=int)
-    response = service.list_opportunities(page=page, page_size=page_size, pipeline_id=pipeline_id, stage=stage, owner_id=owner_id)
+    response = service.list_opportunities(_get_tenant_id(), page=page, page_size=page_size, pipeline_id=pipeline_id, stage=stage, owner_id=owner_id)
     return jsonify(response.to_dict())
 
 
 @sales_bp.route('/opportunities/<int:opp_id>', methods=['GET'])
 @_auth.require_auth
 def get_opportunity(opp_id):
-    response = service.get_opportunity(opp_id)
+    response = service.get_opportunity(_get_tenant_id(), opp_id)
     status_code = 200 if response.status.value == "success" else 404
     return jsonify(response.to_dict()), status_code
 
@@ -110,7 +117,7 @@ def update_opportunity(opp_id):
     data = request.get_json()
     if not data:
         return jsonify({"code": 1001, "message": "Request body is required"}), 400
-    response = service.update_opportunity(opp_id, data)
+    response = service.update_opportunity(_get_tenant_id(), opp_id, data)
     return jsonify(response.to_dict())
 
 
@@ -121,7 +128,7 @@ def change_stage(opp_id):
     stage = data.get('stage')
     if not stage:
         return jsonify({"code": 1001, "message": "stage is required"}), 400
-    response = service.change_stage(opp_id, stage)
+    response = service.change_stage(_get_tenant_id(), opp_id, stage)
     return jsonify(response.to_dict())
 
 
@@ -129,5 +136,5 @@ def change_stage(opp_id):
 @_auth.require_auth
 def get_forecast():
     owner_id = request.args.get('owner_id', type=int)
-    response = service.get_forecast(owner_id=owner_id)
+    response = service.get_forecast(_get_tenant_id(), owner_id=owner_id)
     return jsonify(response.to_dict())
