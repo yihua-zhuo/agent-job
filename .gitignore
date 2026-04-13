@@ -21,3 +21,8 @@ shared-memory/results/
 shared-memory/reports/
 .worktrees/
 .idea
+
+# Claw / agent tooling
+.claw/
+.clawd-todos.json
+.sandbox-home/

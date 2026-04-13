@@ -1,5 +1,13 @@
-from typing import Optional, List, Dict
+"""
+工作流自动化引擎
+使用 PostgreSQL + SQLAlchemy async 进行持久化存储
+"""
 from datetime import datetime
+from typing import List, Dict, Optional
+
+from sqlalchemy import select, update, delete, func, and_, or_, insert as pg_insert
+
+from src.db.connection import get_db_session
 from src.models.workflow import Workflow, WorkflowExecution, WorkflowStatus, TriggerType
 
 
@@ -7,104 +15,200 @@ class WorkflowService:
     """工作流自动化引擎"""
 
     def __init__(self):
-        self._workflows: Dict[int, Workflow] = {}
-        self._executions: Dict[int, List[WorkflowExecution]] = {}
-        self._next_id = 1
+        pass
 
-    def create_workflow(self, name, trigger_type, created_by, **kwargs) -> Workflow:
+    async def create_workflow(
+        self,
+        name: str,
+        trigger_type: TriggerType,
+        created_by: int,
+        **kwargs,
+    ) -> Workflow:
         """创建工作流"""
-        workflow = Workflow(
-            id=self._next_id,
-            name=name,
-            description=kwargs.get("description"),
-            trigger_type=trigger_type,
-            trigger_config=kwargs.get("trigger_config", {}),
-            actions=kwargs.get("actions", []),
-            conditions=kwargs.get("conditions", []),
-            status=WorkflowStatus.DRAFT,
-            created_by=created_by,
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
-        )
-        self._workflows[self._next_id] = workflow
-        self._executions[self._next_id] = []
-        self._next_id += 1
-        return workflow
+        async with get_db_session() as session:
+            stmt = pg_insert(Workflow).values(
+                name=name,
+                description=kwargs.get("description"),
+                trigger_type=trigger_type,
+                trigger_config=kwargs.get("trigger_config", {}),
+                actions=kwargs.get("actions", []),
+                conditions=kwargs.get("conditions", []),
+                status=WorkflowStatus.DRAFT,
+                created_by=created_by,
+                created_at=datetime.now(),
+                updated_at=datetime.now(),
+            ).returning(
+                Workflow.id,
+                Workflow.name,
+                Workflow.description,
+                Workflow.trigger_type,
+                Workflow.trigger_config,
+                Workflow.actions,
+                Workflow.conditions,
+                Workflow.status,
+                Workflow.created_by,
+                Workflow.created_at,
+                Workflow.updated_at,
+            )
+            result = await session.execute(stmt)
+            row = result.fetchone()
+            return Workflow(*row)
 
-    def get_workflow(self, workflow_id: int) -> Optional[Workflow]:
+    async def get_workflow(self, workflow_id: int) -> Optional[Workflow]:
         """获取工作流详情"""
-        return self._workflows.get(workflow_id)
+        async with get_db_session() as session:
+            stmt = select(Workflow).where(Workflow.id == workflow_id)
+            result = await session.execute(stmt)
+            row = result.fetchone()
+            if row is None:
+                return None
+            return Workflow(*row) if not isinstance(row, Workflow) else row
 
-    def update_workflow(self, workflow_id: int, **kwargs) -> Optional[Workflow]:
+    async def update_workflow(self, workflow_id: int, **kwargs) -> Optional[Workflow]:
         """更新工作流"""
-        workflow = self._workflows.get(workflow_id)
-        if not workflow:
-            return None
+        update_values: Dict = {"updated_at": datetime.now()}
         if "name" in kwargs:
-            workflow.name = kwargs["name"]
+            update_values["name"] = kwargs["name"]
         if "description" in kwargs:
-            workflow.description = kwargs["description"]
+            update_values["description"] = kwargs["description"]
         if "trigger_type" in kwargs:
-            workflow.trigger_type = kwargs["trigger_type"]
+            update_values["trigger_type"] = kwargs["trigger_type"]
         if "trigger_config" in kwargs:
-            workflow.trigger_config = kwargs["trigger_config"]
+            update_values["trigger_config"] = kwargs["trigger_config"]
         if "actions" in kwargs:
-            workflow.actions = kwargs["actions"]
+            update_values["actions"] = kwargs["actions"]
         if "conditions" in kwargs:
-            workflow.conditions = kwargs["conditions"]
-        workflow.updated_at = datetime.now()
-        return workflow
+            update_values["conditions"] = kwargs["conditions"]
 
-    def activate_workflow(self, workflow_id: int) -> Optional[Workflow]:
+        async with get_db_session() as session:
+            stmt = (
+                update(Workflow)
+                .where(Workflow.id == workflow_id)
+                .values(**update_values)
+                .returning(
+                    Workflow.id,
+                    Workflow.name,
+                    Workflow.description,
+                    Workflow.trigger_type,
+                    Workflow.trigger_config,
+                    Workflow.actions,
+                    Workflow.conditions,
+                    Workflow.status,
+                    Workflow.created_by,
+                    Workflow.created_at,
+                    Workflow.updated_at,
+                )
+            )
+            result = await session.execute(stmt)
+            row = result.fetchone()
+            if row is None:
+                return None
+            return Workflow(*row)
+
+    async def activate_workflow(self, workflow_id: int) -> Optional[Workflow]:
         """激活工作流"""
-        workflow = self._workflows.get(workflow_id)
-        if not workflow:
-            return None
-        workflow.status = WorkflowStatus.ACTIVE
-        workflow.updated_at = datetime.now()
-        return workflow
+        async with get_db_session() as session:
+            stmt = (
+                update(Workflow)
+                .where(Workflow.id == workflow_id)
+                .values(status=WorkflowStatus.ACTIVE, updated_at=datetime.now())
+                .returning(
+                    Workflow.id,
+                    Workflow.name,
+                    Workflow.description,
+                    Workflow.trigger_type,
+                    Workflow.trigger_config,
+                    Workflow.actions,
+                    Workflow.conditions,
+                    Workflow.status,
+                    Workflow.created_by,
+                    Workflow.created_at,
+                    Workflow.updated_at,
+                )
+            )
+            result = await session.execute(stmt)
+            row = result.fetchone()
+            if row is None:
+                return None
+            return Workflow(*row)
 
-    def pause_workflow(self, workflow_id: int) -> Optional[Workflow]:
+    async def pause_workflow(self, workflow_id: int) -> Optional[Workflow]:
         """暂停工作流"""
-        workflow = self._workflows.get(workflow_id)
-        if not workflow:
-            return None
-        workflow.status = WorkflowStatus.PAUSED
-        workflow.updated_at = datetime.now()
-        return workflow
+        async with get_db_session() as session:
+            stmt = (
+                update(Workflow)
+                .where(Workflow.id == workflow_id)
+                .values(status=WorkflowStatus.PAUSED, updated_at=datetime.now())
+                .returning(
+                    Workflow.id,
+                    Workflow.name,
+                    Workflow.description,
+                    Workflow.trigger_type,
+                    Workflow.trigger_config,
+                    Workflow.actions,
+                    Workflow.conditions,
+                    Workflow.status,
+                    Workflow.created_by,
+                    Workflow.created_at,
+                    Workflow.updated_at,
+                )
+            )
+            result = await session.execute(stmt)
+            row = result.fetchone()
+            if row is None:
+                return None
+            return Workflow(*row)
 
-    def delete_workflow(self, workflow_id: int) -> bool:
+    async def delete_workflow(self, workflow_id: int) -> bool:
         """删除工作流"""
-        if workflow_id in self._workflows:
-            del self._workflows[workflow_id]
-            if workflow_id in self._executions:
-                del self._executions[workflow_id]
-            return True
-        return False
+        async with get_db_session() as session:
+            stmt = delete(Workflow).where(Workflow.id == workflow_id)
+            result = await session.execute(stmt)
+            return result.rowcount > 0
 
-    def list_workflows(self, page: int = 1, page_size: int = 20, status: WorkflowStatus = None) -> Dict:
+    async def list_workflows(
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        status: WorkflowStatus = None,
+    ) -> Dict:
         """工作流列表"""
-        workflows = list(self._workflows.values())
-        if status:
-            workflows = [w for w in workflows if w.status == status]
-        total = len(workflows)
-        start = (page - 1) * page_size
-        end = start + page_size
-        return {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "items": workflows[start:end],
-        }
+        async with get_db_session() as session:
+            base_stmt = select(Workflow)
+            count_stmt = select(func.count(Workflow.id))
 
-    def execute_workflow(self, workflow_id: int, context: Dict) -> WorkflowExecution:
+            if status is not None:
+                base_stmt = base_stmt.where(Workflow.status == status)
+                count_stmt = count_stmt.where(Workflow.status == status)
+
+            total_result = await session.execute(count_stmt)
+            total = total_result.scalar() or 0
+
+            offset = (page - 1) * page_size
+            paginated_stmt = (
+                base_stmt.order_by(Workflow.created_at.desc())
+                .offset(offset)
+                .limit(page_size)
+            )
+            result = await session.execute(paginated_stmt)
+            rows = result.fetchall()
+            items = [Workflow(*row) if not isinstance(row, Workflow) else row for row in rows]
+
+            return {
+                "total": total,
+                "page": page,
+                "page_size": page_size,
+                "items": items,
+            }
+
+    async def execute_workflow(self, workflow_id: int, context: Dict) -> WorkflowExecution:
         """手动执行工作流"""
-        workflow = self._workflows.get(workflow_id)
+        workflow = await self.get_workflow(workflow_id)
         if not workflow:
             raise ValueError(f"Workflow {workflow_id} not found")
 
         execution = WorkflowExecution(
-            id=len(self._executions.get(workflow_id, [])) + 1,
+            id=None,
             workflow_id=workflow_id,
             trigger_type=workflow.trigger_type.value,
             triggered_by=context.get("user_id", 0),
@@ -114,25 +218,40 @@ class WorkflowService:
             result=None,
         )
 
-        if workflow.conditions and not self.evaluate_conditions(workflow_id, context):
+        if workflow.conditions and not await self.evaluate_conditions(workflow_id, context):
             execution.status = "failed"
             execution.result = {"error": "Conditions not met"}
             execution.completed_at = datetime.now()
         else:
             try:
-                result = self.execute_actions(workflow_id, context)
+                result = await self.execute_actions(workflow_id, context)
                 execution.status = "success"
                 execution.result = result
             except Exception as e:
                 execution.status = "failed"
                 execution.result = {"error": str(e)}
+            execution.completed_at = datetime.now()
 
-        self._executions.setdefault(workflow_id, []).append(execution)
+        # Persist execution record
+        async with get_db_session() as session:
+            stmt = pg_insert(WorkflowExecution).values(
+                workflow_id=execution.workflow_id,
+                trigger_type=execution.trigger_type,
+                triggered_by=execution.triggered_by,
+                started_at=execution.started_at,
+                completed_at=execution.completed_at,
+                status=execution.status,
+                result=execution.result,
+            ).returning(WorkflowExecution.id)
+            result = await session.execute(stmt)
+            execution_id_row = result.fetchone()
+            if execution_id_row is not None:
+                execution.id = execution_id_row[0]
         return execution
 
-    def evaluate_conditions(self, workflow_id: int, context: Dict) -> bool:
+    async def evaluate_conditions(self, workflow_id: int, context: Dict) -> bool:
         """评估条件是否满足"""
-        workflow = self._workflows.get(workflow_id)
+        workflow = await self.get_workflow(workflow_id)
         if not workflow:
             return False
 
@@ -166,12 +285,11 @@ class WorkflowService:
 
         return True
 
-    def execute_actions(self, workflow_id: int, context: Dict) -> Dict:
+    async def execute_actions(self, workflow_id: int, context: Dict) -> Dict:
         """执行动作列表"""
-        workflow = self._workflows.get(workflow_id)
+        workflow = await self.get_workflow(workflow_id)
         if not workflow:
             raise ValueError(f"Workflow {workflow_id} not found")
-
         results = []
         for action in workflow.actions:
             action_type = action.get("type")
@@ -213,6 +331,14 @@ class WorkflowService:
 
         return {"actions_executed": results}
 
-    def get_execution_history(self, workflow_id: int) -> List[WorkflowExecution]:
+    async def get_execution_history(self, workflow_id: int) -> List[WorkflowExecution]:
         """获取执行历史"""
-        return self._executions.get(workflow_id, [])
+        async with get_db_session() as session:
+            stmt = (
+                select(WorkflowExecution)
+                .where(WorkflowExecution.workflow_id == workflow_id)
+                .order_by(WorkflowExecution.started_at.desc())
+            )
+            result = await session.execute(stmt)
+            rows = result.fetchall()
+            return [WorkflowExecution(*row) if not isinstance(row, WorkflowExecution) else row for row in rows]
