@@ -1,0 +1,40 @@
+{
+  "fixed_count": 2,
+  "files_modified": [
+    "src/app.py",
+    "src/internal/middleware/auth.py"
+  ],
+  "issues_fixed": [
+    {
+      "issue": "硬编码密钥 'dev-secret-key' 在 src/app.py",
+      "fix": "移除了默认值，SECRET_KEY 必须从环境变量获取"
+    },
+    {
+      "issue": "硬编码密钥 'your-secret-key' 在 src/internal/middleware/auth.py",
+      "fix": "移除了默认值，JWT_SECRET 必须从环境变量获取"
+    }
+  ],
+  "already_defined": [
+    {
+      "item": "UserRole",
+      "location": "src/models/user.py:19",
+      "status": "已存在，无需修复"
+    },
+    {
+      "item": "UserStatus",
+      "location": "src/models/user.py:30",
+      "status": "已存在，无需修复"
+    }
+  ],
+  "import_paths_verified": [
+    {
+      "file": "src/services/ticket_service.py",
+      "status": "导入路径正确"
+    },
+    {
+      "file": "src/services/user_service.py",
+      "status": "导入 UserRole, UserStatus 正确"
+    }
+  ],
+  "timestamp": "2026-04-12T11:13:00Z"
+}

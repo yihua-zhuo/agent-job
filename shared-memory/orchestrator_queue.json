@@ -1,0 +1,87 @@
+{
+  "tasks": [
+    {
+      "task_id": "T001",
+      "name": "多租户隔离修复",
+      "description": "修复 CRM 系统的租户隔离问题",
+      "created_at": "2026-04-13T01:24:44.616260",
+      "status": "pending",
+      "agents": [
+        {
+          "agent_id": "tenant-middleware",
+          "name": "中间件层检查",
+          "layer": "middleware",
+          "task": "检查并修复租户隔离中间件:\n\n1. 检查 src/internal/middleware/auth.py 是否提取 tenant_id 到 g 对象\n2. 检查 src/internal/middleware/tenant.py 是否存在并正确实现\n3. 检查 src/app.py 是否启用租户隔离中间件\n\n需要验证的场景:\n- g.tenant_id 是否从 JWT payload 中正确提取\n- set_tenant_id() 是否在请求开始时调用\n\n发现的问题直接修复并提交到 develop 分支。\n\n【必须】完成代码修改后，必须同步编写或更新测试：\n- 修改了哪个 service，就更新那个 service 的测试文件\n- 新增了 API endpoint，必须在 tests/unit/ 下有对应的测试\n- 测试文件命名规范: test_<service_name>.py\n- 如果没有测试文件，必须新建\n- 测试覆盖率要求：核心逻辑路径必须有测试\n\n检查标准：\n- python3 -m pytest tests/unit/ -q --tb=short 必须通过\n- 提交的代码和测试必须在同一个 commit 中",
+          "timeout_seconds": 180
+        },
+        {
+          "agent_id": "tenant-api",
+          "name": "API 层检查",
+          "layer": "api",
+          "task": "检查并修复 API 层的租户隔离:\n\n1. 检查 src/api/customers.py 的租户过滤\n2. 检查 src/api/sales.py 的租户过滤\n3. 检查 src/api/users.py 的租户过滤\n\n需要验证的场景:\n- GET /api/customers 是否只返回当前租户的客户\n- POST /api/customers 是否自动设置 tenant_id\n- DELETE /api/customers/{id} 是否验证租户所有权\n\n发现的问题直接修复并提交到 develop 分支。\n\n【必须】完成代码修改后，必须同步编写或更新测试：\n- 修改了哪个 service，就更新那个 service 的测试文件\n- 新增了 API endpoint，必须在 tests/unit/ 下有对应的测试\n- 测试文件命名规范: test_<service_name>.py\n- 如果没有测试文件，必须新建\n- 测试覆盖率要求：核心逻辑路径必须有测试\n\n检查标准：\n- python3 -m pytest tests/unit/ -q --tb=short 必须通过\n- 提交的代码和测试必须在同一个 commit 中",
+          "timeout_seconds": 180
+        },
+        {
+          "agent_id": "tenant-db",
+          "name": "数据库层检查",
+          "layer": "database",
+          "task": "检查并修复数据库模型的租户支持:\n\n1. 检查 src/models/ 下的模型是否有 tenant_id 字段\n   - customer.py\n   - pipeline.py\n   - opportunity.py\n   - 其他关键模型\n\n2. 如果缺少 tenant_id 字段，添加到模型定义\n\n3. 检查 sql/ 目录下的 SQL 文件是否包含 tenant_id 列\n\n发现的问题直接修复并提交到 develop 分支。\n\n【必须】完成代码修改后，必须同步编写或更新测试：\n- 修改了哪个 service，就更新那个 service 的测试文件\n- 新增了 API endpoint，必须在 tests/unit/ 下有对应的测试\n- 测试文件命名规范: test_<service_name>.py\n- 如果没有测试文件，必须新建\n- 测试覆盖率要求：核心逻辑路径必须有测试\n\n检查标准：\n- python3 -m pytest tests/unit/ -q --tb=short 必须通过\n- 提交的代码和测试必须在同一个 commit 中",
+          "timeout_seconds": 180
+        },
+        {
+          "agent_id": "tenant-service",
+          "name": "Service 层检查",
+          "layer": "service",
+          "task": "检查并修复 Service 层的租户隔离:\n\n1. 检查 src/services/customer_service.py 的租户过滤\n2. 检查 src/services/sales_service.py 的租户过滤\n3. 检查其他 service 文件\n\n需要验证的场景:\n- list_customers() 是否接受 tenant_id 参数并过滤\n- create_customer() 是否自动设置 tenant_id\n- delete_customer() 是否验证租户所有权\n\n发现的问题直接修复并提交到 develop 分支。\n\n【必须】完成代码修改后，必须同步编写或更新测试：\n- 修改了哪个 service，就更新那个 service 的测试文件\n- 新增了 API endpoint，必须在 tests/unit/ 下有对应的测试\n- 测试文件命名规范: test_<service_name>.py\n- 如果没有测试文件，必须新建\n- 测试覆盖率要求：核心逻辑路径必须有测试\n\n检查标准：\n- python3 -m pytest tests/unit/ -q --tb=short 必须通过\n- 提交的代码和测试必须在同一个 commit 中",
+          "timeout_seconds": 180
+        }
+      ]
+    }
+  ],
+  "pending_agents": [
+    {
+      "agent_id": "tenant-middleware",
+      "task_id": "T001",
+      "name": "中间件层检查",
+      "layer": "middleware",
+      "task": "检查并修复租户隔离中间件:\n\n1. 检查 src/internal/middleware/auth.py 是否提取 tenant_id 到 g 对象\n2. 检查 src/internal/middleware/tenant.py 是否存在并正确实现\n3. 检查 src/app.py 是否启用租户隔离中间件\n\n需要验证的场景:\n- g.tenant_id 是否从 JWT payload 中正确提取\n- set_tenant_id() 是否在请求开始时调用\n\n发现的问题直接修复并提交到 develop 分支。",
+      "timeout_seconds": 180,
+      "status": "pending",
+      "session_key": null,
+      "run_id": null
+    },
+    {
+      "agent_id": "tenant-api",
+      "task_id": "T001",
+      "name": "API 层检查",
+      "layer": "api",
+      "task": "检查并修复 API 层的租户隔离:\n\n1. 检查 src/api/customers.py 的租户过滤\n2. 检查 src/api/sales.py 的租户过滤\n3. 检查 src/api/users.py 的租户过滤\n\n需要验证的场景:\n- GET /api/customers 是否只返回当前租户的客户\n- POST /api/customers 是否自动设置 tenant_id\n- DELETE /api/customers/{id} 是否验证租户所有权\n\n发现的问题直接修复并提交到 develop 分支。",
+      "timeout_seconds": 180,
+      "status": "pending",
+      "session_key": null,
+      "run_id": null
+    },
+    {
+      "agent_id": "tenant-db",
+      "task_id": "T001",
+      "name": "数据库层检查",
+      "layer": "database",
+      "task": "检查并修复数据库模型的租户支持:\n\n1. 检查 src/models/ 下的模型是否有 tenant_id 字段\n   - customer.py\n   - pipeline.py\n   - opportunity.py\n   - 其他关键模型\n\n2. 如果缺少 tenant_id 字段，添加到模型定义\n\n3. 检查 sql/ 目录下的 SQL 文件是否包含 tenant_id 列\n\n发现的问题直接修复并提交到 develop 分支。",
+      "timeout_seconds": 180,
+      "status": "pending",
+      "session_key": null,
+      "run_id": null
+    },
+    {
+      "agent_id": "tenant-service",
+      "task_id": "T001",
+      "name": "Service 层检查",
+      "layer": "service",
+      "task": "检查并修复 Service 层的租户隔离:\n\n1. 检查 src/services/customer_service.py 的租户过滤\n2. 检查 src/services/sales_service.py 的租户过滤\n3. 检查其他 service 文件\n\n需要验证的场景:\n- list_customers() 是否接受 tenant_id 参数并过滤\n- create_customer() 是否自动设置 tenant_id\n- delete_customer() 是否验证租户所有权\n\n发现的问题直接修复并提交到 develop 分支。",
+      "timeout_seconds": 180,
+      "status": "pending",
+      "session_key": null,
+      "run_id": null
+    }
+  ]
+}
