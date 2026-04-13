@@ -13,6 +13,7 @@ from db.models.tenant import TenantModel
 from db.models.ticket import TicketModel
 from db.models.ticket_reply import TicketReplyModel
 from db.models.user import UserModel
+from db.models.workflow import WorkflowExecutionModel, WorkflowModel
 
 __all__ = [
     "ActivityModel",
@@ -31,4 +32,6 @@ __all__ = [
     "TicketModel",
     "TicketReplyModel",
     "UserModel",
+    "WorkflowExecutionModel",
+    "WorkflowModel",
 ]

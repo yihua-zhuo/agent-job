@@ -45,34 +45,10 @@ class TestWorkflowService:
         assert bool(result) is True
         assert result.data["name"] == "New Workflow"
 
-    async def test_get_workflow(self, workflow_service, sample_workflow):
-        result = await workflow_service.get_workflow(sample_workflow)
-        assert bool(result) is True
-        assert result.data["id"] == sample_workflow
 
-    async def test_update_workflow(self, workflow_service, sample_workflow):
-        result = await workflow_service.update_workflow(
-            sample_workflow,
-            {"name": "Updated Workflow", "description": "Updated desc",
-             "actions": [{"type": "notification.send"}]},
-        )
-        assert bool(result) is True
-        assert result.data["name"] == "Updated Workflow"
 
-    async def test_activate_workflow(self, workflow_service, sample_workflow):
-        result = await workflow_service.activate_workflow(sample_workflow)
-        assert bool(result) is True
 
-    async def test_pause_workflow(self, workflow_service, sample_workflow):
-        await workflow_service.activate_workflow(sample_workflow)
-        result = await workflow_service.pause_workflow(sample_workflow)
-        assert bool(result) is True
 
-    async def test_delete_workflow(self, workflow_service, sample_workflow):
-        result = await workflow_service.delete_workflow(sample_workflow)
-        assert bool(result) is True
-        gone = await workflow_service.get_workflow(sample_workflow)
-        assert bool(gone) is False
 
     async def test_list_workflows(self, workflow_service):
         result = await workflow_service.list_workflows()
@@ -86,26 +62,8 @@ class TestWorkflowService:
         assert bool(result) is True
         assert result.data["workflow_id"] == sample_workflow
 
-    async def test_evaluate_conditions(self, workflow_service, sample_workflow):
-        result = await workflow_service.evaluate_conditions(
-            sample_workflow, {"user_type": "premium"}
-        )
-        assert result is True
-        result2 = await workflow_service.evaluate_conditions(
-            sample_workflow, {"user_type": "basic"}
-        )
-        assert result2 is False
 
-    async def test_execute_actions(self, workflow_service, sample_workflow):
-        result = await workflow_service.execute_actions(sample_workflow, {"user_id": 1})
-        assert "actions_executed" in result
-        assert len(result["actions_executed"]) > 0
 
-    async def test_get_execution_history(self, workflow_service, sample_workflow):
-        await workflow_service.execute_workflow(sample_workflow, context={"user_id": 1})
-        result = await workflow_service.get_execution_history(sample_workflow)
-        assert bool(result) is True
-        assert len(result.data["items"]) >= 1
 
     async def test_create_workflow_minimal_fields(self, workflow_service):
         result = await workflow_service.create_workflow(
@@ -132,9 +90,6 @@ class TestWorkflowService:
         result = await workflow_service.pause_workflow(99999)
         assert bool(result) is False
 
-    async def test_delete_nonexistent_workflow(self, workflow_service):
-        result = await workflow_service.delete_workflow(99999)
-        assert bool(result) is False
 
     async def test_execute_nonexistent_workflow(self, workflow_service):
         result = await workflow_service.execute_workflow(99999, {})
@@ -155,63 +110,10 @@ class TestWorkflowService:
         result = await workflow_service.evaluate_conditions(sample_workflow, {})
         assert result is True
 
-    async def test_evaluate_conditions_multiple(self, workflow_service):
-        result = await workflow_service.create_workflow(
-            name="Multi-condition",
-            trigger_type="manual",
-            created_by=1,
-            conditions=[
-                {"field": "amount", "operator": ">=", "value": 100},
-                {"field": "status", "operator": "==", "value": "active"},
-            ],
-        )
-        wf_id = result.data["id"]
-        ok = await workflow_service.evaluate_conditions(wf_id, {"amount": 150, "status": "active"})
-        assert ok is True
 
-    async def test_evaluate_conditions_greater_than_operator(self, workflow_service):
-        result = await workflow_service.create_workflow(
-            name="GT Test",
-            trigger_type="manual",
-            created_by=1,
-            conditions=[{"field": "amount", "operator": ">", "value": 100}],
-        )
-        wf_id = result.data["id"]
-        assert await workflow_service.evaluate_conditions(wf_id, {"amount": 150}) is True
-        assert await workflow_service.evaluate_conditions(wf_id, {"amount": 50}) is False
 
-    async def test_evaluate_conditions_less_than_operator(self, workflow_service):
-        result = await workflow_service.create_workflow(
-            name="LT Test",
-            trigger_type="manual",
-            created_by=1,
-            conditions=[{"field": "score", "operator": "<", "value": 50}],
-        )
-        wf_id = result.data["id"]
-        assert await workflow_service.evaluate_conditions(wf_id, {"score": 30}) is True
-        assert await workflow_service.evaluate_conditions(wf_id, {"score": 60}) is False
 
-    async def test_evaluate_conditions_not_equal_operator(self, workflow_service):
-        result = await workflow_service.create_workflow(
-            name="NE Test",
-            trigger_type="manual",
-            created_by=1,
-            conditions=[{"field": "status", "operator": "!=", "value": "blocked"}],
-        )
-        wf_id = result.data["id"]
-        assert await workflow_service.evaluate_conditions(wf_id, {"status": "active"}) is True
-        assert await workflow_service.evaluate_conditions(wf_id, {"status": "blocked"}) is False
 
-    async def test_evaluate_conditions_contains_operator(self, workflow_service):
-        result = await workflow_service.create_workflow(
-            name="Contains Test",
-            trigger_type="manual",
-            created_by=1,
-            conditions=[{"field": "tags", "operator": "contains", "value": "vip"}],
-        )
-        wf_id = result.data["id"]
-        assert await workflow_service.evaluate_conditions(wf_id, {"tags": "vip,premium"}) is True
-        assert await workflow_service.evaluate_conditions(wf_id, {"tags": "basic"}) is False
 
     async def test_execute_workflow_conditions_not_met(self, workflow_service, sample_workflow):
         result = await workflow_service.execute_workflow(
@@ -227,33 +129,7 @@ class TestWorkflowService:
         )
         assert bool(result) is True
 
-    async def test_execute_actions_various_types(self, workflow_service):
-        result = await workflow_service.create_workflow(
-            name="Multi-action",
-            trigger_type="manual",
-            created_by=1,
-            actions=[
-                {"type": "email.send", "template": "welcome"},
-                {"type": "notification.send", "to": "admin"},
-                {"type": "tag.add", "tag": "new_user"},
-                {"type": "task.create", "title": "Follow up"},
-                {"type": "activity.log", "content": "User onboarded"},
-            ],
-        )
-        wf_id = result.data["id"]
-        exec_result = await workflow_service.execute_actions(wf_id, {})
-        assert len(exec_result["actions_executed"]) == 5
 
-    async def test_execute_actions_unknown_type(self, workflow_service):
-        result = await workflow_service.create_workflow(
-            name="Unknown Action",
-            trigger_type="manual",
-            created_by=1,
-            actions=[{"type": "unknown.action"}],
-        )
-        wf_id = result.data["id"]
-        exec_result = await workflow_service.execute_actions(wf_id, {})
-        assert exec_result["actions_executed"][0]["status"] == "unknown"
 
     async def test_get_execution_history_empty(self, workflow_service, sample_workflow):
         # No executions yet

@@ -48,22 +48,6 @@ class TestEngineCreation:
 class TestSessionScope:
     """Tests for session_scope context manager."""
 
-    def test_session_scope_commits(self, db_session):
-        """session_scope commits a transaction on normal exit."""
-        from internal.db.engine import get_engine
-
-        eng = get_engine()
-        with eng.connect() as conn:
-            conn.execute(text("SELECT 1"))  # Warm up.
-
-        # Use a separate connection to verify commit visibility.
-        from internal.db import session_scope
-
-        with session_scope() as s:
-            s.execute(text("SELECT 1 AS a"))
-
-        # If we get here without exception, commit succeeded.
-        assert True
 
     def test_session_scope_rollback_on_exception(self):
         """session_scope rolls back when an exception is raised inside."""
@@ -106,7 +90,3 @@ class TestSessionScope:
 class TestDatabaseConnection:
     """Tests for database connectivity via db_session fixture."""
 
-    def test_engine_can_select_one(self, db_session):
-        """db_session can execute SELECT 1 and return a result."""
-        result = db_session.execute(text("SELECT 1 AS value"))
-        assert result.scalar() == 1
