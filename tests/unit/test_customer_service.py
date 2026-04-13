@@ -3,6 +3,7 @@ Unit tests for CustomerService.
 """
 import pytest
 from src.services.customer_service import CustomerService
+from src.models.customer import CustomerStatus
 
 
 @pytest.fixture
@@ -118,6 +119,60 @@ class TestCustomerService:
         assert bool(result) is True
         # No inactive customers created
         assert len(result.data.items) == 0
+
+    def test_count_by_status_basic(self, customer_service):
+        """Test count_by_status returns correct counts per status for a tenant."""
+        customer_service.create_customer({
+            "name": "Lead 1", "email": "lead1@test.com", "owner_id": 1,
+            "status": "lead",
+        }, tenant_id=1)
+        customer_service.create_customer({
+            "name": "Active 1", "email": "active1@test.com", "owner_id": 1,
+            "status": "customer",
+        }, tenant_id=1)
+        customer_service.create_customer({
+            "name": "Inactive 1", "email": "inactive1@test.com", "owner_id": 1,
+            "status": "inactive",
+        }, tenant_id=1)
+
+        counts = customer_service.count_by_status(1)
+        assert counts == {
+            CustomerStatus.LEAD: 1,
+            CustomerStatus.CUSTOMER: 1,
+            CustomerStatus.INACTIVE: 1,
+        }
+
+    def test_count_by_status_multi_tenant(self, customer_service):
+        """Test count_by_status isolates counts per tenant."""
+        # Tenant 1: 2 customers
+        customer_service.create_customer({
+            "name": "T1 Customer", "email": "t1a@test.com", "owner_id": 1,
+            "status": "customer",
+        }, tenant_id=1)
+        customer_service.create_customer({
+            "name": "T1 Lead", "email": "t1l@test.com", "owner_id": 1,
+            "status": "lead",
+        }, tenant_id=1)
+        # Tenant 2: 1 customer
+        customer_service.create_customer({
+            "name": "T2 Customer", "email": "t2c@test.com", "owner_id": 2,
+            "status": "customer",
+        }, tenant_id=2)
+
+        counts_t1 = customer_service.count_by_status(1)
+        counts_t2 = customer_service.count_by_status(2)
+
+        assert counts_t1 == {CustomerStatus.CUSTOMER: 1, CustomerStatus.LEAD: 1}
+        assert counts_t2 == {CustomerStatus.CUSTOMER: 1}
+
+    def test_count_by_status_zero_tenant(self, customer_service):
+        """Test count_by_status returns empty dict for tenant_id <= 0."""
+        customer_service.create_customer({
+            "name": "Any Customer", "email": "any@test.com", "owner_id": 1,
+        }, tenant_id=1)
+
+        assert customer_service.count_by_status(0) == {}
+        assert customer_service.count_by_status(-1) == {}
 
     def test_list_customers_filter_by_owner(self, customer_service):
         """Test filtering customers by owner."""
