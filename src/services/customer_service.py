@@ -42,8 +42,8 @@ class CustomerService:
         """List customers with pagination and filters"""
         filtered = list(self._customers.values())
 
-        # Filter by tenant_id for isolation
-        if tenant_id:
+        # Filter by tenant_id for isolation (tenant_id=0 means no filtering)
+        if tenant_id != 0:
             filtered = [c for c in filtered if c.tenant_id == tenant_id]
 
         if status:
@@ -112,11 +112,11 @@ class CustomerService:
         return ApiResponse.success(message="客户删除成功")
 
     def search_customers(self, keyword: str, tenant_id: int = 0) -> ApiResponse:
-        """Search customers by keyword"""
+        """Search customers by keyword (tenant-scoped)"""
         results = [
             c.to_dict() for c in self._customers.values()
-            if keyword.lower() in c.name.lower() or (c.email and keyword.lower() in c.email.lower())
-            and (tenant_id == 0 or c.tenant_id == tenant_id)
+            if (tenant_id == 0 or c.tenant_id == tenant_id)
+            and (keyword.lower() in c.name.lower() or (c.email and keyword.lower() in c.email.lower()))
         ]
         return ApiResponse.success(data={"keyword": keyword, "items": results}, message="")
 

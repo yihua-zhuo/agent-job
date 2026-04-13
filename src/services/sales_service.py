@@ -16,7 +16,7 @@ class SalesService:
         self._next_pipeline_id = 1
         self._next_opp_id = 1
 
-    def create_pipeline(self, data: dict) -> ApiResponse:
+    def create_pipeline(self, tenant_id: int, data: dict) -> ApiResponse:
         """Create a new sales pipeline"""
         if not data.get('name'):
             return ApiResponse.error(message="管道名称不能为空", code=3001)
@@ -26,6 +26,7 @@ class SalesService:
 
         pipeline = Pipeline(
             id=self._next_pipeline_id,
+            tenant_id=tenant_id,
             name=data['name'],
             stages=stages,
             is_default=data.get('is_default', False),
@@ -34,25 +35,25 @@ class SalesService:
         self._next_pipeline_id += 1
         return ApiResponse.success(data=pipeline.to_dict(), message="管道创建成功")
 
-    def list_pipelines(self) -> ApiResponse:
-        """List all pipelines"""
-        items = [p.to_dict() for p in self._pipelines.values()]
+    def list_pipelines(self, tenant_id: int) -> ApiResponse:
+        """List all pipelines for tenant"""
+        items = [p.to_dict() for p in self._pipelines.values() if p.tenant_id == tenant_id]
         return ApiResponse.success(data={"items": items}, message="")
 
-    def get_pipeline(self, pipeline_id: int) -> ApiResponse:
+    def get_pipeline(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """Get pipeline by ID"""
         pipeline = self._pipelines.get(pipeline_id)
-        if not pipeline:
+        if not pipeline or pipeline.tenant_id != tenant_id:
             return ApiResponse.error(message="管道不存在", code=3001)
         return ApiResponse.success(data=pipeline.to_dict(), message="")
 
-    def get_pipeline_stats(self, pipeline_id: int) -> ApiResponse:
+    def get_pipeline_stats(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """Get pipeline statistics"""
         pipeline = self._pipelines.get(pipeline_id)
-        if not pipeline:
+        if not pipeline or pipeline.tenant_id != tenant_id:
             return ApiResponse.error(message="管道不存在", code=3001)
 
-        pipeline_opps = [o for o in self._opportunities.values() if o.pipeline_id == pipeline_id]
+        pipeline_opps = [o for o in self._opportunities.values() if o.pipeline_id == pipeline_id and o.tenant_id == tenant_id]
 
         total = len(pipeline_opps)
         won = len([o for o in pipeline_opps if o.stage == Stage.CLOSED_WON])
@@ -63,10 +64,10 @@ class SalesService:
             message=""
         )
 
-    def get_pipeline_funnel(self, pipeline_id: int) -> ApiResponse:
+    def get_pipeline_funnel(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """Get pipeline funnel (stage distribution)"""
         pipeline = self._pipelines.get(pipeline_id)
-        if not pipeline:
+        if not pipeline or pipeline.tenant_id != tenant_id:
             return ApiResponse.error(message="管道不存在", code=3001)
 
         stage_counts = {}
@@ -75,7 +76,7 @@ class SalesService:
             stage_counts[stage_name] = 0
 
         for opp in self._opportunities.values():
-            if opp.pipeline_id == pipeline_id:
+            if opp.pipeline_id == pipeline_id and opp.tenant_id == tenant_id:
                 stage_name = opp.stage.value if isinstance(opp.stage, Stage) else opp.stage
                 if stage_name in stage_counts:
                     stage_counts[stage_name] += 1
@@ -85,7 +86,7 @@ class SalesService:
             message=""
         )
 
-    def create_opportunity(self, data: dict) -> ApiResponse:
+    def create_opportunity(self, tenant_id: int, data: dict) -> ApiResponse:
         """Create a new opportunity"""
         required = ['name', 'customer_id', 'pipeline_id', 'stage', 'amount', 'owner_id']
         for field in required:
@@ -100,11 +101,13 @@ class SalesService:
         except (ValueError, TypeError) as e:
             return ApiResponse.error(message=f"字段格式错误: {e}", code=1001)
 
-        if data['pipeline_id'] not in self._pipelines:
+        pipeline = self._pipelines.get(int(data['pipeline_id']))
+        if not pipeline or pipeline.tenant_id != tenant_id:
             return ApiResponse.error(message="管道不存在", code=3001)
 
         opp = Opportunity(
             id=self._next_opp_id,
+            tenant_id=tenant_id,
             customer_id=int(data['customer_id']),
             name=data['name'],
             stage=stage,
@@ -118,9 +121,9 @@ class SalesService:
         self._next_opp_id += 1
         return ApiResponse.success(data=opp.to_dict(), message="商机创建成功")
 
-    def list_opportunities(self, page=1, page_size=20, pipeline_id=None, stage=None, owner_id=None) -> ApiResponse:
+    def list_opportunities(self, tenant_id: int, page=1, page_size=20, pipeline_id=None, stage=None, owner_id=None) -> ApiResponse:
         """List opportunities with filters"""
-        filtered = list(self._opportunities.values())
+        filtered = [o for o in self._opportunities.values() if o.tenant_id == tenant_id]
 
         if pipeline_id:
             filtered = [o for o in filtered if o.pipeline_id == pipeline_id]
@@ -143,17 +146,17 @@ class SalesService:
             message=""
         )
 
-    def get_opportunity(self, opp_id: int) -> ApiResponse:
+    def get_opportunity(self, tenant_id: int, opp_id: int) -> ApiResponse:
         """Get opportunity by ID"""
         opp = self._opportunities.get(opp_id)
-        if not opp:
+        if not opp or opp.tenant_id != tenant_id:
             return ApiResponse.error(message="商机不存在", code=3001)
         return ApiResponse.success(data=opp.to_dict(), message="")
 
-    def update_opportunity(self, opp_id: int, data: dict) -> ApiResponse:
+    def update_opportunity(self, tenant_id: int, opp_id: int, data: dict) -> ApiResponse:
         """Update opportunity fields"""
         opp = self._opportunities.get(opp_id)
-        if not opp:
+        if not opp or opp.tenant_id != tenant_id:
             return ApiResponse.error(message="商机不存在", code=3001)
 
         for key in ['name', 'customer_id', 'pipeline_id', 'amount', 'probability', 'owner_id']:
@@ -168,22 +171,22 @@ class SalesService:
         opp.updated_at = datetime.utcnow()
         return ApiResponse.success(data=opp.to_dict(), message="商机更新成功")
 
-    def change_stage(self, opp_id: int, stage: str) -> ApiResponse:
+    def change_stage(self, tenant_id: int, opp_id: int, stage: str) -> ApiResponse:
         """Change opportunity stage"""
         opp = self._opportunities.get(opp_id)
-        if not opp:
+        if not opp or opp.tenant_id != tenant_id:
             return ApiResponse.error(message="商机不存在", code=3001)
         opp.stage = Stage(stage)
         opp.updated_at = datetime.utcnow()
         return ApiResponse.success(data={"id": opp_id, "stage": stage}, message="阶段更新成功")
 
-    def get_forecast(self, owner_id: int = None) -> ApiResponse:
+    def get_forecast(self, tenant_id: int, owner_id: int = None) -> ApiResponse:
         """Get sales forecast by owner"""
-        pipeline_ids = [p.id for p in self._pipelines.values()]
+        pipeline_ids = [p.id for p in self._pipelines.values() if p.tenant_id == tenant_id]
 
         pipeline_forecasts = {}
         for pid in pipeline_ids:
-            pipeline_opps = [o for o in self._opportunities.values() if o.pipeline_id == pid]
+            pipeline_opps = [o for o in self._opportunities.values() if o.pipeline_id == pid and o.tenant_id == tenant_id]
             total_amount = sum(o.amount for o in pipeline_opps if o.stage not in [Stage.CLOSED_WON, Stage.CLOSED_LOST])
             pipeline_forecasts[pid] = float(total_amount)
 

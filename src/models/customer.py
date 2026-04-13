@@ -19,8 +19,8 @@ class Customer:
     name: str
     email: str
     owner_id: int
-    id: Optional[int] = None
     tenant_id: int = 0
+    id: Optional[int] = None
     phone: Optional[str] = None
     company: Optional[str] = None
     status: CustomerStatus = CustomerStatus.LEAD
