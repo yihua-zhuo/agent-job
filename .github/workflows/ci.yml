@@ -53,31 +53,20 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: unit-test
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testdb
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     env:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/testdb
+      # docker-compose.test.yml brings up its own postgres:15 (test-db);
+      # match the credentials it sets so engine.py can connect.
+      DATABASE_URL: postgresql+psycopg2://test_user:test_pass@localhost:5432/test_db
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
       - run: pip install -q ".[dev]" requests
-      - run: docker compose -f configs/docker-compose.test.yml up -d
-      - run: sleep 5 && PYTHONPATH=src pytest tests/integration/ -v
-      - run: docker compose -f configs/docker-compose.test.yml down
+      - run: docker compose -f configs/docker-compose.test.yml up -d --wait
+      - run: PYTHONPATH=src pytest tests/integration/ -v
+      - if: always()
+        run: docker compose -f configs/docker-compose.test.yml down
 
   code-review:
     name: Code Review
