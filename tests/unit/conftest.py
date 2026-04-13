@@ -1,4 +1,4 @@
-"""Shared test fixtures, including dotenv loading and db_session fixture."""
+"""Shared test fixtures."""
 from __future__ import annotations
 
 import sys
@@ -8,24 +8,27 @@ import pytest
 from dotenv import load_dotenv
 
 # Load .env so DATABASE_URL is available in test environment.
-load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+_dotenv_path = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(_dotenv_path)
+
+# Silence SQLAlchemy 2.0 warnings during tests
+import warnings
+
+warnings.filterwarnings("ignore", category=warnings.SQLAlchemyWarning)
+
+# Ensure project root is on sys.path so "src" imports resolve
+_project_root = Path(__file__).resolve().parents[2]
+if str(_project_root) not in sys.path:
+    sys.path.insert(0, str(_project_root))
 
 
 @pytest.fixture
-def db_session():
-    """Provide a transactional-scoped database session.
+def tenant_id() -> int:
+    """Return a fixed test tenant ID."""
+    return 1
 
-    Opens a connection, begins a transaction, binds a Session to that
-    connection, yields it, then rolls back the transaction on teardown.
-    No data is ever committed to the database — zero Supabase pollution.
-    """
-    from src.internal.db.engine import get_engine, SessionLocal
 
-    eng = get_engine()
-    conn = eng.connect()
-    conn.begin()
-    session = SessionLocal(bind=conn)
-    yield session
-    session.close()
-    conn.rollback()
-    conn.close()
+@pytest.fixture
+def tenant_id_2() -> int:
+    """Return a second fixed test tenant ID."""
+    return 2

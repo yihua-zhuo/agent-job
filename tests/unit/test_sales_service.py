@@ -1,4 +1,4 @@
-"""销售服务单元测试"""
+"""Unit tests for SalesService (pipeline + opportunity CRUD)."""
 import pytest
 from src.services.sales_service import SalesService
 from src.models.opportunity import Stage
@@ -6,151 +6,231 @@ from src.models.opportunity import Stage
 
 @pytest.fixture
 def sales_service():
-    """创建销售服务实例"""
     return SalesService()
 
 
 @pytest.fixture
-def sample_pipeline(sales_service):
-    """创建示例管道"""
-    result = sales_service.create_pipeline(1, {
-        "name": "测试管道",
-        "created_by": 1,
-    })
+async def sample_pipeline(sales_service):
+    result = await sales_service.create_pipeline(1, {"name": "Test Pipeline"})
     return result.data["id"]
 
 
-class TestSalesService:
-    """测试销售服务"""
-
-    def test_create_and_get_pipeline(self, sales_service):
-        """测试创建和获取管道"""
-        result = sales_service.create_pipeline(1, {
-            "name": "主销售管道",
-            "created_by": 1,
-        })
+@pytest.mark.asyncio
+class TestSalesServicePipeline:
+    async def test_create_and_get_pipeline(self, sales_service):
+        result = await sales_service.create_pipeline(1, {"name": "Main Pipeline"})
         assert bool(result) is True
         pipeline = result.data
-        assert pipeline["name"] == "主销售管道"
+        assert pipeline["name"] == "Main Pipeline"
         assert "lead" in pipeline["stages"]
 
-        retrieved = sales_service.get_pipeline(1, pipeline["id"])
+        retrieved = await sales_service.get_pipeline(1, pipeline["id"])
         assert bool(retrieved) is True
         assert retrieved.data["id"] == pipeline["id"]
 
-    def test_create_opportunity(self, sales_service, sample_pipeline):
-        """测试创建商机"""
-        result = sales_service.create_opportunity(1, {
-            "name": "测试商机",
+    async def test_create_pipeline_empty_name(self, sales_service):
+        result = await sales_service.create_pipeline(1, {"name": ""})
+        assert bool(result) is False
+
+    async def test_create_pipeline_duplicate(self, sales_service):
+        await sales_service.create_pipeline(1, {"name": "Duplicate"})
+        dup = await sales_service.create_pipeline(1, {"name": "Duplicate"})
+        assert bool(dup) is False
+
+
+@pytest.mark.asyncio
+class TestSalesServiceOpportunity:
+    async def test_create_opportunity(self, sales_service, sample_pipeline):
+        result = await sales_service.create_opportunity(1, {
+            "name": "Big Deal",
             "stage": Stage.LEAD,
             "owner_id": 1,
             "customer_id": 1,
             "pipeline_id": sample_pipeline,
-            "amount": 50000,
+            "amount": "50000",
         })
         assert bool(result) is True
-        assert result.data["name"] == "测试商机"
+        assert result.data["name"] == "Big Deal"
         assert result.data["stage"] == "lead"
 
-    def test_get_opportunity(self, sales_service, sample_pipeline):
-        """测试获取商机详情"""
-        r1 = sales_service.create_opportunity(1, {
-            "name": "商机A",
+    async def test_create_opportunity_missing_field(self, sales_service, sample_pipeline):
+        result = await sales_service.create_opportunity(1, {
+            "name": "Missing Amount",
+            "stage": Stage.LEAD,
+            "owner_id": 1,
+            "customer_id": 1,
+            "pipeline_id": sample_pipeline,
+            # amount missing
+        })
+        assert bool(result) is False
+
+    async def test_get_opportunity(self, sales_service, sample_pipeline):
+        r1 = await sales_service.create_opportunity(1, {
+            "name": "Opp A",
             "stage": Stage.QUALIFIED,
             "owner_id": 1,
             "customer_id": 1,
             "pipeline_id": sample_pipeline,
-            "amount": 30000,
+            "amount": "30000",
         })
         opp_id = r1.data["id"]
-
-        result = sales_service.get_opportunity(1, opp_id)
+        result = await sales_service.get_opportunity(1, opp_id)
         assert bool(result) is True
-        assert result.data["name"] == "商机A"
+        assert result.data["name"] == "Opp A"
 
-    def test_update_opportunity(self, sales_service, sample_pipeline):
-        """测试更新商机"""
-        r1 = sales_service.create_opportunity(1, {
-            "name": "旧名称",
+    async def test_get_opportunity_not_found(self, sales_service):
+        result = await sales_service.get_opportunity(1, 9999)
+        assert bool(result) is False
+
+    async def test_update_opportunity(self, sales_service, sample_pipeline):
+        r1 = await sales_service.create_opportunity(1, {
+            "name": "Old Name",
             "stage": Stage.LEAD,
             "owner_id": 1,
             "customer_id": 1,
             "pipeline_id": sample_pipeline,
-            "amount": 10000,
+            "amount": "10000",
         })
         opp_id = r1.data["id"]
-
-        result = sales_service.update_opportunity(1, opp_id, {
-            "name": "新名称",
-        })
+        result = await sales_service.update_opportunity(1, opp_id, {"name": "New Name"})
         assert bool(result) is True
-        assert result.data["name"] == "新名称"
+        assert result.data["name"] == "New Name"
 
-    def test_change_stage(self, sales_service, sample_pipeline):
-        """测试改变商机阶段"""
-        r1 = sales_service.create_opportunity(1, {
-            "name": "商机阶段测试",
+    async def test_change_stage(self, sales_service, sample_pipeline):
+        r1 = await sales_service.create_opportunity(1, {
+            "name": "Stage Test",
             "stage": Stage.LEAD,
             "owner_id": 1,
             "customer_id": 1,
             "pipeline_id": sample_pipeline,
-            "amount": 10000,
+            "amount": "10000",
         })
         opp_id = r1.data["id"]
-
-        result = sales_service.change_stage(1, opp_id, Stage.PROPOSAL)
+        result = await sales_service.change_stage(1, opp_id, Stage.PROPOSAL)
         assert bool(result) is True
-        assert result.data["stage"] == Stage.PROPOSAL
+        assert result.data["stage"] == Stage.PROPOSAL.value
 
-    def test_list_opportunities(self, sales_service, sample_pipeline):
-        """测试商机列表"""
+    async def test_change_stage_invalid(self, sales_service, sample_pipeline):
+        r1 = await sales_service.create_opportunity(1, {
+            "name": "Bad Stage",
+            "stage": Stage.LEAD,
+            "owner_id": 1,
+            "customer_id": 1,
+            "pipeline_id": sample_pipeline,
+            "amount": "5000",
+        })
+        opp_id = r1.data["id"]
+        result = await sales_service.change_stage(1, opp_id, "not_a_stage")
+        assert bool(result) is False
+
+    async def test_list_opportunities(self, sales_service, sample_pipeline):
         for i in range(3):
-            sales_service.create_opportunity(1, {
-                "name": f"商机{i}",
+            await sales_service.create_opportunity(1, {
+                "name": f"Opp{i}",
                 "stage": Stage.LEAD,
                 "owner_id": 1,
                 "customer_id": i + 1,
                 "pipeline_id": sample_pipeline,
-                "amount": 10000 * (i + 1),
+                "amount": str(10000 * (i + 1)),
             })
-
-        result = sales_service.list_opportunities(1, page=1, page_size=10)
+        result = await sales_service.list_opportunities(1, page=1, page_size=10)
         assert bool(result) is True
         assert result.data.total == 3
         assert len(result.data.items) == 3
 
-    def test_list_pipelines(self, sales_service):
-        """测试管道列表"""
-        sales_service.create_pipeline(1, {"name": "管道A", "created_by": 1})
-        sales_service.create_pipeline(1, {"name": "管道B", "created_by": 1})
-
-        result = sales_service.list_pipelines(1)
-        assert bool(result) is True
-        assert len(result.data["items"]) >= 2
-
-    def test_get_pipeline_stats(self, sales_service, sample_pipeline):
-        """测试管道统计"""
-        sales_service.create_opportunity(1, {
-            "name": "商机统计测试",
+    async def test_list_opportunities_filter_by_stage(self, sales_service, sample_pipeline):
+        await sales_service.create_opportunity(1, {
+            "name": "Lead Opp",
             "stage": Stage.LEAD,
             "owner_id": 1,
             "customer_id": 1,
             "pipeline_id": sample_pipeline,
-            "amount": 50000,
+            "amount": "10000",
         })
+        await sales_service.create_opportunity(1, {
+            "name": "Won Opp",
+            "stage": Stage.CLOSED_WON,
+            "owner_id": 1,
+            "customer_id": 2,
+            "pipeline_id": sample_pipeline,
+            "amount": "20000",
+        })
+        result = await sales_service.list_opportunities(1, stage=Stage.LEAD)
+        assert bool(result) is True
+        assert all(o["stage"] == Stage.LEAD.value for o in result.data.items)
 
-        result = sales_service.get_pipeline_stats(1, sample_pipeline)
+    async def test_list_pipelines(self, sales_service):
+        await sales_service.create_pipeline(1, {"name": "Pipe A"})
+        await sales_service.create_pipeline(1, {"name": "Pipe B"})
+        result = await sales_service.list_pipelines(1)
+        assert bool(result) is True
+        names = [p["name"] for p in result.data["items"]]
+        assert "Pipe A" in names
+        assert "Pipe B" in names
+
+    async def test_get_pipeline_stats(self, sales_service, sample_pipeline):
+        await sales_service.create_opportunity(1, {
+            "name": "Stat Test",
+            "stage": Stage.LEAD,
+            "owner_id": 1,
+            "customer_id": 1,
+            "pipeline_id": sample_pipeline,
+            "amount": "50000",
+        })
+        result = await sales_service.get_pipeline_stats(1, sample_pipeline)
         assert bool(result) is True
         assert result.data["total"] == 1
 
-    def test_get_pipeline_funnel(self, sales_service, sample_pipeline):
-        """测试管道漏斗"""
-        result = sales_service.get_pipeline_funnel(1, sample_pipeline)
+    async def test_get_pipeline_funnel(self, sales_service, sample_pipeline):
+        result = await sales_service.get_pipeline_funnel(1, sample_pipeline)
         assert bool(result) is True
         assert "stages" in result.data
 
-    def test_get_forecast(self, sales_service):
-        """测试销售预测"""
-        result = sales_service.get_forecast(1)
+    async def test_get_forecast(self, sales_service):
+        result = await sales_service.get_forecast(1)
         assert bool(result) is True
         assert "forecast" in result.data
+
+
+@pytest.mark.asyncio
+class TestSalesServiceTenantIsolation:
+    async def test_get_opportunity_wrong_tenant(self, sales_service, sample_pipeline):
+        r1 = await sales_service.create_opportunity(1, {
+            "name": "T1 Opp",
+            "stage": Stage.LEAD,
+            "owner_id": 1,
+            "customer_id": 1,
+            "pipeline_id": sample_pipeline,
+            "amount": "10000",
+        })
+        opp_id = r1.data["id"]
+        # Tenant 2 cannot access
+        result = await sales_service.get_opportunity(2, opp_id)
+        assert bool(result) is False
+
+    async def test_update_opportunity_wrong_tenant(self, sales_service, sample_pipeline):
+        r1 = await sales_service.create_opportunity(1, {
+            "name": "T1 Opp",
+            "stage": Stage.LEAD,
+            "owner_id": 1,
+            "customer_id": 1,
+            "pipeline_id": sample_pipeline,
+            "amount": "10000",
+        })
+        opp_id = r1.data["id"]
+        result = await sales_service.update_opportunity(2, opp_id, {"name": "Hijacked"})
+        assert bool(result) is False
+
+    async def test_list_opportunities_tenant_isolation(self, sales_service, sample_pipeline):
+        await sales_service.create_opportunity(1, {
+            "name": "T1 Opp",
+            "stage": Stage.LEAD,
+            "owner_id": 1,
+            "customer_id": 1,
+            "pipeline_id": sample_pipeline,
+            "amount": "10000",
+        })
+        # Tenant 99 has no opportunities — returns empty, not error
+        result = await sales_service.list_opportunities(99)
+        assert bool(result) is True
+        assert result.data.total == 0
