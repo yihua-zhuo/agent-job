@@ -2,7 +2,11 @@
 const { execSync } = require('child_process');
 const path = require('path');
 
-const token = process.env.RAILWAY_TOKEN || '2dc2f4ae-4e33-4ec4-a715-474a16792c00';
+const token = process.env.RAILWAY_TOKEN;
+if (!token) {
+  console.error('RAILWAY_TOKEN environment variable is required');
+  process.exit(1);
+}
 const railwayPath = path.join(__dirname, 'railway-cli-bin', 'bin', 'railway.js');
 
 try {
