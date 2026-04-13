@@ -1,7 +1,7 @@
 """Customer service layer - handles customer business logic."""
 from typing import Optional, List, Dict
 from src.models.response import ApiResponse
-from src.models.customer import Customer
+from src.models.customer import Customer, CustomerStatus
 
 
 class CustomerService:
@@ -11,28 +11,40 @@ class CustomerService:
         self._customers: Dict[int, Customer] = {}
         self._next_id = 1
 
-    def create_customer(self, data: dict) -> ApiResponse:
+    def create_customer(self, data: dict, tenant_id: int = 0) -> ApiResponse:
         """Create a new customer"""
         if not data.get('name'):
             return ApiResponse.error(message="客户名称不能为空", code=3001)
 
+        status_value = data.get('status', 'lead')
+        if isinstance(status_value, str):
+            try:
+                status_value = CustomerStatus(status_value)
+            except ValueError:
+                status_value = CustomerStatus.LEAD
+
         customer = Customer(
             id=self._next_id,
+            tenant_id=tenant_id,
             name=data['name'],
             email=data.get('email'),
             phone=data.get('phone'),
             company=data.get('company'),
-            status='active',
-            owner_id=data.get('owner_id'),
+            status=status_value,
+            owner_id=data.get('owner_id', 0),
             tags=data.get('tags', []),
         )
         self._customers[self._next_id] = customer
         self._next_id += 1
         return ApiResponse.success(data=customer.to_dict(), message="客户创建成功")
 
-    def list_customers(self, page=1, page_size=20, status=None, owner_id=None, tags=None) -> ApiResponse:
+    def list_customers(self, page=1, page_size=20, status=None, owner_id=None, tags=None, tenant_id: int = 0) -> ApiResponse:
         """List customers with pagination and filters"""
         filtered = list(self._customers.values())
+
+        # Filter by tenant_id for isolation
+        if tenant_id:
+            filtered = [c for c in filtered if c.tenant_id == tenant_id]
 
         if status:
             filtered = [c for c in filtered if c.status == status]
@@ -54,44 +66,67 @@ class CustomerService:
             message=""
         )
 
-    def get_customer(self, customer_id: int) -> ApiResponse:
+    def get_customer(self, customer_id: int, tenant_id: int = 0) -> ApiResponse:
         """Get customer by ID"""
         customer = self._customers.get(customer_id)
         if not customer:
             return ApiResponse.error(message="客户不存在", code=3001)
+        # Verify tenant ownership
+        if tenant_id and customer.tenant_id != tenant_id:
+            return ApiResponse.error(message="客户不存在", code=3001)
         return ApiResponse.success(data=customer.to_dict(), message="")
 
-    def update_customer(self, customer_id: int, data: dict) -> ApiResponse:
+    def update_customer(self, customer_id: int, data: dict, tenant_id: int = 0) -> ApiResponse:
         """Update customer fields"""
         customer = self._customers.get(customer_id)
         if not customer:
             return ApiResponse.error(message="客户不存在", code=3001)
+        # Verify tenant ownership
+        if tenant_id and customer.tenant_id != tenant_id:
+            return ApiResponse.error(message="客户不存在", code=3001)
 
         for key in ['name', 'email', 'phone', 'company', 'status', 'owner_id', 'tags']:
             if key in data:
-                setattr(customer, key, data[key])
+                if key == 'status':
+                    status_val = data[key]
+                    if isinstance(status_val, str):
+                        try:
+                            status_val = CustomerStatus(status_val)
+                        except ValueError:
+                            status_val = CustomerStatus.LEAD
+                    setattr(customer, key, status_val)
+                else:
+                    setattr(customer, key, data[key])
 
         return ApiResponse.success(data=customer.to_dict(), message="客户更新成功")
 
-    def delete_customer(self, customer_id: int) -> ApiResponse:
+    def delete_customer(self, customer_id: int, tenant_id: int = 0) -> ApiResponse:
         """Delete a customer"""
-        if customer_id not in self._customers:
+        customer = self._customers.get(customer_id)
+        if not customer:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        # Verify tenant ownership
+        if tenant_id and customer.tenant_id != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
         del self._customers[customer_id]
         return ApiResponse.success(message="客户删除成功")
 
-    def search_customers(self, keyword: str) -> ApiResponse:
+    def search_customers(self, keyword: str, tenant_id: int = 0) -> ApiResponse:
         """Search customers by keyword"""
         results = [
             c.to_dict() for c in self._customers.values()
             if keyword.lower() in c.name.lower() or (c.email and keyword.lower() in c.email.lower())
+            and (tenant_id == 0 or c.tenant_id == tenant_id)
         ]
         return ApiResponse.success(data={"keyword": keyword, "items": results}, message="")
 
-    def add_tag(self, customer_id: int, tag: str) -> ApiResponse:
+    def add_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> ApiResponse:
         """Add a tag to customer"""
         customer = self._customers.get(customer_id)
         if not customer:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        # Verify tenant ownership
+        if tenant_id and customer.tenant_id != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
         if customer.tags is None:
             customer.tags = []
@@ -99,32 +134,44 @@ class CustomerService:
             customer.tags.append(tag)
         return ApiResponse.success(data={"id": customer_id, "tag": tag}, message="标签添加成功")
 
-    def remove_tag(self, customer_id: int, tag: str) -> ApiResponse:
+    def remove_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> ApiResponse:
         """Remove a tag from customer"""
         customer = self._customers.get(customer_id)
         if not customer:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        # Verify tenant ownership
+        if tenant_id and customer.tenant_id != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
         if customer.tags and tag in customer.tags:
             customer.tags.remove(tag)
         return ApiResponse.success(data={"id": customer_id, "tag": tag}, message="标签移除成功")
 
-    def change_status(self, customer_id: int, status: str) -> ApiResponse:
+    def change_status(self, customer_id: int, status: str, tenant_id: int = 0) -> ApiResponse:
         """Change customer status"""
         customer = self._customers.get(customer_id)
         if not customer:
             return ApiResponse.error(message="客户不存在", code=3001)
-        customer.status = status
-        return ApiResponse.success(data={"id": customer_id, "status": status}, message="状态更新成功")
+        # Verify tenant ownership
+        if tenant_id and customer.tenant_id != tenant_id:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        try:
+            customer.status = CustomerStatus(status)
+        except ValueError:
+            customer.status = CustomerStatus.LEAD
+        return ApiResponse.success(data={"id": customer_id, "status": customer.status.value}, message="状态更新成功")
 
-    def assign_owner(self, customer_id: int, owner_id: int) -> ApiResponse:
+    def assign_owner(self, customer_id: int, owner_id: int, tenant_id: int = 0) -> ApiResponse:
         """Assign owner to customer"""
         customer = self._customers.get(customer_id)
         if not customer:
             return ApiResponse.error(message="客户不存在", code=3001)
+        # Verify tenant ownership
+        if tenant_id and customer.tenant_id != tenant_id:
+            return ApiResponse.error(message="客户不存在", code=3001)
         customer.owner_id = owner_id
         return ApiResponse.success(data={"id": customer_id, "owner_id": owner_id}, message="负责人分配成功")
 
-    def bulk_import(self, customers: list) -> ApiResponse:
+    def bulk_import(self, customers: list, tenant_id: int = 0) -> ApiResponse:
         """Bulk import customers"""
         if not isinstance(customers, list):
             return ApiResponse.error(message="customers 必须是数组", code=1001)
@@ -137,12 +184,13 @@ class CustomerService:
                 continue
             customer = Customer(
                 id=self._next_id,
+                tenant_id=tenant_id,
                 name=data['name'],
                 email=data.get('email'),
                 phone=data.get('phone'),
                 company=data.get('company'),
                 status='active',
-                owner_id=data.get('owner_id'),
+                owner_id=data.get('owner_id', 0),
                 tags=data.get('tags', []),
             )
             self._customers[self._next_id] = customer
