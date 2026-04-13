@@ -4,7 +4,7 @@ Unit tests for Opportunity model.
 import pytest
 from datetime import datetime
 from decimal import Decimal
-from src.models.opportunity import Opportunity, Stage
+from models.opportunity import Opportunity, Stage
 
 
 class TestOpportunityModel:

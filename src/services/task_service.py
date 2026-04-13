@@ -1,101 +1,238 @@
-"""Task service for CRM system."""
+"""Task service for CRM system - async PostgreSQL via SQLAlchemy."""
 from typing import List, Dict, Optional
 from datetime import datetime
+
+from sqlalchemy import text, func, and_, or_
+
+from db.connection import get_db_session
 
 
 class TaskService:
     """任务服务"""
 
-    def __init__(self):
-        self._tasks_db: List[Dict] = []
-        self._next_id = 1
-
-    def create_task(self, title: str, description: str, assigned_to: int, due_date: datetime = None, **kwargs) -> Dict:
+    async def create_task(
+        self,
+        title: str,
+        description: str,
+        assigned_to: int,
+        due_date: datetime = None,
+        **kwargs,
+    ) -> Dict:
         """创建任务"""
-        task = {
-            'id': self._next_id,
-            'title': title,
-            'description': description,
-            'assigned_to': assigned_to,
-            'due_date': due_date.isoformat() if due_date else None,
-            'status': 'pending',
-            'created_by': kwargs.get('created_by'),
-            'priority': kwargs.get('priority', 'normal'),
-            'created_at': datetime.utcnow().isoformat(),
-            'updated_at': datetime.utcnow().isoformat(),
-            'completed_at': None,
-        }
-        self._tasks_db.append(task)
-        self._next_id += 1
-        return {'success': True, 'data': task, 'message': '任务创建成功'}
+        async with get_db_session() as session:
+            tenant_id = kwargs.get("tenant_id", 0)
+            created_by = kwargs.get("created_by")
+            priority = kwargs.get("priority", "normal")
+            now = datetime.utcnow()
+            result = await session.execute(
+                text(
+                    """
+                    INSERT INTO tasks
+                        (tenant_id, title, description, assigned_to, due_date, status,
+                         priority, created_by, completed_at, created_at, updated_at)
+                    VALUES
+                        (:tenant_id, :title, :description, :assigned_to, :due_date, 'pending',
+                         :priority, :created_by, NULL, :now, :now)
+                    RETURNING id, tenant_id, title, description, assigned_to, due_date,
+                              status, priority, created_by, completed_at, created_at, updated_at
+                    """
+                ),
+                {
+                    "tenant_id": tenant_id,
+                    "title": title,
+                    "description": description,
+                    "assigned_to": assigned_to,
+                    "due_date": due_date,
+                    "priority": priority,
+                    "created_by": created_by,
+                    "now": now,
+                },
+            )
+            await session.commit()
+            row = result.fetchone()
+            task = self._row_to_dict(row)
+            return {"success": True, "data": task, "message": "任务创建成功"}
 
-    def get_task(self, task_id: int) -> Dict:
+    async def get_task(self, task_id: int) -> Dict:
         """获取任务详情"""
-        for task in self._tasks_db:
-            if task['id'] == task_id:
-                return {'success': True, 'data': task, 'message': ''}
-        return {'success': False, 'data': None, 'message': '任务不存在'}
+        async with get_db_session() as session:
+            result = await session.execute(
+                text(
+                    """
+                    SELECT id, tenant_id, title, description, assigned_to, due_date,
+                           status, priority, created_by, completed_at, created_at, updated_at
+                    FROM tasks
+                    WHERE id = :task_id
+                    """
+                ),
+                {"task_id": task_id},
+            )
+            row = result.fetchone()
+            if row is None:
+                return {"success": False, "data": None, "message": "任务不存在"}
+            return {"success": True, "data": self._row_to_dict(row), "message": ""}
 
-    def update_task(self, task_id: int, **kwargs) -> Dict:
+    async def update_task(self, task_id: int, **kwargs) -> Dict:
         """更新任务"""
-        for task in self._tasks_db:
-            if task['id'] == task_id:
-                if 'title' in kwargs:
-                    task['title'] = kwargs['title']
-                if 'description' in kwargs:
-                    task['description'] = kwargs['description']
-                if 'assigned_to' in kwargs:
-                    task['assigned_to'] = kwargs['assigned_to']
-                if 'due_date' in kwargs:
-                    task['due_date'] = kwargs['due_date'].isoformat() if kwargs['due_date'] else None
-                if 'status' in kwargs:
-                    task['status'] = kwargs['status']
-                if 'priority' in kwargs:
-                    task['priority'] = kwargs['priority']
-                task['updated_at'] = datetime.utcnow().isoformat()
-                return {'success': True, 'data': task, 'message': '任务更新成功'}
-        return {'success': False, 'data': None, 'message': '任务不存在'}
+        async with get_db_session() as session:
+            # Build dynamic SET clause
+            set_clauses = []
+            params: Dict = {"task_id": task_id}
+            if "title" in kwargs:
+                set_clauses.append("title = :title")
+                params["title"] = kwargs["title"]
+            if "description" in kwargs:
+                set_clauses.append("description = :description")
+                params["description"] = kwargs["description"]
+            if "assigned_to" in kwargs:
+                set_clauses.append("assigned_to = :assigned_to")
+                params["assigned_to"] = kwargs["assigned_to"]
+            if "due_date" in kwargs:
+                set_clauses.append("due_date = :due_date")
+                params["due_date"] = kwargs["due_date"]
+            if "status" in kwargs:
+                set_clauses.append("status = :status")
+                params["status"] = kwargs["status"]
+            if "priority" in kwargs:
+                set_clauses.append("priority = :priority")
+                params["priority"] = kwargs["priority"]
 
-    def complete_task(self, task_id: int):
+            if not set_clauses:
+                return {"success": False, "data": None, "message": "任务不存在"}
+
+            set_clauses.append("updated_at = :now")
+            params["now"] = datetime.utcnow()
+
+            sql = text(
+                f"UPDATE tasks SET {', '.join(set_clauses)} "
+                f"WHERE id = :task_id "
+                f"RETURNING id, tenant_id, title, description, assigned_to, due_date, "
+                f"status, priority, created_by, completed_at, created_at, updated_at"
+            )
+            result = await session.execute(sql, params)
+            await session.commit()
+            row = result.fetchone()
+            if row is None:
+                return {"success": False, "data": None, "message": "任务不存在"}
+            return {"success": True, "data": self._row_to_dict(row), "message": "任务更新成功"}
+
+    async def complete_task(self, task_id: int):
         """完成任务"""
-        for task in self._tasks_db:
-            if task['id'] == task_id:
-                task['status'] = 'completed'
-                task['completed_at'] = datetime.utcnow().isoformat()
-                task['updated_at'] = datetime.utcnow().isoformat()
-                return {'success': True, 'data': task, 'message': '任务已完成'}
-        return {'success': False, 'data': None, 'message': '任务不存在'}
+        async with get_db_session() as session:
+            now = datetime.utcnow()
+            result = await session.execute(
+                text(
+                    """
+                    UPDATE tasks
+                    SET status = 'completed', completed_at = :now, updated_at = :now
+                    WHERE id = :task_id
+                    RETURNING id, tenant_id, title, description, assigned_to, due_date,
+                              status, priority, created_by, completed_at, created_at, updated_at
+                    """
+                ),
+                {"task_id": task_id, "now": now},
+            )
+            await session.commit()
+            row = result.fetchone()
+            if row is None:
+                return {"success": False, "data": None, "message": "任务不存在"}
+            return {"success": True, "data": self._row_to_dict(row), "message": "任务已完成"}
 
-    def delete_task(self, task_id: int):
+    async def delete_task(self, task_id: int):
         """删除任务"""
-        for i, task in enumerate(self._tasks_db):
-            if task['id'] == task_id:
-                self._tasks_db.pop(i)
-                return {'success': True, 'data': {'id': task_id}, 'message': '任务删除成功'}
-        return {'success': False, 'data': None, 'message': '任务不存在'}
+        async with get_db_session() as session:
+            result = await session.execute(
+                text("DELETE FROM tasks WHERE id = :task_id RETURNING id"),
+                {"task_id": task_id},
+            )
+            await session.commit()
+            row = result.fetchone()
+            if row is None:
+                return {"success": False, "data": None, "message": "任务不存在"}
+            return {"success": True, "data": {"id": task_id}, "message": "任务删除成功"}
 
-    def list_tasks(self, assigned_to: int = None, status: str = None, page: int = 1, page_size: int = 20) -> Dict:
+    async def list_tasks(
+        self,
+        assigned_to: int = None,
+        status: str = None,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> Dict:
         """任务列表"""
-        filtered = self._tasks_db
-        if assigned_to is not None:
-            filtered = [t for t in filtered if t['assigned_to'] == assigned_to]
-        if status:
-            filtered = [t for t in filtered if t['status'] == status]
+        async with get_db_session() as session:
+            # Count
+            count_params: Dict = {}
+            where_clauses = []
+            if assigned_to is not None:
+                where_clauses.append("assigned_to = :assigned_to")
+                count_params["assigned_to"] = assigned_to
+            if status:
+                where_clauses.append("status = :status")
+                count_params["status"] = status
+            where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
-        filtered.sort(key=lambda x: x['created_at'], reverse=True)
+            count_result = await session.execute(
+                text(f"SELECT COUNT(*) FROM tasks {where_sql}"),
+                count_params,
+            )
+            total = count_result.fetchone()[0]
 
-        total = len(filtered)
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = filtered[start:end]
+            # Fetch page
+            offset = (page - 1) * page_size
+            fetch_sql = text(
+                f"""
+                SELECT id, tenant_id, title, description, assigned_to, due_date,
+                       status, priority, created_by, completed_at, created_at, updated_at
+                FROM tasks
+                {where_sql}
+                ORDER BY created_at DESC
+                LIMIT :limit OFFSET :offset
+                """
+            )
+            fetch_params = dict(count_params, limit=page_size, offset=offset)
+            rows = await session.execute(fetch_sql, fetch_params)
+            items = [self._row_to_dict(r) for r in rows.fetchall()]
+            return {
+                "success": True,
+                "data": {"page": page, "page_size": page_size, "total": total, "items": items},
+                "message": "",
+            }
 
-        return {'success': True, 'data': {'page': page, 'page_size': page_size, 'total': total, 'items': items}, 'message': ''}
-
-    def get_my_tasks(self, user_id: int, status: str = None) -> List[Dict]:
+    async def get_my_tasks(self, user_id: int, status: str = None) -> List[Dict]:
         """获取我的任务"""
-        tasks = [t for t in self._tasks_db if t['assigned_to'] == user_id]
-        if status:
-            tasks = [t for t in tasks if t['status'] == status]
+        async with get_db_session() as session:
+            params: Dict = {"user_id": user_id}
+            where_clauses = ["assigned_to = :user_id"]
+            if status:
+                where_clauses.append("status = :status")
+                params["status"] = status
+            where_sql = "WHERE " + " AND ".join(where_clauses)
 
-        tasks.sort(key=lambda x: x['due_date'] or '9999-12-31')
-        return tasks
+            sql = text(
+                f"""
+                SELECT id, tenant_id, title, description, assigned_to, due_date,
+                       status, priority, created_by, completed_at, created_at, updated_at
+                FROM tasks
+                {where_sql}
+                ORDER BY due_date ASC NULLS LAST
+                """
+            )
+            rows = await session.execute(sql, params)
+            return [self._row_to_dict(r) for r in rows.fetchall()]
+
+    def _row_to_dict(self, row) -> Dict:
+        """Map a tasks row to a dict matching the original shape."""
+        return {
+            "id": row[0],
+            "tenant_id": row[1],
+            "title": row[2],
+            "description": row[3],
+            "assigned_to": row[4],
+            "due_date": row[5].isoformat() if row[5] else None,
+            "status": row[6],
+            "priority": row[7],
+            "created_by": row[8],
+            "completed_at": row[9].isoformat() if row[9] else None,
+            "created_at": row[10].isoformat() if row[10] else None,
+            "updated_at": row[11].isoformat() if row[11] else None,
+        }

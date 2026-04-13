@@ -13,7 +13,7 @@ class TestTenantContext:
         app = Flask(__name__)
         
         with app.test_request_context(headers={"Authorization": "Bearer test_token"}):
-            with patch('src.internal.middleware.auth.decode_token') as mock_decode:
+            with patch('internal.middleware.auth.decode_token') as mock_decode:
                 # 模拟 JWT 解码返回租户信息
                 mock_decode.return_value = {
                     "user_id": 1,
@@ -21,7 +21,7 @@ class TestTenantContext:
                     "roles": ["admin"]
                 }
                 
-                from src.internal.middleware.auth import require_auth, get_current_tenant_id
+                from internal.middleware.auth import require_auth, get_current_tenant_id
                 
                 @require_auth
                 def protected_endpoint():
@@ -34,9 +34,9 @@ class TestTenantContext:
 
     def test_tenant_context_none_without_auth(self):
         """验证未认证时租户上下文为空"""
-        from src.internal.middleware.auth import get_current_tenant_id
+        from internal.middleware.auth import get_current_tenant_id
         
-        with patch('src.internal.middleware.auth.extract_token_from_header', return_value=None):
+        with patch('internal.middleware.auth.extract_token_from_header', return_value=None):
             tenant_id = get_current_tenant_id()
             assert tenant_id is None, "未认证时租户ID应该为None"
 
@@ -46,8 +46,8 @@ class TestCrossTenantAccess:
 
     def test_cross_tenant_access_denied(self):
         """验证跨租户访问被拒绝"""
-        from src.internal.middleware.tenant import require_tenant
-        from src.internal.middleware.auth import get_current_tenant_id
+        from internal.middleware.tenant import require_tenant
+        from internal.middleware.auth import get_current_tenant_id
         
         app = Flask(__name__)
         
@@ -71,8 +71,8 @@ class TestCrossTenantAccess:
 
     def test_same_tenant_access_allowed(self):
         """验证同租户访问被允许"""
-        from src.internal.middleware.tenant import require_tenant
-        from src.internal.middleware.auth import get_current_tenant_id
+        from internal.middleware.tenant import require_tenant
+        from internal.middleware.auth import get_current_tenant_id
         
         app = Flask(__name__)
         
@@ -98,8 +98,8 @@ class TestTenantIdRequired:
 
     def test_tenant_id_required_for_protected_routes(self):
         """验证受保护路由需要 tenant_id"""
-        from src.internal.middleware.tenant import require_tenant
-        from src.internal.pkg.errors import AppError
+        from internal.middleware.tenant import require_tenant
+        from internal.pkg.errors import AppError
         
         @require_tenant
         def protected_route():
@@ -115,8 +115,8 @@ class TestTenantIdRequired:
 
     def test_missing_tenant_id_returns_401(self):
         """验证缺少 tenant_id 时返回 401"""
-        from src.internal.middleware.tenant import require_tenant
-        from src.internal.pkg.errors import AppError, ErrorCode
+        from internal.middleware.tenant import require_tenant
+        from internal.pkg.errors import AppError, ErrorCode
         
         @require_tenant
         def protected_route():
@@ -161,7 +161,7 @@ class TestRepositoryFilters:
 
     def test_model_has_tenant_id_field(self):
         """验证模型包含 tenant_id 字段"""
-        from src.models.customer import Customer
+        from models.customer import Customer
         import inspect
         
         # 获取 Customer 的字段
@@ -193,13 +193,13 @@ class TestMiddlewareIntegration:
 
     def test_auth_middleware_sets_tenant_context(self):
         """验证 auth 中间件正确设置 tenant_id 到 g"""
-        from src.internal.middleware.auth import require_auth
+        from internal.middleware.auth import require_auth
         from flask import g
         
         app = Flask(__name__)
         
         with app.test_request_context(headers={"Authorization": "Bearer valid_token"}):
-            with patch('src.internal.middleware.auth.decode_token') as mock_decode:
+            with patch('internal.middleware.auth.decode_token') as mock_decode:
                 mock_decode.return_value = {
                     "user_id": 1,
                     "tenant_id": 99,
@@ -221,9 +221,9 @@ class TestEndToEnd:
 
     def test_request_without_tenant_id_rejected(self):
         """验证不带 tenant_id 的请求被拒绝"""
-        from src.internal.middleware.auth import require_auth
-        from src.internal.middleware.tenant import require_tenant
-        from src.internal.pkg.errors import AppError
+        from internal.middleware.auth import require_auth
+        from internal.middleware.tenant import require_tenant
+        from internal.pkg.errors import AppError
         
         @require_auth
         @require_tenant
@@ -234,7 +234,7 @@ class TestEndToEnd:
         
         # 模拟带有效 token 但无 tenant_id 的请求
         with app.test_request_context(headers={"Authorization": "Bearer valid_token"}):
-            with patch('src.internal.middleware.auth.decode_token') as mock_decode:
+            with patch('internal.middleware.auth.decode_token') as mock_decode:
                 mock_decode.return_value = {
                     "user_id": 1,
                     # 无 tenant_id
@@ -249,8 +249,8 @@ class TestEndToEnd:
 
     def test_tenant_a_cannot_access_tenant_b_data(self):
         """验证租户A无法访问租户B的数据 - 核心隔离测试"""
-        from src.internal.middleware.auth import get_current_tenant_id
-        from src.internal.middleware.tenant import require_tenant
+        from internal.middleware.auth import get_current_tenant_id
+        from internal.middleware.tenant import require_tenant
         
         app = Flask(__name__)
         

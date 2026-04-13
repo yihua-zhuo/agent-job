@@ -87,6 +87,9 @@ register "pipeline-code-review"  code-review  "0 * * * *"    "cron"
 register "pipeline-qc"           qc           "20 */2 * * *" "cron"
 register "pipeline-orchestrator" orchestrator "0 2 * * *"    "cron"
 register "pipeline-deploy"       deploy       "10 3 * * 1-5" "cron"
+# implement runs on a conservative cadence; its internal cooldown is 60m so
+# even with /2h scheduling it self-limits to one attempt per window.
+register "pipeline-implement"    implement    "0 */2 * * *"  "cron"
 
 echo
 echo "Current pipeline-* jobs:"

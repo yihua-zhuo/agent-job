@@ -1,10 +1,10 @@
 """认证中间件"""
-import os
-import jwt
+from flask import g, request
 from functools import wraps
-from flask import request, g
+import jwt
+import os
 from typing import Optional, List
-from ..pkg.errors import AppError, ErrorCode
+
 
 # 配置（建议从 config.yaml 加载）
 JWT_SECRET = os.environ.get('JWT_SECRET')
@@ -29,9 +29,9 @@ def decode_token(token: str) -> dict:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
-        raise AppError(ErrorCode.UNAUTHORIZED, "Token 已过期", 401)
+        raise Exception("Token 已过期")
     except jwt.InvalidTokenError:
-        raise AppError(ErrorCode.UNAUTHORIZED, "无效的 Token", 401)
+        raise Exception("无效的 Token")
 
 
 def require_auth(f):
@@ -40,11 +40,16 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         token = extract_token_from_header()
         if not token:
-            raise AppError(ErrorCode.UNAUTHORIZED, "缺少认证 Token", 401)
+            raise Exception("缺少认证 Token")
 
         payload = decode_token(token)
         g.user_id = payload.get("user_id")
-        g.tenant_id = payload.get("tenant_id")
+        # Ensure tenant_id is stored as an integer
+        raw_tenant_id = payload.get("tenant_id")
+        if raw_tenant_id is not None:
+            g.tenant_id = int(raw_tenant_id)
+        else:
+            g.tenant_id = None
         g.roles = payload.get("roles", [])
 
         return f(*args, **kwargs)
@@ -57,7 +62,7 @@ def require_permission(permission: str):
         @wraps(f)
         def decorated(*args, **kwargs):
             if permission not in g.roles:
-                raise AppError(ErrorCode.FORBIDDEN, "权限不足", 403)
+                raise Exception("权限不足")
             return f(*args, **kwargs)
         return decorated
     return decorator
@@ -65,4 +70,13 @@ def require_permission(permission: str):
 
 def get_current_tenant_id() -> Optional[int]:
     """获取当前租户 ID"""
-    return getattr(g, "tenant_id", None)
+    val = getattr(g, "tenant_id", None)
+    if val is None:
+        return None
+    if isinstance(val, int):
+        return val
+    # Attempt coercion for non-None types (e.g. float from JSON)
+    try:
+        return int(val)
+    except (TypeError, ValueError):
+        return None
