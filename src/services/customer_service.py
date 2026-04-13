@@ -189,7 +189,7 @@ class CustomerService:
                 email=data.get('email'),
                 phone=data.get('phone'),
                 company=data.get('company'),
-                status='active',
+                status=CustomerStatus.CUSTOMER,
                 owner_id=data.get('owner_id', 0),
                 tags=data.get('tags', []),
             )
