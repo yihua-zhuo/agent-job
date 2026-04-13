@@ -1,0 +1,11 @@
+{
+  "agent": "code-review",
+  "status": "pass",
+  "generated_at": "2026-04-13T06:03:54.023607Z",
+  "details": {
+    "critical": 0,
+    "warnings": 0,
+    "suggestions": 0,
+    "approval": null
+  }
+}

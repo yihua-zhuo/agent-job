@@ -1,0 +1,14 @@
+{
+  "agent": "manager",
+  "status": "pass",
+  "generated_at": "2026-04-13T06:03:47.350900Z",
+  "details": {
+    "agents": {},
+    "pending_tasks": [
+      "crm_phase1_plan.json",
+      "crm_phase2_plan.json",
+      "task_20260412_090521.json",
+      "task_20260413_053318.json"
+    ]
+  }
+}

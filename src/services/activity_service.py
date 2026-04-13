@@ -13,11 +13,18 @@ class ActivityService:
         self._activities_db: List[Activity] = []
         self._next_id = 1
 
-    def create_activity(self, customer_id: int, activity_type: str, content: str, created_by: int, **kwargs) -> ApiResponse[Activity]:
+    def _scope(self, activities: List[Activity], tenant_id: int) -> List[Activity]:
+        """Restrict activities to the given tenant. tenant_id<=0 is rejected upstream."""
+        if tenant_id and tenant_id > 0:
+            return [a for a in activities if a.tenant_id == tenant_id]
+        return []
+
+    def create_activity(self, customer_id: int, activity_type: str, content: str, created_by: int, tenant_id: int = 0, **kwargs) -> ApiResponse[Activity]:
         """创建活动记录"""
         try:
             activity = Activity(
                 id=self._next_id,
+                tenant_id=tenant_id,
                 customer_id=customer_id,
                 type=ActivityType(activity_type),
                 content=content,
@@ -31,17 +38,21 @@ class ActivityService:
         except (ValueError, TypeError) as e:
             return ApiResponse.error(message=f'创建活动记录失败: {str(e)}', code=1001)
 
-    def get_activity(self, activity_id: int) -> ApiResponse[Activity]:
+    def get_activity(self, activity_id: int, tenant_id: int = 0) -> ApiResponse[Activity]:
         """获取活动详情"""
         for activity in self._activities_db:
             if activity.id == activity_id:
+                if tenant_id and activity.tenant_id != tenant_id:
+                    return ApiResponse.error(message='活动记录不存在', code=1404)
                 return ApiResponse.success(data=activity, message='')
         return ApiResponse.error(message='活动记录不存在', code=1404)
 
-    def update_activity(self, activity_id: int, **kwargs) -> ApiResponse[Activity]:
+    def update_activity(self, activity_id: int, tenant_id: int = 0, **kwargs) -> ApiResponse[Activity]:
         """更新活动"""
         for activity in self._activities_db:
             if activity.id == activity_id:
+                if tenant_id and activity.tenant_id != tenant_id:
+                    return ApiResponse.error(message='活动记录不存在', code=1404)
                 if 'content' in kwargs:
                     activity.content = kwargs['content']
                 if 'activity_type' in kwargs:
@@ -51,17 +62,19 @@ class ActivityService:
                 return ApiResponse.success(data=activity, message='活动记录更新成功')
         return ApiResponse.error(message='活动记录不存在', code=1404)
 
-    def delete_activity(self, activity_id: int) -> ApiResponse[Dict]:
+    def delete_activity(self, activity_id: int, tenant_id: int = 0) -> ApiResponse[Dict]:
         """删除活动"""
         for i, activity in enumerate(self._activities_db):
             if activity.id == activity_id:
+                if tenant_id and activity.tenant_id != tenant_id:
+                    return ApiResponse.error(message='活动记录不存在', code=1404)
                 self._activities_db.pop(i)
                 return ApiResponse.success(data={'id': activity_id}, message='活动记录删除成功')
         return ApiResponse.error(message='活动记录不存在', code=1404)
 
-    def list_activities(self, customer_id: Optional[int] = None, activity_type: Optional[str] = None, page: int = 1, page_size: int = 20) -> ApiResponse[PaginatedData[Activity]]:
+    def list_activities(self, customer_id: Optional[int] = None, activity_type: Optional[str] = None, page: int = 1, page_size: int = 20, tenant_id: int = 0) -> ApiResponse[PaginatedData[Activity]]:
         """活动列表"""
-        filtered = self._activities_db
+        filtered = self._scope(self._activities_db, tenant_id)
         if customer_id is not None:
             filtered = [a for a in filtered if a.customer_id == customer_id]
         if activity_type:
@@ -80,22 +93,23 @@ class ActivityService:
             message=''
         )
 
-    def get_customer_activities(self, customer_id: int, limit: int = 50) -> List[Dict]:
+    def get_customer_activities(self, customer_id: int, limit: int = 50, tenant_id: int = 0) -> List[Dict]:
         """获取客户的所有活动"""
-        activities = [a for a in self._activities_db if a.customer_id == customer_id]
+        activities = [a for a in self._scope(self._activities_db, tenant_id) if a.customer_id == customer_id]
         activities.sort(key=lambda x: x.created_at, reverse=True)
         return [a.to_dict() for a in activities[:limit]]
 
-    def get_opportunity_activities(self, opportunity_id: int) -> List[Dict]:
+    def get_opportunity_activities(self, opportunity_id: int, tenant_id: int = 0) -> List[Dict]:
         """获取商机的所有活动"""
-        activities = [a for a in self._activities_db if a.opportunity_id == opportunity_id]
+        activities = [a for a in self._scope(self._activities_db, tenant_id) if a.opportunity_id == opportunity_id]
         activities.sort(key=lambda x: x.created_at, reverse=True)
         return [a.to_dict() for a in activities]
 
-    def search_activities(self, keyword: str, filters: Optional[Dict] = None) -> List[Dict]:
+    def search_activities(self, keyword: str, filters: Optional[Dict] = None, tenant_id: int = 0) -> List[Dict]:
         """搜索活动"""
         keyword_lower = keyword.lower()
-        results = [a for a in self._activities_db if keyword_lower in a.content.lower()]
+        scoped = self._scope(self._activities_db, tenant_id)
+        results = [a for a in scoped if keyword_lower in a.content.lower()]
 
         if filters:
             if 'customer_id' in filters:
@@ -109,9 +123,9 @@ class ActivityService:
 
         return [a.to_dict() for a in results]
 
-    def get_activity_summary(self, customer_id: int, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> ApiResponse[Dict]:
+    def get_activity_summary(self, customer_id: int, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None, tenant_id: int = 0) -> ApiResponse[Dict]:
         """获取活动摘要"""
-        activities = [a for a in self._activities_db if a.customer_id == customer_id]
+        activities = [a for a in self._scope(self._activities_db, tenant_id) if a.customer_id == customer_id]
 
         if start_date:
             activities = [a for a in activities if a.created_at >= start_date]
