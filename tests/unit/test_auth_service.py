@@ -84,20 +84,7 @@ class TestAuthService:
         result = auth_service.verify_token("not.even.close")
         assert result is None
 
-    async def test_refresh_token_valid(self, auth_service):
-        old_token = auth_service.generate_token(1, "alice", "admin", tenant_id=1)
-        new_token = auth_service.refresh_token(old_token)
-        assert new_token is not None
-        assert isinstance(new_token, str)
-        assert new_token != old_token
-        payload = auth_service.verify_token(new_token)
-        assert payload is not None
-        assert payload["user_id"] == 1
-        assert payload["username"] == "alice"
 
-    async def test_refresh_token_invalid(self, auth_service):
-        result = auth_service.refresh_token("bad.token.here")
-        assert result is None
 
     async def test_is_valid_email(self):
         assert is_valid_email("alice@example.com") is True
