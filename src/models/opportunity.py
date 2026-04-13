@@ -26,8 +26,9 @@ class Opportunity:
     probability: int
     expected_close_date: datetime
     owner_id: int
-    pipeline_id: int
+    pipeline_id: Optional[int] = None
     id: Optional[int] = None
+    tenant_id: int = 0
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -53,6 +54,7 @@ class Opportunity:
         """Convert opportunity to dictionary representation."""
         return {
             'id': self.id,
+            'tenant_id': self.tenant_id,
             'customer_id': self.customer_id,
             'name': self.name,
             'stage': self.stage.value if isinstance(self.stage, Stage) else self.stage,
@@ -60,6 +62,7 @@ class Opportunity:
             'probability': self.probability,
             'expected_close_date': self.expected_close_date.isoformat() if isinstance(self.expected_close_date, datetime) else self.expected_close_date,
             'owner_id': self.owner_id,
+            'pipeline_id': self.pipeline_id,
             'created_at': self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
             'updated_at': self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at,
         }
@@ -101,6 +104,7 @@ class Opportunity:
 
         return cls(
             id=data.get('id'),
+            tenant_id=data.get('tenant_id', 0),
             customer_id=data['customer_id'],
             name=data['name'],
             stage=stage,
