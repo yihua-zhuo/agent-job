@@ -209,3 +209,13 @@ class CustomerService:
             data={"imported": imported, "errors": errors},
             message=f"成功导入{imported}条客户记录"
         )
+
+    def count_by_status(self, tenant_id: int) -> Dict[CustomerStatus, int]:
+        """Return count of customers grouped by CustomerStatus for a given tenant."""
+        if tenant_id <= 0:
+            return {}
+        counts: Dict[CustomerStatus, int] = {}
+        for customer in self._customers.values():
+            if customer.tenant_id == tenant_id:
+                counts[customer.status] = counts.get(customer.status, 0) + 1
+        return counts

@@ -6,9 +6,12 @@ requires-python = ">=3.11"
 
 [project.dependencies]
 flask = "^3.0"
+flask-cors = "^4.0"
 pymysql = "^1.1"
 python-dotenv = "^1.0"
 gunicorn = "^21.0"
+sqlalchemy = "^2.0"
+psycopg2-binary = "^2.9"
 
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "pylint>=3.0"]

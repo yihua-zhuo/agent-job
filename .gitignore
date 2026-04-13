@@ -15,4 +15,9 @@ build/
 railway-binary/
 railway-cli-4.36.1.tgz
 railway-cli-bin/
+shared-memory/logs/
+shared-memory/locks/
+shared-memory/results/
+shared-memory/reports/
+.worktrees/
 .idea

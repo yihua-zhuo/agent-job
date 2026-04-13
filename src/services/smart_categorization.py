@@ -5,6 +5,7 @@
 
 from typing import List, Dict, Optional
 from dataclasses import dataclass
+import hashlib
 import random
 
 
@@ -24,7 +25,7 @@ class SmartCategorizationService:
         "hot_lead",       # 高质量线索
         "warm_lead",      # 中等质量线索
         "cold_lead",      # 低质量线索
-        " disqualified",  # 不合格线索
+        "disqualified",  # 不合格线索
     ]
 
     # RFM 分群标签
@@ -136,7 +137,6 @@ class SmartCategorizationService:
         自动标签客户
         基于：行为数据、交易数据
         """
-        import hashlib
         seed = int(hashlib.md5(str(customer_id).encode()).hexdigest()[:8], 16)
 
         tags = []
@@ -214,6 +214,6 @@ class SmartCategorizationService:
                 "description": self.RFM_SEGMENTS[segment]["description"],
             })
 
-        random.seed()
+        random.seed(None)
 
         return segments

@@ -7,7 +7,11 @@ const fs = require('fs');
 const path = require('path');
 const { execSync } = require('child_process');
 
-const TOKEN = '2dc2f4ae-4e33-4ec4-a715-474a16792c00';
+const TOKEN = process.env.RAILWAY_TOKEN;
+if (!TOKEN) {
+  console.error('RAILWAY_TOKEN environment variable is required');
+  process.exit(1);
+}
 const REPO = 'yihua-zhuo/agent-job';
 
 function apiRequest(method, path, body = null) {
