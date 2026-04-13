@@ -35,12 +35,37 @@ from sqlalchemy.pool import NullPool
 
 
 # ── Test database URL ────────────────────────────────────────────────────────────
-_DEFAULT_TEST_DB = (
-    "postgresql+asyncpg://postgres.unkojburovuewvojcepd:"
-    "+t%26d%2BSCF4f69k.y@aws-1-ap-south-1.pooler.supabase.com:5432/postgres"
-)
+# Resolution order:
+#   1. TEST_DATABASE_URL env var (explicit, highest priority)
+#   2. DATABASE_URL env var, rewritten to asyncpg flavour
+#   3. SKIP integration tests (we will NOT silently fall back to a remote
+#      production-class database — that risk turned into a near-incident).
+def _resolve_test_db_url() -> str | None:
+    explicit = os.environ.get("TEST_DATABASE_URL", "").strip()
+    if explicit:
+        return explicit
+    inherited = os.environ.get("DATABASE_URL", "").strip()
+    if not inherited:
+        return None
+    # Rewrite sync driver hints to asyncpg; leave bare ``postgresql://`` alone
+    # so SQLAlchemy picks asyncpg via the next replace step.
+    if inherited.startswith("postgresql+asyncpg://"):
+        return inherited
+    if inherited.startswith("postgresql+psycopg2://"):
+        return inherited.replace("postgresql+psycopg2://", "postgresql+asyncpg://", 1)
+    if inherited.startswith("postgresql://"):
+        return inherited.replace("postgresql://", "postgresql+asyncpg://", 1)
+    return inherited
 
-TEST_DATABASE_URL: str = os.environ.get("TEST_DATABASE_URL", _DEFAULT_TEST_DB)
+
+_resolved = _resolve_test_db_url()
+if _resolved is None:
+    pytest.skip(
+        "integration tests require TEST_DATABASE_URL or DATABASE_URL to be set",
+        allow_module_level=True,
+    )
+
+TEST_DATABASE_URL: str = _resolved
 TEST_SYNC_DATABASE_URL: str = TEST_DATABASE_URL.replace(
     "postgresql+asyncpg://", "postgresql://", 1
 )

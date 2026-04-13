@@ -57,6 +57,10 @@ jobs:
       # docker-compose.test.yml brings up its own postgres:15 (test-db);
       # match the credentials it sets so engine.py can connect.
       DATABASE_URL: postgresql+psycopg2://test_user:test_pass@localhost:5432/test_db
+      # Same DB, async driver — the integration conftest opens an
+      # asyncpg engine and TRUNCATEs all tables between tests, so we
+      # must point it at the local test container, NEVER at production.
+      TEST_DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
