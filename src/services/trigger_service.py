@@ -1,5 +1,6 @@
 """自动化触发器"""
 from typing import Dict, List, Optional
+
 from src.models.marketing import TriggerType
 
 
@@ -15,9 +16,9 @@ class TriggerService:
     def __init__(self, marketing_service=None):
         self._marketing_service = marketing_service
 
-    def check_triggers(self, event_type: str, customer_data: Dict) -> List[int]:
+    async def check_triggers(self, event_type: str, customer_data: Dict) -> List[int]:
         """检查触发的活动"""
-        triggered_campaign_ids = []
+        triggered_campaign_ids: List[int] = []
 
         # 映射事件类型到触发器类型
         event_to_trigger = {
@@ -32,7 +33,7 @@ class TriggerService:
 
         # 检查所有活动，找到匹配触发类型的活动
         if self._marketing_service:
-            campaigns_response = self._marketing_service.list_campaigns(
+            campaigns_response = await self._marketing_service.list_campaigns(
                 page=1, page_size=1000
             )
             # campaigns_response is an ApiResponse; extract items from data.paginated_data
@@ -40,7 +41,6 @@ class TriggerService:
                 campaigns = campaigns_response.data.items
             else:
                 campaigns = []
-
             for campaign_data in campaigns:
                 campaign_trigger = getattr(campaign_data, "trigger_type", None)
                 if campaign_trigger is not None and campaign_trigger == trigger_type.value:
@@ -48,12 +48,12 @@ class TriggerService:
 
         return triggered_campaign_ids
 
-    def execute_trigger(self, campaign_id: int, customer_ids: List[int]) -> Dict:
+    async def execute_trigger(self, campaign_id: int, customer_ids: List[int]) -> Dict:
         """执行触发"""
         if not self._marketing_service:
             return {"success": False, "message": "Marketing service not configured"}
 
-        campaign_response = self._marketing_service.get_campaign(campaign_id)
+        campaign_response = await self._marketing_service.get_campaign(campaign_id)
         if not campaign_response or not campaign_response.data:
             return {"success": False, "message": "Campaign not found"}
 
@@ -65,7 +65,7 @@ class TriggerService:
         sent_count = 0
 
         for customer_id in customer_ids:
-            event_response = self._marketing_service.record_event(
+            event_response = await self._marketing_service.record_event(
                 campaign_id=campaign_id,
                 customer_id=customer_id,
                 event_type="sent",
