@@ -19,6 +19,7 @@ class Customer:
     name: str
     email: str
     owner_id: int
+    tenant_id: int = 0
     id: Optional[int] = None
     phone: Optional[str] = None
     company: Optional[str] = None
@@ -48,6 +49,7 @@ class Customer:
         """Convert customer to dictionary representation."""
         return {
             'id': self.id,
+            'tenant_id': self.tenant_id,
             'name': self.name,
             'email': self.email,
             'phone': self.phone,
@@ -82,6 +84,7 @@ class Customer:
 
         return cls(
             id=data.get('id'),
+            tenant_id=data.get('tenant_id', 0),
             name=data['name'],
             email=data['email'],
             phone=data.get('phone'),

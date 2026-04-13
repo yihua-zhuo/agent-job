@@ -2,18 +2,22 @@
 import jwt
 from functools import wraps
 from flask import request, g
+import os
 
 
 class AuthMiddleware:
     """Middleware for handling JWT authentication and role verification."""
 
-    def __init__(self, secret_key: str):
+    def __init__(self, secret_key: str = None):
         """Initialize with the secret key for JWT verification.
 
         Args:
             secret_key: Secret key used for JWT encoding/decoding.
+                       Defaults to JWT_SECRET_KEY env var.
         """
-        self.secret_key = secret_key
+        self.secret_key = secret_key or os.environ.get('JWT_SECRET_KEY')
+        if not self.secret_key:
+            raise ValueError("JWT_SECRET_KEY must be set")
 
     def verify_token(self, token: str) -> dict | None:
         """Verify and decode a JWT token.
@@ -39,12 +43,15 @@ class AuthMiddleware:
         """
         @wraps(f)
         def decorated(*args, **kwargs):
-            token = request.headers.get('Authorization', '').replace('Bearer ', '')
+            auth_header = request.headers.get('Authorization', '')
+            if not auth_header.startswith('Bearer '):
+                return {'code': 401, 'message': 'Missing or invalid Authorization header'}, 401
+            token = auth_header[7:]
             if not token:
-                return {'error': 'No token'}, 401
+                return {'code': 401, 'message': 'No token provided'}, 401
             payload = self.verify_token(token)
             if not payload:
-                return {'error': 'Invalid token'}, 401
+                return {'code': 401, 'message': 'Invalid or expired token'}, 401
             g.current_user = payload
             return f(*args, **kwargs)
         return decorated
@@ -61,10 +68,10 @@ class AuthMiddleware:
             @wraps(f)
             def decorated(*args, **kwargs):
                 if not hasattr(g, 'current_user'):
-                    return {'error': 'Not authenticated'}, 401
+                    return {'code': 401, 'message': 'Not authenticated'}, 401
                 user_role = g.current_user.get('role')
                 if user_role not in roles:
-                    return {'error': 'Forbidden'}, 403
+                    return {'code': 403, 'message': 'Forbidden: insufficient role'}, 403
                 return f(*args, **kwargs)
             return decorated
         return decorator

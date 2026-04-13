@@ -99,6 +99,40 @@ class TestOpportunityModel:
         assert result["amount"] == "50000"
         assert result["probability"] == 50
         assert result["owner_id"] == 1
+        assert "tenant_id" in result
+        assert result["tenant_id"] == 0
         assert "expected_close_date" in result
         assert "created_at" in result
         assert "updated_at" in result
+
+    def test_tenant_id_in_to_dict(self):
+        """Test tenant_id is included in to_dict output."""
+        opp = Opportunity(
+            id=1,
+            tenant_id=42,
+            customer_id=1,
+            name="Test Opportunity",
+            stage=Stage.LEAD,
+            amount=Decimal("10000"),
+            probability=10,
+            expected_close_date=datetime(2024, 12, 31),
+            owner_id=1
+        )
+        result = opp.to_dict()
+        assert result["tenant_id"] == 42
+
+    def test_tenant_id_from_dict(self):
+        """Test tenant_id is parsed from dict via from_dict."""
+        data = {
+            "id": 1,
+            "tenant_id": 99,
+            "customer_id": 1,
+            "name": "Test",
+            "stage": "lead",
+            "amount": "5000",
+            "probability": 20,
+            "expected_close_date": "2024-12-31",
+            "owner_id": 1,
+        }
+        opp = Opportunity.from_dict(data)
+        assert opp.tenant_id == 99

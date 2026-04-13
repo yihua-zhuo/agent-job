@@ -13,29 +13,32 @@ class ActivityService:
         self._activities_db: List[Activity] = []
         self._next_id = 1
 
-    def create_activity(self, customer_id: int, activity_type: str, content: str, created_by: int, **kwargs) -> Dict:
+    def create_activity(self, customer_id: int, activity_type: str, content: str, created_by: int, **kwargs) -> ApiResponse[Activity]:
         """创建活动记录"""
-        activity = Activity(
-            id=self._next_id,
-            customer_id=customer_id,
-            type=ActivityType(activity_type),
-            content=content,
-            created_by=created_by,
-            opportunity_id=kwargs.get('opportunity_id'),
-            created_at=datetime.utcnow()
-        )
-        self._activities_db.append(activity)
-        self._next_id += 1
-        return {'success': True, 'data': activity.to_dict(), 'message': '活动记录创建成功'}
+        try:
+            activity = Activity(
+                id=self._next_id,
+                customer_id=customer_id,
+                type=ActivityType(activity_type),
+                content=content,
+                created_by=created_by,
+                opportunity_id=kwargs.get('opportunity_id'),
+                created_at=datetime.utcnow()
+            )
+            self._activities_db.append(activity)
+            self._next_id += 1
+            return ApiResponse.success(data=activity, message='活动记录创建成功')
+        except (ValueError, TypeError) as e:
+            return ApiResponse.error(message=f'创建活动记录失败: {str(e)}', code=1001)
 
-    def get_activity(self, activity_id: int) -> Dict:
+    def get_activity(self, activity_id: int) -> ApiResponse[Activity]:
         """获取活动详情"""
         for activity in self._activities_db:
             if activity.id == activity_id:
-                return {'success': True, 'data': activity.to_dict(), 'message': ''}
-        return {'success': False, 'data': None, 'message': '活动记录不存在'}
+                return ApiResponse.success(data=activity, message='')
+        return ApiResponse.error(message='活动记录不存在', code=1404)
 
-    def update_activity(self, activity_id: int, **kwargs) -> Dict:
+    def update_activity(self, activity_id: int, **kwargs) -> ApiResponse[Activity]:
         """更新活动"""
         for activity in self._activities_db:
             if activity.id == activity_id:
@@ -45,18 +48,18 @@ class ActivityService:
                     activity.type = ActivityType(kwargs['activity_type'])
                 if 'opportunity_id' in kwargs:
                     activity.opportunity_id = kwargs['opportunity_id']
-                return {'success': True, 'data': activity.to_dict(), 'message': '活动记录更新成功'}
-        return {'success': False, 'data': None, 'message': '活动记录不存在'}
+                return ApiResponse.success(data=activity, message='活动记录更新成功')
+        return ApiResponse.error(message='活动记录不存在', code=1404)
 
-    def delete_activity(self, activity_id: int):
+    def delete_activity(self, activity_id: int) -> ApiResponse[Dict]:
         """删除活动"""
         for i, activity in enumerate(self._activities_db):
             if activity.id == activity_id:
                 self._activities_db.pop(i)
-                return {'success': True, 'data': {'id': activity_id}, 'message': '活动记录删除成功'}
-        return {'success': False, 'data': None, 'message': '活动记录不存在'}
+                return ApiResponse.success(data={'id': activity_id}, message='活动记录删除成功')
+        return ApiResponse.error(message='活动记录不存在', code=1404)
 
-    def list_activities(self, customer_id: Optional[int] = None, activity_type: Optional[str] = None, page: int = 1, page_size: int = 20) -> Dict:
+    def list_activities(self, customer_id: Optional[int] = None, activity_type: Optional[str] = None, page: int = 1, page_size: int = 20) -> ApiResponse[PaginatedData[Activity]]:
         """活动列表"""
         filtered = self._activities_db
         if customer_id is not None:
@@ -67,9 +70,15 @@ class ActivityService:
         total = len(filtered)
         start = (page - 1) * page_size
         end = start + page_size
-        items = [a.to_dict() for a in filtered[start:end]]
+        items = filtered[start:end]
 
-        return {'success': True, 'data': {'page': page, 'page_size': page_size, 'total': total, 'items': items}, 'message': ''}
+        return ApiResponse.paginated(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            message=''
+        )
 
     def get_customer_activities(self, customer_id: int, limit: int = 50) -> List[Dict]:
         """获取客户的所有活动"""
@@ -100,7 +109,7 @@ class ActivityService:
 
         return [a.to_dict() for a in results]
 
-    def get_activity_summary(self, customer_id: int, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> Dict:
+    def get_activity_summary(self, customer_id: int, start_date: Optional[datetime] = None, end_date: Optional[datetime] = None) -> ApiResponse[Dict]:
         """获取活动摘要"""
         activities = [a for a in self._activities_db if a.customer_id == customer_id]
 
@@ -112,11 +121,11 @@ class ActivityService:
         summary: dict = {
             'total': len(activities),
             'by_type': {},
-            'recent_activities': [a.to_dict() for a in sorted(activities, key=lambda x: x.created_at, reverse=True)[:5]]
+            'recent_activities': sorted(activities, key=lambda x: x.created_at, reverse=True)[:5]
         }
 
         for activity in activities:
             type_val = activity.type.value
             summary['by_type'][type_val] = summary['by_type'].get(type_val, 0) + 1
 
-        return {'success': True, 'data': summary, 'message': ''}
+        return ApiResponse.success(data=summary, message='')

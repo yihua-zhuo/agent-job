@@ -1,6 +1,8 @@
 from datetime import datetime, timedelta
 from typing import Optional, List, Dict
 
+from src.models.response import ApiResponse, PaginatedData
+
 
 class AnalyticsService:
     def __init__(self):
@@ -9,7 +11,7 @@ class AnalyticsService:
         self._next_id = 1
 
     # Dashboard methods
-    def create_dashboard(self, name: str, owner_id: int, description: Optional[str] = None) -> Dict:
+    def create_dashboard(self, name: str, owner_id: int, description: Optional[str] = None) -> ApiResponse[Dict]:
         """创建仪表板"""
         now = datetime.utcnow()
         dashboard = {
@@ -24,47 +26,58 @@ class AnalyticsService:
         }
         self._dashboards[self._next_id] = dashboard
         self._next_id += 1
-        return dashboard
+        return ApiResponse.success(data=dashboard, message='仪表板创建成功')
 
-    def get_dashboard(self, dashboard_id: int) -> Optional[Dict]:
+    def get_dashboard(self, dashboard_id: int) -> ApiResponse[Dict]:
         """获取仪表板"""
-        return self._dashboards.get(dashboard_id)
+        dashboard = self._dashboards.get(dashboard_id)
+        if not dashboard:
+            return ApiResponse.error(message='仪表板不存在', code=1404)
+        return ApiResponse.success(data=dashboard)
 
-    def update_dashboard(self, dashboard_id: int, **kwargs) -> Optional[Dict]:
+    def update_dashboard(self, dashboard_id: int, **kwargs) -> ApiResponse[Dict]:
         """更新仪表板"""
         if dashboard_id not in self._dashboards:
-            return None
+            return ApiResponse.error(message='仪表板不存在', code=1404)
         dashboard = self._dashboards[dashboard_id]
         for key, value in kwargs.items():
             if key in ["name", "description", "widgets", "is_default"]:
                 dashboard[key] = value
         dashboard["updated_at"] = datetime.utcnow()
-        return dashboard
+        return ApiResponse.success(data=dashboard, message='仪表板更新成功')
 
-    def list_dashboards(self, owner_id: Optional[int] = None) -> List[Dict]:
+    def list_dashboards(self, owner_id: Optional[int] = None) -> ApiResponse[PaginatedData[Dict]]:
         """仪表板列表"""
         if owner_id is None:
-            return list(self._dashboards.values())
-        return [d for d in self._dashboards.values() if d["owner_id"] == owner_id]
+            dashboards = list(self._dashboards.values())
+        else:
+            dashboards = [d for d in self._dashboards.values() if d["owner_id"] == owner_id]
+        return ApiResponse.paginated(
+            items=dashboards,
+            total=len(dashboards),
+            page=1,
+            page_size=len(dashboards),
+            message=''
+        )
 
-    def add_widget(self, dashboard_id: int, widget_config: Dict) -> Optional[Dict]:
+    def add_widget(self, dashboard_id: int, widget_config: Dict) -> ApiResponse[Dict]:
         """添加组件"""
         if dashboard_id not in self._dashboards:
-            return None
+            return ApiResponse.error(message='仪表板不存在', code=1404)
         dashboard = self._dashboards[dashboard_id]
         widget = {"id": len(dashboard["widgets"]) + 1, **widget_config}
         dashboard["widgets"].append(widget)
         dashboard["updated_at"] = datetime.utcnow()
-        return widget
+        return ApiResponse.success(data=widget, message='组件添加成功')
 
-    def remove_widget(self, dashboard_id: int, widget_id: int) -> bool:
+    def remove_widget(self, dashboard_id: int, widget_id: int) -> ApiResponse[Dict]:
         """移除组件"""
         if dashboard_id not in self._dashboards:
-            return False
+            return ApiResponse.error(message='仪表板不存在', code=1404)
         dashboard = self._dashboards[dashboard_id]
         dashboard["widgets"] = [w for w in dashboard["widgets"] if w["id"] != widget_id]
         dashboard["updated_at"] = datetime.utcnow()
-        return True
+        return ApiResponse.success(data={'widget_id': widget_id}, message='组件移除成功')
 
     # Report methods
     def create_report(
@@ -73,7 +86,7 @@ class AnalyticsService:
         report_type: str,
         config: Dict,
         created_by: int,
-    ) -> Dict:
+    ) -> ApiResponse[Dict]:
         """创建报表"""
         now = datetime.utcnow()
         report = {
@@ -88,12 +101,12 @@ class AnalyticsService:
         }
         self._reports[self._next_id] = report
         self._next_id += 1
-        return report
+        return ApiResponse.success(data=report, message='报表创建成功')
 
-    def run_report(self, report_id: int, date_range: Dict) -> Optional[Dict]:
+    def run_report(self, report_id: int, date_range: Dict) -> ApiResponse[Dict]:
         """运行报表"""
         if report_id not in self._reports:
-            return None
+            return ApiResponse.error(message='报表不存在', code=1404)
         report = self._reports[report_id]
         report["date_range"] = date_range
         report["last_run_at"] = datetime.utcnow()
@@ -103,17 +116,18 @@ class AnalyticsService:
         end = date_range.get("end")
 
         if report_type == "sales_revenue":
-            return self.get_sales_revenue_report(start, end)
+            result = self.get_sales_revenue_report(start, end)
         elif report_type == "sales_conversion":
-            return self.get_sales_conversion_report(start, end)
+            result = self.get_sales_conversion_report(start, end)
         elif report_type == "customer_growth":
-            return self.get_customer_growth_report(start, end)
+            result = self.get_customer_growth_report(start, end)
         elif report_type == "pipeline_forecast":
-            return self.get_pipeline_forecast(date_range.get("pipeline_id"))
+            result = self.get_pipeline_forecast(date_range.get("pipeline_id"))
         elif report_type == "team_performance":
-            return self.get_team_performance(start, end)
+            result = self.get_team_performance(start, end)
         else:
-            return {"error": "Unknown report type"}
+            return ApiResponse.error(message=f'未知报表类型: {report_type}', code=1001)
+        return ApiResponse.success(data=result)
 
     def get_sales_revenue_report(self, start_date, end_date, group_by: str = "day") -> Dict:
         """销售营收报表"""

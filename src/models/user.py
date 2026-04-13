@@ -41,6 +41,7 @@ class User:
     """User entity representing a system user."""
     username: str
     email: str
+    tenant_id: int = 0
     role: UserRole = UserRole.USER
     id: Optional[int] = None
     full_name: Optional[str] = None
@@ -99,6 +100,7 @@ class User:
             'id': self.id,
             'username': self.username,
             'email': self.email,
+            'tenant_id': self.tenant_id,
             'role': extract_value(self.role),
             'full_name': self.full_name,
             'status': extract_value(self.status),
@@ -142,6 +144,7 @@ class User:
             id=data.get('id'),
             username=data['username'],
             email=data['email'],
+            tenant_id=data.get('tenant_id', 0),
             role=role,
             full_name=data.get('full_name'),
             status=status,

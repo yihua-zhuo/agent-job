@@ -12,3 +12,6 @@ dist/
 build/
 *.egg
 .DS_Store
+railway-binary/
+railway-cli-4.36.1.tgz
+railway-cli-bin/

@@ -7,7 +7,11 @@ from typing import Optional, List
 from ..pkg.errors import AppError, ErrorCode
 
 # 配置（建议从 config.yaml 加载）
-JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
+JWT_SECRET = os.environ.get('JWT_SECRET')
+if not JWT_SECRET:
+    if os.environ.get('FLASK_ENV') == 'production':
+        raise ValueError("JWT_SECRET environment variable is required in production")
+    JWT_SECRET = 'dev-only-secret-change-in-production'
 JWT_ALGORITHM = "HS256"
 
 

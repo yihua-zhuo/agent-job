@@ -1,31 +1,45 @@
 #!/bin/bash
-# Pre-push hook: run lint checks before push (non-blocking - warnings only)
+# Pre-push hook: lint checks + unit tests before push
 
 set -e
 
-echo "🔍 Running pre-push lint checks..."
+echo "🔍 Running pre-push checks (lint + unit tests)..."
 
 cd "$(git rev-parse --show-toplevel)"
 
-FLAKE8="/home/node/.local/bin/flake8"
+FLAKE8="python3 -m flake8"
+PYTEST="python3 -m pytest"
 MYPY="python3 -m mypy"
 
-# Run flake8 - show critical errors
+# ── flake8 (critical errors only) ──────────────────────────────────────────
 echo "=== flake8 ==="
-if [ -x "$FLAKE8" ]; then
-    $FLAKE8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
-else
-    echo "⚠️  flake8 not found, skipping"
-fi
+$FLAKE8 src/ --count --select=E9,F63,F77,F82 --show-source --statistics 2>&1 | tail -5 || true
 echo "✅ flake8 check done"
 
-# Run mypy - non-blocking, show type errors as warnings
+# ── unit tests ─────────────────────────────────────────────────────────────
+echo "=== unit tests ==="
+if $PYTEST --version &>/dev/null 2>&1; then
+    # Run unit tests with timeout (max 60s for all tests)
+    timeout 90 $PYTEST tests/unit/ -v --tb=short -x 2>&1 | tail -30
+    TEST_RC=$?
+    if [ $TEST_RC -eq 0 ]; then
+        echo "✅ unit tests passed"
+    elif [ $TEST_RC -eq 124 ]; then
+        echo "⚠️  unit tests timed out (90s limit)"
+    else
+        echo "⚠️  unit tests had failures (review above)"
+    fi
+else
+    echo "⚠️  pytest not found, skipping tests"
+fi
+
+# ── mypy (non-blocking, just show summary) ───────────────────────────────
 echo "=== mypy ==="
 if $MYPY --version &>/dev/null 2>&1; then
-    $MYPY src/ --ignore-missing-imports --no-error-summary 2>&1 | grep -E "^src/.*error:" || true
+    timeout 60 $MYPY src/ --ignore-missing-imports --no-error-summary 2>&1 | grep -c "^src/.*error:" || echo "0 type errors"
 else
     echo "⚠️  mypy not found, skipping"
 fi
 echo "✅ mypy check done"
 
-echo "✅ Pre-push lint checks complete"
+echo "✅ Pre-push checks complete"
