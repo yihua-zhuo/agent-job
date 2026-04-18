@@ -7,12 +7,17 @@ Submit a video job, poll for completion, return result.
 import argparse
 import json
 import time
+import os
 import requests
 import sys
 
 
-LITELLM_URL = "http://hedge-order-1443101935.ap-southeast-1.elb.amazonaws.com:4001"
-API_KEY = "sk-cNuXYqrIDqo0pvFCUiUxHA"
+LITELLM_URL = os.environ.get("AI_GATEWAY_URL", "")
+API_KEY = os.environ.get("AI_GATEWAY_KEY", "")
+
+if not LITELLM_URL or not API_KEY:
+    print("Error: AI_GATEWAY_URL and AI_GATEWAY_KEY must be set")
+    sys.exit(1)
 
 
 def headers():

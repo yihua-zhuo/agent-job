@@ -45,12 +45,6 @@ python3 ~/.openclaw/workspace/skills/video-generator/scripts/submit_video.py --p
 3. **Poll** the job every 5 seconds until `completed` or `failed`
 4. **Output URL** is returned in the `output.url` field
 
-## Model Examples
+## Prompt Examples
 
-- `ltx2-19b-fast` — fast LTX video model
-- `ltx2-19b-dev` — LTX dev model
-- `wan22-t2v-14b` — Wan video model
-- `hunyuan-video-t2v` — Hunyuan video model
-- `flux-dev-nf4` — quantized Flux for images
-
-Run `./submit_video.py --list` for the full list.
+See [diver-examples.md](references/diver-examples.md) for detailed dive scene prompts with camera movement, lighting, and marine life descriptions. Use these as templates for high-quality video prompts.
