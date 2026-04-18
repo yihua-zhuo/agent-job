@@ -48,3 +48,7 @@ python3 ~/.openclaw/workspace/skills/video-generator/scripts/submit_video.py --p
 ## Prompt Examples
 
 See [diver-examples.md](references/diver-examples.md) for detailed dive scene prompts with camera movement, lighting, and marine life descriptions. Use these as templates for high-quality video prompts.
+
+## Tips & Gotchas
+
+See [lessons-learned.md](references/lessons-learned.md) — queue overflow, billing, job IDs, and timing gotchas from real production runs.

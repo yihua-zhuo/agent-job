@@ -74,7 +74,41 @@ def submit_video(
     return job_id
 
 
-def poll_video(job_id: str, poll_interval: int = 5, timeout: int = 300) -> dict | None:
+def download_video(job_id: str, output_dir: str = "~/Downloads") -> str | None:
+    """Download completed video content via /videos/{id}/content."""
+    output_dir = os.path.expanduser(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
+
+    print(f"  Downloading video content...")
+    resp = requests.get(
+        f"{LITELLM_URL}/v1/videos/{job_id}/content",
+        headers=headers(),
+        timeout=60,
+        stream=True,
+    )
+    if not resp.ok:
+        print(f"  Download error: {resp.status_code} {resp.text[:200]}")
+        return None
+
+    # Determine filename from Content-Disposition or default
+    content_disp = resp.headers.get("Content-Disposition", "")
+    if "filename=" in content_disp:
+        filename = content_disp.split("filename=")[1].strip('"')
+    else:
+        ext = resp.headers.get("Content-Type", "video/mp4").split("/")[-1]
+        filename = f"video_{job_id[-12:]}.{ext}"
+
+    filepath = os.path.join(output_dir, filename)
+    with open(filepath, "wb") as f:
+        for chunk in resp.iter_content(chunk_size=65536):
+            f.write(chunk)
+
+    size_mb = os.path.getsize(filepath) / (1024 * 1024)
+    print(f"  Saved: {filepath} ({size_mb:.1f} MB)")
+    return filepath
+
+
+def poll_video(job_id: str, poll_interval: int = 5, timeout: int = 600, download: bool = True) -> dict | None:
     start = time.time()
     while time.time() - start < timeout:
         resp = requests.get(
@@ -93,8 +127,11 @@ def poll_video(job_id: str, poll_interval: int = 5, timeout: int = 300) -> dict 
 
         if status == "completed":
             output = data.get("output") or {}
-            print(f"  Completed! URL: {output.get('url', 'N/A')}")
-            print(f"  Generate time: {output.get('generate_time_sec', '?')}s")
+            print(f"  Completed! Generate time: {output.get('generate_time_sec', '?')}s")
+            if download:
+                local_path = download_video(job_id)
+                if local_path:
+                    print(f"  Local file: {local_path}")
             return data
         elif status == "failed":
             print(f"FAILED: {data.get('error', {}).get('message', 'unknown')}")
@@ -116,7 +153,9 @@ def main():
     parser.add_argument("--guidance", type=float, default=4.0)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--list", "-l", action="store_true", help="List available models and exit")
-    parser.add_argument("--poll-only", "-p2", metavar="JOB_ID", help="Poll existing job ID")
+    parser.add_argument("--poll-only", "-p2", metavar="JOB_ID", help="Poll existing job ID (auto-downloads when complete)")
+    parser.add_argument("--download", "-dl", action="store_true", help="Download video to --output-dir after completion")
+    parser.add_argument("--output-dir", "-o", default="~/Downloads", help="Directory to save downloaded video")
     args = parser.parse_args()
 
     if args.list:
@@ -127,7 +166,7 @@ def main():
         return
 
     if args.poll_only:
-        result = poll_video(args.poll_only)
+        result = poll_video(args.poll_only, download=args.download)
         if result:
             print(json.dumps(result, indent=2))
         return
@@ -142,7 +181,7 @@ def main():
         seed=args.seed,
     )
     if job_id:
-        poll_video(job_id)
+        poll_video(job_id, download=True, output_dir=args.output_dir)
 
 
 if __name__ == "__main__":
