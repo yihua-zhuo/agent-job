@@ -57,6 +57,7 @@ def submit_video(
         payload["seed"] = seed
 
     print(f"Submitting: {model} | prompt={prompt[:60]}...")
+    print("⚠️ 请等待约10分钟后查询结果 | Please wait ~10 minutes before checking the result.")
     resp = requests.post(
         f"{LITELLM_URL}/v1/videos",
         json=payload,
