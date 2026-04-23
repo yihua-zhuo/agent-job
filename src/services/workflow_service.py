@@ -258,7 +258,7 @@ class WorkflowService:
                 if ctx_value is None or not (ctx_value <= value):
                     return False
             elif operator == "contains":
-                if ctx_value is None or value not in str(ctx_value):
+                if ctx_value is None or not isinstance(value, str) or value not in str(ctx_value):
                     return False
         return True
 

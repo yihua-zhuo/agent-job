@@ -1,10 +1,14 @@
 """Pipeline stage ORM model."""
 from datetime import datetime
+from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
+
+if TYPE_CHECKING:
+    from db.models.pipeline import PipelineModel
 
 
 class PipelineStageModel(Base):

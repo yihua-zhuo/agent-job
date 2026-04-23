@@ -117,7 +117,7 @@ class ImportExportService:
             # Persist to DB
             async with get_db_session() as session:
                 for row in data:
-                    stmt = pg_insert("customers").values(
+                    stmt = pg_insert(_customers_t).values(
                         tenant_id=tenant_id,
                         name=row["name"],
                         email=row.get("email", ""),
@@ -193,7 +193,7 @@ class ImportExportService:
                     elif expected_close is None:
                         expected_close = datetime.now()
 
-                    stmt = pg_insert("opportunities").values(
+                    stmt = pg_insert(_opportunities_t).values(
                         tenant_id=tenant_id,
                         customer_id=int(row["customer_id"]),
                         name=row["name"],
@@ -261,7 +261,7 @@ class ImportExportService:
             # Persist leads as customers with status "lead"
             async with get_db_session() as session:
                 for row in data:
-                    stmt = pg_insert("customers").values(
+                    stmt = pg_insert(_customers_t).values(
                         tenant_id=tenant_id,
                         name=row["name"],
                         email=row.get("email", ""),
@@ -556,6 +556,6 @@ class ImportExportService:
             return json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
         elif file_format == self.FORMAT_PDF:
             # Synchronous – run in executor if needed in production
-            return self._generate_simple_pdf({"details": data}, "导出数据").encode("utf-8")
+            return self._generate_simple_pdf({"details": data}, "导出数据")
         else:
             raise ValueError(f"不支持的导出格式: {file_format}")

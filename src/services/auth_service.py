@@ -18,13 +18,13 @@ class AuthService:
     TOKEN_ISSUER = "crm-agent-system"
     TOKEN_AUDIENCE = "crm-api"
 
-    def __init__(self, secret_key: str = None):
+    def __init__(self, secret_key: Optional[str] = None):
         """Initialize with the secret key for JWT operations.
 
         Args:
             secret_key: Secret key used for JWT encoding. Defaults to JWT_SECRET_KEY env var.
         """
-        self.secret_key = secret_key or os.environ.get("JWT_SECRET_KEY")
+        self.secret_key: str = cast(str, secret_key) or os.environ["JWT_SECRET_KEY"]
         if not self.secret_key:
             raise ValueError("JWT_SECRET_KEY must be set")
 

@@ -17,8 +17,8 @@ class CustomerStatus(Enum):
 class Customer:
     """Customer entity representing a lead, opportunity, or actual customer."""
     name: str
-    email: str
     owner_id: int
+    email: Optional[str] = None
     tenant_id: int = 0
     id: Optional[int] = None
     phone: Optional[str] = None
