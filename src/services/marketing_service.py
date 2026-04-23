@@ -85,7 +85,7 @@ class MarketingService:
                     "content": content,
                     "target_audience": kwargs.get("target_audience", ""),
                     "trigger_type": (
-                        kwargs.get("trigger_type").value
+                        kwargs["trigger_type"].value
                         if isinstance(kwargs.get("trigger_type"), TriggerType)
                         else kwargs.get("trigger_type")
                     ),

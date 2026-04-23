@@ -5,6 +5,7 @@ from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
+from db.models.pipeline import PipelineModel
 
 
 class PipelineStageModel(Base):
@@ -22,7 +23,7 @@ class PipelineStageModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    pipeline: Mapped["PipelineModel"] = relationship("PipelineModel", back_populates="stages")
+    pipeline: Mapped["PipelineModel"] = relationship(PipelineModel, back_populates="stages")
 
     def to_dict(self) -> dict:
         return {

@@ -1,5 +1,5 @@
 """Async repository base with SQLAlchemy 2.0 async sessions."""
-from typing import Any, List, Optional, Type, TypeVar
+from typing import Any, List, Optional, Type, TypeVar, cast
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -34,8 +34,8 @@ class BaseRepository:
     ) -> Optional[T]:
         """Fetch a row by primary key with tenant isolation."""
         query = select(model).where(
-            model.__table__.columns["id"] == id_val,
-            model.__table__.columns["tenant_id"] == tenant_id,
+            cast(Any, model).__table__.columns["id"] == id_val,
+            cast(Any, model).__table__.columns["tenant_id"] == tenant_id,
         )
         return await self.execute_one(query)
 
@@ -45,7 +45,7 @@ class BaseRepository:
         """List all rows for a tenant with pagination."""
         query = (
             select(model)
-            .where(model.__table__.columns["tenant_id"] == tenant_id)
+            .where(cast(Any, model).__table__.columns["tenant_id"] == tenant_id)
             .limit(limit)
             .offset(offset)
         )
@@ -54,7 +54,7 @@ class BaseRepository:
     async def count_by_tenant(self, model: Type[T], tenant_id: int) -> int:
         """Count rows for a tenant."""
         query = select(func.count()).select_from(model).where(
-            model.__table__.columns["tenant_id"] == tenant_id
+            cast(Any, model).__table__.columns["tenant_id"] == tenant_id
         )
         result = await self.execute_scalar(query)
         return int(result) if result is not None else 0
@@ -66,8 +66,8 @@ class BaseRepository:
         stmt = (
             update(model)
             .where(
-                model.__table__.columns["id"] == id_val,
-                model.__table__.columns["tenant_id"] == tenant_id,
+            cast(Any, model).__table__.columns["id"] == id_val,
+            cast(Any, model).__table__.columns["tenant_id"] == tenant_id,
             )
             .values(**kwargs)
             .returning(model)
@@ -81,9 +81,9 @@ class BaseRepository:
     ) -> bool:
         """Delete a row by id + tenant. Returns True if a row was deleted."""
         stmt = delete(model).where(
-            model.__table__.columns["id"] == id_val,
-            model.__table__.columns["tenant_id"] == tenant_id,
+            cast(Any, model).__table__.columns["id"] == id_val,
+            cast(Any, model).__table__.columns["tenant_id"] == tenant_id,
         )
         result = await self.session.execute(stmt)
         await self.session.commit()
-        return result.rowcount > 0
+        return cast(Any, result).rowcount > 0
