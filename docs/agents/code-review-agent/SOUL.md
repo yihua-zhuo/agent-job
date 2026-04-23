@@ -65,3 +65,42 @@
 - Git push 到 master/develop 分支
 - Pull Request 创建/更新
 - 手动触发（通过 coordinator）
+
+## Pre-Commit Verification 流程（强制）
+
+每次代码变更必须执行 requesting-code-review 技能的完整 pipeline：
+
+### Step 1: 获取 Diff
+```bash
+git diff --cached   # staged changes
+git diff HEAD~1     # last commit
+```
+
+### Step 2: 静态安全扫描
+```bash
+# 硬编码 secrets
+git diff --cached | grep -iE "(api_key|secret|password|token)"
+
+# Shell 注入
+git diff --cached | grep -E "os\.system\(|subprocess.*shell=True"
+
+# SQL 注入
+git diff --cached | grep -E "execute\(f\"|\.format\(.*SELECT"
+```
+
+### Step 3: Baseline 测试
+```bash
+# 记录 baseline
+pytest tests/ -q 2>&1 | tail -3
+# 对比变更后新增 failures = regression
+```
+
+### Step 4: 独立审查
+调用 delegate_task 派遣独立审查 subagent，传入 diff 和扫描结果。
+收到 JSON verdict 后：
+- passed=true → 可合并
+- passed=false → 列出 issues，要求修复后重新审查
+
+### Step 5: Auto-fix Loop（最多 2 轮）
+修复后重新执行 Step 1-4。
+超过 2 轮 → 报告用户人工介入
