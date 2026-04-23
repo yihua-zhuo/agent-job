@@ -49,6 +49,80 @@ AGENTS = {
     }
 }
 
+# Pipeline 状态机配置
+PIPELINE_STAGES = ["test", "code-review", "qc", "deploy"]
+PIPELINE_STATE_FILE = SHARED_MEMORY / "orchestrator_state.json"
+
+
+def load_state():
+    """加载 pipeline 状态"""
+    if PIPELINE_STATE_FILE.exists():
+        return json.loads(PIPELINE_STATE_FILE.read_text())
+    return {"stage": "IDLE", "task_id": None, "results": {}}
+
+
+def save_state(state):
+    """保存 pipeline 状态"""
+    PIPELINE_STATE_FILE.write_text(json.dumps(state, indent=2))
+
+
+async def run_pipeline(task_description, code_dir=None):
+    """运行完整 pipeline"""
+    state = load_state()
+    
+    if state["stage"] != "IDLE":
+        return {"error": f"Pipeline already running: {state['stage']}"}
+    
+    task_id = datetime.now().strftime("%Y%m%d%H%M%S")
+    state = {
+        "stage": "TESTING",
+        "task_id": task_id,
+        "task_description": task_description,
+        "started_at": datetime.now().isoformat(),
+        "results": {}
+    }
+    save_state(state)
+    
+    # Stage 1: Test
+    log("🧪 Stage 1: Running tests...")
+    test_result = await spawn_agent("test", f"Run all tests for: {task_description}", code_dir)
+    state["results"]["test"] = {"status": "PASS" if test_result else "FAIL"}
+    save_state(state)
+    
+    if not test_result:
+        state["stage"] = "FAILED"
+        save_state(state)
+        return {"error": "Test stage failed"}
+    
+    # Stage 2: Code Review
+    state["stage"] = "CODE_REVIEW"
+    save_state(state)
+    log("🔍 Stage 2: Code review...")
+    cr_result = await spawn_agent("code-review", f"Review code for: {task_description}", code_dir)
+    state["results"]["code-review"] = {"status": "PASS" if cr_result else "FAIL"}
+    save_state(state)
+    
+    # Stage 3: QC
+    state["stage"] = "QC"
+    save_state(state)
+    log("✅ Stage 3: Quality control...")
+    qc_result = await spawn_agent("qc", f"QC check for: {task_description}", code_dir)
+    state["results"]["qc"] = {"status": "PASS" if qc_result else "FAIL"}
+    save_state(state)
+    
+    if state["results"]["qc"]["status"] == "PASS":
+        state["stage"] = "DEPLOYING"
+        save_state(state)
+        log("🚀 Stage 4: Deploying...")
+        deploy_result = await spawn_agent("deploy", f"Deploy: {task_description}", code_dir)
+        state["results"]["deploy"] = {"status": "PASS" if deploy_result else "FAIL"}
+    
+    state["stage"] = "DONE" if state["results"].get("deploy", {}).get("status") == "PASS" else "FAILED"
+    state["completed_at"] = datetime.now().isoformat()
+    save_state(state)
+    
+    return state
+
 
 def log(msg):
     """统一日志输出"""
@@ -208,4 +282,15 @@ async def main():
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    if len(sys.argv) < 2:
+        print("Usage: python3 coordinator.py <task> [--code-dir <path>]")
+        sys.exit(1)
+    
+    task = sys.argv[1]
+    code_dir = None
+    if "--code-dir" in sys.argv:
+        idx = sys.argv.index("--code-dir")
+        code_dir = sys.argv[idx + 1]
+    
+    result = asyncio.run(run_pipeline(task, code_dir))
+    print(json.dumps(result, indent=2))
