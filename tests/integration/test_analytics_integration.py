@@ -86,10 +86,10 @@ class TestDashboardIntegration:
         assert len(updated.data["widgets"]) == 1
 
     async def test_get_dashboard_not_found(self, db_schema, tenant_id):
-        """Non-existent dashboard returns ERROR."""
+        """Non-existent dashboard returns NOT_FOUND."""
         svc = AnalyticsService()
         result = await svc.get_dashboard(dashboard_id=999_999_999, tenant_id=tenant_id)
-        assert result.status == ResponseStatus.ERROR
+        assert result.status == ResponseStatus.NOT_FOUND
 
     async def test_list_dashboards(self, db_schema, tenant_id):
         """List returns all dashboards for the tenant."""

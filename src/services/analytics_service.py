@@ -92,7 +92,7 @@ class AnalyticsService:
         for key in allowed:
             if key in kwargs:
                 updates.append(f"{key} = :{key}")
-                params[key] = kwargs[key]
+                params[key] = json.dumps(kwargs[key]) if key == "widgets" else kwargs[key]
 
         if not updates:
             return await self.get_dashboard(dashboard_id, tenant_id)
@@ -248,11 +248,10 @@ class AnalyticsService:
                 return ApiResponse.error(message="创建报表失败", code=500)
             return ApiResponse.success(
                 data={
-                    "id": row[0], "name": row[2], "type": row[3],
+                    "id": row[0], "tenant_id": row[1], "name": row[2], "type": row[3],
                     "config": _json_loads(row[4]) if row[4] else {},
                     "date_range": _json_loads(row[5]) if row[5] else {},
-                    "created_by": row[6],
-                    "created_at": row[7].isoformat() if row[7] else None,
+                    "created_by": row[6], "created_at": row[7].isoformat() if row[7] else None,
                     "last_run_at": row[8].isoformat() if row[8] else None,
                 },
                 message="报表创建成功",

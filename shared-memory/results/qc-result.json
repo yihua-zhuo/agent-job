@@ -1,10 +1,8 @@
 {
   "agent": "qc",
-  "status": "passed",
-  "generated_at": "2026-04-24T12:05:00Z",
+  "status": "skipped",
+  "generated_at": "2026-04-24T12:20:08.955934Z",
   "details": {
-    "checks": {
-      "mypy": "passed (0 errors in 84 source files)"
-    }
+    "reason": "code-review not green in last 24h"
   }
 }
