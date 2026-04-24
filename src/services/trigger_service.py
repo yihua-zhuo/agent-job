@@ -1,5 +1,5 @@
 """自动化触发器"""
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from models.marketing import TriggerType
 
@@ -16,7 +16,9 @@ class TriggerService:
     def __init__(self, marketing_service=None):
         self._marketing_service = marketing_service
 
-    async def check_triggers(self, event_type: str, customer_data: Dict) -> List[int]:
+    async def check_triggers(
+        self, event_type: str, customer_data: Dict, tenant_id: int = 0
+    ) -> List[int]:
         """检查触发的活动"""
         triggered_campaign_ids: List[int] = []
 
@@ -34,7 +36,7 @@ class TriggerService:
         # 检查所有活动，找到匹配触发类型的活动
         if self._marketing_service:
             campaigns_response = await self._marketing_service.list_campaigns(
-                page=1, page_size=1000
+                page=1, page_size=1000, tenant_id=tenant_id
             )
             # campaigns_response is an ApiResponse; extract items from data.paginated_data
             if campaigns_response.data is not None:
@@ -43,8 +45,11 @@ class TriggerService:
                 campaigns = []
             for campaign_data in campaigns:
                 campaign_trigger = getattr(campaign_data, "trigger_type", None)
-                if campaign_trigger is not None and campaign_trigger == trigger_type.value:
-                    triggered_campaign_ids.append(campaign_data.id)
+                if campaign_trigger is not None:
+                    _cv: Any = campaign_trigger  # type: ignore[assignment]
+                    campaign_trigger_value = getattr(_cv, "value", None)
+                    if campaign_trigger_value == trigger_type.value:
+                        triggered_campaign_ids.append(campaign_data.id)
 
         return triggered_campaign_ids
 
