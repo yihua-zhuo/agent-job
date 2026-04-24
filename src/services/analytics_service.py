@@ -1,11 +1,22 @@
 """Analytics service — async PostgreSQL via SQLAlchemy."""
-from datetime import datetime, timedelta
+import json
+from datetime import datetime, timedelta, UTC
 from typing import Optional, List, Dict
 
 from sqlalchemy import text, func, and_, or_
 
 from db.connection import get_db_session
 from models.response import ApiResponse, PaginatedData
+
+
+def _json_loads(val):
+    """Safely parse a JSON value that may already be a Python object (asyncpg deserializes JSON columns)."""
+    if val is None:
+        return None
+    if isinstance(val, str):
+        import json
+        return json.loads(val)
+    return val
 
 
 class AnalyticsService:
@@ -18,7 +29,7 @@ class AnalyticsService:
         self, name: str, owner_id: int, tenant_id: int = 0, description: Optional[str] = None
     ) -> ApiResponse[Dict]:
         """创建仪表板"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         async with get_db_session() as session:
             stmt = text(
                 """
@@ -99,7 +110,7 @@ class AnalyticsService:
                 RETURNING id, tenant_id, name, description, widgets, owner_id, is_default, created_at, updated_at
                 """
             )
-            params["now"] = datetime.utcnow()
+            params["now"] = datetime.now(UTC)
             result = await session.execute(stmt, params)
             await session.commit()
             row = result.fetchone()
@@ -165,15 +176,14 @@ class AnalyticsService:
             if not row:
                 return ApiResponse.error(message="仪表板不存在", code=1404)
 
-            import json
-            widgets = json.loads(row[0]) if row[0] else []
+            widgets = _json_loads(row[0]) if row[0] else []
             widget_id = len(widgets) + 1
             widgets.append({"id": widget_id, **widget_config})
 
             update_stmt = text(
                 "UPDATE dashboards SET widgets = :widgets, updated_at = :now WHERE id = :id RETURNING widgets"
             )
-            await session.execute(update_stmt, {"widgets": json.dumps(widgets), "now": datetime.utcnow(), "id": dashboard_id})
+            await session.execute(update_stmt, {"widgets": json.dumps(widgets), "now": datetime.now(UTC), "id": dashboard_id})
             await session.commit()
             return ApiResponse.success(data={"id": widget_id, **widget_config}, message="组件添加成功")
 
@@ -189,13 +199,13 @@ class AnalyticsService:
             if not row:
                 return ApiResponse.error(message="仪表板不存在", code=1404)
 
-            widgets = json.loads(row[0]) if row[0] else []
+            widgets = _json_loads(row[0]) if row[0] else []
             widgets = [w for w in widgets if w.get("id") != widget_id]
 
             update_stmt = text(
                 "UPDATE dashboards SET widgets = :widgets, updated_at = :now WHERE id = :id"
             )
-            await session.execute(update_stmt, {"widgets": json.dumps(widgets), "now": datetime.utcnow(), "id": dashboard_id})
+            await session.execute(update_stmt, {"widgets": json.dumps(widgets), "now": datetime.now(UTC), "id": dashboard_id})
             await session.commit()
             return ApiResponse.success(data={"widget_id": widget_id}, message="组件移除成功")
 
@@ -212,7 +222,7 @@ class AnalyticsService:
     ) -> ApiResponse[Dict]:
         """创建报表"""
         import json
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         async with get_db_session() as session:
             stmt = text(
                 """
@@ -239,8 +249,8 @@ class AnalyticsService:
             return ApiResponse.success(
                 data={
                     "id": row[0], "name": row[2], "type": row[3],
-                    "config": json.loads(row[4]) if row[4] else {},
-                    "date_range": json.loads(row[5]) if row[5] else {},
+                    "config": _json_loads(row[4]) if row[4] else {},
+                    "date_range": _json_loads(row[5]) if row[5] else {},
                     "created_by": row[6],
                     "created_at": row[7].isoformat() if row[7] else None,
                     "last_run_at": row[8].isoformat() if row[8] else None,
@@ -261,7 +271,7 @@ class AnalyticsService:
                 return ApiResponse.error(message="报表不存在", code=1404)
 
             report_type = row[0]
-            config = json.loads(row[1]) if row[1] else {}
+            config = _json_loads(row[1]) if row[1] else {}
             start = date_range.get("start")
             end = date_range.get("end")
 
@@ -281,7 +291,7 @@ class AnalyticsService:
             # Update last_run_at
             await session.execute(
                 text("UPDATE reports SET last_run_at = :now, date_range = :dr WHERE id = :id"),
-                {"now": datetime.utcnow(), "dr": json.dumps(date_range), "id": report_id},
+                {"now": datetime.now(UTC), "dr": json.dumps(date_range), "id": report_id},
             )
             await session.commit()
             return ApiResponse.success(data=result_data)
@@ -369,17 +379,9 @@ class AnalyticsService:
             "chart_type": "bar",
         }
 
-    def get_sales_revenue_report(self, start_date, end_date, group_by: str = "day") -> Dict:
-        """Sync wrapper for chart generation."""
-        import asyncio
-        try:
-            return asyncio.get_event_loop().run_until_complete(
-                self._get_sales_revenue(start_date, end_date, group_by)
-            )
-        except RuntimeError:
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            return loop.run_until_complete(self._get_sales_revenue(start_date, end_date, group_by))
+    async def get_sales_revenue_report(self, start_date, end_date, group_by: str = "day") -> Dict:
+        """Get sales revenue report."""
+        return await self._get_sales_revenue(start_date, end_date, group_by)
 
     def get_sales_conversion_report(self, start_date, end_date) -> Dict:
         return {
