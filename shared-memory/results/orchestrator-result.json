@@ -1,10 +1,10 @@
 {
   "agent": "orchestrator",
-  "status": "pass",
-  "generated_at": "2026-04-13T06:03:54.071155Z",
+  "status": "fail",
+  "generated_at": "2026-04-24T02:01:05.414484Z",
   "details": {
-    "report_id": "task_20260413_060354",
-    "generated_at": "2026-04-13T06:03:54.070946Z",
+    "report_id": "task_20260424_020105",
+    "generated_at": "2026-04-24T02:01:05.413949Z",
     "ran": [
       "test",
       "code-review",
@@ -12,9 +12,10 @@
     ],
     "summary": {
       "test": "pass",
-      "code-review": "pass",
-      "qc": "pass"
+      "code-review": "skipped",
+      "qc": "skipped"
     },
-    "recommendation": "deploy"
+    "recommendation": "fix-and-retry",
+    "llm_reason": ""
   }
 }

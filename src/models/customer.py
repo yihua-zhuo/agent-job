@@ -1,6 +1,6 @@
 """Customer model for CRM system."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Optional, List
 
@@ -25,8 +25,8 @@ class Customer:
     company: Optional[str] = None
     status: CustomerStatus = CustomerStatus.LEAD
     tags: List[str] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Initialize default values after dataclass initialization."""
@@ -41,9 +41,9 @@ class Customer:
         if not self.tags:
             self.tags = []
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
     def to_dict(self) -> dict:
         """Convert customer to dictionary representation."""
@@ -74,17 +74,17 @@ class Customer:
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.utcnow()
+            created_at = datetime.now(UTC)
 
         updated_at = data.get('updated_at')
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at)
         elif updated_at is None:
-            updated_at = datetime.utcnow()
+            updated_at = datetime.now(UTC)
 
         return cls(
             id=data.get('id'),
-            tenant_id=data.get('tenant_id', 0),
+            tenant_id=0,  # tenant_id must be set by the service layer, never from input
             name=data['name'],
             email=data['email'],
             phone=data.get('phone'),

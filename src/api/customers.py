@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from services.customer_service import CustomerService
 from internal.middleware.auth import require_auth, get_current_tenant_id
+from models.response import ResponseStatus
 
 customer_bp = Blueprint('customers', __name__, url_prefix='/api/v1/customers')
 service = CustomerService()
@@ -8,6 +9,21 @@ service = CustomerService()
 
 class _MissingTenantError(Exception):
     """Raised when authenticated user has no valid tenant_id in the token."""
+
+
+def _http_status(response) -> int:
+    """Map ApiResponse.status to correct HTTP status code."""
+    status_map = {
+        ResponseStatus.SUCCESS: 200,
+        ResponseStatus.NOT_FOUND: 404,
+        ResponseStatus.VALIDATION_ERROR: 400,
+        ResponseStatus.UNAUTHORIZED: 401,
+        ResponseStatus.FORBIDDEN: 403,
+        ResponseStatus.SERVER_ERROR: 500,
+        ResponseStatus.ERROR: 400,
+        ResponseStatus.WARNING: 200,
+    }
+    return status_map.get(response.status, 400)
 
 
 def _get_tenant_id() -> int:
@@ -78,7 +94,7 @@ def list_customers():
 @require_auth
 def get_customer(customer_id):
     response = service.get_customer(customer_id, tenant_id=_get_tenant_id())
-    status_code = 200 if response.status.value == "success" else 404
+    status_code = _http_status(response)
     return jsonify(response.to_dict()), status_code
 
 

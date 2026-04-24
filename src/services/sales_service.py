@@ -1,5 +1,5 @@
 """Sales service layer - handles sales pipeline and opportunity logic via PostgreSQL/SQLAlchemy async."""
-from datetime import datetime
+from datetime import datetime, UTC
 from decimal import Decimal
 from typing import Optional
 
@@ -41,7 +41,7 @@ class SalesService:
                 return ApiResponse.error(message="管道名称已存在", code=3002)
 
             # 创建管道记录，使用 RETURNING 获取 id
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             pipeline = PipelineModel(
                 tenant_id=tenant_id,
                 name=data["name"],
@@ -266,7 +266,7 @@ class SalesService:
             amount = Decimal(str(data["amount"]))
             probability = int(data.get("probability", 0))
             expected_close = datetime.fromisoformat(
-                data.get("expected_close_date", datetime.utcnow().isoformat())
+                data.get("expected_close_date", datetime.now(UTC).isoformat())
             )
             stage = (
                 OpportunityStage(data["stage"]).value
@@ -289,7 +289,7 @@ class SalesService:
             if not pipeline_result.scalar_one_or_none():
                 return ApiResponse.error(message="管道不存在", code=3001)
 
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             opp = OpportunityModel(
                 tenant_id=tenant_id,
                 customer_id=int(data["customer_id"]),
@@ -455,7 +455,7 @@ class SalesService:
                 return ApiResponse.error(message="商机不存在", code=3001)
 
             # 构建更新字段
-            update_values: dict = {"updated_at": datetime.utcnow()}
+            update_values: dict = {"updated_at": datetime.now(UTC)}
 
             for key in ["name", "customer_id", "owner_id"]:
                 if key in data:
@@ -558,7 +558,7 @@ class SalesService:
                     OpportunityModel.id == opp_id,
                     OpportunityModel.tenant_id == tenant_id,
                 )
-                .values(stage=stage_val, updated_at=datetime.utcnow())
+                .values(stage=stage_val, updated_at=datetime.now(UTC))
             )
             await session.commit()
 

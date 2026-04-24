@@ -1,14 +1,56 @@
 {
   "agent": "manager",
   "status": "pass",
-  "generated_at": "2026-04-13T06:03:47.350900Z",
+  "generated_at": "2026-04-24T12:30:24.514002Z",
   "details": {
-    "agents": {},
-    "pending_tasks": [
-      "crm_phase1_plan.json",
-      "crm_phase2_plan.json",
-      "task_20260412_090521.json",
-      "task_20260413_053318.json"
-    ]
+    "generated_at": "2026-04-24T12:30:24.513987Z",
+    "tasks": {
+      "pending": 0,
+      "executing": 0,
+      "completed": 0,
+      "implemented_prs": 0,
+      "implementation_failed": 0,
+      "pr_urls": [],
+      "other_files": [
+        "crm_phase1_plan.json",
+        "crm_phase2_plan.json",
+        "failed.json",
+        "inbox.json",
+        "plan.json",
+        "task_20260412_090521.json",
+        "task_20260413_053318.json"
+      ],
+      "latest_research": null
+    },
+    "stages": {
+      "test": {
+        "status": "pass",
+        "age_min": 14
+      },
+      "code-review": {
+        "status": "skipped",
+        "age_min": 24
+      },
+      "qc": {
+        "status": "skipped",
+        "age_min": 10
+      },
+      "deploy": {
+        "status": "skipped",
+        "age_min": 560
+      },
+      "orchestrator": {
+        "status": "fail",
+        "age_min": 629
+      },
+      "research": {
+        "status": "missing",
+        "age_min": null
+      },
+      "task": {
+        "status": "missing",
+        "age_min": null
+      }
+    }
   }
 }

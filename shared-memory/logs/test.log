@@ -2,3 +2,319 @@
 [2026-04-13T06:03:47.667495Z] [test] pytest returncode=0
 [2026-04-13T06:03:53.783828Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py
 [2026-04-13T06:03:53.985595Z] [test] pytest returncode=0
+[2026-04-22T17:13:36.178496Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py
+[2026-04-22T17:13:37.197304Z] [test] pytest returncode=1
+[2026-04-22T17:14:10.694939Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T17:14:11.317020Z] [test] pytest returncode=0
+[2026-04-22T17:14:16.300859Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T17:14:16.930958Z] [test] pytest returncode=0
+[2026-04-22T17:27:27.377478Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T17:27:28.057468Z] [test] pytest returncode=0
+[2026-04-22T17:27:32.491474Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T17:27:33.106408Z] [test] pytest returncode=0
+[2026-04-22T17:30:51.126306Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T17:30:51.728706Z] [test] pytest returncode=0
+[2026-04-22T17:45:18.658780Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T17:45:19.351885Z] [test] pytest returncode=0
+[2026-04-22T18:00:59.293496Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T18:01:00.011316Z] [test] pytest returncode=0
+[2026-04-22T18:16:02.676644Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T18:16:03.401791Z] [test] pytest returncode=0
+[2026-04-22T18:30:47.908347Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T18:30:48.574352Z] [test] pytest returncode=0
+[2026-04-22T18:45:15.239804Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T18:45:15.899528Z] [test] pytest returncode=0
+[2026-04-22T19:00:52.045382Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T19:00:52.701072Z] [test] pytest returncode=0
+[2026-04-22T19:15:34.867697Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T19:15:35.539466Z] [test] pytest returncode=0
+[2026-04-22T19:31:11.835037Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T19:31:12.520243Z] [test] pytest returncode=0
+[2026-04-22T19:45:36.651590Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T19:45:37.328026Z] [test] pytest returncode=0
+[2026-04-22T20:01:13.629743Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T20:01:14.266850Z] [test] pytest returncode=0
+[2026-04-22T20:15:59.710725Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T20:16:00.367005Z] [test] pytest returncode=0
+[2026-04-22T20:30:58.061122Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T20:30:58.715876Z] [test] pytest returncode=0
+[2026-04-22T20:45:22.292292Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T20:45:22.976173Z] [test] pytest returncode=0
+[2026-04-22T21:01:00.083146Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T21:01:00.744068Z] [test] pytest returncode=0
+[2026-04-22T21:15:50.680917Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T21:15:51.344633Z] [test] pytest returncode=0
+[2026-04-22T21:30:27.056090Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T21:30:27.713104Z] [test] pytest returncode=0
+[2026-04-22T21:45:53.576693Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T21:45:54.263632Z] [test] pytest returncode=0
+[2026-04-22T22:00:31.263274Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T22:00:31.914934Z] [test] pytest returncode=0
+[2026-04-22T22:15:27.729834Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T22:15:28.404547Z] [test] pytest returncode=0
+[2026-04-22T22:30:28.654412Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T22:30:29.324661Z] [test] pytest returncode=0
+[2026-04-22T22:45:57.526806Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T22:45:58.207956Z] [test] pytest returncode=0
+[2026-04-22T23:00:45.272082Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T23:00:45.945818Z] [test] pytest returncode=0
+[2026-04-22T23:15:32.188192Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T23:15:32.844621Z] [test] pytest returncode=0
+[2026-04-22T23:31:16.114245Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T23:31:16.797824Z] [test] pytest returncode=0
+[2026-04-22T23:45:43.080079Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-22T23:45:43.756562Z] [test] pytest returncode=0
+[2026-04-23T00:00:25.883470Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T00:00:26.587196Z] [test] pytest returncode=0
+[2026-04-23T00:15:25.698053Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T00:15:26.379932Z] [test] pytest returncode=0
+[2026-04-23T00:30:22.654419Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T00:30:23.327204Z] [test] pytest returncode=0
+[2026-04-23T00:45:48.942784Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T00:45:49.647567Z] [test] pytest returncode=0
+[2026-04-23T01:02:16.000439Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T01:02:16.775281Z] [test] pytest returncode=0
+[2026-04-23T01:15:33.429837Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T01:15:34.158356Z] [test] pytest returncode=0
+[2026-04-23T01:31:13.259509Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T01:31:13.955737Z] [test] pytest returncode=0
+[2026-04-23T01:45:42.214218Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T01:45:42.891236Z] [test] pytest returncode=0
+[2026-04-23T02:00:24.194186Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T02:00:24.887396Z] [test] pytest returncode=2
+[2026-04-23T02:00:38.186758Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T02:00:38.838436Z] [test] pytest returncode=2
+[2026-04-23T02:15:31.162527Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T02:15:31.830296Z] [test] pytest returncode=0
+[2026-04-23T02:30:26.091135Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T02:30:26.750484Z] [test] pytest returncode=0
+[2026-04-23T02:45:52.352422Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T02:45:53.032465Z] [test] pytest returncode=0
+[2026-04-23T03:00:32.033676Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T03:00:32.758566Z] [test] pytest returncode=0
+[2026-04-23T03:19:25.773011Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T03:19:26.533543Z] [test] pytest returncode=0
+[2026-04-23T03:30:55.431812Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T03:30:56.236763Z] [test] pytest returncode=0
+[2026-04-23T03:45:25.669446Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T03:45:26.369223Z] [test] pytest returncode=0
+[2026-04-23T04:00:52.740397Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T04:00:53.514611Z] [test] pytest returncode=0
+[2026-04-23T04:16:00.958300Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T04:16:01.839952Z] [test] pytest returncode=0
+[2026-04-23T04:30:39.613808Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T04:30:40.305874Z] [test] pytest returncode=0
+[2026-04-23T04:45:05.490725Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T04:45:06.230610Z] [test] pytest returncode=0
+[2026-04-23T05:15:23.441696Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T05:15:24.135133Z] [test] pytest returncode=0
+[2026-04-23T05:30:54.635830Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T05:30:55.409035Z] [test] pytest returncode=0
+[2026-04-23T05:45:26.443080Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T05:45:27.121453Z] [test] pytest returncode=0
+[2026-04-23T06:00:55.759974Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T06:00:56.376946Z] [test] pytest returncode=0
+[2026-04-23T06:15:21.585607Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T06:15:22.350320Z] [test] pytest returncode=0
+[2026-04-23T06:31:05.341061Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T06:31:06.008828Z] [test] pytest returncode=0
+[2026-04-23T06:45:37.622144Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T06:45:38.313786Z] [test] pytest returncode=0
+[2026-04-23T07:00:06.639609Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T07:00:07.315390Z] [test] pytest returncode=0
+[2026-04-23T07:15:07.576768Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T07:15:08.205537Z] [test] pytest returncode=0
+[2026-04-23T07:30:38.764627Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T07:30:39.411954Z] [test] pytest returncode=0
+[2026-04-23T07:45:10.694817Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T07:45:11.383884Z] [test] pytest returncode=0
+[2026-04-23T08:00:43.585501Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T08:00:44.212713Z] [test] pytest returncode=0
+[2026-04-23T08:16:39.831902Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T08:16:40.496173Z] [test] pytest returncode=0
+[2026-04-23T08:30:20.994570Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T08:30:21.660231Z] [test] pytest returncode=0
+[2026-04-23T08:45:09.543606Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T08:45:10.234179Z] [test] pytest returncode=0
+[2026-04-23T09:00:41.771474Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T09:00:42.485513Z] [test] pytest returncode=0
+[2026-04-23T09:15:38.293046Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T09:15:38.971641Z] [test] pytest returncode=0
+[2026-04-23T09:30:10.655277Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T09:30:11.293401Z] [test] pytest returncode=0
+[2026-04-23T09:45:40.228828Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T09:45:40.891763Z] [test] pytest returncode=0
+[2026-04-23T10:00:11.657541Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T10:00:12.260969Z] [test] pytest returncode=0
+[2026-04-23T10:15:52.527786Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T10:15:54.364961Z] [test] pytest returncode=0
+[2026-04-23T10:30:21.163952Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T10:30:21.764910Z] [test] pytest returncode=2
+[2026-04-23T10:45:51.007301Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T10:45:52.815963Z] [test] pytest returncode=0
+[2026-04-23T11:00:18.562192Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T11:00:20.429227Z] [test] pytest returncode=0
+[2026-04-23T11:16:02.251599Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T11:16:04.109798Z] [test] pytest returncode=0
+[2026-04-23T11:30:31.003213Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T11:30:32.846933Z] [test] pytest returncode=0
+[2026-04-23T11:46:01.023914Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T11:46:02.880594Z] [test] pytest returncode=0
+[2026-04-23T12:00:33.595678Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T12:00:35.473079Z] [test] pytest returncode=0
+[2026-04-23T12:15:20.423192Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T12:15:22.236523Z] [test] pytest returncode=0
+[2026-04-23T12:30:51.834479Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T12:30:53.666721Z] [test] pytest returncode=0
+[2026-04-23T12:45:20.874393Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T12:45:22.740523Z] [test] pytest returncode=0
+[2026-04-23T13:00:49.608818Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T13:00:51.558469Z] [test] pytest returncode=0
+[2026-04-23T13:15:36.311123Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T13:15:38.273803Z] [test] pytest returncode=0
+[2026-04-23T13:31:04.601032Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T13:31:06.650727Z] [test] pytest returncode=0
+[2026-04-23T13:45:36.696489Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T13:45:38.817401Z] [test] pytest returncode=0
+[2026-04-23T14:00:19.564410Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T14:00:21.849796Z] [test] pytest returncode=0
+[2026-04-23T14:16:04.706361Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T14:16:06.858278Z] [test] pytest returncode=0
+[2026-04-23T14:30:37.771538Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T14:30:39.945608Z] [test] pytest returncode=0
+[2026-04-23T14:45:07.622788Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T14:45:09.702359Z] [test] pytest returncode=0
+[2026-04-23T15:00:38.908525Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T15:00:41.077085Z] [test] pytest returncode=0
+[2026-04-23T15:15:23.948638Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T15:15:26.231676Z] [test] pytest returncode=0
+[2026-04-23T15:30:54.474044Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T15:30:56.568455Z] [test] pytest returncode=0
+[2026-04-23T15:45:27.164102Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T15:45:29.151738Z] [test] pytest returncode=0
+[2026-04-23T16:01:00.489907Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T16:01:02.426796Z] [test] pytest returncode=0
+[2026-04-23T16:15:44.457576Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T16:15:46.274723Z] [test] pytest returncode=0
+[2026-04-23T16:30:14.112908Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T16:30:15.957402Z] [test] pytest returncode=0
+[2026-04-23T16:45:42.833705Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T16:45:44.644132Z] [test] pytest returncode=0
+[2026-04-23T17:00:11.186069Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T17:00:13.051043Z] [test] pytest returncode=0
+[2026-04-23T17:15:50.170515Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T17:15:51.996539Z] [test] pytest returncode=0
+[2026-04-23T17:30:15.908370Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T17:30:17.798504Z] [test] pytest returncode=0
+[2026-04-23T17:45:42.709247Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T17:45:44.515800Z] [test] pytest returncode=0
+[2026-04-23T18:00:08.230173Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T18:00:10.124109Z] [test] pytest returncode=0
+[2026-04-23T18:15:49.603459Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T18:15:51.417308Z] [test] pytest returncode=0
+[2026-04-23T18:30:17.151547Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T18:30:19.065425Z] [test] pytest returncode=0
+[2026-04-23T18:45:43.896474Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T18:45:45.720391Z] [test] pytest returncode=0
+[2026-04-23T19:00:09.969957Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-23T19:00:11.838913Z] [test] pytest returncode=0
+[2026-04-24T00:34:36.645022Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T00:34:38.821514Z] [test] pytest returncode=0
+[2026-04-24T00:45:05.415097Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T00:45:07.393570Z] [test] pytest returncode=0
+[2026-04-24T01:00:35.336422Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T01:00:37.354594Z] [test] pytest returncode=0
+[2026-04-24T01:15:28.106184Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T01:15:29.975367Z] [test] pytest returncode=0
+[2026-04-24T01:31:02.811554Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T01:31:04.883733Z] [test] pytest returncode=0
+[2026-04-24T01:45:32.825340Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T01:45:34.734126Z] [test] pytest returncode=0
+[2026-04-24T02:01:02.102966Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T02:01:02.867718Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T02:01:04.136860Z] [test] pytest returncode=0
+[2026-04-24T02:01:04.795196Z] [test] pytest returncode=0
+[2026-04-24T02:15:49.850398Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T02:15:52.068834Z] [test] pytest returncode=0
+[2026-04-24T02:30:20.507673Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T02:30:22.576708Z] [test] pytest returncode=0
+[2026-04-24T02:45:54.114853Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T02:45:56.220186Z] [test] pytest returncode=0
+[2026-04-24T03:00:24.986447Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T03:00:27.063094Z] [test] pytest returncode=0
+[2026-04-24T03:15:37.500511Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T03:15:39.690556Z] [test] pytest returncode=0
+[2026-04-24T03:30:10.368827Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T03:30:12.287552Z] [test] pytest returncode=0
+[2026-04-24T03:45:42.729662Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T03:45:44.822955Z] [test] pytest returncode=0
+[2026-04-24T04:00:25.310476Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T04:00:27.485838Z] [test] pytest returncode=0
+[2026-04-24T04:15:07.205216Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T04:15:09.542937Z] [test] pytest returncode=0
+[2026-04-24T04:30:36.180116Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T04:30:38.578735Z] [test] pytest returncode=0
+[2026-04-24T04:46:03.459624Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T04:46:05.683001Z] [test] pytest returncode=0
+[2026-04-24T05:00:29.857175Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T05:00:31.764266Z] [test] pytest returncode=0
+[2026-04-24T05:15:16.837832Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T05:15:19.075784Z] [test] pytest returncode=0
+[2026-04-24T05:30:49.885660Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T05:30:52.055753Z] [test] pytest returncode=0
+[2026-04-24T05:45:26.950257Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T05:45:29.255475Z] [test] pytest returncode=0
+[2026-04-24T06:01:01.252491Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T06:01:03.485485Z] [test] pytest returncode=0
+[2026-04-24T06:15:55.229252Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T06:15:57.290306Z] [test] pytest returncode=0
+[2026-04-24T06:30:25.634621Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T06:30:27.705991Z] [test] pytest returncode=0
+[2026-04-24T06:46:10.700147Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T06:46:12.824643Z] [test] pytest returncode=0
+[2026-04-24T07:00:20.239077Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T07:00:22.313980Z] [test] pytest returncode=0
+[2026-04-24T07:15:16.505878Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T07:15:18.565959Z] [test] pytest returncode=0
+[2026-04-24T07:30:47.857266Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T07:30:49.970909Z] [test] pytest returncode=0
+[2026-04-24T07:45:20.336049Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T07:45:22.402054Z] [test] pytest returncode=0
+[2026-04-24T08:00:50.125470Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T08:00:52.695883Z] [test] pytest returncode=0
+[2026-04-24T08:15:38.560026Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T08:15:40.699852Z] [test] pytest returncode=0
+[2026-04-24T08:30:10.666882Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T08:30:12.841854Z] [test] pytest returncode=0
+[2026-04-24T08:45:43.078163Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T08:45:45.327309Z] [test] pytest returncode=0
+[2026-04-24T09:00:16.858024Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T09:00:19.122817Z] [test] pytest returncode=0
+[2026-04-24T09:16:05.844638Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T09:16:08.188370Z] [test] pytest returncode=0
+[2026-04-24T09:30:39.624348Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T09:30:41.998627Z] [test] pytest returncode=0
+[2026-04-24T09:45:08.702372Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T09:45:10.893543Z] [test] pytest returncode=0
+[2026-04-24T10:00:38.214208Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T10:00:40.397556Z] [test] pytest returncode=0
+[2026-04-24T10:15:23.088976Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T10:15:25.260287Z] [test] pytest returncode=0
+[2026-04-24T10:30:53.128309Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T10:30:55.356579Z] [test] pytest returncode=0
+[2026-04-24T10:45:24.210789Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T10:45:26.179387Z] [test] pytest returncode=0
+[2026-04-24T11:00:52.789960Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T11:00:55.119519Z] [test] pytest returncode=0
+[2026-04-24T11:15:37.953450Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T11:15:40.192537Z] [test] pytest returncode=0
+[2026-04-24T11:30:08.670983Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T11:30:10.840192Z] [test] pytest returncode=0
+[2026-04-24T11:45:37.912707Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T11:45:39.902397Z] [test] pytest returncode=0
+[2026-04-24T12:00:08.767596Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T12:00:10.808879Z] [test] pytest returncode=0
+[2026-04-24T12:15:54.398777Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T12:15:56.268058Z] [test] pytest returncode=0
+[2026-04-24T12:30:24.544811Z] [test] $ python3 -m pytest tests/unit -q --ignore=tests/unit/test_user_service.py --ignore=tests/unit/test_import_export_service.py --ignore=tests/unit/test_db_engine.py
+[2026-04-24T12:30:26.445170Z] [test] pytest returncode=0

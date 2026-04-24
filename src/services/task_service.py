@@ -1,6 +1,6 @@
 """Task service for CRM system - async PostgreSQL via SQLAlchemy."""
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, UTC
 
 from sqlalchemy import text, func, and_, or_
 
@@ -13,17 +13,17 @@ class TaskService:
     async def create_task(
         self,
         title: str,
-        description: str,
-        assigned_to: int,
+        description: str = "",
+        assigned_to: int = None,
         due_date: datetime = None,
         **kwargs,
     ) -> Dict:
         """创建任务"""
         async with get_db_session() as session:
             tenant_id = kwargs.get("tenant_id", 0)
-            created_by = kwargs.get("created_by")
+            created_by = kwargs.get("created_by") or assigned_to
             priority = kwargs.get("priority", "normal")
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             result = await session.execute(
                 text(
                     """
@@ -101,7 +101,7 @@ class TaskService:
                 return {"success": False, "data": None, "message": "任务不存在"}
 
             set_clauses.append("updated_at = :now")
-            params["now"] = datetime.utcnow()
+            params["now"] = datetime.now(UTC)
 
             sql = text(
                 f"UPDATE tasks SET {', '.join(set_clauses)} "
@@ -119,7 +119,7 @@ class TaskService:
     async def complete_task(self, task_id: int):
         """完成任务"""
         async with get_db_session() as session:
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             result = await session.execute(
                 text(
                     """
@@ -153,6 +153,7 @@ class TaskService:
 
     async def list_tasks(
         self,
+        tenant_id: int = None,
         assigned_to: int = None,
         status: str = None,
         page: int = 1,
@@ -163,6 +164,9 @@ class TaskService:
             # Count
             count_params: Dict = {}
             where_clauses = []
+            if tenant_id is not None:
+                where_clauses.append("tenant_id = :tenant_id")
+                count_params["tenant_id"] = tenant_id
             if assigned_to is not None:
                 where_clauses.append("assigned_to = :assigned_to")
                 count_params["assigned_to"] = assigned_to

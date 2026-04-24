@@ -2,7 +2,7 @@
 from .customer import Customer, CustomerStatus
 from .opportunity import Opportunity, Stage
 from .pipeline import Pipeline
-from .user import User, Role
+from .user import User, UserRole
 from .activity import Activity, ActivityType
 from .marketing import Campaign, CampaignEvent, CampaignStatus, CampaignType, TriggerType
 
@@ -13,7 +13,7 @@ __all__ = [
     'Stage',
     'Pipeline',
     'User',
-    'Role',
+    'UserRole',
     'Activity',
     'ActivityType',
     'Campaign',

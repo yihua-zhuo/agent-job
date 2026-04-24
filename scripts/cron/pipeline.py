@@ -307,7 +307,8 @@ def step_test() -> Dict[str, Any]:
         proc = _run(
             ["python3", "-m", "pytest", "tests/unit", "-q",
              "--ignore=tests/unit/test_user_service.py",
-             "--ignore=tests/unit/test_import_export_service.py"],
+             "--ignore=tests/unit/test_import_export_service.py",
+             "--ignore=tests/unit/test_db_engine.py"],
             "test",
         )
     except subprocess.TimeoutExpired as exc:

@@ -26,3 +26,4 @@ shared-memory/reports/
 .claw/
 .clawd-todos.json
 .sandbox-home/
+coverage.json

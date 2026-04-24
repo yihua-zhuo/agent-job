@@ -6,3 +6,47 @@
 [2026-04-13T06:03:54.037200Z] [qc] $ python3 -c import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)
 [2026-04-13T06:03:54.057960Z] [qc] $ python3 -m mypy src
 [2026-04-13T06:03:54.070870Z] [qc] status=pass checks={'syntax': 0, 'mypy': 'skipped', 'readme': 0}
+[2026-04-22T17:14:17.616902Z] [qc] code-review not green; skipping
+[2026-04-22T17:14:59.203571Z] [qc] $ python3 -m ruff check src
+[2026-04-22T17:14:59.211671Z] [qc] $ python3 -c import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)
+[2026-04-22T17:14:59.263278Z] [qc] $ python3 -m mypy src
+[2026-04-22T17:15:17.931144Z] [qc] status=fail reason=-
+[2026-04-22T17:27:33.943633Z] [qc] code-review not green; skipping
+[2026-04-22T18:20:25.061111Z] [qc] code-review not green; skipping
+[2026-04-22T20:20:20.968695Z] [qc] $ python3 -m ruff check src
+[2026-04-22T20:20:20.976455Z] [qc] $ python3 -c import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)
+[2026-04-22T20:20:21.009169Z] [qc] $ python3 -m mypy src
+[2026-04-22T20:20:31.379889Z] [qc] status=fail reason=-
+[2026-04-22T22:20:50.277882Z] [qc] $ python3 -m ruff check src
+[2026-04-22T22:20:50.285138Z] [qc] $ python3 -c import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)
+[2026-04-22T22:20:50.322708Z] [qc] $ python3 -m mypy src
+[2026-04-22T22:21:03.999040Z] [qc] status=fail reason=-
+[2026-04-23T00:20:47.848432Z] [qc] $ python3 -m ruff check src
+[2026-04-23T00:20:47.856491Z] [qc] $ python3 -c import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)
+[2026-04-23T00:20:47.903868Z] [qc] $ python3 -m mypy src
+[2026-04-23T00:20:58.095471Z] [qc] status=fail reason=-
+[2026-04-23T02:00:38.840427Z] [qc] code-review not green; skipping
+[2026-04-23T02:20:58.517596Z] [qc] code-review not green; skipping
+[2026-04-23T04:20:13.865007Z] [qc] $ python3 -m ruff check src
+[2026-04-23T04:20:13.871881Z] [qc] $ python3 -c import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)
+[2026-04-23T04:20:13.910711Z] [qc] $ python3 -m mypy src
+[2026-04-23T04:20:27.338893Z] [qc] status=pass reason=-
+[2026-04-23T06:20:35.679062Z] [qc] $ python3 -m ruff check src
+[2026-04-23T06:20:35.686434Z] [qc] $ python3 -c import compileall,sys; sys.exit(0 if compileall.compile_dir('src', quiet=1) else 1)
+[2026-04-23T06:20:35.718008Z] [qc] $ python3 -m mypy src
+[2026-04-23T06:20:49.106458Z] [qc] status=pass reason=-
+[2026-04-23T08:21:03.306572Z] [qc] code-review not green; skipping
+[2026-04-23T10:20:06.377431Z] [qc] code-review not green; skipping
+[2026-04-23T12:20:38.134190Z] [qc] code-review not green; skipping
+[2026-04-23T14:20:24.201063Z] [qc] code-review not green; skipping
+[2026-04-23T16:20:58.438897Z] [qc] code-review not green; skipping
+[2026-04-23T18:21:03.164323Z] [qc] code-review not green; skipping
+[2026-04-23T20:50:56.311096Z] [qc] code-review not green; skipping
+[2026-04-24T00:34:35.489040Z] [qc] code-review not green; skipping
+[2026-04-24T02:01:05.412846Z] [qc] code-review not green; skipping
+[2026-04-24T02:21:07.190783Z] [qc] code-review not green; skipping
+[2026-04-24T04:20:23.974919Z] [qc] code-review not green; skipping
+[2026-04-24T06:20:10.308005Z] [qc] code-review not green; skipping
+[2026-04-24T08:20:54.912006Z] [qc] code-review not green; skipping
+[2026-04-24T10:20:38.159243Z] [qc] code-review not green; skipping
+[2026-04-24T12:20:08.956309Z] [qc] code-review not green; skipping

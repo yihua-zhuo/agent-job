@@ -4,7 +4,7 @@ TicketService – async PostgreSQL implementation via SQLAlchemy.
 Keeps identical public method signatures and return types as the original
 in-memory version, but replaces _tickets/_replies dicts with DB queries.
 """
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional, List, Dict
 
 from sqlalchemy import select, update, func, and_, or_
@@ -91,7 +91,7 @@ class TicketService:
         stmt = select(TicketModel).where(TicketModel.id == ticket_id)
         if tenant_id:
             stmt = stmt.where(
-                or_(TicketModel.tenant_id == tenant_id, TicketModel.tenant_id == 0)
+                or_(TicketModel.tenant_id == tenant_id)
             )
         result = await session.execute(stmt)
         return result.scalar_one_or_none()
@@ -112,7 +112,7 @@ class TicketService:
         tenant_id: int = 0,
     ) -> ApiResponse[Ticket]:
         """创建工单"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         sla_config = SLA_CONFIGS[sla_level]
         response_deadline = now + timedelta(hours=sla_config.first_response_hours)
 
@@ -164,6 +164,15 @@ class TicketService:
         """更新工单"""
         # tenant_id must never be mutated
         kwargs.pop('tenant_id', None)
+        # id and timestamps are read-only
+        kwargs.pop('id', None)
+        kwargs.pop('created_at', None)
+        kwargs.pop('resolved_at', None)
+        kwargs.pop('customer_id', None)
+
+        # Allowlist: only these fields can be updated via kwargs
+        _updatable = {'subject', 'description', 'status', 'priority',
+                      'channel', 'assigned_to', 'sla_level', 'tags'}
 
         async with get_db_session() as session:
             row = await self._fetch_ticket(session, ticket_id, tenant_id)
@@ -171,13 +180,13 @@ class TicketService:
                 return ApiResponse.error(message='工单不存在', code=1404)
 
             for key, value in kwargs.items():
-                if hasattr(row, key):
-                    # Store enum values as strings in the DB
-                    if hasattr(value, 'value'):
-                        setattr(row, key, value.value)
-                    else:
-                        setattr(row, key, value)
-            row.updated_at = datetime.utcnow()
+                if key not in _updatable:
+                    continue
+                if hasattr(value, 'value'):
+                    setattr(row, key, value.value)
+                else:
+                    setattr(row, key, value)
+            row.updated_at = datetime.now(UTC)
             ticket = _row_to_ticket(row)
 
         return ApiResponse.success(data=ticket, message='工单更新成功')
@@ -205,7 +214,7 @@ class TicketService:
             if ticket_row is None:
                 return ApiResponse.error(message='工单不存在', code=1404)
 
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             reply_row = TicketReplyModel(
                 ticket_id=ticket_id,
                 tenant_id=ticket_row.tenant_id,
@@ -235,7 +244,7 @@ class TicketService:
             if row is None:
                 return ApiResponse.error(message='工单不存在', code=1404)
 
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             row.status = new_status.value
             row.updated_at = now
 
@@ -255,7 +264,7 @@ class TicketService:
             stmt = select(TicketModel).where(TicketModel.customer_id == customer_id)
             if tenant_id:
                 stmt = stmt.where(
-                    or_(TicketModel.tenant_id == tenant_id, TicketModel.tenant_id == 0)
+                    or_(TicketModel.tenant_id == tenant_id)
                 )
             result = await session.execute(stmt)
             rows = result.scalars().all()
@@ -276,7 +285,7 @@ class TicketService:
             stmt = select(TicketModel)
             if tenant_id:
                 stmt = stmt.where(
-                    or_(TicketModel.tenant_id == tenant_id, TicketModel.tenant_id == 0)
+                    or_(TicketModel.tenant_id == tenant_id)
                 )
             if status is not None:
                 stmt = stmt.where(TicketModel.status == status.value)
@@ -309,7 +318,7 @@ class TicketService:
 
     async def get_sla_breaches(self, tenant_id: int = 0) -> List[Ticket]:
         """获取SLA超时的工单"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         async with get_db_session() as session:
             stmt = select(TicketModel).where(
                 and_(
@@ -319,7 +328,7 @@ class TicketService:
             )
             if tenant_id:
                 stmt = stmt.where(
-                    or_(TicketModel.tenant_id == tenant_id, TicketModel.tenant_id == 0)
+                    or_(TicketModel.tenant_id == tenant_id)
                 )
             result = await session.execute(stmt)
             rows = result.scalars().all()
@@ -340,6 +349,6 @@ class TicketService:
             agent_id = self._agent_pool[self._agent_index % len(self._agent_pool)]
             self._agent_index += 1
             row.assigned_to = agent_id
-            row.updated_at = datetime.utcnow()
+            row.updated_at = datetime.now(UTC)
 
         return ApiResponse.success(data={'agent_id': agent_id}, message='自动分配客服成功')

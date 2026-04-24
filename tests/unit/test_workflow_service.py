@@ -1,7 +1,7 @@
 """Unit tests for WorkflowService."""
 import pytest
 import pytest_asyncio
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 from services.workflow_service import WorkflowService
 
 
@@ -135,3 +135,105 @@ class TestWorkflowService:
         # No executions yet
         result = await workflow_service.get_execution_history(sample_workflow)
         assert bool(result) is True
+
+    # ── _check_conditions operator tests ──────────────────────────────────────
+
+    @pytest.mark.parametrize("operator,context_field,context_value,cond_value,expected", [
+        ("==", "status", "active", "active", True),
+        ("==", "status", "active", "inactive", False),
+        ("!=", "status", "active", "inactive", True),
+        ("!=", "status", "active", "active", False),
+        (">",   "amount", 50000, 10000, True),
+        (">",   "amount", 5000, 10000, False),
+        ("<",   "amount", 5000, 10000, True),
+        ("<",   "amount", 50000, 10000, False),
+        (">=",  "amount", 10000, 10000, True),
+        (">=",  "amount", 9999,  10000, False),
+        ("<=",  "amount", 10000, 10000, True),
+        ("<=",  "amount", 10001, 10000, False),
+        ("contains", "email", "alice@example.com", "alice", True),
+        ("contains", "email", "alice@example.com", "bob", False),
+    ])
+    async def test_check_conditions_single_operator(
+        self, workflow_service, operator, context_field, context_value, cond_value, expected
+    ):
+        conditions = [{"field": context_field, "operator": operator, "value": cond_value}]
+        context = {context_field: context_value}
+        result = await workflow_service._check_conditions(conditions, context)
+        assert result is expected
+
+    # ── _run_actions action type tests ───────────────────────────────────────
+
+    async def test_run_actions_email_send(self, workflow_service):
+        actions = [{"type": "email.send", "template": "welcome"}]
+        result = await workflow_service._run_actions(actions)
+        assert result["actions_executed"][0]["type"] == "email.send"
+        assert result["actions_executed"][0]["status"] == "sent"
+        assert result["actions_executed"][0]["template"] == "welcome"
+
+    async def test_run_actions_notification_send(self, workflow_service):
+        actions = [{"type": "notification.send", "to": "user:42"}]
+        result = await workflow_service._run_actions(actions)
+        assert result["actions_executed"][0]["type"] == "notification.send"
+        assert result["actions_executed"][0]["to"] == "user:42"
+
+    async def test_run_actions_tag_add(self, workflow_service):
+        actions = [{"type": "tag.add", "tag": "vip"}]
+        result = await workflow_service._run_actions(actions)
+        assert result["actions_executed"][0]["type"] == "tag.add"
+        assert result["actions_executed"][0]["tag"] == "vip"
+
+    async def test_run_actions_task_create(self, workflow_service):
+        actions = [{"type": "task.create", "title": "Follow up"}]
+        result = await workflow_service._run_actions(actions)
+        assert result["actions_executed"][0]["type"] == "task.create"
+        assert result["actions_executed"][0]["title"] == "Follow up"
+
+    async def test_run_actions_activity_log(self, workflow_service):
+        actions = [{"type": "activity.log", "content": "Called customer"}]
+        result = await workflow_service._run_actions(actions)
+        assert result["actions_executed"][0]["type"] == "activity.log"
+        assert result["actions_executed"][0]["status"] == "logged"
+
+    async def test_run_actions_unknown_type(self, workflow_service):
+        actions = [{"type": "http.webhook", "url": "https://example.com"}]
+        result = await workflow_service._run_actions(actions)
+        assert result["actions_executed"][0]["type"] == "http.webhook"
+        assert result["actions_executed"][0]["status"] == "unknown"
+
+    async def test_run_actions_multiple_actions(self, workflow_service):
+        actions = [
+            {"type": "email.send", "template": "welcome"},
+            {"type": "tag.add", "tag": "new"},
+            {"type": "task.create", "title": "Onboarding"},
+        ]
+        result = await workflow_service._run_actions(actions)
+        assert len(result["actions_executed"]) == 3
+
+    # ── execute_actions error path ────────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_execute_actions_not_found_raises(self, workflow_service):
+        """When get_workflow returns None, execute_actions raises ValueError."""
+        workflow_service.get_workflow = AsyncMock(
+            return_value=type("R", (), {"__bool__": lambda self: False})()
+        )
+        with pytest.raises(ValueError, match="not found"):
+            await workflow_service.execute_actions(99999, {})
+
+    # ── delete_workflow success path ──────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_delete_workflow_success(self, workflow_service):
+        mock_result = MagicMock()
+        mock_result.rowcount = 1
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("services.workflow_service.get_db_session", return_value=mock_session):
+            result = await workflow_service.delete_workflow(1)
+        assert bool(result) is True
+        assert result.data["id"] == 1

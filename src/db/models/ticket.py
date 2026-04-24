@@ -1,5 +1,5 @@
 """Ticket ORM model."""
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional
 
 from sqlalchemy import DateTime, Integer, String, Text, func
@@ -39,7 +39,7 @@ class TicketModel(Base):
             return False
         if self.response_deadline is None:
             return False
-        return datetime.utcnow() > self.response_deadline
+        return datetime.now(UTC) > self.response_deadline
 
     def to_dict(self) -> dict:
         return {

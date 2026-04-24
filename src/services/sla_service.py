@@ -1,5 +1,5 @@
 """SLA management service - async PostgreSQL via SQLAlchemy."""
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import List, Literal, Optional
 
 from sqlalchemy import text
@@ -46,7 +46,7 @@ class SLAService:
         self, tenant_id: int, tickets: List[Ticket] = None
     ) -> List[Ticket]:
         """获取所有超时的工单（按租户隔离）"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         async with get_db_session() as session:
             result = await session.execute(
                 text(
@@ -74,7 +74,7 @@ class SLAService:
         if ticket.resolved_at:
             return timedelta(0)
 
-        remaining = ticket.response_deadline - datetime.utcnow()
+        remaining = ticket.response_deadline - datetime.now(UTC)
         return remaining if remaining.total_seconds() > 0 else timedelta(0)
 
     def _row_to_ticket(self, row) -> Ticket:
