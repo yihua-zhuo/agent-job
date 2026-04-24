@@ -1,5 +1,5 @@
 """Workflow automation service backed by PostgreSQL via SQLAlchemy async."""
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, List, Optional, Union
 
 from sqlalchemy import delete, func, select, update
@@ -7,13 +7,13 @@ from sqlalchemy import delete, func, select, update
 from db.connection import get_db_session
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
 from models.response import ApiResponse, PaginatedData
-from models.workflow import TriggerType, WorkflowStatus
+from models.workflow import WorkflowTriggerType, WorkflowStatus
 
 
-def _as_trigger_value(value: Union[str, TriggerType, None]) -> str:
+def _as_trigger_value(value: Union[str, WorkflowTriggerType, None]) -> str:
     if value is None:
-        return TriggerType.MANUAL.value
-    if isinstance(value, TriggerType):
+        return WorkflowTriggerType.MANUAL.value
+    if isinstance(value, WorkflowTriggerType):
         return value.value
     return str(value)
 
@@ -32,12 +32,12 @@ class WorkflowService:
     async def create_workflow(
         self,
         name: str,
-        trigger_type: Union[str, TriggerType],
+        trigger_type: Union[str, WorkflowTriggerType],
         created_by: int,
         **kwargs,
     ) -> ApiResponse:
         """Create a new workflow."""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         async with get_db_session() as session:
             row = WorkflowModel(
                 tenant_id=kwargs.get("tenant_id", 0),
@@ -69,7 +69,7 @@ class WorkflowService:
 
     async def update_workflow(self, workflow_id: int, data: Dict) -> ApiResponse:
         """Update fields on a workflow."""
-        update_values: Dict = {"updated_at": datetime.utcnow()}
+        update_values: Dict = {"updated_at": datetime.now(UTC)}
         for key in ("name", "description", "trigger_config", "actions", "conditions"):
             if key in data:
                 update_values[key] = data[key]
@@ -98,7 +98,7 @@ class WorkflowService:
             stmt = (
                 update(WorkflowModel)
                 .where(WorkflowModel.id == workflow_id)
-                .values(status=new_status.value, updated_at=datetime.utcnow())
+                .values(status=new_status.value, updated_at=datetime.now(UTC))
                 .returning(WorkflowModel)
             )
             result = await session.execute(stmt)
@@ -174,7 +174,7 @@ class WorkflowService:
         if conditions and not await self._check_conditions(conditions, context):
             status = "failed"
             exec_result = {"error": "Conditions not met"}
-            completed_at = datetime.utcnow()
+            completed_at = datetime.now(UTC)
         else:
             try:
                 exec_result = await self._run_actions(
@@ -184,9 +184,9 @@ class WorkflowService:
             except Exception as exc:  # noqa: BLE001 - surface runtime failure to caller
                 status = "failed"
                 exec_result = {"error": str(exc)}
-            completed_at = datetime.utcnow()
+            completed_at = datetime.now(UTC)
 
-        started_at = datetime.utcnow()
+        started_at = datetime.now(UTC)
         async with get_db_session() as session:
             exec_row = WorkflowExecutionModel(
                 workflow_id=workflow_id,

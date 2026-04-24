@@ -1,5 +1,5 @@
 """营销服务 — async PostgreSQL via SQLAlchemy."""
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy import text, func
@@ -59,7 +59,7 @@ class MarketingService:
         **kwargs,
     ) -> ApiResponse[Campaign]:
         """创建营销活动"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         async with get_db_session() as session:
             stmt = text(
                 """
@@ -79,7 +79,11 @@ class MarketingService:
                 {
                     "tenant_id": tenant_id,
                     "name": name,
-                    "type": campaign_type.value,
+                    "type": (
+                        campaign_type.value
+                        if hasattr(campaign_type, "value")
+                        else campaign_type
+                    ),
                     "status": CampaignStatus.DRAFT.value,
                     "subject": kwargs.get("subject"),
                     "content": content,
@@ -149,7 +153,7 @@ class MarketingService:
                           sent_count, open_count, click_count, created_at, updated_at
                 """
             )
-            params["now"] = datetime.utcnow()
+            params["now"] = datetime.now(UTC)
             result = await session.execute(stmt, params)
             await session.commit()
             row = result.fetchone()
@@ -244,7 +248,7 @@ class MarketingService:
         tenant_id: int = 0,
     ) -> ApiResponse[CampaignEvent]:
         """记录用户事件"""
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         async with get_db_session() as session:
             # Insert event
             stmt = text(

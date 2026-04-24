@@ -1,6 +1,6 @@
 """Opportunity model for CRM system."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -29,8 +29,8 @@ class Opportunity:
     pipeline_id: Optional[int] = None
     id: Optional[int] = None
     tenant_id: int = 0
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Initialize default values after dataclass initialization."""
@@ -46,9 +46,9 @@ class Opportunity:
         elif self.probability > 100:
             self.probability = 100
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
     def to_dict(self) -> dict:
         """Convert opportunity to dictionary representation."""
@@ -88,19 +88,19 @@ class Opportunity:
         if isinstance(expected_close_date, str):
             expected_close_date = datetime.fromisoformat(expected_close_date)
         elif expected_close_date is None:
-            expected_close_date = datetime.utcnow()
+            expected_close_date = datetime.now(UTC)
 
         created_at = data.get('created_at')
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.utcnow()
+            created_at = datetime.now(UTC)
 
         updated_at = data.get('updated_at')
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at)
         elif updated_at is None:
-            updated_at = datetime.utcnow()
+            updated_at = datetime.now(UTC)
 
         return cls(
             id=data.get('id'),

@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from enum import Enum
 from typing import Optional, List
 
@@ -57,9 +57,9 @@ class Ticket:
         if self.assigned_to is None:
             self.assigned_to = None
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
     def check_sla_breach(self) -> bool:
         """检查是否SLA超时"""
@@ -67,7 +67,7 @@ class Ticket:
             return False
         if self.response_deadline is None:
             return False
-        return datetime.utcnow() > self.response_deadline
+        return datetime.now(UTC) > self.response_deadline
 
 
 @dataclass
@@ -84,7 +84,7 @@ class TicketReply:
         if self.id is None:
             self.id = None
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
 
 
 @dataclass

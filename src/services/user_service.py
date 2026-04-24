@@ -4,7 +4,7 @@
 from __future__ import annotations
 
 import re
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, Tuple
 
 import bcrypt
@@ -148,7 +148,7 @@ class UserService:
                 UserStatus.ACTIVE if role == UserRole.ADMIN else UserStatus.PENDING
             )
 
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             row = UserModel(
                 tenant_id=tenant_id,
                 username=username,
@@ -278,7 +278,7 @@ class UserService:
                         value = value.value
                     values[field] = value
 
-            values["updated_at"] = datetime.utcnow()
+            values["updated_at"] = datetime.now(UTC)
 
             await session.execute(
                 update(UserModel).where(UserModel.id == user_id).values(**values)
@@ -345,7 +345,7 @@ class UserService:
             await session.execute(
                 update(UserModel)
                 .where(UserModel.id == user_id)
-                .values(password_hash=new_hash, updated_at=datetime.utcnow())
+                .values(password_hash=new_hash, updated_at=datetime.now(UTC))
             )
 
         return ApiResponse.success(message="密码修改成功")

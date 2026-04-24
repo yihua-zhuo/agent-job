@@ -55,7 +55,7 @@ class AnalyticsService:
             return ApiResponse.success(
                 data={
                     "id": row[0], "tenant_id": row[1], "name": row[2],
-                    "description": row[3], "widgets": row[4], "owner_id": row[5],
+                    "description": row[3], "widgets": _json_loads(row[4]) if row[4] else [], "owner_id": row[5],
                     "is_default": row[6], "created_at": row[7].isoformat() if row[7] else None,
                     "updated_at": row[8].isoformat() if row[8] else None,
                 },
@@ -78,7 +78,7 @@ class AnalyticsService:
             return ApiResponse.success(
                 data={
                     "id": row[0], "tenant_id": row[1], "name": row[2],
-                    "description": row[3], "widgets": row[4], "owner_id": row[5],
+                    "description": row[3], "widgets": _json_loads(row[4]) if row[4] else [], "owner_id": row[5],
                     "is_default": row[6], "created_at": row[7].isoformat() if row[7] else None,
                     "updated_at": row[8].isoformat() if row[8] else None,
                 }
@@ -119,7 +119,7 @@ class AnalyticsService:
             return ApiResponse.success(
                 data={
                     "id": row[0], "tenant_id": row[1], "name": row[2],
-                    "description": row[3], "widgets": row[4], "owner_id": row[5],
+                    "description": row[3], "widgets": _json_loads(row[4]) if row[4] else [], "owner_id": row[5],
                     "is_default": row[6], "created_at": row[7].isoformat() if row[7] else None,
                     "updated_at": row[8].isoformat() if row[8] else None,
                 },
@@ -155,7 +155,7 @@ class AnalyticsService:
             items = [
                 {
                     "id": r[0], "tenant_id": r[1], "name": r[2],
-                    "description": r[3], "widgets": r[4], "owner_id": r[5],
+                    "description": r[3], "widgets": _json_loads(r[4]) if r[4] else [], "owner_id": r[5],
                     "is_default": r[6],
                     "created_at": r[7].isoformat() if r[7] else None,
                     "updated_at": r[8].isoformat() if r[8] else None,

@@ -1,6 +1,6 @@
 """Customer service layer - handles customer business logic via PostgreSQL/SQLAlchemy async."""
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, List, Dict
 from sqlalchemy import select, update, delete, func, text
 from db.connection import get_db_session
@@ -51,7 +51,7 @@ class CustomerService:
                     :owner_id, CAST(:tags AS jsonb), :created_at, :updated_at)
             RETURNING *
         """)
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         async with get_db_session() as session:
             result = await session.execute(
@@ -195,7 +195,7 @@ class CustomerService:
             return ApiResponse.error(message="没有需要更新的字段", code=1001)
 
         update_fields.append("updated_at = :updated_at")
-        params["updated_at"] = datetime.utcnow()
+        params["updated_at"] = datetime.now(UTC)
 
         # Tenant isolation: UPDATE ... WHERE id=? AND tenant_id=?
         if tenant_id:
@@ -282,7 +282,7 @@ class CustomerService:
             if tag not in existing_tags:
                 existing_tags = existing_tags + [tag]
 
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             update_sql = text(
                 "UPDATE customers SET tags = CAST(:tags AS jsonb), updated_at = :updated_at "
                 "WHERE id = :id RETURNING *"
@@ -318,7 +318,7 @@ class CustomerService:
             if tag in existing_tags:
                 existing_tags = [t for t in existing_tags if t != tag]
 
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             update_sql = text(
                 "UPDATE customers SET tags = CAST(:tags AS jsonb), updated_at = :updated_at "
                 "WHERE id = :id RETURNING *"
@@ -350,7 +350,7 @@ class CustomerService:
         except ValueError:
             new_status = CustomerStatus.LEAD
 
-        params: dict = {"id": customer_id, "status": new_status.value, "updated_at": datetime.utcnow()}
+        params: dict = {"id": customer_id, "status": new_status.value, "updated_at": datetime.now(UTC)}
         if tenant_id:
             params["tenant_id"] = tenant_id
             where_clause = "id = :id AND tenant_id = :tenant_id"
@@ -389,7 +389,7 @@ class CustomerService:
             if tenant_id and row._mapping.get("tenant_id") != tenant_id:
                 return ApiResponse.error(message="客户不存在", code=3001)
 
-        params: dict = {"id": customer_id, "owner_id": owner_id, "updated_at": datetime.utcnow()}
+        params: dict = {"id": customer_id, "owner_id": owner_id, "updated_at": datetime.now(UTC)}
         if tenant_id:
             params["tenant_id"] = tenant_id
             where_clause = "id = :id AND tenant_id = :tenant_id"
@@ -422,7 +422,7 @@ class CustomerService:
 
         imported = 0
         errors = []
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
 
         for i, data in enumerate(customers):
             if not data.get('name'):

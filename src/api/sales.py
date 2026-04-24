@@ -1,10 +1,25 @@
 from flask import Blueprint, request, jsonify, g
 from services.sales_service import SalesService
 from internal.middleware.auth import require_auth, get_current_tenant_id
-from pkg.errors import AppError
+from models.response import ResponseStatus
 
-sales_bp = Blueprint('sales', __name__, url_prefix='/api/v1')
+sales_bp = Blueprint('sales', __name__, url_prefix='/api/v1/sales')
 service = SalesService()
+
+
+def _http_status(response) -> int:
+    """Map ApiResponse.status to correct HTTP status code."""
+    status_map = {
+        ResponseStatus.SUCCESS: 200,
+        ResponseStatus.NOT_FOUND: 404,
+        ResponseStatus.VALIDATION_ERROR: 400,
+        ResponseStatus.UNAUTHORIZED: 401,
+        ResponseStatus.FORBIDDEN: 403,
+        ResponseStatus.SERVER_ERROR: 500,
+        ResponseStatus.ERROR: 400,
+        ResponseStatus.WARNING: 200,
+    }
+    return status_map.get(response.status, 400)
 
 
 class _MissingTenantError(Exception):
@@ -61,7 +76,7 @@ def list_pipelines():
 @require_auth
 def get_pipeline(pipeline_id):
     response = service.get_pipeline(_get_tenant_id(), pipeline_id)
-    status_code = 200 if response.status.value == "success" else 404
+    status_code = _http_status(response)
     return jsonify(response.to_dict()), status_code
 
 
@@ -69,7 +84,7 @@ def get_pipeline(pipeline_id):
 @require_auth
 def get_pipeline_stats(pipeline_id):
     response = service.get_pipeline_stats(_get_tenant_id(), pipeline_id)
-    status_code = 200 if response.status.value == "success" else 404
+    status_code = _http_status(response)
     return jsonify(response.to_dict()), status_code
 
 
@@ -77,7 +92,7 @@ def get_pipeline_stats(pipeline_id):
 @require_auth
 def get_pipeline_funnel(pipeline_id):
     response = service.get_pipeline_funnel(_get_tenant_id(), pipeline_id)
-    status_code = 200 if response.status.value == "success" else 404
+    status_code = _http_status(response)
     return jsonify(response.to_dict()), status_code
 
 
@@ -119,7 +134,7 @@ def list_opportunities():
 @require_auth
 def get_opportunity(opp_id):
     response = service.get_opportunity(_get_tenant_id(), opp_id)
-    status_code = 200 if response.status.value == "success" else 404
+    status_code = _http_status(response)
     return jsonify(response.to_dict()), status_code
 
 

@@ -3,7 +3,7 @@ import jwt
 import bcrypt
 import re
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, UTC
 from typing import cast, Optional, Dict
 
 from sqlalchemy import text
@@ -42,7 +42,7 @@ class AuthService:
         Returns:
             Encoded JWT token string.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             "sub": str(user_id),
             "user_id": user_id,
@@ -267,7 +267,7 @@ class AuthService:
                 ),
                 {
                     "jti": str(jti),
-                    "revoked_at": datetime.utcnow(),
+                    "revoked_at": datetime.now(UTC),
                     "exp": datetime.utcfromtimestamp(exp) if exp else None,
                 },
             )

@@ -1,11 +1,17 @@
 {
   "agent": "code-review",
-  "status": "pass",
-  "generated_at": "2026-04-13T06:03:54.023607Z",
+  "status": "skipped",
+  "generated_at": "2026-04-24T12:05:26.810613Z",
   "details": {
-    "critical": 0,
-    "warnings": 0,
-    "suggestions": 0,
-    "approval": null
+    "llm_status": "skipped",
+    "llm_parsed": {},
+    "llm_elapsed_sec": 0.0,
+    "reason": "claw binary not found on PATH or pod fallback",
+    "local": {
+      "diff_chars": 733,
+      "truncated_chars": 0,
+      "base": "d87086e1adbee068b482392c46f00d7e6838681f Merge pull request #17 from yihua-zhuo/develop",
+      "head": "f2334f843ab72b3eb0d925a44e36eebbdb24cb9a fix: restore JWT_SECRET fallback value instead of placeholder '***'"
+    }
   }
 }
