@@ -11,6 +11,7 @@ import asyncio
 import json
 import sys
 import os
+import uuid
 from datetime import datetime
 from pathlib import Path
 
@@ -73,7 +74,7 @@ async def run_pipeline(task_description, code_dir=None):
     if state["stage"] != "IDLE":
         return {"error": f"Pipeline already running: {state['stage']}"}
     
-    task_id = datetime.now().strftime("%Y%m%d%H%M%S")
+    task_id = uuid.uuid4().hex
     state = {
         "stage": "TESTING",
         "task_id": task_id,
@@ -148,11 +149,7 @@ async def spawn_agent(agent_id, task_description, code_dir=None):
 """
     
     log(f"🚀 启动 {AGENTS[agent_id]['name']}...")
-    
-    # 这里应该调用 sessions_spawn，实际使用时通过 OpenClaw CLI 或 API
-    # subprocess 调用 openclaw 命令
-    import subprocess
-    
+
     cmd = [
         "openclaw", "sessions", "spawn",
         "--label", f"{agent_id}-worker",
@@ -160,16 +157,21 @@ async def spawn_agent(agent_id, task_description, code_dir=None):
         "--task", prompt,
         "--cwd", str(workspace_path)
     ]
-    
+
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=300
+        # Use asyncio.create_subprocess_exec to avoid blocking the event loop
+        proc = await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
         )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
         log(f"✅ {AGENTS[agent_id]['name']} 完成")
-        return result.stdout
+        return stdout.decode() if stdout else None
+    except asyncio.TimeoutError:
+        proc.kill()
+        log(f"❌ {AGENTS[agent_id]['name']} 执行超时")
+        return None
     except Exception as e:
         log(f"❌ {AGENTS[agent_id]['name']} 执行失败: {e}")
         return None
@@ -236,7 +238,7 @@ async def main():
     task = sys.argv[1] if len(sys.argv) > 1 else "开发任务"
     code_dir = sys.argv[2] if len(sys.argv) > 2 else str(BASE_DIR / "src")
     
-    task_id = f"task_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    task_id = f"task_{uuid.uuid4().hex}"
     
     log(f"📋 任务ID: {task_id}")
     log(f"📁 代码目录: {code_dir}")

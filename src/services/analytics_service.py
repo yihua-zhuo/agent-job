@@ -14,7 +14,6 @@ def _json_loads(val):
     if val is None:
         return None
     if isinstance(val, str):
-        import json
         return json.loads(val)
     return val
 
@@ -191,7 +190,6 @@ class AnalyticsService:
         self, dashboard_id: int, widget_id: int, tenant_id: int = 0
     ) -> ApiResponse[Dict]:
         """移除组件"""
-        import json
         async with get_db_session() as session:
             stmt = text("SELECT widgets FROM dashboards WHERE id = :id")
             result = await session.execute(stmt, {"id": dashboard_id})
@@ -221,7 +219,6 @@ class AnalyticsService:
         tenant_id: int = 0,
     ) -> ApiResponse[Dict]:
         """创建报表"""
-        import json
         now = datetime.now(UTC)
         async with get_db_session() as session:
             stmt = text(
@@ -261,7 +258,6 @@ class AnalyticsService:
         self, report_id: int, date_range: Dict, tenant_id: int = 0
     ) -> ApiResponse[Dict]:
         """运行报表"""
-        import json
         async with get_db_session() as session:
             stmt = text("SELECT type, config FROM reports WHERE id = :id")
             result = await session.execute(stmt, {"id": report_id})
