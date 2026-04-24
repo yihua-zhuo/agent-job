@@ -1,9 +1,9 @@
 {
   "agent": "manager",
   "status": "pass",
-  "generated_at": "2026-04-24T12:30:24.514002Z",
+  "generated_at": "2026-04-24T13:20:38.435897Z",
   "details": {
-    "generated_at": "2026-04-24T12:30:24.513987Z",
+    "generated_at": "2026-04-24T13:20:38.435888Z",
     "tasks": {
       "pending": 0,
       "executing": 0,
@@ -25,23 +25,23 @@
     "stages": {
       "test": {
         "status": "pass",
-        "age_min": 14
+        "age_min": 5
       },
       "code-review": {
         "status": "skipped",
-        "age_min": 24
+        "age_min": 14
       },
       "qc": {
         "status": "skipped",
-        "age_min": 10
+        "age_min": 60
       },
       "deploy": {
         "status": "skipped",
-        "age_min": 560
+        "age_min": 610
       },
       "orchestrator": {
         "status": "fail",
-        "age_min": 629
+        "age_min": 679
       },
       "research": {
         "status": "missing",
