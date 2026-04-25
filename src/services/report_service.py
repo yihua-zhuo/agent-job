@@ -59,8 +59,10 @@ class ReportService:
 
         # Write CSV file
         import os as _os
-        _base = _os.environ.get("SHARED_MEMORY_DIR", "shared-memory")
-        filepath = f"{_base}/results/{filename}"
+        import tempfile as _tmp
+        _base = _os.environ.get("EXPORT_DIR") or _os.path.join(_tmp.gettempdir(), "exports")
+        _os.makedirs(_base, exist_ok=True)
+        filepath = _os.path.join(_base, filename)
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if headers:

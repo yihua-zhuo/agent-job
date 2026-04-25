@@ -9,6 +9,8 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
+  SHARED_MEMORY_REPO: yihua-zhuo/agent-job-shared-memory
+  SHARED_MEMORY_BRANCH: main
 
 jobs:
   test:
@@ -21,6 +23,17 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      # Clone the shared-memory repo so results persist across pipelines.
+      # Requires COMMIT_GITHUB_TOKEN (PAT) with write access to the
+      # shared-memory repo; falls back to the built-in GITHUB_TOKEN.
+      - name: Clone shared-memory
+        env:
+          SM_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || github.token }}
+        run: |
+          git clone --branch "$SHARED_MEMORY_BRANCH" \
+            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
+            shared-memory
+
       - name: Install deps
         run: pip install -q -e ".[dev]"
 
@@ -29,41 +42,61 @@ jobs:
           PYTHONPATH: src
         run: |
           mkdir -p pipeline-artifacts
+          set +e
           python3 -m pytest tests/unit -q \
             --ignore=tests/unit/test_user_service.py \
             --ignore=tests/unit/test_import_export_service.py \
             --ignore=tests/unit/test_db_engine.py \
             2>&1 | tee pipeline-artifacts/pytest-output.txt
-          echo "EXIT_CODE=$?" >> $GITHUB_ENV
+          echo "EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
+          set -e
 
       - name: Write result envelope
+        if: always()
         run: |
+          mkdir -p shared-memory/results
           python3 -c "
-          import json, sys, os
+          import json, os
+          from datetime import datetime
           exit_code = int(os.environ.get('EXIT_CODE', 1))
           status = 'pass' if exit_code == 0 else 'fail'
           try:
               with open('pipeline-artifacts/pytest-output.txt') as f:
                   tail = f.read().splitlines()[-8:]
-          except:
+          except Exception:
               tail = []
-          from datetime import datetime
           result = {
               'agent': 'test',
               'status': status,
               'generated_at': datetime.utcnow().isoformat() + 'Z',
               'details': {'returncode': exit_code, 'tail': tail}
           }
-          with open('pipeline-artifacts/test-result.json', 'w') as f:
+          with open('shared-memory/results/test-result.json', 'w') as f:
               json.dump(result, f, indent=2)
           print(f'Result: {status}')
           "
 
+      - name: Push shared-memory
+        if: always()
+        env:
+          SM_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || github.token }}
+        run: |
+          cd shared-memory
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "pipeline(test): update results"
+          git push \
+            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
+            "$SHARED_MEMORY_BRANCH"
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: pipeline-test-result
-          path: pipeline-artifacts/test-result.json
+          path: shared-memory/results/test-result.json
           retention-days: 3
 
       - name: Create GitHub Issue on failure
@@ -71,6 +104,13 @@ jobs:
         uses: actions/github-script@v7
         with:
           script: |
+            // Ensure labels exist before creating the issue.
+            for (const name of ['pipeline', 'test-failure', 'automated']) {
+              await github.rest.issues.createLabel({
+                owner: context.repo.owner, repo: context.repo.repo,
+                name, color: 'ededed',
+              }).catch(() => {});  // ignore "already exists"
+            }
             const { data: issue } = await github.rest.issues.create({
               owner: context.repo.owner,
               repo: context.repo.repo,

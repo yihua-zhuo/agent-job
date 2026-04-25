@@ -32,6 +32,10 @@ body = (
 
 title = f"❌ QC Gate Failed — {datetime.utcnow().strftime('%Y-%m-%d %H:00')}"
 
+# Ensure labels exist (--force is a no-op if already present).
+for lbl in ('pipeline', 'qc', 'automated'):
+    subprocess.run(['gh', 'label', 'create', lbl, '--force'], capture_output=True, text=True)
+
 # Fix #11: pass each label with its own --label flag so gh receives them correctly.
 cmd = [
     'gh', 'issue', 'create',

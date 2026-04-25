@@ -39,6 +39,10 @@ body = (
 
 title = f"❌ Deploy Failed — {datetime.utcnow().strftime('%Y-%m-%d')}"
 
+# Ensure labels exist (--force is a no-op if already present).
+for lbl in ('pipeline', 'deploy', 'automated'):
+    subprocess.run(['gh', 'label', 'create', lbl, '--force'], capture_output=True, text=True)
+
 # Fix #9: pass each label with its own --label flag so gh receives them correctly.
 cmd = [
     'gh', 'issue', 'create',

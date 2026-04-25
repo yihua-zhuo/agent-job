@@ -54,6 +54,10 @@ body = (
 
 title = f"🔴 Code Review Critical — {datetime.utcnow().strftime('%Y-%m-%d %H:00')}"
 
+# Ensure labels exist (--force is a no-op if already present).
+for lbl in ('pipeline', 'code-review', 'automated'):
+    subprocess.run(['gh', 'label', 'create', lbl, '--force'], capture_output=True, text=True)
+
 # Fix #7: pass each label with its own --label flag so gh receives them correctly.
 cmd = [
     'gh', 'issue', 'create',

@@ -11,6 +11,8 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
+  SHARED_MEMORY_REPO: yihua-zhuo/agent-job-shared-memory
+  SHARED_MEMORY_BRANCH: main
 
 jobs:
   deploy:
@@ -24,12 +26,13 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Download QC artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: pipeline-qc-result
-          path: ./artifacts
-        continue-on-error: true
+      - name: Clone shared-memory
+        env:
+          SM_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || github.token }}
+        run: |
+          git clone --branch "$SHARED_MEMORY_BRANCH" \
+            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
+            shared-memory
 
       - name: Check QC gate
         id: gate
@@ -37,13 +40,13 @@ jobs:
           python3 -c "
           import json, os
           from datetime import datetime, timezone
-          path = 'artifacts/qc-result.json'
+          path = 'shared-memory/results/qc-result.json'
           if not os.path.exists(path):
               print('QC_GATE=skip')
           else:
               with open(path) as f:
                   data = json.load(f)
-              gen = datetime.fromisoformat(data['generated_at'].rstrip('Z'))
+              gen = datetime.fromisoformat(data['generated_at'].rstrip('Z')).replace(tzinfo=timezone.utc)
               age_h = (datetime.now(timezone.utc) - gen).total_seconds() / 3600
               if data.get('status') == 'pass' and age_h < 24:
                   print('QC_GATE=ok')
@@ -53,40 +56,32 @@ jobs:
 
       - name: Skip if QC not green
         if: steps.gate.outputs.QC_GATE != 'ok' && github.event_name != 'workflow_dispatch'
-        run: |
-          mkdir -p artifacts
-          python3 -c "
-          import json
-          from datetime import datetime
-          result = {'agent':'deploy','status':'skipped','generated_at':datetime.utcnow().isoformat()+'Z','details':{'reason':'qc not green today'}}
-          with open('artifacts/deploy-result.json','w') as f:
-              json.dump(result,f,indent=2)
-          "
-          echo "QC gate not met — deploy skipped"
+        run: echo "QC gate not met — deploy skipped"
 
       - name: Run deploy
         if: steps.gate.outputs.QC_GATE == 'ok' || github.event_name == 'workflow_dispatch'
         env:
           DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
         run: |
-          mkdir -p artifacts
           echo "Running deploy script..."
-          python3 scripts/deploy.py 2>&1 | tee artifacts/deploy-output.txt
-          echo "EXIT_CODE=$?" >> $GITHUB_ENV
+          set +e
+          python3 scripts/deploy.py 2>&1 | tee /tmp/deploy-output.txt
+          echo "EXIT_CODE=${PIPESTATUS[0]}" >> $GITHUB_ENV
+          set -e
 
       - name: Write result envelope
         if: steps.gate.outputs.QC_GATE == 'ok' || github.event_name == 'workflow_dispatch'
         run: |
-          mkdir -p artifacts
+          mkdir -p shared-memory/results
           python3 -c "
           import json, os
           from datetime import datetime
           exit_code = int(os.environ.get('EXIT_CODE', 1))
           status = 'pass' if exit_code == 0 else 'fail'
           try:
-              with open('artifacts/deploy-output.txt') as f:
+              with open('/tmp/deploy-output.txt') as f:
                   tail = f.read().splitlines()[-12:]
-          except:
+          except Exception:
               tail = []
           result = {
               'agent': 'deploy',
@@ -94,17 +89,32 @@ jobs:
               'generated_at': datetime.utcnow().isoformat() + 'Z',
               'details': {'returncode': exit_code, 'tail': tail}
           }
-          with open('artifacts/deploy-result.json','w') as f:
-              json.dump(result,f,indent=2)
+          with open('shared-memory/results/deploy-result.json','w') as f:
+              json.dump(result, f, indent=2)
           print(f'Deploy result: {status}')
           "
+
+      - name: Push shared-memory
+        if: always()
+        env:
+          SM_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || github.token }}
+        run: |
+          cd shared-memory
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "pipeline(deploy): update results"
+          git push \
+            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
+            "$SHARED_MEMORY_BRANCH"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         if: always()
         with:
           name: pipeline-deploy-result
-          path: artifacts/deploy-result.json
+          path: shared-memory/results/deploy-result.json
           retention-days: 3
 
       - name: Create GitHub Issue on deploy failure
@@ -113,5 +123,5 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXIT_CODE: ${{ env.EXIT_CODE || '0' }}
           GITHUB_RUN_ID: ${{ github.run_id }}
-          ARTIFACT_PATH: artifacts/deploy-result.json
+          ARTIFACT_PATH: shared-memory/results/deploy-result.json
         run: python3 scripts/ci/create_deploy_issue.py
