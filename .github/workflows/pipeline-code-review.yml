@@ -47,13 +47,16 @@ jobs:
           if not os.path.exists(path):
               print('TEST_GATE=skip')
           else:
-              with open(path) as f:
-                  data = json.load(f)
-              gen = datetime.fromisoformat(data['generated_at'].rstrip('Z'))
-              age_h = (datetime.now(timezone.utc) - gen).total_seconds() / 3600
-              if data['status'] == 'pass' and age_h < 24:
-                  print('TEST_GATE=ok')
-              else:
+              try:
+                  with open(path) as f:
+                      data = json.load(f)
+                  gen = datetime.fromisoformat(data['generated_at'].rstrip('Z'))
+                  age_h = (datetime.now(timezone.utc) - gen).total_seconds() / 3600
+                  if data.get('status') == 'pass' and age_h < 0.5:
+                      print('TEST_GATE=ok')
+                  else:
+                      print('TEST_GATE=skip')
+              except Exception:
                   print('TEST_GATE=skip')
           " >> $GITHUB_OUTPUT
 
