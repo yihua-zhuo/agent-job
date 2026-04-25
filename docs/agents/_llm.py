@@ -31,7 +31,7 @@ Environment hooks (all optional):
 
     CLAW_BIN            Override the binary path (default: discover ``claw`` on
                         PATH, then fall back to the pod-canonical
-                        ``/home/node/.openclaw/.local/bin/claw``).
+                        ``/opt/data/bin/claw``).
     CLAW_MODEL          Model identifier passed to ``--model``
                         (default: ``openai/MiniMax-M2.7``).
     CLAW_PERMISSION     Permission mode (default: ``workspace-write``).
@@ -60,7 +60,7 @@ DEFAULT_AGENT = os.environ.get("OPENCLAW_AGENT", "main")  # kept for API parity
 DEFAULT_MODEL = os.environ.get("CLAW_MODEL", "openai/MiniMax-M2.7")
 DEFAULT_PERMISSION = os.environ.get("CLAW_PERMISSION", "workspace-write")
 
-_FALLBACK_CLAW_BIN = "/home/node/.openclaw/.local/bin/claw"
+_FALLBACK_CLAW_BIN = "/opt/data/bin/claw"
 
 
 @dataclass
