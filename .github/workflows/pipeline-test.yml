@@ -22,7 +22,7 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install deps
-        run: pip install -q pytest pytest-asyncio
+        run: pip install -q pytest pytest-asyncio python-dotenv
 
       - name: Run pytest
         run: |
