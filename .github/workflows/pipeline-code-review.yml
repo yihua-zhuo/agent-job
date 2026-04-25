@@ -118,7 +118,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 -c "
-          import json, os, subprocess
+          import json, os, subprocess, sys
           path = 'artifacts/code-review-result.json'
           if not os.path.exists(path):
               print('No result file to parse')
@@ -138,16 +138,16 @@ jobs:
                   loc = f'line {line}' if line else 'N/A'
                   issues_md.append(f'{i+1}. **[{dim.upper()}]** {msg} (at {loc})')
               body = '''**Pipeline Stage:** code-review
-**Status:** FAIL — {n} critical issue(s) found
-**Triggered:** {t}
+**Status:** FAIL — {{n}} critical issue(s) found
+**Triggered:** {{t}}
 
 ## Critical Issues
-{issues}
+{{issues}}
 
 ## Warnings
-{warnings}
+{{warnings}}
 
-_See pipeline-run: {run}_
+_See pipeline-run: {{run}}_
 '''.format(
                   n=len(critical),
                   t=datetime.utcnow().isoformat(),

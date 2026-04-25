@@ -114,7 +114,7 @@ jobs:
           EXIT_CODE: ${{ env.EXIT_CODE || '0' }}
         run: |
           python3 -c "
-          import json, subprocess
+          import json, os, subprocess
           from datetime import datetime
           try:
               with open('artifacts/deploy-result.json') as f:
@@ -124,16 +124,16 @@ jobs:
           if data.get('status') == 'fail':
               tail = data.get('details',{}).get('tail',[])
               body = '''**Pipeline Stage:** deploy
-**Status:** FAIL\n**Triggered:** {t}
+**Status:** FAIL\n**Triggered:** {{t}}
 
 Deploy script returned non-zero.
 
 ## Output
 ```
-{output}
+{{output}}
 ```
 
-_See pipeline-run: {run}_
+_See pipeline-run: {{run}}_
 '''.format(
                   t=datetime.utcnow().isoformat(),
                   output='\\n'.join(tail[-20:]) if tail else 'No output',
