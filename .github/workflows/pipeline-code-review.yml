@@ -1,0 +1,172 @@
+name: Pipeline · Code Review
+
+on:
+  schedule:
+    - cron: "5 * * * *"          # hourly at :05
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  code-review:
+    name: Code Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up claw wrapper
+        run: |
+          mkdir -p bin
+          cp scripts/ci/claw bin/claw
+          chmod +x bin/claw
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Download test artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pipeline-test-result
+          path: ./artifacts
+        continue-on-error: true
+
+      - name: Check test gate
+        id: gate
+        run: |
+          python3 -c "
+          import json, os
+          from datetime import datetime, timezone
+          path = 'artifacts/test-result.json'
+          if not os.path.exists(path):
+              print('TEST_GATE=skip')
+          else:
+              with open(path) as f:
+                  data = json.load(f)
+              gen = datetime.fromisoformat(data['generated_at'].rstrip('Z'))
+              age_h = (datetime.now(timezone.utc) - gen).total_seconds() / 3600
+              if data['status'] == 'pass' and age_h < 24:
+                  print('TEST_GATE=ok')
+              else:
+                  print('TEST_GATE=skip')
+          " >> $GITHUB_OUTPUT
+
+      - name: Skip if test not green
+        if: steps.gate.outputs.TEST_GATE == 'skip'
+        run: |
+          python3 -c "
+          import json
+          from datetime import datetime
+          result = {'agent':'code-review','status':'skipped','generated_at':datetime.utcnow().isoformat()+'Z','details':{'reason':'test not green in last 24h'}}
+          with open('artifacts/code-review-result.json','w') as f:
+              json.dump(result,f,indent=2)
+          "
+          mkdir -p artifacts
+          mv artifacts/code-review-result.json artifacts/code-review-result.json.bak 2>/dev/null; true
+
+      - name: Run Code Review Agent
+        if: steps.gate.outputs.TEST_GATE == 'ok'
+        env:
+          AI_GATEWAY_URL: ${{ secrets.AI_GATEWAY_URL }}
+          AI_GATEWAY_KEY: ${{ secrets.AI_GATEWAY_KEY }}
+          CLAW_BIN: ${{ github.workspace }}/bin/claw
+        run: |
+          mkdir -p artifacts
+          python3 scripts/cron/pipeline.py code-review 2>&1 | tee artifacts/code-review-output.txt || true
+
+      - name: Parse and normalize result
+        run: |
+          mkdir -p artifacts
+          python3 -c "
+          import json, os, sys
+          from datetime import datetime
+
+          # Try to read what pipeline.py wrote
+          path = 'shared-memory/results/code-review-result.json'
+          if os.path.exists(path):
+              import shutil
+              shutil.copy(path, 'artifacts/code-review-result.json')
+              print('Found pipeline.py output')
+              sys.exit(0)
+
+          # Fallback: parse from output log
+          log_path = 'artifacts/code-review-output.txt'
+          if os.path.exists(log_path):
+              with open(log_path) as f:
+                  content = f.read()
+              # If we skipped, pipeline.py wrote a skipped envelope
+              print('No result file found — check pipeline output')
+          "
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipeline-code-review-result
+          path: artifacts/code-review-result.json
+          retention-days: 3
+
+      - name: Create GitHub Issue on critical issues
+        if: steps.gate.outputs.TEST_GATE == 'ok'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 -c "
+          import json, os, subprocess
+          path = 'artifacts/code-review-result.json'
+          if not os.path.exists(path):
+              print('No result file to parse')
+              sys.exit(0)
+          with open(path) as f:
+              data = json.load(f)
+          status = data.get('status','')
+          llm_parsed = data.get('details',{}).get('llm_parsed',{})
+          critical = llm_parsed.get('critical',[])
+          warnings = llm_parsed.get('warnings',[])
+          if status == 'fail' and critical:
+              issues_md = []
+              for i, c in enumerate(critical):
+                  dim = c.get('dim','')
+                  line = c.get('line','')
+                  msg = c.get('msg','')
+                  loc = f'line {line}' if line else 'N/A'
+                  issues_md.append(f'{i+1}. **[{dim.upper()}]** {msg} (at {loc})')
+              body = '''**Pipeline Stage:** code-review
+**Status:** FAIL — {n} critical issue(s) found
+**Triggered:** {t}
+
+## Critical Issues
+{issues}
+
+## Warnings
+{warnings}
+
+_See pipeline-run: {run}_
+'''.format(
+                  n=len(critical),
+                  t=datetime.utcnow().isoformat(),
+                  issues='\\n'.join(issues_md) if issues_md else 'None',
+                  warnings='\\n'.join(f'- {w}' for w in warnings[:5]) if warnings else 'None',
+                  run=os.environ.get('GITHUB_RUN_ID','N/A')
+              )
+              # Use gh cli to create issue
+              cmd = ['gh','issue','create',
+                     '--title','❌ Code Review Critical Issues — ' + datetime.utcnow().strftime('%Y-%m-%d %H:00'),
+                     '--body', body,
+                     '--label','pipeline','code-review','automated']
+              result = subprocess.run(cmd, capture_output=True, text=True)
+              if result.returncode == 0:
+                  print('Issue created:', result.stdout.strip())
+              else:
+                  print('gh error:', result.stderr)
+          else:
+              print(f'Status={status}, critical={len(critical)} — no issue created')
+          " || echo "Issue check script failed"
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}

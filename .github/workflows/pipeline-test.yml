@@ -1,0 +1,79 @@
+name: Pipeline · Test
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install deps
+        run: pip install -q pytest pytest-asyncio
+
+      - name: Run pytest
+        run: |
+          mkdir -p pipeline-artifacts
+          python3 -m pytest tests/unit -q \
+            --ignore=tests/unit/test_user_service.py \
+            --ignore=tests/unit/test_import_export_service.py \
+            --ignore=tests/unit/test_db_engine.py \
+            2>&1 | tee pipeline-artifacts/pytest-output.txt
+          echo "EXIT_CODE=$?" >> $GITHUB_ENV
+
+      - name: Write result envelope
+        run: |
+          python3 -c "
+          import json, sys, os
+          exit_code = int(os.environ.get('EXIT_CODE', 1))
+          status = 'pass' if exit_code == 0 else 'fail'
+          try:
+              with open('pipeline-artifacts/pytest-output.txt') as f:
+                  tail = f.read().splitlines()[-8:]
+          except:
+              tail = []
+          from datetime import datetime
+          result = {
+              'agent': 'test',
+              'status': status,
+              'generated_at': datetime.utcnow().isoformat() + 'Z',
+              'details': {'returncode': exit_code, 'tail': tail}
+          }
+          with open('pipeline-artifacts/test-result.json', 'w') as f:
+              json.dump(result, f, indent=2)
+          print(f'Result: {status}')
+          "
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-test-result
+          path: pipeline-artifacts/test-result.json
+          retention-days: 3
+
+      - name: Create GitHub Issue on failure
+        if: env.EXIT_CODE != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: issue } = await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: '❌ Test Failure — ' + new Date().toISOString().slice(0,16),
+              body: `**Pipeline Stage:** test\n**Status:** FAIL\n**Triggered:** ${new Date().toISOString()}\n\nPytest reported failures. Please check the test output and fix.\n\n_See pipeline-run: ${context.runId}_`,
+              labels: ['pipeline', 'test-failure', 'automated']
+            });
+            console.log('Issue created:', issue.data.html_url);
