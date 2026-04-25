@@ -31,11 +31,15 @@ body = (
 )
 
 title = f"❌ QC Gate Failed — {datetime.utcnow().strftime('%Y-%m-%d %H:00')}"
+
+# Fix #11: pass each label with its own --label flag so gh receives them correctly.
 cmd = [
     'gh', 'issue', 'create',
     '--title', title,
     '--body', body,
-    '--label', 'pipeline', 'qc', 'automated'
+    '--label', 'pipeline',
+    '--label', 'qc',
+    '--label', 'automated',
 ]
 result = subprocess.run(cmd, capture_output=True, text=True)
 if result.returncode == 0:

@@ -32,7 +32,14 @@ for i, c in enumerate(critical):
     issues_md.append(f'{i+1}. **[{dim.upper()}]** {msg} (at {loc})')
 
 issues_str = '\n'.join(issues_md)
-warnings_str = '\n'.join(f'- {w}' for w in warnings[:5]) if warnings else 'None'
+
+# Fix #8: surface count of omitted warnings.
+MAX_WARNINGS = 5
+shown_warnings = warnings[:MAX_WARNINGS]
+omitted = len(warnings) - len(shown_warnings)
+warnings_str = '\n'.join(f'- {w}' for w in shown_warnings) if shown_warnings else 'None'
+if omitted > 0:
+    warnings_str += f'\n- _…and {omitted} more warning(s) not shown_'
 
 body = (
     f"**Pipeline Stage:** code-review\n"
@@ -46,11 +53,15 @@ body = (
 )
 
 title = f"🔴 Code Review Critical — {datetime.utcnow().strftime('%Y-%m-%d %H:00')}"
+
+# Fix #7: pass each label with its own --label flag so gh receives them correctly.
 cmd = [
     'gh', 'issue', 'create',
     '--title', title,
     '--body', body,
-    '--label', 'pipeline', 'code-review', 'automated'
+    '--label', 'pipeline',
+    '--label', 'code-review',
+    '--label', 'automated',
 ]
 result = subprocess.run(cmd, capture_output=True, text=True)
 if result.returncode == 0:

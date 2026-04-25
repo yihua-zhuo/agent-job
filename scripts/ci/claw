@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
-from pathlib import Path
 
 URL = os.environ.get("AI_GATEWAY_URL", "").rstrip("/")
 KEY = os.environ.get("AI_GATEWAY_KEY", "")
@@ -15,43 +15,49 @@ MODEL = "MiniMax-M2.7"
 
 
 def main() -> None:
+    # Fix #4: Fail fast if URL is not configured.
+    if not URL:
+        print(json.dumps({"error": "AI_GATEWAY_URL is not set"}), file=sys.stderr)
+        sys.exit(1)
+
     args = sys.argv[1:]
 
-    # Parse known claw flags; everything else is passed through
-    output_format = "json"
     model_override: str | None = None
-    permission_mode = "workspace-write"
-    allowed_tools: list[str] = []
+    # Note: output_format, permission_mode, allowed_tools are accepted for CLI
+    # compatibility with claw but are not forwarded to the gateway.
 
     i = 0
     prompt_texts: list[str] = []
     while i < len(args):
         arg = args[i]
         if arg in ("--output-format", "-o"):
+            # Fix #2: consume value token without using it.
             i += 2
         elif arg in ("--model", "-m"):
             model_override = args[i + 1]
             i += 2
         elif arg in ("--permission-mode", "-p"):
+            # Fix #2: consume value token without using it.
             i += 2
         elif arg == "--allowedTools":
-            allowed_tools = args[i + 1].split(",")
+            # Fix #1: accepted for compat; not forwarded.
             i += 2
         elif arg in ("prompt", "p"):
-            i += 1
-            prompt_texts = args[i:]
+            # Fix #3: don't skip the token after the subcommand word —
+            # the prompt text starts at i+1, not i+2.
+            prompt_texts = args[i + 1 :]
             break
         else:
             i += 1
 
     model = model_override or MODEL
 
-    # Build messages
+    # Build messages (system role is standard OpenAI-style chat format).
     system_msg = (
         "You are a helpful assistant. When asked to produce JSON output, "
         "reply with ONLY the JSON object, no extra text or markdown fences."
     )
-    messages = [{"role": "system", "content": system_msg}]
+    messages: list[dict] = [{"role": "system", "content": system_msg}]
     if prompt_texts:
         messages.append({"role": "user", "content": "\n".join(prompt_texts)})
 
@@ -76,8 +82,7 @@ def main() -> None:
         with urllib.request.urlopen(req, timeout=180) as resp:
             result = json.loads(resp.read())
             choice = result["choices"][0]["message"]["content"]
-            # Stripthink blocks
-            import re
+            # Fix #5: re is imported at top level; strip <think> blocks.
             choice = re.sub(r"<think>.*?</think>", "", choice, flags=re.DOTALL).strip()
             print(choice)
     except urllib.error.HTTPError as e:

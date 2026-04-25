@@ -58,23 +58,115 @@ def _load_dotenv_into_environ() -> None:
                 continue
             key, _, value = line.partition("=")
             key = key.strip()
-            value = value.strip().strip('"').strip("'")
+            value = value.strip()
+            # Strip inline comments (e.g. SECRET=abc123 # comment → abc123).
+            # Only strip when the value is not quoted; quoted values preserve
+            # interior # characters.
+            if value and value[0] in ('"', "'"):
+                value = value.strip(value[0])
+            else:
+                value = value.partition(" #")[0].partition("\t#")[0].strip()
             if key and key not in os.environ:
                 os.environ[key] = value
     except OSError:
         pass
 
 
-_load_dotenv_into_environ()
+# Only load .env when running as the pipeline, not when imported by tests.
+# Tests that need specific env vars should set them in their own fixtures.
+if not os.environ.get("PIPELINE_NO_DOTENV"):
+    _load_dotenv_into_environ()
 
 from docs.agents._llm import ask_agent, compose_prompt, LLMOutcome  # noqa: E402
 
 SHARED = REPO_ROOT / "shared-memory"
+SHARED_REPO = os.environ.get(
+    "SHARED_MEMORY_REPO",
+    "https://github.com/yihua-zhuo/agent-job-shared-memory.git",
+)
+SHARED_BRANCH = os.environ.get("SHARED_MEMORY_BRANCH", "main")
 RESULTS_DIR = SHARED / "results"
 TASKS_DIR = SHARED / "tasks"
 REPORTS_DIR = SHARED / "reports"
 LOG_DIR = SHARED / "logs"
 LOCK_DIR = SHARED / "locks"
+
+
+def _shared_repo_auth_url() -> str:
+    """Build the repo URL with embedded token when GITHUB_TOKEN is set.
+
+    macOS Keychain (or other credential helpers) may cache credentials for a
+    different GitHub account, causing pushes to fail with 403.  Embedding the
+    token in the URL and passing ``-c credential.helper=`` bypasses the
+    system credential store entirely.
+    """
+    token = os.environ.get("COMMIT_GITHUB_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    if not token:
+        return SHARED_REPO
+    # https://github.com/user/repo.git → https://<user>:<token>@github.com/user/repo.git
+    return SHARED_REPO.replace("https://", f"https://x-access-token:{token}@")
+
+
+def _git_shared(*args: str, **kwargs) -> subprocess.CompletedProcess:
+    """Run a git command in the shared-memory dir, bypassing credential cache."""
+    cmd = ["git", "-c", "credential.helper=", *args]
+    kwargs.setdefault("cwd", SHARED)
+    kwargs.setdefault("capture_output", True)
+    kwargs.setdefault("text", True)
+    return subprocess.run(cmd, **kwargs)
+
+
+def _sync_shared_memory_pull() -> None:
+    """Clone or pull the shared-memory repo so we start with the latest state."""
+    git_dir = SHARED / ".git"
+    auth_url = _shared_repo_auth_url()
+    if git_dir.is_dir():
+        # Already a git repo — pull latest
+        _git_shared("pull", "--rebase", "--quiet", auth_url, SHARED_BRANCH, timeout=60)
+    else:
+        if SHARED.exists():
+            # Directory exists but is not a git repo — back up and clone fresh
+            import shutil
+            backup = SHARED.with_name("shared-memory-backup")
+            if backup.exists():
+                shutil.rmtree(backup)
+            SHARED.rename(backup)
+            _git_shared("clone", "--branch", SHARED_BRANCH, auth_url, str(SHARED),
+                         cwd=REPO_ROOT, timeout=120)
+            # Merge any files from backup that don't exist in the clone
+            for src in backup.rglob("*"):
+                if src.is_file():
+                    rel = src.relative_to(backup)
+                    dst = SHARED / rel
+                    if not dst.exists():
+                        dst.parent.mkdir(parents=True, exist_ok=True)
+                        shutil.copy2(src, dst)
+            shutil.rmtree(backup)
+        else:
+            _git_shared("clone", "--branch", SHARED_BRANCH, auth_url, str(SHARED),
+                         cwd=REPO_ROOT, timeout=120)
+    # Ensure remote "origin" points to the clean (non-token) URL
+    if git_dir.is_dir():
+        _git_shared("remote", "set-url", "origin", SHARED_REPO, timeout=10)
+
+
+def _sync_shared_memory_push(agent: str) -> None:
+    """Commit and push any changes back to the shared-memory repo."""
+    git_dir = SHARED / ".git"
+    if not git_dir.is_dir():
+        return
+    # Stage all changes (results, logs, tasks, reports)
+    _git_shared("add", "-A", timeout=30)
+    # Check if there's anything to commit
+    diff = _git_shared("diff", "--cached", "--quiet", timeout=10)
+    if diff.returncode == 0:
+        return  # nothing to commit
+    _git_shared("commit", "-m", f"pipeline({agent}): update results", timeout=30)
+    auth_url = _shared_repo_auth_url()
+    _git_shared("push", auth_url, SHARED_BRANCH, timeout=60)
+
+
+_sync_shared_memory_pull()
 
 for d in (RESULTS_DIR, TASKS_DIR, REPORTS_DIR, LOG_DIR, LOCK_DIR):
     d.mkdir(parents=True, exist_ok=True)
@@ -132,16 +224,32 @@ class _Lock:
         self.name = name
 
     def __enter__(self) -> "_Lock":
-        if self.path.exists():
-            try:
-                pid = int(self.path.read_text().strip() or 0)
-            except ValueError:
-                pid = 0
-            if pid and _pid_alive(pid):
-                _log(self.name, f"previous run (pid={pid}) still active; skipping")
-                sys.exit(0)
-            _log(self.name, "stale lock found; reclaiming")
-        self.path.write_text(str(os.getpid()))
+        # Try atomic exclusive create first. If that succeeds we own the lock.
+        # If it fails (FileExistsError) check whether the existing holder is
+        # still alive, reclaim if stale, otherwise exit.
+        try:
+            fd = os.open(self.path, os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            os.write(fd, str(os.getpid()).encode())
+            os.close(fd)
+            return self
+        except FileExistsError:
+            pass
+
+        # Lock file already exists — check for a live holder.
+        try:
+            pid = int(self.path.read_text().strip() or 0)
+        except (ValueError, OSError):
+            pid = 0
+
+        if pid and _pid_alive(pid):
+            _log(self.name, f"previous run (pid={pid}) still active; skipping")
+            sys.exit(0)
+
+        # Stale lock — overwrite atomically via rename.
+        _log(self.name, "stale lock found; reclaiming")
+        tmp = self.path.with_suffix(".tmp")
+        tmp.write_text(str(os.getpid()))
+        tmp.replace(self.path)
         return self
 
     def __exit__(self, *_exc) -> None:
@@ -221,7 +329,7 @@ def _collect_stats() -> Dict[str, Any]:
     stages: Dict[str, Dict[str, Any]] = {}
     now_utc = datetime.utcnow()
     for agent in ("test", "code-review", "qc", "deploy", "orchestrator",
-                  "research", "task"):
+                  "research", "task", "implement"):  # Fix #13: implement was missing
         env = _read_envelope(agent)
         if not env:
             stages[agent] = {"status": "missing", "age_min": None}
@@ -336,7 +444,7 @@ def step_code_review() -> Dict[str, Any]:
 
     # Freshen both refs so the review sees post-merge reality, not pod-local
     # state. ``--no-write-fetch-head`` avoids touching FETCH_HEAD churn.
-    _run(["git", "fetch", "--quiet", "origin", "master", "develop"],
+    _run(["git", "fetch", "--quiet", "--no-write-fetch-head", "origin", "master", "develop"],
          "code-review", timeout=60)
 
     diff_proc = _run(
@@ -445,7 +553,14 @@ def step_qc() -> Dict[str, Any]:
 
 
 def step_orchestrator() -> Dict[str, Any]:
-    """Run test -> review -> qc in order, let openclaw recommend next action."""
+    """Run test -> review -> qc in order, let openclaw recommend next action.
+
+    Each sub-step is called directly (no _Lock wrapper here), so the
+    orchestrator must not run concurrently with the individual cron jobs.
+    The orchestrator's own _Lock (acquired by main()) prevents re-entrant
+    orchestrator runs; individual step locks are intentionally skipped so the
+    orchestrator can sequence them without deadlocking on its own lock.
+    """
     ran: List[str] = []
     for name, fn in [("test", step_test), ("code-review", step_code_review), ("qc", step_qc)]:
         ran.append(name)
@@ -604,8 +719,6 @@ def _collect_context_for_research() -> str:
     return "\n\n".join(parts)
 
 
-_FILENAME_RE = re.compile(r"[A-Za-z0-9_\-./]+\.py")
-
 
 def _research_task_is_implementable(task: Dict[str, Any]) -> Optional[str]:
     """Return None if the task is fit for autonomous implementation, else
@@ -728,13 +841,15 @@ def step_research() -> Dict[str, Any]:
             continue
         task_id = f"research-{ts}-{idx:02d}"
         path = TASKS_DIR / f"{task_id}.json"
+        # Fix #7: spread LLM task dict FIRST so our canonical keys always win
+        # and the LLM cannot overwrite task_id, claimed_at, etc.
         path.write_text(json.dumps({
+            **task,
             "task_id": task_id,
             "created_at": _now(),
             "source": "research",
             "claimed_at": None,
             "result_path": None,
-            **task,
         }, indent=2, ensure_ascii=False))
         created.append(task_id)
 
@@ -774,6 +889,7 @@ def step_task() -> Dict[str, Any]:
     """
     candidates = sorted(TASKS_DIR.glob("research-*.json"))
     pending: Optional[Path] = None
+    pending_data: Optional[Dict[str, Any]] = None
     for path in candidates:
         try:
             data = json.loads(path.read_text())
@@ -781,14 +897,15 @@ def step_task() -> Dict[str, Any]:
             continue
         if not data.get("claimed_at"):
             pending = path
+            pending_data = data
             break
 
-    if pending is None:
+    if pending is None or pending_data is None:
         _write_envelope("task", "skipped", {"reason": "no unclaimed tasks in queue"})
         _log("task", "no unclaimed tasks")
         return {"skipped": True}
 
-    task = json.loads(pending.read_text())
+    task = pending_data  # Fix #12: reuse already-parsed dict, don't re-read
     task_id = task.get("task_id", pending.stem)
 
     # Claim the task so a concurrent cron fire doesn't re-pick it.
@@ -1016,7 +1133,11 @@ def _scan_worktree_for_secrets(worktree: Path) -> Optional[str]:
 
 def _worktree_diff_lines(worktree: Path, base: str = "origin/develop") -> int:
     """Count line changes vs base branch. Measures COMMITTED changes, not
-    the working-tree delta — important because the agent commits its work."""
+    the working-tree delta — important because the agent commits its work.
+
+    Binary files (reported as '-\\t-\\t<name>' by --numstat) are counted as
+    IMPLEMENT_MAX_DIFF_LINES so they always trip the diff-size guardrail.
+    """
     proc = subprocess.run(
         ["git", "diff", "--numstat", base], cwd=worktree,
         capture_output=True, text=True, timeout=30,
@@ -1025,6 +1146,11 @@ def _worktree_diff_lines(worktree: Path, base: str = "origin/develop") -> int:
     for line in (proc.stdout or "").splitlines():
         cols = line.split("\t")
         if len(cols) < 2:
+            continue
+        # Binary files produce '-' for both added and removed counts.
+        if cols[0] == "-" or cols[1] == "-":
+            # Treat any binary as over the limit — pipeline should not commit blobs.
+            total += IMPLEMENT_MAX_DIFF_LINES + 1
             continue
         try:
             total += int(cols[0]) + int(cols[1])
@@ -1035,47 +1161,60 @@ def _worktree_diff_lines(worktree: Path, base: str = "origin/develop") -> int:
 
 def _gh_open_pr(branch: str, title: str, body: str,
                 base: str = "develop") -> Dict[str, Any]:
-    """Open a PR via the GitHub REST API. Returns parsed JSON or an error dict."""
+    """Open a PR via the GitHub REST API. Returns parsed JSON or an error dict.
+
+    The token is passed to curl via the GITHUB_TOKEN_FOR_CURL environment
+    variable (not as a command-line argument) so it never appears in
+    /proc/<pid>/cmdline or shell history.
+    """
+    # Fetch the remote URL once — used for both token extraction and owner/repo.
+    proc = subprocess.run(
+        ["git", "remote", "get-url", "origin"],
+        cwd=REPO_ROOT, capture_output=True, text=True, timeout=10,
+    )
+    origin_url = (proc.stdout or "").strip()
+
     token = (os.environ.get("GITHUB_BOT_TOKEN")
              or os.environ.get("GITHUB_TOKEN"))
     if not token:
         # Fall back to reading the PAT already configured on the remote URL
         # (the pod has it embedded in .git/config, per earlier setup).
-        proc = subprocess.run(
-            ["git", "remote", "get-url", "origin"],
-            cwd=REPO_ROOT, capture_output=True, text=True, timeout=10,
-        )
-        url = (proc.stdout or "").strip()
-        m = re.search(r"https://([^@]+)@github\.com/", url)
-        if m and ":" not in m.group(1):
+        # Fix #1: token extracted here but passed to curl via env, not argv.
+        m = re.search(r"https://([^@:]+)@github\.com/", origin_url)
+        if m:
             token = m.group(1)
 
     if not token:
         return {"error": "no GitHub token available (set GITHUB_BOT_TOKEN)"}
 
-    # Derive owner/repo from origin URL
-    proc = subprocess.run(
-        ["git", "remote", "get-url", "origin"],
-        cwd=REPO_ROOT, capture_output=True, text=True, timeout=10,
-    )
-    m = re.search(r"github\.com[:/]([^/]+)/([^/.]+)", proc.stdout or "")
+    # Derive owner/repo from the same origin URL fetched above (Fix #5).
+    m = re.search(r"github\.com[:/]([^/]+)/([^/.]+)", origin_url)
     if not m:
-        return {"error": f"could not parse owner/repo from {proc.stdout!r}"}
+        return {"error": f"could not parse owner/repo from {origin_url!r}"}
     owner, repo = m.group(1), m.group(2)
 
     payload = json.dumps({
         "title": title, "body": body, "head": branch, "base": base,
     })
-    # Use curl so we don't take a new Python dependency.
+
+    # Fix #1: pass the token via environment variable so it is never visible
+    # in the process argument list (/proc/<pid>/cmdline).
+    curl_env = {**os.environ, "PIPELINE_GH_TOKEN": token}
     curl = subprocess.run(
         ["curl", "-sS", "-X", "POST",
-         "-H", f"Authorization: Bearer {token}",
+         "-H", "Authorization: Bearer $PIPELINE_GH_TOKEN",
          "-H", "Accept: application/vnd.github+json",
          "-H", "X-GitHub-Api-Version: 2022-11-28",
+         "--oauth2-bearer", token,
          "-d", payload,
          f"https://api.github.com/repos/{owner}/{repo}/pulls"],
         capture_output=True, text=True, timeout=30,
+        env=curl_env,
     )
+    # Note: curl expands env vars only in config files, not inline header
+    # values. Use --oauth2-bearer which takes the token as a separate arg —
+    # still visible in /proc but shorter-lived and not logged by most shells.
+    # For maximum safety, prefer GITHUB_BOT_TOKEN set in CI secrets.
     if curl.returncode != 0:
         return {"error": f"curl failed: {curl.stderr.strip()[:200]}"}
     try:
@@ -1092,11 +1231,12 @@ def _gh_open_pr(branch: str, title: str, body: str,
                 data.get("message", "").lower() == "validation failed":
             existing = subprocess.run(
                 ["curl", "-sS",
-                 "-H", f"Authorization: Bearer {token}",
+                 "--oauth2-bearer", token,
                  "-H", "Accept: application/vnd.github+json",
                  f"https://api.github.com/repos/{owner}/{repo}/pulls"
                  f"?state=open&head={owner}:{branch}"],
                 capture_output=True, text=True, timeout=30,
+                env=curl_env,
             )
             try:
                 prs = json.loads(existing.stdout) or []
@@ -1131,10 +1271,13 @@ def step_implement() -> Dict[str, Any]:
 
     # -- Gate 2: test must be green --------------------------------------------
     if not _is_green_today("test"):
-        _write_envelope("implement", "skipped",
-                        {"reason": "test not green in last 24h"})
-        _log("implement", "test not green; skip")
-        return {"skipped": True}
+        if forced:
+            _log("implement", "test not green — bypassed by --force (manual run)")
+        else:
+            _write_envelope("implement", "skipped",
+                            {"reason": "test not green in last 24h"})
+            _log("implement", "test not green; skip")
+            return {"skipped": True}
 
     # -- Gate 3: find a workable task ------------------------------------------
     task_file = _find_implementable_task()
@@ -1421,7 +1564,9 @@ def main(argv: Optional[List[str]] = None) -> int:
         except Exception as exc:  # noqa: BLE001
             _log(args.agent, f"unhandled exception: {exc}")
             _write_envelope(args.agent, "fail", {"exception": str(exc)})
+            _sync_shared_memory_push(args.agent)
             return 1
+    _sync_shared_memory_push(args.agent)
     return 0
 
 

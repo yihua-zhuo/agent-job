@@ -4,11 +4,17 @@ import json, os, subprocess, sys
 from datetime import datetime
 
 path = os.environ.get('ARTIFACT_PATH', 'artifacts/deploy-result.json')
+
+# Fix #10: surface read/parse errors explicitly instead of silently swallowing them.
 try:
     with open(path) as f:
         data = json.load(f)
-except:
-    data = {}
+except FileNotFoundError:
+    print(f"Artifact not found at {path} — no issue created")
+    sys.exit(0)
+except json.JSONDecodeError as e:
+    print(f"Failed to parse artifact JSON: {e}", file=sys.stderr)
+    sys.exit(1)
 
 if data.get('status') != 'fail':
     print("Deploy did not fail — no issue needed")
@@ -32,11 +38,15 @@ body = (
 )
 
 title = f"❌ Deploy Failed — {datetime.utcnow().strftime('%Y-%m-%d')}"
+
+# Fix #9: pass each label with its own --label flag so gh receives them correctly.
 cmd = [
     'gh', 'issue', 'create',
     '--title', title,
     '--body', body,
-    '--label', 'pipeline', 'deploy', 'automated'
+    '--label', 'pipeline',
+    '--label', 'deploy',
+    '--label', 'automated',
 ]
 result = subprocess.run(cmd, capture_output=True, text=True)
 if result.returncode == 0:
