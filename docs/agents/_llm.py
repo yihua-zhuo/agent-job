@@ -31,7 +31,7 @@ Environment hooks (all optional):
 
     CLAW_BIN            Override the binary path (default: discover ``claw`` on
                         PATH, then fall back to the pod-canonical
-                        ``/home/node/.openclaw/.local/bin/claw``).
+                        ``/opt/data/home/.local/bin/claw``).
     CLAW_MODEL          Model identifier passed to ``--model``
                         (default: ``openai/MiniMax-M2.7``).
     CLAW_PERMISSION     Permission mode (default: ``workspace-write``).
@@ -60,7 +60,7 @@ DEFAULT_AGENT = os.environ.get("OPENCLAW_AGENT", "main")  # kept for API parity
 DEFAULT_MODEL = os.environ.get("CLAW_MODEL", "openai/MiniMax-M2.7")
 DEFAULT_PERMISSION = os.environ.get("CLAW_PERMISSION", "workspace-write")
 
-_FALLBACK_CLAW_BIN = "/home/node/.openclaw/.local/bin/claw"
+_FALLBACK_CLAW_BIN = "/opt/data/home/.local/bin/claw"
 
 
 @dataclass
@@ -93,10 +93,10 @@ def _resolve_credentials(env: Dict[str, str]) -> Optional[str]:
     Mutates ``env`` in place — fills in OPENAI_* from AI_GATEWAY_* when the
     direct vars are unset (this is how the pod is configured).
     """
-    api_key = env.get("OPENAI_API_KEY") or env.get("AI_GATEWAY_MASTER_KEY")
+    api_key = env.get("OPENAI_API_KEY") or env.get("AI_GATEWAY_MASTER_KEY") or env.get("AI_GATEWAY_KEY")
     base_url = env.get("OPENAI_BASE_URL") or env.get("AI_GATEWAY_URL")
     if not api_key:
-        return ("missing OPENAI_API_KEY (and AI_GATEWAY_MASTER_KEY fallback)"
+        return ("missing OPENAI_API_KEY (and AI_GATEWAY_MASTER_KEY/AI_GATEWAY_KEY fallback)"
                 " — cannot call claw")
     if not base_url:
         return ("missing OPENAI_BASE_URL (and AI_GATEWAY_URL fallback)"

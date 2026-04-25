@@ -20,7 +20,8 @@
 # pipeline in one serial pass" safety net in case the staggered jobs drift.
 # ----------------------------------------------------------------------------
 
-REPO=/Users/yihuazhuo/Desktop/git/github/agent-job
+# Fill in your repo path below (or set REPO env var before sourcing this file):
+REPO={{REPO}}
 PY=/usr/bin/env python3
 
 # Heartbeat: snapshot every 10 minutes

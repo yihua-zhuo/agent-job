@@ -114,11 +114,14 @@ class ApiResponse(Generic[T]):
             2001: ResponseStatus.NOT_FOUND,   # USER_NOT_FOUND
             3001: ResponseStatus.NOT_FOUND,   # RESOURCE_NOT_FOUND
         }
+        _extra = {k: v for k, v in kwargs.items() if k not in ["status", "message", "data", "errors", "timestamp", "request_id"]}
+        if code != 1000:
+            _extra["code"] = code
         return cls(
             status=status_map.get(code, ResponseStatus.ERROR),
             message=message,
             errors=errors or [],
-            **{k: v for k, v in kwargs.items() if k not in ["status", "message", "data", "errors", "meta", "timestamp", "request_id"]}
+            meta=_extra,
         )
     
     @classmethod

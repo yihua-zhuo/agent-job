@@ -2,7 +2,7 @@
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-from services.workflow_service import WorkflowService
+from services.workflow_service import WorkflowService, _as_trigger_value, _as_status_value
 
 
 @pytest.fixture
@@ -28,7 +28,7 @@ async def sample_workflow(workflow_service):
     # Patch get_workflow to return this mock
     original_get = workflow_service.get_workflow
     workflow_service.get_workflow = AsyncMock(return_value=mock_wf)
-    yield 1
+    yield mock_wf  # yield the mock so tests can also access it directly
     workflow_service.get_workflow = original_get
 
 
@@ -237,3 +237,312 @@ class TestWorkflowService:
             result = await workflow_service.delete_workflow(1)
         assert bool(result) is True
         assert result.data["id"] == 1
+
+    @pytest.mark.asyncio
+    async def test_delete_workflow_not_found(self, workflow_service):
+        """rowcount=0 should return error."""
+        mock_result = MagicMock()
+        mock_result.rowcount = 0
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("services.workflow_service.get_db_session", return_value=mock_session):
+            result = await workflow_service.delete_workflow(99999)
+        assert bool(result) is False
+        assert result.meta.get("code") == 3001
+
+    # ── helper function coverage ───────────────────────────────────────────────
+
+    def test_as_trigger_value_none(self, workflow_service):
+        """None input should default to MANUAL."""
+        result = _as_trigger_value(None)
+        from models.workflow import WorkflowTriggerType
+        assert result == WorkflowTriggerType.MANUAL.value
+
+    def test_as_trigger_value_enum(self, workflow_service):
+        """WorkflowTriggerType enum input."""
+        from models.workflow import WorkflowTriggerType
+        result = _as_trigger_value(WorkflowTriggerType.SCHEDULED)
+        assert result == WorkflowTriggerType.SCHEDULED.value
+
+    def test_as_trigger_value_string(self, workflow_service):
+        """Plain string input."""
+        result = _as_trigger_value("webhook")
+        assert result == "webhook"
+
+    def test_as_status_value_none(self, workflow_service):
+        """None input should default to DRAFT."""
+        result = _as_status_value(None)
+        from models.workflow import WorkflowStatus
+        assert result == WorkflowStatus.DRAFT.value
+
+    def test_as_status_value_enum(self, workflow_service):
+        """WorkflowStatus enum input."""
+        from models.workflow import WorkflowStatus
+        result = _as_status_value(WorkflowStatus.ACTIVE)
+        assert result == WorkflowStatus.ACTIVE.value
+
+    def test_as_status_value_string(self, workflow_service):
+        """Plain string input."""
+        result = _as_status_value("archived")
+        assert result == "archived"
+
+    # ── get_workflow not-found path ───────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_get_workflow_not_found(self, workflow_service):
+        """scalar_one_or_none returns None → error response."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("services.workflow_service.get_db_session", return_value=mock_session):
+            result = await workflow_service.get_workflow(99999)
+        assert bool(result) is False
+        assert result.meta.get("code") == 3001
+
+    # ── update_workflow with trigger_type / status fields ──────────────────────
+
+    @pytest.mark.asyncio
+    async def test_update_workflow_with_trigger_type(self, workflow_service):
+        """trigger_type in update data should call _as_trigger_value."""
+        mock_row = MagicMock()
+        mock_row.to_dict.return_value = {"id": 1, "trigger_type": "scheduled"}
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_row
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("services.workflow_service.get_db_session", return_value=mock_session):
+            result = await workflow_service.update_workflow(1, {"trigger_type": "scheduled"})
+        assert bool(result) is True
+
+    @pytest.mark.asyncio
+    async def test_update_workflow_with_status(self, workflow_service):
+        """status in update data should call _as_status_value."""
+        mock_row = MagicMock()
+        mock_row.to_dict.return_value = {"id": 1, "status": "active"}
+
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = mock_row
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("services.workflow_service.get_db_session", return_value=mock_session):
+            result = await workflow_service.update_workflow(1, {"status": "active"})
+        assert bool(result) is True
+
+    @pytest.mark.asyncio
+    async def test_update_workflow_not_found(self, workflow_service):
+        """scalar_one_or_none returns None → error response."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("services.workflow_service.get_db_session", return_value=mock_session):
+            result = await workflow_service.update_workflow(99999, {"name": "X"})
+        assert bool(result) is False
+        assert result.meta.get("code") == 3001
+
+    # ── _transition_status not-found path ──────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_transition_status_not_found(self, workflow_service):
+        """_transition_status returns error when row is None."""
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none.return_value = None
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(return_value=mock_result)
+
+        with patch("services.workflow_service.get_db_session", return_value=mock_session):
+            result = await workflow_service.activate_workflow(99999)
+        assert bool(result) is False
+        assert result.meta.get("code") == 3001
+
+    # ── execute_workflow condition failure path ─────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_execute_workflow_conditions_not_met(self, workflow_service):
+        """Conditions not met → status=failed, error in result."""
+        mock_wf = MagicMock()
+        mock_wf.id = 1
+        mock_wf.name = "Test WF"
+        mock_wf.description = None
+        mock_wf.trigger_type = MagicMock(value="manual")
+        mock_wf.trigger_config = {}
+        mock_wf.actions = []
+        mock_wf.conditions = [{"field": "user_type", "operator": "==", "value": "premium"}]
+        mock_wf.status = MagicMock(value="draft")
+        mock_wf.created_by = 1
+        mock_wf.created_at = None
+        mock_wf.updated_at = None
+
+        mock_api_response = MagicMock()
+        mock_api_response.__bool__ = MagicMock(return_value=True)
+        mock_api_response.data = mock_wf
+
+        mock_exec_row = MagicMock()
+        mock_exec_row.to_dict.return_value = {"workflow_id": 1, "status": "failed"}
+
+        mock_wf.get.side_effect = lambda k: {
+            "conditions": mock_wf.conditions,
+            "actions": mock_wf.actions,
+            "trigger_type": mock_wf.trigger_type,
+        }.get(k)
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=mock_wf)))
+
+        workflow_service.get_workflow = AsyncMock(return_value=mock_api_response)
+
+        def flush_side_effect():
+            pass
+        mock_session.flush = AsyncMock(side_effect=flush_side_effect)
+        mock_session.add = MagicMock()
+
+        with patch("services.workflow_service.get_db_session", return_value=mock_session):
+            result = await workflow_service.execute_workflow(1, {"user_id": 1, "user_type": "basic"})
+        assert bool(result) is True
+
+    # ── execute_workflow exception handler path ────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_execute_workflow_exception(self, workflow_service):
+        """_run_actions raises → status=failed with error string."""
+        mock_wf = MagicMock()
+        mock_wf.id = 1
+        mock_wf.name = "Test WF"
+        mock_wf.description = None
+        mock_wf.trigger_type = MagicMock(value="manual")
+        mock_wf.trigger_config = {}
+        mock_wf.actions = [{"type": "bad.action"}]
+        mock_wf.conditions = []
+        mock_wf.status = MagicMock(value="draft")
+        mock_wf.created_by = 1
+        mock_wf.created_at = None
+        mock_wf.updated_at = None
+
+        mock_api_response = MagicMock()
+        mock_api_response.__bool__ = MagicMock(return_value=True)
+        mock_api_response.data = mock_wf
+
+        mock_wf.get.side_effect = lambda k: {
+            "conditions": mock_wf.conditions,
+            "actions": mock_wf.actions,
+            "trigger_type": mock_wf.trigger_type,
+        }.get(k)
+
+        workflow_service.get_workflow = AsyncMock(return_value=mock_api_response)
+
+        mock_session = AsyncMock()
+        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
+        mock_session.__aexit__ = AsyncMock(return_value=None)
+        mock_session.execute = AsyncMock(return_value=MagicMock(scalar_one_or_none=MagicMock(return_value=mock_wf)))
+        mock_session.flush = AsyncMock()
+        mock_session.add = MagicMock()
+
+        with patch("services.workflow_service.get_db_session", return_value=mock_session):
+            result = await workflow_service.execute_workflow(1, {"user_id": 1})
+        assert bool(result) is True
+
+    # ── evaluate_conditions not-found path ────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_evaluate_conditions_workflow_not_found(self, workflow_service):
+        """get_workflow returns falsy → evaluate_conditions returns False."""
+        workflow_service.get_workflow = AsyncMock(
+            return_value=type("R", (), {"__bool__": lambda self: False})()
+        )
+        result = await workflow_service.evaluate_conditions(99999, {})
+        assert result is False
+
+    # ── _check_conditions edge cases ───────────────────────────────────────────
+
+    @pytest.mark.asyncio
+    async def test_check_conditions_no_field(self, workflow_service):
+        """condition without 'field' key → treated as no context value."""
+        conditions = [{"operator": "==", "value": "x"}]
+        context = {"status": "active"}
+        # field is None/missing → ctx_value=None → != value → returns False
+        result = await workflow_service._check_conditions(conditions, context)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_conditions_unknown_operator(self, workflow_service):
+        """unknown operator → falls through all checks → returns True."""
+        conditions = [{"field": "status", "operator": "unknown", "value": "x"}]
+        context = {"status": "active"}
+        result = await workflow_service._check_conditions(conditions, context)
+        assert result is True
+
+    @pytest.mark.asyncio
+    async def test_check_conditions_gt_with_none_context(self, workflow_service):
+        """> operator with None ctx_value → returns False."""
+        conditions = [{"field": "amount", "operator": ">", "value": 100}]
+        context = {}
+        result = await workflow_service._check_conditions(conditions, context)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_conditions_lt_with_none_context(self, workflow_service):
+        """>< operator with None ctx_value → returns False."""
+        conditions = [{"field": "amount", "operator": "<", "value": 100}]
+        context = {}
+        result = await workflow_service._check_conditions(conditions, context)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_conditions_ge_with_none_context(self, workflow_service):
+        """>= operator with None ctx_value → returns False."""
+        conditions = [{"field": "amount", "operator": ">=", "value": 100}]
+        context = {}
+        result = await workflow_service._check_conditions(conditions, context)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_conditions_le_with_none_context(self, workflow_service):
+        """><= operator with None ctx_value → returns False."""
+        conditions = [{"field": "amount", "operator": "<=", "value": 100}]
+        context = {}
+        result = await workflow_service._check_conditions(conditions, context)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_conditions_contains_with_none_context(self, workflow_service):
+        """>contains with None ctx_value → returns False."""
+        conditions = [{"field": "email", "operator": "contains", "value": "alice"}]
+        context = {}
+        result = await workflow_service._check_conditions(conditions, context)
+        assert result is False
+
+    @pytest.mark.asyncio
+    async def test_check_conditions_contains_with_list_context(self, workflow_service):
+        """contains with list context → value IN str(list) so returns True."""
+        conditions = [{"field": "tags", "operator": "contains", "value": "alice"}]
+        context = {"tags": ["alice", "bob"]}
+        # "alice" IS in str(["alice", "bob"]) = "['alice', 'bob']" → condition False → return True
+        result = await workflow_service._check_conditions(conditions, context)
+        assert result is True

@@ -13,7 +13,7 @@ MYPY="python3 -m mypy"
 
 # ── flake8 (critical errors only) ──────────────────────────────────────────
 echo "=== flake8 ==="
-$FLAKE8 src/ --count --select=E9,F63,F77,F82 --show-source --statistics 2>&1 | tail -5 || true
+$FLAKE8 src/ --count --select=E9,F63,F77,F82 --show-source --statistics 2>&1 | tail -5
 echo "✅ flake8 check done"
 
 # ── unit tests ─────────────────────────────────────────────────────────────
