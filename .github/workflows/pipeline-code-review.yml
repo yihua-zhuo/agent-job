@@ -116,57 +116,6 @@ jobs:
         if: steps.gate.outputs.TEST_GATE == 'ok'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python3 -c "
-          import json, os, subprocess, sys
-          path = 'artifacts/code-review-result.json'
-          if not os.path.exists(path):
-              print('No result file to parse')
-              sys.exit(0)
-          with open(path) as f:
-              data = json.load(f)
-          status = data.get('status','')
-          llm_parsed = data.get('details',{}).get('llm_parsed',{})
-          critical = llm_parsed.get('critical',[])
-          warnings = llm_parsed.get('warnings',[])
-          if status == 'fail' and critical:
-              issues_md = []
-              for i, c in enumerate(critical):
-                  dim = c.get('dim','')
-                  line = c.get('line','')
-                  msg = c.get('msg','')
-                  loc = f'line {line}' if line else 'N/A'
-                  issues_md.append(f'{i+1}. **[{dim.upper()}]** {msg} (at {loc})')
-              body = '''**Pipeline Stage:** code-review
-**Status:** FAIL — {{n}} critical issue(s) found
-**Triggered:** {{t}}
-
-## Critical Issues
-{{issues}}
-
-## Warnings
-{{warnings}}
-
-_See pipeline-run: {{run}}_
-'''.format(
-                  n=len(critical),
-                  t=datetime.utcnow().isoformat(),
-                  issues='\\n'.join(issues_md) if issues_md else 'None',
-                  warnings='\\n'.join(f'- {w}' for w in warnings[:5]) if warnings else 'None',
-                  run=os.environ.get('GITHUB_RUN_ID','N/A')
-              )
-              # Use gh cli to create issue
-              cmd = ['gh','issue','create',
-                     '--title','❌ Code Review Critical Issues — ' + datetime.utcnow().strftime('%Y-%m-%d %H:00'),
-                     '--body', body,
-                     '--label','pipeline','code-review','automated']
-              result = subprocess.run(cmd, capture_output=True, text=True)
-              if result.returncode == 0:
-                  print('Issue created:', result.stdout.strip())
-              else:
-                  print('gh error:', result.stderr)
-          else:
-              print(f'Status={status}, critical={len(critical)} — no issue created')
-          " || echo "Issue check script failed"
-        env:
           GITHUB_RUN_ID: ${{ github.run_id }}
+          ARTIFACT_PATH: artifacts/code-review-result.json
+        run: python3 scripts/ci/create_cr_issue.py

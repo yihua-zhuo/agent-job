@@ -112,40 +112,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           EXIT_CODE: ${{ env.EXIT_CODE || '0' }}
-        run: |
-          python3 -c "
-          import json, os, subprocess
-          from datetime import datetime
-          try:
-              with open('artifacts/deploy-result.json') as f:
-                  data = json.load(f)
-          except:
-              data = {}
-          if data.get('status') == 'fail':
-              tail = data.get('details',{}).get('tail',[])
-              body = '''**Pipeline Stage:** deploy
-**Status:** FAIL\n**Triggered:** {{t}}
-
-Deploy script returned non-zero.
-
-## Output
-```
-{{output}}
-```
-
-_See pipeline-run: {{run}}_
-'''.format(
-                  t=datetime.utcnow().isoformat(),
-                  output='\\n'.join(tail[-20:]) if tail else 'No output',
-                  run=os.environ.get('GITHUB_RUN_ID','N/A')
-              )
-              cmd = ['gh','issue','create',
-                     '--title','❌ Deploy Failed — ' + datetime.utcnow().strftime('%Y-%m-%d'),
-                     '--body', body,
-                     '--label','pipeline','deploy','automated']
-              result = subprocess.run(cmd, capture_output=True, text=True)
-              if result.returncode == 0:
-                  print('Issue created:', result.stdout.strip())
-          " || echo "Issue script failed"
-        env:
           GITHUB_RUN_ID: ${{ github.run_id }}
+          ARTIFACT_PATH: artifacts/deploy-result.json
+        run: python3 scripts/ci/create_deploy_issue.py
