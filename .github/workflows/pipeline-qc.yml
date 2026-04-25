@@ -26,7 +26,7 @@ jobs:
         run: pip install -q -e ".[dev]"
 
       - name: Install lint tools
-        run: pip install -q ruff mypy flake8 pylint compileall
+        run: pip install -q ruff mypy flake8 pylint
 
       - name: Download code-review artifact
         uses: actions/download-artifact@v4
