@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""claw-compatible wrapper that routes to AI_GATEWAY instead of OpenClaw cloud."""
+from __future__ import annotations
+
+import json
+import os
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+URL = os.environ.get("AI_GATEWAY_URL", "").rstrip("/")
+KEY = os.environ.get("AI_GATEWAY_KEY", "")
+MODEL = "MiniMax-M2.7"
+
+
+def main() -> None:
+    args = sys.argv[1:]
+
+    # Parse known claw flags; everything else is passed through
+    output_format = "json"
+    model_override: str | None = None
+    permission_mode = "workspace-write"
+    allowed_tools: list[str] = []
+
+    i = 0
+    prompt_texts: list[str] = []
+    while i < len(args):
+        arg = args[i]
+        if arg in ("--output-format", "-o"):
+            i += 2
+        elif arg in ("--model", "-m"):
+            model_override = args[i + 1]
+            i += 2
+        elif arg in ("--permission-mode", "-p"):
+            i += 2
+        elif arg == "--allowedTools":
+            allowed_tools = args[i + 1].split(",")
+            i += 2
+        elif arg in ("prompt", "p"):
+            i += 1
+            prompt_texts = args[i:]
+            break
+        else:
+            i += 1
+
+    model = model_override or MODEL
+
+    # Build messages
+    system_msg = (
+        "You are a helpful assistant. When asked to produce JSON output, "
+        "reply with ONLY the JSON object, no extra text or markdown fences."
+    )
+    messages = [{"role": "system", "content": system_msg}]
+    if prompt_texts:
+        messages.append({"role": "user", "content": "\n".join(prompt_texts)})
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": 0.1,
+        "max_tokens": 4096,
+    }
+
+    req = urllib.request.Request(
+        f"{URL}/v1/chat/completions",
+        data=json.dumps(payload).encode(),
+        headers={
+            "Authorization": f"Bearer {KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(req, timeout=180) as resp:
+            result = json.loads(resp.read())
+            choice = result["choices"][0]["message"]["content"]
+            # Stripthink blocks
+            import re
+            choice = re.sub(r"<think>.*?</think>", "", choice, flags=re.DOTALL).strip()
+            print(choice)
+    except urllib.error.HTTPError as e:
+        body = e.read().decode() if e.fp else ""
+        print(json.dumps({"error": f"HTTP {e.code}: {body[:500]}"}), file=sys.stderr)
+        sys.exit(1)
+    except Exception as e:
+        print(json.dumps({"error": str(e)}), file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

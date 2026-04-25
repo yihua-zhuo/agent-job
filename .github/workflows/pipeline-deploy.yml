@@ -1,0 +1,151 @@
+name: Pipeline · Deploy
+
+on:
+  schedule:
+    - cron: "10 3 * * 1-5"       # weekdays at 03:10 UTC
+  push:
+    branches: [master]
+  pull_request:
+    types: [closed]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/master') || (github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged == true)
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Download QC artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: pipeline-qc-result
+          path: ./artifacts
+        continue-on-error: true
+
+      - name: Check QC gate
+        id: gate
+        run: |
+          python3 -c "
+          import json, os
+          from datetime import datetime, timezone
+          path = 'artifacts/qc-result.json'
+          if not os.path.exists(path):
+              print('QC_GATE=skip')
+          else:
+              with open(path) as f:
+                  data = json.load(f)
+              gen = datetime.fromisoformat(data['generated_at'].rstrip('Z'))
+              age_h = (datetime.now(timezone.utc) - gen).total_seconds() / 3600
+              if data.get('status') == 'pass' and age_h < 24:
+                  print('QC_GATE=ok')
+              else:
+                  print('QC_GATE=skip')
+          " >> $GITHUB_OUTPUT
+
+      - name: Skip if QC not green
+        if: steps.gate.outputs.QC_GATE != 'ok' && github.event_name != 'workflow_dispatch'
+        run: |
+          mkdir -p artifacts
+          python3 -c "
+          import json
+          from datetime import datetime
+          result = {'agent':'deploy','status':'skipped','generated_at':datetime.utcnow().isoformat()+'Z','details':{'reason':'qc not green today'}}
+          with open('artifacts/deploy-result.json','w') as f:
+              json.dump(result,f,indent=2)
+          "
+          echo "QC gate not met — deploy skipped"
+
+      - name: Run deploy
+        if: steps.gate.outputs.QC_GATE == 'ok' || github.event_name == 'workflow_dispatch'
+        env:
+          DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+        run: |
+          mkdir -p artifacts
+          echo "Running deploy script..."
+          python3 scripts/deploy.py 2>&1 | tee artifacts/deploy-output.txt
+          echo "EXIT_CODE=$?" >> $GITHUB_ENV
+
+      - name: Write result envelope
+        if: steps.gate.outputs.QC_GATE == 'ok' || github.event_name == 'workflow_dispatch'
+        run: |
+          mkdir -p artifacts
+          python3 -c "
+          import json, os
+          from datetime import datetime
+          exit_code = int(os.environ.get('EXIT_CODE', 1))
+          status = 'pass' if exit_code == 0 else 'fail'
+          try:
+              with open('artifacts/deploy-output.txt') as f:
+                  tail = f.read().splitlines()[-12:]
+          except:
+              tail = []
+          result = {
+              'agent': 'deploy',
+              'status': status,
+              'generated_at': datetime.utcnow().isoformat() + 'Z',
+              'details': {'returncode': exit_code, 'tail': tail}
+          }
+          with open('artifacts/deploy-result.json','w') as f:
+              json.dump(result,f,indent=2)
+          print(f'Deploy result: {status}')
+          "
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipeline-deploy-result
+          path: artifacts/deploy-result.json
+          retention-days: 3
+
+      - name: Create GitHub Issue on deploy failure
+        if: (steps.gate.outputs.QC_GATE == 'ok' || github.event_name == 'workflow_dispatch') && env.EXIT_CODE != '0'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EXIT_CODE: ${{ env.EXIT_CODE || '0' }}
+        run: |
+          python3 -c "
+          import json, subprocess
+          from datetime import datetime
+          try:
+              with open('artifacts/deploy-result.json') as f:
+                  data = json.load(f)
+          except:
+              data = {}
+          if data.get('status') == 'fail':
+              tail = data.get('details',{}).get('tail',[])
+              body = '''**Pipeline Stage:** deploy
+**Status:** FAIL\n**Triggered:** {t}
+
+Deploy script returned non-zero.
+
+## Output
+```
+{output}
+```
+
+_See pipeline-run: {run}_
+'''.format(
+                  t=datetime.utcnow().isoformat(),
+                  output='\\n'.join(tail[-20:]) if tail else 'No output',
+                  run=os.environ.get('GITHUB_RUN_ID','N/A')
+              )
+              cmd = ['gh','issue','create',
+                     '--title','❌ Deploy Failed — ' + datetime.utcnow().strftime('%Y-%m-%d'),
+                     '--body', body,
+                     '--label','pipeline','deploy','automated']
+              result = subprocess.run(cmd, capture_output=True, text=True)
+              if result.returncode == 0:
+                  print('Issue created:', result.stdout.strip())
+          " || echo "Issue script failed"
+        env:
+          GITHUB_RUN_ID: ${{ github.run_id }}
