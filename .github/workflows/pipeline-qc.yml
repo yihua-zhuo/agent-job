@@ -22,6 +22,9 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Install deps
+        run: pip install -q -e ".[dev]"
+
       - name: Install lint tools
         run: pip install -q ruff mypy flake8 pylint compileall
 
@@ -55,6 +58,8 @@ jobs:
       - name: Run QC checks
         if: steps.gate.outputs.CR_GATE == 'ok'
         id: qc-checks
+        env:
+          PYTHONPATH: src
         run: |
           mkdir -p artifacts
 
@@ -142,7 +147,7 @@ jobs:
         run: |
           mkdir -p artifacts
           python3 -c "
-          import json
+          import json, sys
           from datetime import datetime
           result = {'agent':'qc','status':'skipped','generated_at':datetime.utcnow().isoformat()+'Z','details':{'reason':'code-review not green in last 24h'}}
           with open('artifacts/qc-result.json','w') as f:
