@@ -22,9 +22,11 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install deps
-        run: pip install -q pytest pytest-asyncio
+        run: pip install -q -e ".[dev]"
 
       - name: Run pytest
+        env:
+          PYTHONPATH: src
         run: |
           mkdir -p pipeline-artifacts
           python3 -m pytest tests/unit -q \

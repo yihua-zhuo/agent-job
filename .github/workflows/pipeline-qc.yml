@@ -1,3 +1,4 @@
+# trigger workflow_dispatch sync
 name: Pipeline · QC
 
 on:
@@ -21,8 +22,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
+      - name: Install deps
+        run: pip install -q -e ".[dev]"
+
       - name: Install lint tools
-        run: pip install -q ruff mypy flake8 pylint compileall
+        run: pip install -q ruff mypy flake8 pylint
 
       - name: Download code-review artifact
         uses: actions/download-artifact@v4
@@ -54,6 +58,8 @@ jobs:
       - name: Run QC checks
         if: steps.gate.outputs.CR_GATE == 'ok'
         id: qc-checks
+        env:
+          PYTHONPATH: src
         run: |
           mkdir -p artifacts
 
@@ -141,7 +147,7 @@ jobs:
         run: |
           mkdir -p artifacts
           python3 -c "
-          import json
+          import json, sys
           from datetime import datetime
           result = {'agent':'qc','status':'skipped','generated_at':datetime.utcnow().isoformat()+'Z','details':{'reason':'code-review not green in last 24h'}}
           with open('artifacts/qc-result.json','w') as f:
@@ -160,42 +166,6 @@ jobs:
         if: steps.gate.outputs.CR_GATE == 'ok'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          python3 -c "
-          import json, os, subprocess, sys
-          from datetime import datetime
-          path = 'artifacts/qc-result.json'
-          if not os.path.exists(path):
-              print('No QC result')
-              sys.exit(0)
-          with open(path) as f:
-              data = json.load(f)
-          if data.get('status') == 'fail':
-              blocking = data.get('details',{}).get('llm_parsed',{}).get('blocking',[])
-              body = '''**Pipeline Stage:** qc
-**Status:** FAIL — quality gate rejected
-**Triggered:** {{t}}
-
-## Blocking Issues
-{{blocks}}
-
-_See pipeline-run: {{run}}_
-'''.format(
-                  t=datetime.utcnow().isoformat(),
-                  blocks='\\n'.join(f'- {b}' for b in blocking) if blocking else '- (none)',
-                  run=os.environ.get('GITHUB_RUN_ID','N/A')
-              )
-              cmd = ['gh','issue','create',
-                     '--title','❌ QC Gate Failed — ' + datetime.utcnow().strftime('%Y-%m-%d %H:00'),
-                     '--body', body,
-                     '--label','pipeline','qc','automated']
-              result = subprocess.run(cmd, capture_output=True, text=True)
-              if result.returncode == 0:
-                  print('Issue created:', result.stdout.strip())
-              else:
-                  print('Error:', result.stderr)
-          else:
-              print(f'QC status={data.get(\"status\")} — no issue needed')
-          " || echo "Issue script failed"
-        env:
           GITHUB_RUN_ID: ${{ github.run_id }}
+          ARTIFACT_PATH: artifacts/qc-result.json
+        run: python3 scripts/ci/create_qc_issue.py
