@@ -162,7 +162,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           python3 -c "
-          import json, os, subprocess
+          import json, os, subprocess, sys
           from datetime import datetime
           path = 'artifacts/qc-result.json'
           if not os.path.exists(path):
@@ -174,12 +174,12 @@ jobs:
               blocking = data.get('details',{}).get('llm_parsed',{}).get('blocking',[])
               body = '''**Pipeline Stage:** qc
 **Status:** FAIL — quality gate rejected
-**Triggered:** {t}
+**Triggered:** {{t}}
 
 ## Blocking Issues
-{blocks}
+{{blocks}}
 
-_See pipeline-run: {run}_
+_See pipeline-run: {{run}}_
 '''.format(
                   t=datetime.utcnow().isoformat(),
                   blocks='\\n'.join(f'- {b}' for b in blocking) if blocking else '- (none)',
