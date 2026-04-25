@@ -93,10 +93,10 @@ def _resolve_credentials(env: Dict[str, str]) -> Optional[str]:
     Mutates ``env`` in place — fills in OPENAI_* from AI_GATEWAY_* when the
     direct vars are unset (this is how the pod is configured).
     """
-    api_key = env.get("OPENAI_API_KEY") or env.get("AI_GATEWAY_MASTER_KEY")
+    api_key = env.get("OPENAI_API_KEY") or env.get("AI_GATEWAY_MASTER_KEY") or env.get("AI_GATEWAY_KEY")
     base_url = env.get("OPENAI_BASE_URL") or env.get("AI_GATEWAY_URL")
     if not api_key:
-        return ("missing OPENAI_API_KEY (and AI_GATEWAY_MASTER_KEY fallback)"
+        return ("missing OPENAI_API_KEY (and AI_GATEWAY_MASTER_KEY/AI_GATEWAY_KEY fallback)"
                 " — cannot call claw")
     if not base_url:
         return ("missing OPENAI_BASE_URL (and AI_GATEWAY_URL fallback)"
