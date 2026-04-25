@@ -63,15 +63,15 @@ jobs:
       - name: Skip if test not green
         if: steps.gate.outputs.TEST_GATE == 'skip'
         run: |
+          mkdir -p artifacts
           python3 -c "
           import json
           from datetime import datetime
-          result = {'agent':'code-review','status':'skipped','generated_at':datetime.utcnow().isoformat()+'Z','details':{'reason':'test not green in last 24h'}}
+          result = {'agent':'code-review','status':'skipped','generated_at':datetime.utcnow().isoformat()+'Z','details':{'reason':'test not green or artifact not available'}}
           with open('artifacts/code-review-result.json','w') as f:
               json.dump(result,f,indent=2)
           "
-          mkdir -p artifacts
-          mv artifacts/code-review-result.json artifacts/code-review-result.json.bak 2>/dev/null; true
+          echo "Test gate skipped - code-review deferred"
 
       - name: Run Code Review Agent
         if: steps.gate.outputs.TEST_GATE == 'ok'
