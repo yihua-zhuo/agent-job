@@ -123,7 +123,7 @@ def _make_mock_session():
     session = MagicMock(spec=[
         "execute", "add", "delete", "commit", "rollback",
         "close", "flush", "refresh", "scalars", "scalar_one_or_none",
-        "scalar_one", "get", "result",
+        "scalar_one", "get", "result", "__aenter__", "__aexit__",
     ])
 
     def _execute_side_effect(sql, params=None):
@@ -355,6 +355,13 @@ def _make_mock_session():
     session.scalar_one_or_none = MagicMock()
     session.scalar_one = MagicMock()
     session.result = MagicMock()
+
+    @asynccontextmanager  # type: ignore[arg-type]
+    async def _mock_aenter():
+        yield session
+
+    session.__aenter__ = AsyncMock(side_effect=_mock_aenter)
+    session.__aexit__ = AsyncMock(return_value=None)
     return session
 
 

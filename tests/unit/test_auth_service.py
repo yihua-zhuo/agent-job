@@ -54,11 +54,11 @@ from services.auth_service import AuthService, is_valid_email, sanitize_string, 
 
 
 @pytest.fixture
-def auth_service():
+def auth_service(mock_get_db_session):
     """Each test gets its own AuthService with fake JWT pre-installed."""
     # Re-install fake jwt so patches from other tests don't leak real jwt
     sys.modules["jwt"] = _FakeJWT
-    return AuthService(secret_key="test-secret-key")
+    return AuthService(mock_get_db_session, secret_key="test-secret-key")
 
 
 @pytest.mark.asyncio

@@ -18,8 +18,8 @@ from services.data_isolation import (
 # ─────────────────────────────────────────────────────────────────────────────
 
 @pytest.fixture
-def tenant_service():
-    return TenantService()
+def tenant_service(mock_get_db_session):
+    return TenantService(mock_get_db_session)
 
 
 @pytest.mark.asyncio

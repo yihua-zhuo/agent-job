@@ -11,7 +11,14 @@ from configs.settings import settings
 from middleware.logging import LoggingMiddleware, logger
 from pkg.errors.app_exceptions import AppException
 
-from api import customers_router, sales_router
+from api import (
+    customers_router,
+    sales_router,
+    users_router,
+    tenants_router,
+    tickets_router,
+    activities_router,
+)
 
 
 @asynccontextmanager
@@ -88,6 +95,10 @@ def create_app() -> FastAPI:
     # ── Routes ─────────────────────────────────────────────────────────────
     app.include_router(customers_router)
     app.include_router(sales_router)
+    app.include_router(users_router)
+    app.include_router(tenants_router)
+    app.include_router(tickets_router)
+    app.include_router(activities_router)
 
     @app.get("/")
     async def health():

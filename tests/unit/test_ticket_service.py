@@ -5,8 +5,8 @@ from services.ticket_service import TicketService
 
 
 @pytest.fixture
-def ticket_service():
-    return TicketService()
+def ticket_service(mock_get_db_session):
+    return TicketService(mock_get_db_session)
 
 
 @pytest_asyncio.fixture

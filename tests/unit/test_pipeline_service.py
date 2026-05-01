@@ -5,20 +5,20 @@ from services.pipeline_service import PipelineService
 
 
 @pytest.fixture
-def pipeline_service():
-    return PipelineService()
+def pipeline_service(mock_get_db_session):
+    return PipelineService(mock_get_db_session)
 
 
 @pytest_asyncio.fixture
-async def sample_pipeline():
-    svc = PipelineService()
-    result = await svc.create_pipeline(tenant_id=1, data={"Name": "Test Pipeline"})
+async def sample_pipeline(mock_get_db_session):
+    svc = PipelineService(mock_get_db_session)
+    result = await svc.create_pipeline(tenant_id=1, data={"name": "Test Pipeline"})
     return result.data["id"]
 
 
 @pytest_asyncio.fixture
-async def sample_pipeline_2():
-    svc = PipelineService()
+async def sample_pipeline_2(mock_get_db_session):
+    svc = PipelineService(mock_get_db_session)
     result = await svc.create_pipeline(tenant_id=2, data={"name": "Tenant 2 Pipeline"})
     return result.data["id"]
 
