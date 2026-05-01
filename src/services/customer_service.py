@@ -1,12 +1,15 @@
 """Customer service layer - handles customer business logic via PostgreSQL/SQLAlchemy async."""
 import json
 from datetime import datetime, UTC
-from typing import Optional, List, Dict
+from typing import Optional, List, Dict, TYPE_CHECKING
+
 from sqlalchemy import select, update, delete, func, text
-from db.connection import get_db_session
 from db.models.customer import CustomerModel
 from models.response import ApiResponse
 from models.customer import Customer, CustomerStatus
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 def _dumps_tags(tags) -> str:
@@ -19,7 +22,16 @@ def _dumps_tags(tags) -> str:
 
 
 class CustomerService:
-    """Customer service backed by PostgreSQL via SQLAlchemy async."""
+    """Customer service backed by PostgreSQL via SQLAlchemy async.
+
+    Session must be provided by the caller (typically a FastAPI route handler
+    via Depends(get_db) dependency injection).
+    """
+
+    __init__: "classmethod"
+
+    def __init__(self, session: "AsyncSession"):
+        self.session = session
 
     # ------------------------------------------------------------------
     # create
@@ -43,7 +55,6 @@ class CustomerService:
         owner_id = data.get('owner_id', 0)
         tags = data.get('tags', [])
 
-        # Raw SQL INSERT with RETURNING *
         insert_sql = text("""
             INSERT INTO customers (tenant_id, name, email, phone, company, status,
                                    owner_id, tags, created_at, updated_at)
@@ -53,26 +64,25 @@ class CustomerService:
         """)
         now = datetime.now(UTC)
 
-        async with get_db_session() as session:
-            result = await session.execute(
-                insert_sql,
-                {
-                    "tenant_id": tenant_id,
-                    "name": name,
-                    "email": email,
-                    "phone": phone,
-                    "company": company,
-                    "status": status_value.value,
-                    "owner_id": owner_id,
-                    "tags": _dumps_tags(tags),
-                    "created_at": now,
-                    "updated_at": now,
-                },
-            )
-            row = result.fetchone()
-            if row is None:
-                return ApiResponse.error(message="客户创建失败", code=1500)
-            customer_dict = self._row_to_dict(row._mapping)
+        result = await self.session.execute(
+            insert_sql,
+            {
+                "tenant_id": tenant_id,
+                "name": name,
+                "email": email,
+                "phone": phone,
+                "company": company,
+                "status": status_value.value,
+                "owner_id": owner_id,
+                "tags": _dumps_tags(tags),
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
+        row = result.fetchone()
+        if row is None:
+            return ApiResponse.error(message="客户创建失败", code=1500)
+        customer_dict = self._row_to_dict(row._mapping)
         return ApiResponse.success(data=customer_dict, message="客户创建成功")
 
     # ------------------------------------------------------------------
@@ -105,9 +115,7 @@ class CustomerService:
 
         where_clause = " AND ".join(conditions) if conditions else "1=1"
 
-        # Total count query
         count_sql = text(f"SELECT COUNT(*) AS total FROM customers WHERE {where_clause}")
-        # Data query with LIMIT/OFFSET
         data_sql = text(
             f"SELECT * FROM customers WHERE {where_clause} "
             f"ORDER BY id LIMIT :limit OFFSET :offset"
@@ -116,12 +124,11 @@ class CustomerService:
         params["limit"] = page_size
         params["offset"] = (page - 1) * page_size
 
-        async with get_db_session() as session:
-            count_result = await session.execute(count_sql, params)
-            total = count_result.scalar() or 0
+        count_result = await self.session.execute(count_sql, params)
+        total = count_result.scalar() or 0
 
-            data_result = await session.execute(data_sql, params)
-            rows = data_result.fetchall()
+        data_result = await self.session.execute(data_sql, params)
+        rows = data_result.fetchall()
 
         items = [self._row_to_dict(row._mapping) for row in rows]
 
@@ -139,14 +146,12 @@ class CustomerService:
     async def get_customer(self, customer_id: int, tenant_id: int = 0) -> ApiResponse:
         """Get customer by ID"""
         sql = text("SELECT * FROM customers WHERE id = :id")
-        async with get_db_session() as session:
-            result = await session.execute(sql, {"id": customer_id})
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="客户不存在", code=3001)
-            customer_dict = self._row_to_dict(row._mapping)
+        result = await self.session.execute(sql, {"id": customer_id})
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        customer_dict = self._row_to_dict(row._mapping)
 
-        # Tenant isolation check (same logic as original: non-zero tenant_id enforced)
         if tenant_id and customer_dict.get("tenant_id") != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
 
@@ -159,17 +164,14 @@ class CustomerService:
         self, customer_id: int, data: dict, tenant_id: int = 0
     ) -> ApiResponse:
         """Update customer fields"""
-        # Verify record exists and belongs to tenant
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
-        async with get_db_session() as session:
-            result = await session.execute(fetch_sql, {"id": customer_id})
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="客户不存在", code=3001)
-            if tenant_id and row._mapping.get("tenant_id") != tenant_id:
-                return ApiResponse.error(message="客户不存在", code=3001)
+        result = await self.session.execute(fetch_sql, {"id": customer_id})
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+            return ApiResponse.error(message="客户不存在", code=3001)
 
-        # Build dynamic UPDATE
         update_fields = []
         params: dict = {"id": customer_id}
         for key in ['name', 'email', 'phone', 'company', 'owner_id']:
@@ -197,7 +199,6 @@ class CustomerService:
         update_fields.append("updated_at = :updated_at")
         params["updated_at"] = datetime.now(UTC)
 
-        # Tenant isolation: UPDATE ... WHERE id=? AND tenant_id=?
         if tenant_id:
             params["tenant_id"] = tenant_id
             where_clause = "id = :id AND tenant_id = :tenant_id"
@@ -208,12 +209,11 @@ class CustomerService:
             f"UPDATE customers SET {', '.join(update_fields)} WHERE {where_clause} RETURNING *"
         )
 
-        async with get_db_session() as session:
-            result = await session.execute(update_sql, params)
-            updated_row = result.fetchone()
-            if not updated_row:
-                return ApiResponse.error(message="客户不存在", code=3001)
-            customer_dict = self._row_to_dict(updated_row._mapping)
+        result = await self.session.execute(update_sql, params)
+        updated_row = result.fetchone()
+        if not updated_row:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        customer_dict = self._row_to_dict(updated_row._mapping)
 
         return ApiResponse.success(data=customer_dict, message="客户更新成功")
 
@@ -222,7 +222,6 @@ class CustomerService:
     # ------------------------------------------------------------------
     async def delete_customer(self, customer_id: int, tenant_id: int = 0) -> ApiResponse:
         """Delete a customer"""
-        # Tenant isolation: DELETE ... WHERE id=? AND tenant_id=?
         params: dict = {"id": customer_id}
         if tenant_id:
             params["tenant_id"] = tenant_id
@@ -232,11 +231,10 @@ class CustomerService:
 
         del_sql = text(f"DELETE FROM customers WHERE {where_clause} RETURNING id")
 
-        async with get_db_session() as session:
-            result = await session.execute(del_sql, params)
-            deleted_row = result.fetchone()
-            if not deleted_row:
-                return ApiResponse.error(message="客户不存在", code=3001)
+        result = await self.session.execute(del_sql, params)
+        deleted_row = result.fetchone()
+        if not deleted_row:
+            return ApiResponse.error(message="客户不存在", code=3001)
 
         return ApiResponse.success(message="客户删除成功")
 
@@ -253,9 +251,8 @@ class CustomerService:
             where_clause = "(LOWER(name) LIKE :keyword OR LOWER(email) LIKE :keyword)"
 
         sql = text(f"SELECT * FROM customers WHERE {where_clause} ORDER BY id")
-        async with get_db_session() as session:
-            result = await session.execute(sql, params)
-            rows = result.fetchall()
+        result = await self.session.execute(sql, params)
+        rows = result.fetchall()
 
         items = [self._row_to_dict(row._mapping) for row in rows]
         return ApiResponse.success(data={"keyword": keyword, "items": items}, message="")
@@ -266,31 +263,28 @@ class CustomerService:
     async def add_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> ApiResponse:
         """Add a tag to customer"""
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
-        async with get_db_session() as session:
-            result = await session.execute(fetch_sql, {"id": customer_id})
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="客户不存在", code=3001)
-            if tenant_id and row._mapping.get("tenant_id") != tenant_id:
-                return ApiResponse.error(message="客户不存在", code=3001)
+        result = await self.session.execute(fetch_sql, {"id": customer_id})
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+            return ApiResponse.error(message="客户不存在", code=3001)
 
-            existing_tags = row._mapping.get("tags") or []
-            if isinstance(existing_tags, str):
-                import json
-                existing_tags = json.loads(existing_tags)
+        existing_tags = row._mapping.get("tags") or []
+        if isinstance(existing_tags, str):
+            existing_tags = json.loads(existing_tags)
 
-            if tag not in existing_tags:
-                existing_tags = existing_tags + [tag]
+        if tag not in existing_tags:
+            existing_tags = existing_tags + [tag]
 
-            now = datetime.now(UTC)
-            update_sql = text(
-                "UPDATE customers SET tags = CAST(:tags AS jsonb), updated_at = :updated_at "
-                "WHERE id = :id RETURNING *"
-            )
-            upd_result = await session.execute(
-                update_sql, {"tags": _dumps_tags(existing_tags), "updated_at": now, "id": customer_id}
-            )
-            upd_result.fetchone()
+        now = datetime.now(UTC)
+        update_sql = text(
+            "UPDATE customers SET tags = CAST(:tags AS jsonb), updated_at = :updated_at "
+            "WHERE id = :id RETURNING *"
+        )
+        await self.session.execute(
+            update_sql, {"tags": _dumps_tags(existing_tags), "updated_at": now, "id": customer_id}
+        )
 
         return ApiResponse.success(data={"id": customer_id, "tag": tag}, message="标签添加成功")
 
@@ -302,30 +296,28 @@ class CustomerService:
     ) -> ApiResponse:
         """Remove a tag from customer"""
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
-        async with get_db_session() as session:
-            result = await session.execute(fetch_sql, {"id": customer_id})
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="客户不存在", code=3001)
-            if tenant_id and row._mapping.get("tenant_id") != tenant_id:
-                return ApiResponse.error(message="客户不存在", code=3001)
+        result = await self.session.execute(fetch_sql, {"id": customer_id})
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+            return ApiResponse.error(message="客户不存在", code=3001)
 
-            existing_tags = row._mapping.get("tags") or []
-            if isinstance(existing_tags, str):
-                import json
-                existing_tags = json.loads(existing_tags)
+        existing_tags = row._mapping.get("tags") or []
+        if isinstance(existing_tags, str):
+            existing_tags = json.loads(existing_tags)
 
-            if tag in existing_tags:
-                existing_tags = [t for t in existing_tags if t != tag]
+        if tag in existing_tags:
+            existing_tags = [t for t in existing_tags if t != tag]
 
-            now = datetime.now(UTC)
-            update_sql = text(
-                "UPDATE customers SET tags = CAST(:tags AS jsonb), updated_at = :updated_at "
-                "WHERE id = :id RETURNING *"
-            )
-            await session.execute(
-                update_sql, {"tags": _dumps_tags(existing_tags), "updated_at": now, "id": customer_id}
-            )
+        now = datetime.now(UTC)
+        update_sql = text(
+            "UPDATE customers SET tags = CAST(:tags AS jsonb), updated_at = :updated_at "
+            "WHERE id = :id RETURNING *"
+        )
+        await self.session.execute(
+            update_sql, {"tags": _dumps_tags(existing_tags), "updated_at": now, "id": customer_id}
+        )
 
         return ApiResponse.success(data={"id": customer_id, "tag": tag}, message="标签移除成功")
 
@@ -337,13 +329,12 @@ class CustomerService:
     ) -> ApiResponse:
         """Change customer status"""
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
-        async with get_db_session() as session:
-            result = await session.execute(fetch_sql, {"id": customer_id})
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="客户不存在", code=3001)
-            if tenant_id and row._mapping.get("tenant_id") != tenant_id:
-                return ApiResponse.error(message="客户不存在", code=3001)
+        result = await self.session.execute(fetch_sql, {"id": customer_id})
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+            return ApiResponse.error(message="客户不存在", code=3001)
 
         try:
             new_status = CustomerStatus(status)
@@ -362,12 +353,11 @@ class CustomerService:
             f"WHERE {where_clause} RETURNING *"
         )
 
-        async with get_db_session() as session:
-            await session.execute(update_sql, params)
-            result = await session.execute(fetch_sql, {"id": customer_id})
-            updated_row = result.fetchone()
-            if not updated_row:
-                return ApiResponse.error(message="客户不存在", code=3001)
+        await self.session.execute(update_sql, params)
+        result = await self.session.execute(fetch_sql, {"id": customer_id})
+        updated_row = result.fetchone()
+        if not updated_row:
+            return ApiResponse.error(message="客户不存在", code=3001)
 
         return ApiResponse.success(
             data={"id": customer_id, "status": new_status.value}, message="状态更新成功"
@@ -381,13 +371,12 @@ class CustomerService:
     ) -> ApiResponse:
         """Assign owner to customer"""
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
-        async with get_db_session() as session:
-            result = await session.execute(fetch_sql, {"id": customer_id})
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="客户不存在", code=3001)
-            if tenant_id and row._mapping.get("tenant_id") != tenant_id:
-                return ApiResponse.error(message="客户不存在", code=3001)
+        result = await self.session.execute(fetch_sql, {"id": customer_id})
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="客户不存在", code=3001)
+        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+            return ApiResponse.error(message="客户不存在", code=3001)
 
         params: dict = {"id": customer_id, "owner_id": owner_id, "updated_at": datetime.now(UTC)}
         if tenant_id:
@@ -401,12 +390,11 @@ class CustomerService:
             f"WHERE {where_clause} RETURNING *"
         )
 
-        async with get_db_session() as session:
-            await session.execute(update_sql, params)
-            result = await session.execute(fetch_sql, {"id": customer_id})
-            updated_row = result.fetchone()
-            if not updated_row:
-                return ApiResponse.error(message="客户不存在", code=3001)
+        await self.session.execute(update_sql, params)
+        result = await self.session.execute(fetch_sql, {"id": customer_id})
+        updated_row = result.fetchone()
+        if not updated_row:
+            return ApiResponse.error(message="客户不存在", code=3001)
 
         return ApiResponse.success(
             data={"id": customer_id, "owner_id": owner_id}, message="负责人分配成功"
@@ -446,30 +434,29 @@ class CustomerService:
                 RETURNING id
             """)
 
-            async with get_db_session() as session:
-                try:
-                    result = await session.execute(
-                        insert_sql,
-                        {
-                            "tenant_id": tenant_id,
-                            "name": data['name'],
-                            "email": data.get('email'),
-                            "phone": data.get('phone'),
-                            "company": data.get('company'),
-                            "status": status_value.value,
-                            "owner_id": data.get('owner_id', 0),
-                            "tags": _dumps_tags(tags),
-                            "created_at": now,
-                            "updated_at": now,
-                        },
-                    )
-                    row = result.fetchone()
-                    if row is None:
-                        errors.append({"index": i, "error": "客户创建失败"})
-                        continue
-                    imported += 1
-                except Exception as e:
-                    errors.append({"index": i, "error": str(e)})
+            try:
+                result = await self.session.execute(
+                    insert_sql,
+                    {
+                        "tenant_id": tenant_id,
+                        "name": data['name'],
+                        "email": data.get('email'),
+                        "phone": data.get('phone'),
+                        "company": data.get('company'),
+                        "status": status_value.value,
+                        "owner_id": data.get('owner_id', 0),
+                        "tags": _dumps_tags(tags),
+                        "created_at": now,
+                        "updated_at": now,
+                    },
+                )
+                row = result.fetchone()
+                if row is None:
+                    errors.append({"index": i, "error": "客户创建失败"})
+                    continue
+                imported += 1
+            except Exception as e:
+                errors.append({"index": i, "error": str(e)})
 
         return ApiResponse.success(
             data={"imported": imported, "errors": errors},
@@ -489,9 +476,8 @@ class CustomerService:
             "WHERE tenant_id = :tenant_id GROUP BY status"
         )
 
-        async with get_db_session() as session:
-            result = await session.execute(sql, {"tenant_id": tenant_id})
-            rows = result.fetchall()
+        result = await self.session.execute(sql, {"tenant_id": tenant_id})
+        rows = result.fetchall()
 
         counts: Dict[CustomerStatus, int] = {}
         for row in rows:
@@ -511,10 +497,8 @@ class CustomerService:
     def _row_to_dict(mapping) -> dict:
         """Convert a RowMapping from a result row to a plain dict."""
         result = dict(mapping)
-        # Ensure status is the string value
         if "status" in result and hasattr(result["status"], "value"):
             result["status"] = result["status"].value
-        # Format datetime fields as ISO strings
         for field in ("created_at", "updated_at"):
             val = result.get(field)
             if isinstance(val, datetime):
