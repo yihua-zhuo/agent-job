@@ -13,7 +13,7 @@ from typing import List, Dict, Optional, cast, Any
 from sqlalchemy import select, update, delete, func, and_, or_, table, column
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
-from db.connection import get_db_session
+from src.db.connection import get_db_session
 from utils.file_helper import FileHelper
 
 # Lightweight Table descriptors for raw-style queries that don't yet have ORM

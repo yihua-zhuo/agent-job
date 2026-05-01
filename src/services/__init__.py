@@ -1,5 +1,4 @@
 """Services package for CRM system — lazy loading to avoid SQLAlchemy duplicate table registration."""
-import sys
 from types import ModuleType
 from typing import TYPE_CHECKING
 
@@ -43,7 +42,6 @@ def __getattr__(name: str):
         module_path = _lazy_map[name]
         module = __import__(module_path, fromlist=[name])
         val = getattr(module, name)
-        # Cache it
         globals()[name] = val
         return val
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

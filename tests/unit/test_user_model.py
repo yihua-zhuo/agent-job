@@ -3,7 +3,7 @@
 """
 import pytest
 from datetime import datetime
-from models.user import User, UserRole, UserStatus
+from src.models.user import User, UserRole, UserStatus
 
 
 class TestUserModel:

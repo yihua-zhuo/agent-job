@@ -50,7 +50,7 @@ class _FakeJWT:
 
 sys.modules["jwt"] = _FakeJWT  # type: ignore[assign]
 
-from services.auth_service import AuthService, is_valid_email, sanitize_string, validate_id
+from src.services.auth_service import AuthService, is_valid_email, sanitize_string, validate_id
 
 
 @pytest.fixture

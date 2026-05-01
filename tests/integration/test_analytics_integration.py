@@ -13,10 +13,10 @@ import uuid
 
 import pytest
 
-from models.response import ResponseStatus
-from services.analytics_service import AnalyticsService
-from services.report_service import ReportService
-from services.user_service import UserService
+from src.models.response import ResponseStatus
+from src.services.analytics_service import AnalyticsService
+from src.services.report_service import ReportService
+from src.services.user_service import UserService
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

@@ -10,10 +10,10 @@ from typing import Optional, Tuple
 import bcrypt
 from sqlalchemy import select, update, delete, func
 
-from db.connection import get_db_session
-from db.models.user import UserModel
-from models.user import User, UserRole, UserStatus
-from models.response import ApiResponse, PaginatedData, ApiError
+from src.db.connection import get_db_session
+from src.db.models.user import UserModel
+from src.models.user import User, UserRole, UserStatus
+from src.models.response import ApiResponse, PaginatedData, ApiError
 
 
 class ValidationError(Exception):

@@ -1,6 +1,6 @@
 """Unit tests for ChurnPredictionService."""
 import pytest
-from services.churn_prediction import ChurnPredictionService
+from src.services.churn_prediction import ChurnPredictionService
 
 
 @pytest.fixture

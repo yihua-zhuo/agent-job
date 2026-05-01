@@ -1,6 +1,6 @@
 """Unit tests for MarketingService."""
 import pytest
-from services.marketing_service import MarketingService
+from src.services.marketing_service import MarketingService
 
 
 @pytest.fixture

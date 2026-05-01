@@ -1,7 +1,7 @@
 """Unit tests for ImportExportService."""
 import json
 import pytest
-from services.import_export_service import ImportExportService
+from src.services.import_export_service import ImportExportService
 
 
 @pytest.fixture

@@ -1,6 +1,6 @@
 """Unit tests for UserService."""
 import pytest
-from services.user_service import UserService
+from src.services.user_service import UserService
 
 
 @pytest.fixture

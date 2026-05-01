@@ -1,8 +1,8 @@
 """Unit tests for SalesService (pipeline + opportunity CRUD)."""
 import pytest
 import pytest_asyncio
-from services.sales_service import SalesService
-from models.opportunity import Stage
+from src.services.sales_service import SalesService
+from src.models.opportunity import Stage
 
 
 @pytest.fixture

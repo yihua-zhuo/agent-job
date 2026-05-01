@@ -9,7 +9,7 @@ if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 
 import pytest
-from services.auth_service import (
+from src.services.auth_service import (
     AuthService,
     is_valid_email,
     sanitize_string,

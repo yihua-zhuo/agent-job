@@ -14,17 +14,17 @@ import uuid
 
 import pytest
 
-from models.marketing import TriggerType, CampaignType, CampaignStatus
-from models.response import ResponseStatus
-from models.ticket import (
+from src.models.marketing import TriggerType, CampaignType, CampaignStatus
+from src.models.response import ResponseStatus
+from src.models.ticket import (
     Ticket,
     TicketStatus,
     TicketPriority,
     TicketChannel,
     SLALevel,
 )
-from services.automation_rules import AutomationRules
-from services.data_isolation import (
+from src.services.automation_rules import AutomationRules
+from src.services.data_isolation import (
     TenantScope,
     require_tenant_id,
     sanitize_tenant_write,
@@ -32,12 +32,12 @@ from services.data_isolation import (
     is_cross_tenant_safe,
     DataIsolationError,
 )
-from services.rbac_service import RBACService, Permission
-from services.sla_service import SLAService
-from services.trigger_service import TriggerService
-from services.marketing_service import MarketingService
-from services.ticket_service import TicketService
-from services.user_service import UserService
+from src.services.rbac_service import RBACService, Permission
+from src.services.sla_service import SLAService
+from src.services.trigger_service import TriggerService
+from src.services.marketing_service import MarketingService
+from src.services.ticket_service import TicketService
+from src.services.user_service import UserService
 
 
 # ==============================================================================

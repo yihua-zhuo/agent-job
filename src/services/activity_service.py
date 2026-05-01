@@ -2,10 +2,10 @@
 from datetime import datetime, UTC
 from typing import List, Dict, Optional
 
-from models.activity import Activity, ActivityType
-from models.response import ApiResponse, PaginatedData
-from db.connection import get_db_session
-from db.models.activity import ActivityModel
+from src.models.activity import Activity, ActivityType
+from src.models.response import ApiResponse, PaginatedData
+from src.db.connection import get_db_session
+from src.db.models.activity import ActivityModel
 from sqlalchemy import text
 
 

@@ -10,10 +10,10 @@ from typing import Optional, List, Dict
 from sqlalchemy import select, update, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
-from db.models.ticket import TicketModel
-from db.models.ticket_reply import TicketReplyModel
-from models.ticket import (
+from src.db.connection import get_db_session
+from src.db.models.ticket import TicketModel
+from src.db.models.ticket_reply import TicketReplyModel
+from src.models.ticket import (
     Ticket,
     TicketReply,
     TicketStatus,
@@ -22,7 +22,7 @@ from models.ticket import (
     SLALevel,
     SLA_CONFIGS,
 )
-from models.response import ApiResponse, PaginatedData, ApiError
+from src.models.response import ApiResponse, PaginatedData, ApiError
 
 
 # ---------------------------------------------------------------------------

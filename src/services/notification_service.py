@@ -4,8 +4,8 @@ from datetime import datetime, UTC
 
 from sqlalchemy import text, func, and_, or_
 
-from db.connection import get_db_session
-from models.response import ApiResponse, PaginatedData
+from src.db.connection import get_db_session
+from src.models.response import ApiResponse, PaginatedData
 
 
 class NotificationService:

@@ -1,7 +1,7 @@
 """Unit tests for CustomerService."""
 import pytest
-from services.customer_service import CustomerService
-from models.customer import CustomerStatus
+from src.services.customer_service import CustomerService
+from src.models.customer import CustomerStatus
 
 
 @pytest.fixture

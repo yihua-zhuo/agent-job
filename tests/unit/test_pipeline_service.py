@@ -1,7 +1,7 @@
 """Unit tests for PipelineService."""
 import pytest
 import pytest_asyncio
-from services.pipeline_service import PipelineService
+from src.services.pipeline_service import PipelineService
 
 
 @pytest.fixture
