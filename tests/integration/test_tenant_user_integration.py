@@ -17,7 +17,7 @@ from services.auth_service import AuthService
 from services.customer_service import CustomerService
 from services.sla_service import SLAService
 from services.tenant_service import TenantService
-from services.ticket_service import TicketPriority, TicketService, TicketStatus
+from services.ticket_service import TicketChannel, TicketPriority, TicketService, TicketStatus
 from services.user_service import UserService
 
 
@@ -206,10 +206,10 @@ class TestUserServiceIntegration:
                 tenant_id=tenant_id,
             )
 
-        # list_users() takes no tenant_id argument
+        # list_users() returns PaginatedData[User]; User objects have .username
         result = await user_svc.list_users(page=1, page_size=20)
         assert result.status == ResponseStatus.SUCCESS
-        assert any(f"lu_{suffix}_0" in u.username for u in result.data.items)
+        assert any(f"lu_{suffix}_0" == u.username for u in result.data.items)
 
     async def test_search_users(self, db_schema, tenant_id, async_session):
         user_svc = UserService()
@@ -252,12 +252,11 @@ class TestTicketServiceIntegration:
         ticket_svc = TicketService()
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
-        # Signature: create_ticket(subject, description, customer_id, channel, priority, ...)
         result = await ticket_svc.create_ticket(
             subject="Support Issue",
             description="Cannot login",
             customer_id=cid,
-            channel="email",
+            channel=TicketChannel.EMAIL,
             priority=TicketPriority.HIGH,
             tenant_id=tenant_id,
         )
@@ -276,13 +275,13 @@ class TestTicketServiceIntegration:
             subject="Original Title",
             description="Original Desc",
             customer_id=cid,
-            channel="email",
+            channel=TicketChannel.EMAIL,
             priority=TicketPriority.LOW,
             tenant_id=tenant_id,
         )
         tid = created.data.id
 
-        # Signature: update_ticket(ticket_id, tenant_id=0, **kwargs)
+        # update_ticket(ticket_id, tenant_id=0, **kwargs)
         updated = await ticket_svc.update_ticket(tid, tenant_id=tenant_id, subject="Updated Title", priority=TicketPriority.HIGH)
         assert updated.status == ResponseStatus.SUCCESS
         assert updated.data.subject == "Updated Title"
@@ -295,7 +294,7 @@ class TestTicketServiceIntegration:
             subject="To Assign",
             description="Assign me",
             customer_id=cid,
-            channel="email",
+            channel=TicketChannel.EMAIL,
             priority=TicketPriority.MEDIUM,
             tenant_id=tenant_id,
         )
@@ -312,13 +311,13 @@ class TestTicketServiceIntegration:
             subject="Reply Test",
             description="Add a reply",
             customer_id=cid,
-            channel="email",
+            channel=TicketChannel.EMAIL,
             priority=TicketPriority.LOW,
             tenant_id=tenant_id,
         )
         tid = created.data.id
 
-        # Signature: add_reply(ticket_id, content, created_by, is_internal=False, tenant_id=0)
+        # add_reply(ticket_id, content, created_by, is_internal=False, tenant_id=0)
         reply = await ticket_svc.add_reply(tid, "Here is the fix", created_by=uid, tenant_id=tenant_id)
         assert reply.status == ResponseStatus.SUCCESS
         assert reply.data.content == "Here is the fix"
@@ -331,13 +330,13 @@ class TestTicketServiceIntegration:
             subject="Status Test",
             description="Change my status",
             customer_id=cid,
-            channel="email",
+            channel=TicketChannel.EMAIL,
             priority=TicketPriority.LOW,
             tenant_id=tenant_id,
         )
         tid = created.data.id
 
-        # Signature: change_status(ticket_id, new_status: TicketStatus, tenant_id=0)
+        # change_status(ticket_id, new_status: TicketStatus, tenant_id=0)
         changed = await ticket_svc.change_status(tid, TicketStatus.IN_PROGRESS, tenant_id=tenant_id)
         assert changed.status == ResponseStatus.SUCCESS
         assert changed.data.status == TicketStatus.IN_PROGRESS
@@ -352,7 +351,7 @@ class TestTicketServiceIntegration:
                 subject=f"List Ticket {suffix} {i}",
                 description="List me",
                 customer_id=cid,
-                channel="email",
+                channel=TicketChannel.EMAIL,
                 priority=TicketPriority.LOW,
                 tenant_id=tenant_id,
             )
@@ -369,14 +368,14 @@ class TestTicketServiceIntegration:
             subject="Customer Ticket",
             description="For this customer",
             customer_id=cid,
-            channel="email",
+            channel=TicketChannel.EMAIL,
             priority=TicketPriority.MEDIUM,
             tenant_id=tenant_id,
         )
 
+        # get_customer_tickets returns List[Ticket] directly, not ApiResponse
         result = await ticket_svc.get_customer_tickets(cid, tenant_id=tenant_id)
-        assert result.status == ResponseStatus.SUCCESS
-        assert len(result.data) >= 1
+        assert len(result) >= 1
 
     async def test_get_sla_breaches(self, db_schema, tenant_id, async_session):
         ticket_svc = TicketService()
@@ -386,11 +385,12 @@ class TestTicketServiceIntegration:
             subject="SLA Breach Test",
             description="Check SLA",
             customer_id=cid,
-            channel="email",
+            channel=TicketChannel.EMAIL,
             priority=TicketPriority.HIGH,
             tenant_id=tenant_id,
         )
 
+        # get_sla_breaches returns List[Ticket] directly, not ApiResponse
         breaches = await ticket_svc.get_sla_breaches(tenant_id=tenant_id)
         assert isinstance(breaches, list)
 
@@ -411,13 +411,13 @@ class TestSLAServiceIntegration:
             subject="SLA Status Check",
             description="Check SLA status",
             customer_id=cid,
-            channel="email",
+            channel=TicketChannel.EMAIL,
             priority=TicketPriority.HIGH,
             tenant_id=tenant_id,
         )
         tid = created.data.id
 
-        # fetch the ticket and pass the Ticket object
+        # check_sla_status(ticket: Ticket) — fetch the Ticket object first
         fetched = await ticket_svc.get_ticket(tid, tenant_id=tenant_id)
         status = await sla_svc.check_sla_status(fetched.data)
         assert status in ("normal", "warning", "breached")
@@ -431,11 +431,12 @@ class TestSLAServiceIntegration:
             subject="SLA Breach Tickets",
             description="Check breach list",
             customer_id=cid,
-            channel="email",
+            channel=TicketChannel.EMAIL,
             priority=TicketPriority.CRITICAL,
             tenant_id=tenant_id,
         )
 
+        # get_breach_tickets returns List[Ticket] directly
         breaches = await sla_svc.get_breach_tickets(tenant_id=tenant_id)
         assert isinstance(breaches, list)
 
@@ -450,15 +451,15 @@ class TestAuthServiceIntegration:
     async def test_create_user_with_auth(self, db_schema, tenant_id, async_session):
         auth_svc = AuthService()
         suffix = uuid.uuid4().hex[:8]
-        # AuthService.create_user — signature: (username, email, password, tenant_id)
+        # AuthService.create_user returns {"success": bool, "data": User, "message": str}
         result = await auth_svc.create_user(
             username=f"auth_{suffix}",
             email=f"auth_{suffix}@example.com",
             password="Secure@Pass1234",
             tenant_id=tenant_id,
         )
-        assert result.status == ResponseStatus.SUCCESS
-        assert result.data["username"] == f"auth_{suffix}"
+        assert result["success"] is True
+        assert result["data"].username == f"auth_{suffix}"
 
     async def test_login(self, db_schema, tenant_id, async_session):
         auth_svc = AuthService()
@@ -470,10 +471,10 @@ class TestAuthServiceIntegration:
             tenant_id=tenant_id,
         )
 
-        # authenticate_user — signature: (username, password)
+        # authenticate_user returns User dict directly (no ApiResponse wrapper)
         result = await auth_svc.authenticate_user(
             username=f"login_{suffix}",
             password="Secure@Pass1234",
         )
         assert result is not None
-        assert "access_token" in result or "token" in result
+        assert result["username"] == f"login_{suffix}"
