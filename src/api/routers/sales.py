@@ -6,9 +6,42 @@ from typing import Optional, List
 from db.connection import get_db
 from internal.middleware.fastapi_auth import require_auth, AuthContext
 from services.sales_service import SalesService
-
+from models.response import ResponseStatus
+from pkg.response.schemas import (
+    PipelineData,
+    PipelineListData,
+    PipelineResponse,
+    PipelineListResponse,
+    PipelineStatsData,
+    PipelineStatsResponse,
+    PipelineFunnelData,
+    PipelineFunnelResponse,
+    OpportunityData,
+    OpportunityListData,
+    OpportunityResponse,
+    OpportunityListResponse,
+    StageChangeData,
+    StageChangeResponse,
+    ForecastData,
+    ForecastResponse,
+    ErrorEnvelope,
+)
 
 sales_router = APIRouter(prefix='/api/v1/sales', tags=['sales'])
+
+
+def _http_status(status: ResponseStatus) -> int:
+    m = {
+        ResponseStatus.SUCCESS: 200,
+        ResponseStatus.NOT_FOUND: 404,
+        ResponseStatus.VALIDATION_ERROR: 400,
+        ResponseStatus.UNAUTHORIZED: 401,
+        ResponseStatus.FORBIDDEN: 403,
+        ResponseStatus.SERVER_ERROR: 500,
+        ResponseStatus.ERROR: 400,
+        ResponseStatus.WARNING: 200,
+    }
+    return m.get(status, 400)
 
 
 # ---------------------------------------------------------------------------
@@ -53,21 +86,15 @@ class PaginationQuery(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Generic API response wrapper
-# ---------------------------------------------------------------------------
-
-class ApiDataResponse(BaseModel):
-    status: str
-    message: str
-    data: Optional[dict] = None
-    errors: Optional[List[dict]] = None
-
-
-# ---------------------------------------------------------------------------
 # Pipeline endpoints
 # ---------------------------------------------------------------------------
 
-@sales_router.post('/pipelines', status_code=201, response_model=ApiDataResponse)
+@sales_router.post(
+    '/pipelines',
+    status_code=201,
+    response_model=PipelineResponse,
+    responses={400: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def create_pipeline(
     body: PipelineCreate,
     ctx: AuthContext = Depends(require_auth),
@@ -75,20 +102,35 @@ async def create_pipeline(
 ):
     service = SalesService(session)
     resp = await service.create_pipeline(ctx.tenant_id, body.model_dump())
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return PipelineResponse(message=resp.message, data=PipelineData.model_validate(resp.data))
 
 
-@sales_router.get('/pipelines', response_model=ApiDataResponse)
+@sales_router.get(
+    '/pipelines',
+    response_model=PipelineListResponse,
+    responses={401: {"model": ErrorEnvelope}},
+)
 async def list_pipelines(
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
     service = SalesService(session)
     resp = await service.list_pipelines(ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    items = [PipelineData.model_validate(p) for p in resp.data["items"]]
+    return PipelineListResponse(
+        message=resp.message,
+        data=PipelineListData(items=items, total=resp.data["total"]),
+    )
 
 
-@sales_router.get('/pipelines/{pipeline_id}', response_model=ApiDataResponse)
+@sales_router.get(
+    '/pipelines/{pipeline_id}',
+    response_model=PipelineResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def get_pipeline(
     pipeline_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -96,10 +138,17 @@ async def get_pipeline(
 ):
     service = SalesService(session)
     resp = await service.get_pipeline(ctx.tenant_id, pipeline_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return PipelineResponse(message=resp.message, data=PipelineData.model_validate(resp.data))
 
 
-@sales_router.get('/pipelines/{pipeline_id}/stats', response_model=ApiDataResponse)
+@sales_router.get(
+    '/pipelines/{pipeline_id}/stats',
+    response_model=PipelineStatsResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def get_pipeline_stats(
     pipeline_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -107,10 +156,17 @@ async def get_pipeline_stats(
 ):
     service = SalesService(session)
     resp = await service.get_pipeline_stats(ctx.tenant_id, pipeline_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return PipelineStatsResponse(message=resp.message, data=resp.data)
 
 
-@sales_router.get('/pipelines/{pipeline_id}/funnel', response_model=ApiDataResponse)
+@sales_router.get(
+    '/pipelines/{pipeline_id}/funnel',
+    response_model=PipelineFunnelResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def get_pipeline_funnel(
     pipeline_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -118,14 +174,22 @@ async def get_pipeline_funnel(
 ):
     service = SalesService(session)
     resp = await service.get_pipeline_funnel(ctx.tenant_id, pipeline_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return PipelineFunnelResponse(message=resp.message, data=resp.data)
 
 
 # ---------------------------------------------------------------------------
 # Opportunity endpoints
 # ---------------------------------------------------------------------------
 
-@sales_router.post('/opportunities', status_code=201, response_model=ApiDataResponse)
+@sales_router.post(
+    '/opportunities',
+    status_code=201,
+    response_model=OpportunityResponse,
+    responses={400: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def create_opportunity(
     body: OpportunityCreate,
     ctx: AuthContext = Depends(require_auth),
@@ -135,10 +199,17 @@ async def create_opportunity(
     data = body.model_dump()
     data['expected_close_date'] = data.pop('close_date', None)
     resp = await service.create_opportunity(ctx.tenant_id, data)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return OpportunityResponse(message=resp.message, data=OpportunityData.model_validate(resp.data))
 
 
-@sales_router.get('/opportunities', response_model=ApiDataResponse)
+@sales_router.get(
+    '/opportunities',
+    response_model=OpportunityListResponse,
+    responses={401: {"model": ErrorEnvelope}},
+)
 async def list_opportunities(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -153,10 +224,26 @@ async def list_opportunities(
         ctx.tenant_id, page=page, page_size=page_size,
         pipeline_id=pipeline_id, stage=stage, owner_id=owner_id,
     )
-    return ApiDataResponse(**resp.to_dict())
+    items = [OpportunityData.model_validate(o) for o in resp.data["items"]]
+    return OpportunityListResponse(
+        message=resp.message,
+        data=OpportunityListData(
+            items=items,
+            total=resp.data["total"],
+            page=resp.data["page"],
+            page_size=resp.data["page_size"],
+            total_pages=resp.data["total_pages"],
+            has_next=resp.data["has_next"],
+            has_prev=resp.data["has_prev"],
+        ),
+    )
 
 
-@sales_router.get('/opportunities/{opp_id}', response_model=ApiDataResponse)
+@sales_router.get(
+    '/opportunities/{opp_id}',
+    response_model=OpportunityResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def get_opportunity(
     opp_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -164,10 +251,17 @@ async def get_opportunity(
 ):
     service = SalesService(session)
     resp = await service.get_opportunity(ctx.tenant_id, opp_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return OpportunityResponse(message=resp.message, data=OpportunityData.model_validate(resp.data))
 
 
-@sales_router.put('/opportunities/{opp_id}', response_model=ApiDataResponse)
+@sales_router.put(
+    '/opportunities/{opp_id}',
+    response_model=OpportunityResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def update_opportunity(
     opp_id: int,
     body: OpportunityUpdate,
@@ -179,10 +273,17 @@ async def update_opportunity(
     if 'close_date' in data:
         data['expected_close_date'] = data.pop('close_date')
     resp = await service.update_opportunity(ctx.tenant_id, opp_id, data)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return OpportunityResponse(message=resp.message, data=OpportunityData.model_validate(resp.data))
 
 
-@sales_router.put('/opportunities/{opp_id}/stage', response_model=ApiDataResponse)
+@sales_router.put(
+    '/opportunities/{opp_id}/stage',
+    response_model=StageChangeResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def change_stage(
     opp_id: int,
     body: StageChange,
@@ -191,10 +292,17 @@ async def change_stage(
 ):
     service = SalesService(session)
     resp = await service.change_stage(ctx.tenant_id, opp_id, body.stage)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return StageChangeResponse(message=resp.message, data=resp.data)
 
 
-@sales_router.get('/forecast', response_model=ApiDataResponse)
+@sales_router.get(
+    '/forecast',
+    response_model=ForecastResponse,
+    responses={401: {"model": ErrorEnvelope}},
+)
 async def get_forecast(
     owner_id: Optional[int] = Query(None, ge=0),
     ctx: AuthContext = Depends(require_auth),
@@ -202,4 +310,4 @@ async def get_forecast(
 ):
     service = SalesService(session)
     resp = await service.get_forecast(ctx.tenant_id, owner_id=owner_id)
-    return ApiDataResponse(**resp.to_dict())
+    return ForecastResponse(message=resp.message, data=resp.data)
