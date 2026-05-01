@@ -6,12 +6,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir -e ".[dev]"
-
+# Copy source before installing (so egg_info can find src/)
 COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
+
+# Now install — src/ exists so editable install succeeds
+RUN pip install --no-cache-dir -e ".[dev]"
 
 ENV HOST=0.0.0.0
 ENV PYTHONPATH=/app/src
