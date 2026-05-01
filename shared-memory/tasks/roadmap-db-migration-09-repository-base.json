@@ -1,0 +1,20 @@
+{
+  "task_id": "roadmap-db-migration-09-repository-base",
+  "created_at": "2026-04-13T12:53:00Z",
+  "source": "roadmap",
+  "claimed_at": null,
+  "result_path": null,
+  "title": "Add GenericRepository[T] base class with CRUD operations",
+  "kind": "refactor",
+  "priority": "medium",
+  "target_files": [
+    "src/internal/repository/__init__.py",
+    "src/internal/repository/base.py",
+    "tests/unit/test_repository_base.py"
+  ],
+  "description": "Add src/internal/repository/base.py defining GenericRepository[T] mixin/base class usable by all domain repositories. Must provide: GenericRepository[T] with a type param T; methods: create(data: dict, tenant_id: int) -> T; get_by_id(id: int, tenant_id: int) -> Optional[T]; update(id: int, data: dict, tenant_id: int) -> Optional[T]; delete(id: int, tenant_id: int) -> bool; list(page: int, page_size: int, tenant_id: int, **filters) -> List[T]; count(tenant_id: int, **filters) -> int; _apply_tenant_filter(query, tenant_id) -> query; _apply_tenant_filter must raise PermissionError if a cross-tenant access is attempted. Depends on roadmap-db-migration-06-orm-batch2-customers-sales (all ORM models must be defined first).",
+  "acceptance": "GenericRepository imported from src.internal.repository.base; isinstance(repo, GenericRepository) works; pytest tests/unit/test_repository_base.py -v has 5 tests all passing; methods return correct types; tenant isolation raises PermissionError on cross-tenant access",
+  "roadmap": "db-migration",
+  "roadmap_index": 9,
+  "roadmap_total": 11
+}

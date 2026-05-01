@@ -1,0 +1,463 @@
+{
+  "date": "2026-04-25",
+  "stats": {
+    "image": 5,
+    "video": 9,
+    "comfy": 474,
+    "workflows": 0
+  },
+  "entries": [
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Wan2 7 R2V",
+      "https://comfy.org/workflows/api_wan2_7_r2v",
+      "[media-video] api_wan2_7_r2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Wan2 7 I2V",
+      "https://comfy.org/workflows/api_wan2_7_i2v",
+      "[media-video] api_wan2_7_i2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Wan2 7 Video Edit",
+      "https://comfy.org/workflows/api_wan2_7_video_edit",
+      "[media-video] api_wan2_7_video_edit",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Wan2 7 T2V",
+      "https://comfy.org/workflows/api_wan2_7_t2v",
+      "[media-video] api_wan2_7_t2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Ltx2 3 Id Lora",
+      "https://comfy.org/workflows/video_ltx2_3_id_lora",
+      "[media-video] video_ltx2_3_id_lora",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Grok Video Extend",
+      "https://comfy.org/workflows/api_grok_video_extend",
+      "[media-video] api_grok_video_extend",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Grok Reference To Video",
+      "https://comfy.org/workflows/api_grok_reference_to_video",
+      "[media-video] api_grok_reference_to_video",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Ltx2 3 Flf2V",
+      "https://comfy.org/workflows/video_ltx2_3_flf2v",
+      "[media-video] video_ltx2_3_flf2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Ltx2 3 Ia2V",
+      "https://comfy.org/workflows/video_ltx2_3_ia2v",
+      "[media-video] video_ltx2_3_ia2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Kling Motion Control3",
+      "https://comfy.org/workflows/api_kling_motion_control3",
+      "[media-video] api_kling_motion_control3",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Ltx2 3 I2V",
+      "https://comfy.org/workflows/video_ltx2_3_i2v",
+      "[media-video] video_ltx2_3_i2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Ltx2 3 T2V",
+      "https://comfy.org/workflows/video_ltx2_3_t2v",
+      "[media-video] video_ltx2_3_t2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Kling Dual Characters Effects",
+      "https://comfy.org/workflows/api_kling_dual_characters_effects",
+      "[media-video] api_kling_dual_characters_effects",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Kling Avatar2",
+      "https://comfy.org/workflows/api_kling_avatar2",
+      "[media-video] api_kling_avatar2",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Capybara V0 1 Video Edit",
+      "https://comfy.org/workflows/video_capybara_v0_1_video_edit",
+      "[media-video] video_capybara_v0_1_video_edit",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Capybara V0 1 Image To Video",
+      "https://comfy.org/workflows/video_capybara_v0_1_image_to_video",
+      "[media-video] video_capybara_v0_1_image_to_video",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Ltx 2 Audio To Video",
+      "https://comfy.org/workflows/video_ltx_2_audio_to_video",
+      "[media-video] video_ltx_2_audio_to_video",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Kling O3 Flf2V",
+      "https://comfy.org/workflows/api_kling_o3_flf2v",
+      "[media-video] api_kling_o3_flf2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Kling O3 Video Edit",
+      "https://comfy.org/workflows/api_kling_o3_video_edit",
+      "[media-video] api_kling_o3_video_edit",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Kling O3 I2V",
+      "https://comfy.org/workflows/api_kling_o3_i2v",
+      "[media-video] api_kling_o3_i2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "King O3 T2V",
+      "https://comfy.org/workflows/api_king_o3_t2v",
+      "[media-video] api_king_o3_t2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Kling V3 Flf2V",
+      "https://comfy.org/workflows/api_kling_v3_flf2v",
+      "[media-video] api_kling_v3_flf2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Kling V3 Video",
+      "https://comfy.org/workflows/api_kling_v3_video",
+      "[media-video] api_kling_v3_video",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Ltx2 I2V Lora",
+      "https://comfy.org/workflows/video_ltx2_i2v_lora",
+      "[media-video] video_ltx2_i2v_lora",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Vidu Q3 Image To Video",
+      "https://comfy.org/workflows/api_vidu_q3_image_to_video",
+      "[media-video] api_vidu_q3_image_to_video",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Vidu Q3 Text To Video",
+      "https://comfy.org/workflows/api_vidu_q3_text_to_video",
+      "[media-video] api_vidu_q3_text_to_video",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Grok Video Edit",
+      "https://comfy.org/workflows/api_grok_video_edit",
+      "[media-video] api_grok_video_edit",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Grok Video",
+      "https://comfy.org/workflows/api_grok_video",
+      "[media-video] api_grok_video",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 1 Infinitetalk",
+      "https://comfy.org/workflows/video_wan2_1_infinitetalk",
+      "[media-video] video_wan2_1_infinitetalk",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyAPI",
+      "Bytedace Seedance1 5 Flf2V",
+      "https://comfy.org/workflows/api_bytedace_seedance1_5_flf2v",
+      "[media-video] api_bytedace_seedance1_5_flf2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Hunyuan Video 1.5 720P T2V",
+      "https://comfy.org/workflows/video_hunyuan_video_1.5_720p_t2v",
+      "[media-video] video_hunyuan_video_1.5_720p_t2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Hunyuan Video 1.5 720P I2V",
+      "https://comfy.org/workflows/video_hunyuan_video_1.5_720p_i2v",
+      "[media-video] video_hunyuan_video_1.5_720p_i2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan Vace Outpainting",
+      "https://comfy.org/workflows/video_wan_vace_outpainting",
+      "[media-video] video_wan_vace_outpainting",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan Vace Inpainting",
+      "https://comfy.org/workflows/video_wan_vace_inpainting",
+      "[media-video] video_wan_vace_inpainting",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan Vace Flf2V",
+      "https://comfy.org/workflows/video_wan_vace_flf2v",
+      "[media-video] video_wan_vace_flf2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan Vace 14B V2V",
+      "https://comfy.org/workflows/video_wan_vace_14B_v2v",
+      "[media-video] video_wan_vace_14B_v2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan Vace 14B T2V",
+      "https://comfy.org/workflows/video_wan_vace_14B_t2v",
+      "[media-video] video_wan_vace_14B_t2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan Vace 14B Ref2V",
+      "https://comfy.org/workflows/video_wan_vace_14B_ref2v",
+      "[media-video] video_wan_vace_14B_ref2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan Ati",
+      "https://comfy.org/workflows/video_wan_ati",
+      "[media-video] video_wan_ati",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 5B Ti2V",
+      "https://comfy.org/workflows/video_wan2_2_5B_ti2v",
+      "[media-video] video_wan2_2_5B_ti2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 5B Fun Inpaint",
+      "https://comfy.org/workflows/video_wan2_2_5B_fun_inpaint",
+      "[media-video] video_wan2_2_5B_fun_inpaint",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 5B Fun Control",
+      "https://comfy.org/workflows/video_wan2_2_5B_fun_control",
+      "[media-video] video_wan2_2_5B_fun_control",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 14B T2V",
+      "https://comfy.org/workflows/video_wan2_2_14B_t2v",
+      "[media-video] video_wan2_2_14B_t2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 14B S2V",
+      "https://comfy.org/workflows/video_wan2_2_14B_s2v",
+      "[media-video] video_wan2_2_14B_s2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 14B I2V",
+      "https://comfy.org/workflows/video_wan2_2_14B_i2v",
+      "[media-video] video_wan2_2_14B_i2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 14B Fun Inpaint",
+      "https://comfy.org/workflows/video_wan2_2_14B_fun_inpaint",
+      "[media-video] video_wan2_2_14B_fun_inpaint",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 14B Fun Control",
+      "https://comfy.org/workflows/video_wan2_2_14B_fun_control",
+      "[media-video] video_wan2_2_14B_fun_control",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 14B Fun Camera",
+      "https://comfy.org/workflows/video_wan2_2_14B_fun_camera",
+      "[media-video] video_wan2_2_14B_fun_camera",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 14B Flf2V",
+      "https://comfy.org/workflows/video_wan2_2_14B_flf2v",
+      "[media-video] video_wan2_2_14B_flf2v",
+      ""
+    ],
+    [
+      "2026-04-25",
+      "comfy",
+      "ComfyVideo",
+      "Video Wan2 2 14B Animate",
+      "https://comfy.org/workflows/video_wan2_2_14B_animate",
+      "[media-video] video_wan2_2_14B_animate",
+      ""
+    ]
+  ],
+  "comfy_templates": 474,
+  "github_updates": 0
+}

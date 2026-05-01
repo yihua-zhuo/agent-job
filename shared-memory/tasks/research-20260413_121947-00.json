@@ -1,0 +1,20 @@
+{
+  "task_id": "research-20260413_121947-00",
+  "created_at": "2026-04-13T12:19:47.184845Z",
+  "source": "research",
+  "claimed_at": "2026-04-13T12:22:03.906008Z",
+  "result_path": "shared-memory/results/task-research-20260413_121947-00-result.json",
+  "title": "Add analytics_service unit tests",
+  "kind": "test",
+  "priority": "medium",
+  "target_files": [
+    "src/services/analytics_service.py",
+    "tests/unit/test_analytics_service.py"
+  ],
+  "description": "Create tests/unit/test_analytics_service.py with unit tests for analytics_service methods. Add test_get_sales_revenue_report_returns_dict (calls get_sales_revenue_report, asserts isinstance(result, dict) and 'start_date' in result), test_get_sales_conversion_report_returns_dict, test_get_customer_growth_report_returns_dict, test_get_pipeline_forecast_returns_dict (calls with a pipeline_id, asserts dict return), test_get_team_performance_returns_dict. Use a fresh AnalyticsService() instance.",
+  "acceptance": "pytest tests/unit/test_analytics_service.py --collect-only shows >=5 test items; pytest tests/unit/test_analytics_service.py -v passes all; assert isinstance(result, dict) for each method.",
+  "implementation_branch": "auto/research-20260413_121947-00",
+  "implementation_commit_msg": "feat(analytics): add 9 unit tests for AnalyticsService",
+  "pr_url": "https://github.com/yihua-zhuo/agent-job/pull/9",
+  "pr_error": null
+}

@@ -1,13 +1,51 @@
 {
   "agent": "qc",
-  "status": "pass",
-  "generated_at": "2026-04-13T06:03:54.070665Z",
+  "status": "fail",
+  "generated_at": "2026-04-14T10:21:26.054215Z",
   "details": {
-    "checks": {
-      "syntax": 0,
-      "mypy": "skipped",
-      "readme": 0
+    "llm_status": "fail",
+    "llm_parsed": {
+      "status": "fail",
+      "blocking": [
+        "src/db/repositories/base.py:84-85: type[T] has no attribute __table__ (generic constraint too loose)",
+        "src/db/repositories/base.py:89: Result[Any] has no attribute rowcount (wrong type assumption)",
+        "src/db/models/pipeline_stage.py:25: Name PipelineModel is not defined (circular/forward reference)",
+        "src/db/models/pipeline.py:28: Name PipelineStageModel is not defined (circular/forward reference)",
+        "src/services/import_export_service.py:120,196,264: str passed to insert() expected TableClause",
+        "src/services/import_export_service.py:559: bytes has no attribute encode (decode?)"
+      ],
+      "non_blocking": [
+        "readme exists — docs check passes"
+      ],
+      "summary": "compileall clean. 20 mypy errors in 7 files across 4 categories: wrong generic bound in repo base (3 errors), circular import / forward reference in pipeline models (2 errors), string vs sqlalchemy TableClause in import_export_service (3 errors), bytes.encode vs decode (1 error). Quality gate fails — release not deploy-ready."
     },
-    "failing": []
+    "llm_elapsed_sec": 28.3,
+    "local": {
+      "signals": {
+        "style": {
+          "tool": "compileall",
+          "returncode": 0
+        },
+        "types": {
+          "tool": "mypy",
+          "returncode": 1,
+          "findings_tail": [
+            "src/db/repositories/base.py:84: error: \"type[T]\" has no attribute \"__table__\"  [attr-defined]",
+            "src/db/repositories/base.py:85: error: \"type[T]\" has no attribute \"__table__\"  [attr-defined]",
+            "src/db/repositories/base.py:89: error: \"Result[Any]\" has no attribute \"rowcount\"  [attr-defined]",
+            "src/db/models/pipeline_stage.py:25: error: Name \"PipelineModel\" is not defined  [name-defined]",
+            "src/db/models/pipeline.py:28: error: Name \"PipelineStageModel\" is not defined  [name-defined]",
+            "src/services/import_export_service.py:120: error: Argument 1 to \"insert\" has incompatible type \"str\"; expected \"TableClause | Join | Alias | CTE | type[Any] | Inspectable[_HasClauseElement[Any]] | _HasClauseElement[Any]\"  [arg-type]",
+            "src/services/import_export_service.py:196: error: Argument 1 to \"insert\" has incompatible type \"str\"; expected \"TableClause | Join | Alias | CTE | type[Any] | Inspectable[_HasClauseElement[Any]] | _HasClauseElement[Any]\"  [arg-type]",
+            "src/services/import_export_service.py:264: error: Argument 1 to \"insert\" has incompatible type \"str\"; expected \"TableClause | Join | Alias | CTE | type[Any] | Inspectable[_HasClauseElement[Any]] | _HasClauseElement[Any]\"  [arg-type]",
+            "src/services/import_export_service.py:559: error: \"bytes\" has no attribute \"encode\"; maybe \"decode\"?  [attr-defined]",
+            "Found 20 errors in 7 files (checked 84 source files)"
+          ]
+        },
+        "docs": {
+          "readme_exists": true
+        }
+      }
+    }
   }
 }

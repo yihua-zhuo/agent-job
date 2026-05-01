@@ -1,0 +1,68 @@
+[
+  {
+    "url": "https://openai.com/index/",
+    "category": "image",
+    "source": "OpenAI DALL-E",
+    "title_hint": "DALL-E News"
+  },
+  {
+    "url": "https://stability.ai/news",
+    "category": "image",
+    "source": "Stability AI",
+    "title_hint": "Stability News"
+  },
+  {
+    "url": "https://ideogram.ai/",
+    "category": "image",
+    "source": "Ideogram",
+    "title_hint": "Ideogram"
+  },
+  {
+    "url": "https://openai.com/sora/",
+    "category": "video",
+    "source": "OpenAI Sora",
+    "title_hint": "Sora"
+  },
+  {
+    "url": "https://klingai.com/",
+    "category": "video",
+    "source": "Kling AI",
+    "title_hint": "Kling AI"
+  },
+  {
+    "url": "https://pika.art/",
+    "category": "video",
+    "source": "Pika Labs",
+    "title_hint": "Pika"
+  },
+  {
+    "url": "https://lumalabs.ai/dream-machine",
+    "category": "video",
+    "source": "Luma Dream Machine",
+    "title_hint": "Luma"
+  },
+  {
+    "url": "https://deepmind.google/technologies/veo/",
+    "category": "video",
+    "source": "Google Veo 2",
+    "title_hint": "Veo 2"
+  },
+  {
+    "url": "https://haiper.ai/",
+    "category": "video",
+    "source": "Haiper AI",
+    "title_hint": "Haiper"
+  },
+  {
+    "url": "https://comfyspace.com/",
+    "category": "comfy",
+    "source": "ComfyUI Space",
+    "title_hint": "Workflows"
+  },
+  {
+    "url": "https://opencomfyspace.com/",
+    "category": "comfy",
+    "source": "OpenComfySpace",
+    "title_hint": "Workflows"
+  }
+]

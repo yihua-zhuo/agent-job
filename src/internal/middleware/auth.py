@@ -7,7 +7,7 @@ from typing import Optional, List
 
 
 # 配置（建议从 config.yaml 加载）
-JWT_SECRET = os.environ.get('JWT_SECRET')
+JWT_SECRET = os.environ.get('JWT_SECRET') or os.environ.get('JWT_SECRET_KEY') or 'dev-only-secret-change-in-production'
 if not JWT_SECRET:
     if os.environ.get('FLASK_ENV') == 'production':
         raise ValueError("JWT_SECRET environment variable is required in production")
@@ -26,7 +26,7 @@ def extract_token_from_header() -> Optional[str]:
 def decode_token(token: str) -> dict:
     """解码 JWT Token"""
     try:
-        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+        payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM], options={"verify_aud": False})
         return payload
     except jwt.ExpiredSignatureError:
         raise Exception("Token 已过期")

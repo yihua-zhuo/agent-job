@@ -1,0 +1,20 @@
+{
+  "task_id": "research-manual-count-by-status",
+  "created_at": "2026-04-13T10:01:34.021698Z",
+  "source": "manual",
+  "claimed_at": "2026-04-13T10:01:52.870707Z",
+  "result_path": "shared-memory/results/task-research-manual-count-by-status-result.json",
+  "title": "Add CustomerService.count_by_status for dashboards",
+  "kind": "refactor",
+  "priority": "medium",
+  "target_files": [
+    "src/services/customer_service.py",
+    "tests/unit/test_customer_service.py"
+  ],
+  "description": "Add a new method count_by_status(tenant_id: int) -> Dict[CustomerStatus, int] on CustomerService. It returns the count of customers in the given tenant grouped by CustomerStatus enum. Must filter by tenant_id (tenant_id<=0 returns empty dict for safety, matching existing tenant-isolation pattern). Use the CustomerStatus enum keys, not strings.",
+  "acceptance": "1) CustomerService.count_by_status(tenant_id) exists and returns Dict[CustomerStatus, int]. 2) count returned for each status equals the number of customers with that status for that tenant. 3) Unit test in tests/unit/test_customer_service.py creates 3 customers across 2 tenants with mixed statuses, asserts counts are correct per tenant, and asserts tenant_id=0 returns {}. 4) Full tests/unit suite still passes.",
+  "implementation_branch": "auto/research-manual-count-by-status",
+  "implementation_commit_msg": "feat(customer): add count_by_status method for dashboard use",
+  "pr_url": "https://github.com/yihua-zhuo/agent-job/pull/4",
+  "pr_error": null
+}

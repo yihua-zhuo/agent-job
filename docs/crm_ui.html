@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CRM 系统</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    [x-cloak] { display: none; }
+    .cel-shading { box-shadow: 4px 4px 0 rgba(0,0,0,0.15); }
+    .card-hover { transition: all 0.2s; }
+    .card-hover:hover { transform: translateY(-3px); box-shadow: 6px 6px 0 rgba(0,0,0,0.2); }
+    .gradient-header { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .gradient-btn { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+    .gradient-btn:hover { background: linear-gradient(135deg, #5a6fd6 0%, #6a4190 100%); }
+    .stat-card { background: linear-gradient(145deg, #ffffff 0%, #f8fafc 100%); }
+    .glass { backdrop-filter: blur(10px); background: rgba(255,255,255,0.9); }
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f1f1; }
+    ::-webkit-scrollbar-thumb { background: #c1c1c1; border-radius: 3px; }
+    ::-webkit-scrollbar-thumb:hover { background: #a1a1a1; }
+    .table-row:hover { background-color: #f8f4ff; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+
+  <!-- Login Screen -->
+  <div x-show="!auth.token" x-transition class="min-h-screen flex items-center justify-center gradient-header">
+    <div class="bg-white p-10 rounded-2xl cel-shading w-full max-w-md">
+      <div class="text-center mb-8">
+        <div class="w-16 h-16 gradient-btn rounded-2xl flex items-center justify-center mx-auto mb-4">
+          <i class="fas fa-users text-white text-2xl"></i>
+        </div>
+        <h1 class="text-3xl font-bold bg-gradient-to-r from-purple-600 to-pink-500 bg-clip-text text-transparent">CRM System</h1>
+        <p class="text-gray-400 mt-2">客户关系管理系统</p>
+      </div>
+      <div class="space-y-5">
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-2">用户名</label>
+          <div class="relative">
+            <i class="fas fa-user absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="text" x-model="loginForm.username" placeholder="输入用户名" 
+              class="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition text-lg">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-2">密码</label>
+          <div class="relative">
+            <i class="fas fa-lock absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="password" x-model="loginForm.password" placeholder="输入密码" 
+              class="w-full pl-11 pr-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none transition text-lg"
+              @keyup.enter="login">
+          </div>
+        </div>
+        <button @click="login" 
+          class="w-full gradient-btn text-white py-4 rounded-xl font-bold text-lg hover:opacity-90 transition cel-shading flex items-center justify-center gap-2">
+          <i class="fas fa-sign-in-alt"></i> 登录系统
+        </button>
+        <p x-show="error" x-text="error" class="text-red-500 text-center text-sm bg-red-50 py-2 rounded-lg"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main Dashboard -->
+  <div x-show="auth.token" x-transition>
+
+    <!-- Header -->
+    <header class="gradient-header text-white px-6 py-4 sticky top-0 z-50 glass">
+      <div class="flex justify-between items-center max-w-7xl mx-auto">
+        <div class="flex items-center gap-6">
+          <h1 class="text-xl font-bold flex items-center gap-2">
+            <i class="fas fa-users"></i> CRM
+          </h1>
+          <nav class="flex gap-1 text-sm">
+            <button @click="currentView = 'dashboard'" 
+              :class="currentView === 'dashboard' ? 'bg-white/25 font-bold' : 'hover:bg-white/10'" 
+              class="px-4 py-2 rounded-lg transition flex items-center gap-2">
+              <i class="fas fa-chart-line"></i> 仪表盘
+            </button>
+            <button @click="currentView = 'customers'" 
+              :class="currentView === 'customers' ? 'bg-white/25 font-bold' : 'hover:bg-white/10'" 
+              class="px-4 py-2 rounded-lg transition flex items-center gap-2">
+              <i class="fas fa-user-tie"></i> 客户
+            </button>
+            <button @click="currentView = 'sales'" 
+              :class="currentView === 'sales' ? 'bg-white/25 font-bold' : 'hover:bg-white/10'" 
+              class="px-4 py-2 rounded-lg transition flex items-center gap-2">
+              <i class="fas fa-dollar-sign"></i> 销售
+            </button>
+            <button @click="currentView = 'tickets'" 
+              :class="currentView === 'tickets' ? 'bg-white/25 font-bold' : 'hover:bg-white/10'" 
+              class="px-4 py-2 rounded-lg transition flex items-center gap-2">
+              <i class="fas fa-ticket-alt"></i> 工单
+            </button>
+          </nav>
+        </div>
+        <div class="flex items-center gap-4">
+          <div class="text-right">
+            <p class="text-sm font-bold" x-text="auth.username"></p>
+            <p class="text-xs text-white/60">管理员</p>
+          </div>
+          <button @click="logout" class="bg-white/20 hover:bg-white/30 px-4 py-2 rounded-lg transition text-sm">
+            <i class="fas fa-sign-out-alt"></i> 退出
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Content -->
+    <div class="max-w-7xl mx-auto px-6 py-6">
+
+      <!-- Dashboard View -->
+      <div x-show="currentView === 'dashboard'" x-cloak>
+        <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+          <i class="fas fa-chart-line text-purple-500"></i> 数据概览
+        </h2>
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-5 mb-8">
+          <div class="bg-white p-6 rounded-2xl cel-shading card-hover">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-user-tie text-blue-500 text-xl"></i>
+              </div>
+              <span class="text-xs text-green-500 bg-green-50 px-2 py-1 rounded-full">
+                <i class="fas fa-arrow-up"></i> 总数
+              </span>
+            </div>
+            <p class="text-gray-500 text-sm">客户总数</p>
+            <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.customers || 0">-</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl cel-shading card-hover">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-12 h-12 bg-pink-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-handshake text-pink-500 text-xl"></i>
+              </div>
+              <span class="text-xs text-pink-500 bg-pink-50 px-2 py-1 rounded-full">活跃</span>
+            </div>
+            <p class="text-gray-500 text-sm">销售机会</p>
+            <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.opportunities || 0">-</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl cel-shading card-hover">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-ticket-alt text-orange-500 text-xl"></i>
+              </div>
+              <span class="text-xs text-orange-500 bg-orange-50 px-2 py-1 rounded-full">进行中</span>
+            </div>
+            <p class="text-gray-500 text-sm">进行中工单</p>
+            <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.tickets || 0">-</p>
+          </div>
+          <div class="bg-white p-6 rounded-2xl cel-shading card-hover">
+            <div class="flex items-center justify-between mb-3">
+              <div class="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+                <i class="fas fa-user-plus text-green-500 text-xl"></i>
+              </div>
+              <span class="text-xs text-green-500 bg-green-50 px-2 py-1 rounded-full">本月</span>
+            </div>
+            <p class="text-gray-500 text-sm">本月新增客户</p>
+            <p class="text-3xl font-bold text-gray-800 mt-1" x-text="stats.newThisMonth || 0">-</p>
+          </div>
+        </div>
+
+        <!-- Recent Customers Preview -->
+        <div class="bg-white rounded-2xl cel-shading p-6">
+          <div class="flex justify-between items-center mb-4">
+            <h3 class="font-bold text-lg flex items-center gap-2">
+              <i class="fas fa-list text-purple-500"></i> 最新客户
+            </h3>
+            <button @click="currentView = 'customers'" class="text-purple-500 hover:underline text-sm">查看全部 →</button>
+          </div>
+          <div class="overflow-x-auto">
+            <table class="w-full text-left">
+              <thead>
+                <tr class="text-gray-400 text-sm border-b">
+                  <th class="pb-3 font-medium">名称</th>
+                  <th class="pb-3 font-medium">邮箱</th>
+                  <th class="pb-3 font-medium">状态</th>
+                  <th class="pb-3 font-medium">创建时间</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                <template x-for="c in customers.slice(0, 5)" :key="c.id">
+                  <tr class="table-row">
+                    <td class="py-3 font-medium" x-text="c.name"></td>
+                    <td class="py-3 text-gray-500" x-text="c.email || '-'"></td>
+                    <td class="py-3">
+                      <span class="px-3 py-1 rounded-full text-xs font-bold"
+                        :class="{
+                          'bg-green-100 text-green-700': c.status === 'active',
+                          'bg-blue-100 text-blue-700': c.status === 'lead',
+                          'bg-yellow-100 text-yellow-700': c.status === 'inactive',
+                          'bg-purple-100 text-purple-700': c.status === 'prospect'
+                        }" x-text="statusLabel(c.status)"></span>
+                    </td>
+                    <td class="py-3 text-gray-400 text-sm" x-text="formatDate(c.created_at)"></td>
+                  </tr>
+                </template>
+                <tr x-show="customers.length === 0">
+                  <td colspan="4" class="py-8 text-center text-gray-400">
+                    <i class="fas fa-inbox text-4xl mb-2"></i>
+                    <p>暂无数据</p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Customers View -->
+      <div x-show="currentView === 'customers'" x-cloak>
+        <div class="flex justify-between items-center mb-6">
+          <h2 class="text-2xl font-bold flex items-center gap-2">
+            <i class="fas fa-user-tie text-blue-500"></i> 客户管理
+          </h2>
+          <button @click="openCustomerModal()" 
+            class="gradient-btn text-white px-6 py-3 rounded-xl font-bold hover:opacity-90 transition cel-shading flex items-center gap-2">
+            <i class="fas fa-plus"></i> 新建客户
+          </button>
+        </div>
+
+        <!-- Search & Filter -->
+        <div class="bg-white p-4 rounded-2xl cel-shading mb-6 flex gap-4 flex-wrap items-center">
+          <div class="relative flex-1 min-w-64">
+            <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400"></i>
+            <input type="text" x-model="customerSearch" @input="debounceSearch()" placeholder="搜索客户名称..." 
+              class="w-full pl-11 pr-4 py-2.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+          </div>
+          <select x-model="customerStatus" @change="loadCustomers()" 
+            class="px-4 py-2.5 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none text-gray-600">
+            <option value="">全部状态</option>
+            <option value="active">活跃</option>
+            <option value="lead">线索</option>
+            <option value="prospect">潜在</option>
+            <option value="inactive">非活跃</option>
+          </select>
+          <button @click="loadCustomers()" class="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-xl transition">
+            <i class="fas fa-sync-alt text-gray-500"></i>
+          </button>
+        </div>
+
+        <!-- Table -->
+        <div class="bg-white rounded-2xl cel-shading overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">名称</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">邮箱</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">电话</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">公司</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">状态</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">创建时间</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">操作</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                <template x-for="c in customers" :key="c.id">
+                  <tr class="table-row">
+                    <td class="px-6 py-4">
+                      <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 gradient-btn rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                          <span x-text="c.name?.charAt(0)?.toUpperCase()"></span>
+                        </div>
+                        <span class="font-medium" x-text="c.name"></span>
+                      </div>
+                    </td>
+                    <td class="px-6 py-4 text-gray-500" x-text="c.email || '-'"></td>
+                    <td class="px-6 py-4 text-gray-500" x-text="c.phone || '-'"></td>
+                    <td class="px-6 py-4 text-gray-500" x-text="c.company || '-'"></td>
+                    <td class="px-6 py-4">
+                      <span class="px-3 py-1 rounded-full text-xs font-bold"
+                        :class="{
+                          'bg-green-100 text-green-700': c.status === 'active',
+                          'bg-blue-100 text-blue-700': c.status === 'lead',
+                          'bg-yellow-100 text-yellow-700': c.status === 'inactive',
+                          'bg-purple-100 text-purple-700': c.status === 'prospect'
+                        }" x-text="statusLabel(c.status)"></span>
+                    </td>
+                    <td class="px-6 py-4 text-gray-400 text-sm" x-text="formatDate(c.created_at)"></td>
+                    <td class="px-6 py-4">
+                      <div class="flex gap-2">
+                        <button @click="openCustomerModal(c)" class="text-blue-500 hover:bg-blue-50 px-3 py-1.5 rounded-lg transition text-sm">
+                          <i class="fas fa-edit"></i>
+                        </button>
+                        <button @click="deleteCustomer(c.id)" class="text-red-500 hover:bg-red-50 px-3 py-1.5 rounded-lg transition text-sm">
+                          <i class="fas fa-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </template>
+              </tbody>
+            </table>
+          </div>
+          <div x-show="customers.length === 0" class="py-16 text-center">
+            <i class="fas fa-inbox text-5xl text-gray-300 mb-3"></i>
+            <p class="text-gray-400">暂无客户数据</p>
+            <button @click="openCustomerModal()" class="mt-3 text-purple-500 hover:underline">创建第一个客户</button>
+          </div>
+        </div>
+
+        <!-- Pagination -->
+        <div x-show="customers.length > 0" class="flex justify-center gap-2 mt-6">
+          <button @click="customerPage > 1 && (customerPage--, loadCustomers())" 
+            :disabled="customerPage <= 1"
+            class="px-5 py-2 rounded-xl border-2 border-gray-200 hover:border-purple-500 transition disabled:opacity-40 disabled:cursor-not-allowed">
+            <i class="fas fa-chevron-left"></i>
+          </button>
+          <span class="px-5 py-2 bg-purple-500 text-white rounded-xl font-bold" x-text="customerPage"></span>
+          <button @click="customerPage++, loadCustomers()" 
+            class="px-5 py-2 rounded-xl border-2 border-gray-200 hover:border-purple-500 transition">
+            <i class="fas fa-chevron-right"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Sales View -->
+      <div x-show="currentView === 'sales'" x-cloak>
+        <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+          <i class="fas fa-dollar-sign text-green-500"></i> 销售管道
+        </h2>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-5">
+          <template x-for="stage in salesStages" :key="stage.id">
+            <div class="bg-white p-5 rounded-2xl cel-shading">
+              <div class="flex justify-between items-center mb-4">
+                <h3 class="font-bold flex items-center gap-2">
+                  <span class="w-3 h-3 rounded-full" :class="stage.color"></span>
+                  <span x-text="stage.name"></span>
+                </h3>
+                <span class="bg-gray-100 text-gray-600 px-2.5 py-0.5 rounded-full text-xs font-bold" x-text="getStageCount(stage.id)"></span>
+              </div>
+              <div class="space-y-3 min-h-48">
+                <template x-for="opp in getOpportunitiesByStage(stage.id)" :key="opp.id">
+                  <div class="bg-gray-50 p-3 rounded-xl border-l-4 hover:shadow-md transition cursor-pointer"
+                    :style="'border-color:' + stage.color.replace('bg-','')">
+                    <p class="font-medium text-sm" x-text="opp.name"></p>
+                    <p class="text-xs text-gray-500 mt-1 flex justify-between">
+                      <span x-text="opp.customer_name || '-'"></span>
+                      <span class="font-bold text-green-600" x-text="'¥' + ((opp.amount || 0)/1000).toFixed(0) + 'k'"></span>
+                    </p>
+                  </div>
+                </template>
+                <div x-show="getStageCount(stage.id) === 0" class="text-center text-gray-300 py-8">
+                  <i class="fas fa-inbox text-2xl"></i>
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+
+      <!-- Tickets View -->
+      <div x-show="currentView === 'tickets'" x-cloak>
+        <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
+          <i class="fas fa-ticket-alt text-orange-500"></i> 工单管理
+        </h2>
+        <div class="bg-white rounded-2xl cel-shading overflow-hidden">
+          <div class="overflow-x-auto">
+            <table class="w-full">
+              <thead class="bg-gray-50">
+                <tr>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">ID</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">标题</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">状态</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">优先级</th>
+                  <th class="px-6 py-4 text-left text-sm font-bold text-gray-500">创建时间</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y">
+                <template x-for="ticket in tickets" :key="ticket.id">
+                  <tr class="table-row">
+                    <td class="px-6 py-4 text-gray-400 font-mono" x-text="'#' + ticket.id"></td>
+                    <td class="px-6 py-4 font-medium" x-text="ticket.title"></td>
+                    <td class="px-6 py-4">
+                      <span class="px-3 py-1 rounded-full text-xs font-bold"
+                        :class="{
+                          'bg-blue-100 text-blue-700': ticket.status === 'open',
+                          'bg-yellow-100 text-yellow-700': ticket.status === 'pending',
+                          'bg-green-100 text-green-700': ticket.status === 'resolved',
+                          'bg-red-100 text-red-700': ticket.status === 'closed'
+                        }" x-text="statusLabel(ticket.status)"></span>
+                    </td>
+                    <td class="px-6 py-4">
+                      <span class="px-3 py-1 rounded-full text-xs font-bold"
+                        :class="{
+                          'bg-red-100 text-red-700': ticket.priority === 'high',
+                          'bg-yellow-100 text-yellow-700': ticket.priority === 'medium',
+                          'bg-gray-100 text-gray-600': ticket.priority === 'low'
+                        }" x-text="priorityLabel(ticket.priority)"></span>
+                    </td>
+                    <td class="px-6 py-4 text-gray-400 text-sm" x-text="formatDate(ticket.created_at)"></td>
+                  </tr>
+                </template>
+                <tr x-show="tickets.length === 0">
+                  <td colspan="5" class="py-12 text-center text-gray-400">
+                    <i class="fas fa-check-circle text-4xl text-green-300 mb-2"></i>
+                    <p>暂无工单</p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Customer Modal -->
+  <div x-show="showCustomerModal" x-transition.opacity class="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" x-cloak>
+    <div class="bg-white rounded-2xl cel-shading w-full max-w-lg p-8">
+      <div class="flex justify-between items-center mb-6">
+        <h3 class="text-xl font-bold" x-text="editingCustomer ? '编辑客户' : '新建客户'"></h3>
+        <button @click="showCustomerModal = false" class="text-gray-400 hover:text-gray-600">
+          <i class="fas fa-times text-xl"></i>
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1.5">客户名称 *</label>
+          <input type="text" x-model="customerForm.name" placeholder="输入客户名称"
+            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+        </div>
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1.5">邮箱</label>
+            <input type="email" x-model="customerForm.email" placeholder="email@example.com"
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-gray-600 mb-1.5">电话</label>
+            <input type="tel" x-model="customerForm.phone" placeholder="+86 xxx xxxx xxxx"
+              class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1.5">公司</label>
+          <input type="text" x-model="customerForm.company" placeholder="公司名称"
+            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-gray-600 mb-1.5">状态</label>
+          <select x-model="customerForm.status"
+            class="w-full px-4 py-3 border-2 border-gray-200 rounded-xl focus:border-purple-500 focus:outline-none">
+            <option value="lead">线索</option>
+            <option value="prospect">潜在客户</option>
+            <option value="active">活跃客户</option>
+            <option value="inactive">非活跃客户</option>
+          </select>
+        </div>
+      </div>
+      <div class="flex justify-end gap-3 mt-8">
+        <button @click="showCustomerModal = false" class="px-6 py-3 border-2 border-gray-200 rounded-xl hover:border-gray-300 transition font-medium">取消</button>
+        <button @click="saveCustomer" class="px-8 py-3 gradient-btn text-white rounded-xl font-bold hover:opacity-90 transition">保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div x-show="toast.show" x-transition.origin.bottom.right
+    class="fixed bottom-6 right-6 bg-gray-800 text-white px-6 py-3 rounded-xl cel-shading font-medium shadow-lg flex items-center gap-2">
+    <i class="fas fa-check-circle text-green-400"></i>
+    <span x-text="toast.message"></span>
+  </div>
+
+  <script>
+    const API_BASE = window.location.protocol + '//' + window.location.host;
+
+    function crmApp() {
+      return {
+        currentView: 'dashboard',
+        auth: { token: localStorage.getItem('crm_token'), username: localStorage.getItem('crm_username') || '' },
+        loginForm: { username: '', password: '' },
+        error: '',
+        customers: [],
+        opportunities: [],
+        tickets: [],
+        stats: {},
+        salesStages: [
+          { id: 'new', name: '新线索', color: 'bg-blue-400' },
+          { id: 'qualified', name: '已 Qualified', color: 'bg-purple-400' },
+          { id: 'proposal', name: '方案/报价', color: 'bg-orange-400' },
+          { id: 'negotiation', name: '谈判中', color: 'bg-yellow-400' },
+          { id: 'closed_won', name: '成交', color: 'bg-green-400' },
+          { id: 'closed_lost', name: '流失', color: 'bg-red-400' }
+        ],
+        customerSearch: '',
+        customerStatus: '',
+        customerPage: 1,
+        showCustomerModal: false,
+        editingCustomer: null,
+        customerForm: { name: '', email: '', phone: '', company: '', status: 'lead' },
+        toast: { show: false, message: '' },
+
+        async login() {
+          try {
+            const res = await fetch(`${API_BASE}/api/auth/login`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(this.loginForm)
+            });
+            const data = await res.json();
+            if (data.code === 200) {
+              this.auth.token = data.data.token;
+              this.auth.username = this.loginForm.username;
+              localStorage.setItem('crm_token', data.data.token);
+              localStorage.setItem('crm_username', this.loginForm.username);
+              this.loadDashboard();
+            } else {
+              this.error = data.message || '登录失败';
+            }
+          } catch (e) {
+            this.error = '无法连接到服务器';
+          }
+        },
+
+        logout() {
+          this.auth.token = null;
+          this.auth.username = '';
+          localStorage.removeItem('crm_token');
+          localStorage.removeItem('crm_username');
+          this.currentView = 'dashboard';
+          this.customers = [];
+          this.opportunities = [];
+          this.tickets = [];
+          this.stats = {};
+        },
+
+        async api(endpoint, options = {}) {
+          const headers = { 'Content-Type': 'application/json' };
+          if (this.auth.token) headers['Authorization'] = `Bearer ${this.auth.token}`;
+          const res = await fetch(`${API_BASE}${endpoint}`, { ...options, headers });
+          return res.json();
+        },
+
+        async loadDashboard() {
+          this.currentView = 'dashboard';
+          const data = await this.api('/api/v1/customers?page=1&page_size=1');
+          this.stats.customers = data.data?.total || 0;
+          this.stats.opportunities = 0;
+          this.stats.tickets = 0;
+          this.stats.newThisMonth = 0;
+          await this.loadCustomers();
+          await this.loadSales();
+          await this.loadTickets();
+        },
+
+        async loadCustomers() {
+          const params = new URLSearchParams({ page: this.customerPage, page_size: 20 });
+          if (this.customerSearch) params.set('search', this.customerSearch);
+          if (this.customerStatus) params.set('status', this.customerStatus);
+          const data = await this.api(`/api/v1/customers?${params}`);
+          if (data.data?.items) {
+            this.customers = data.data.items;
+          } else if (data.data) {
+            this.customers = [data.data];
+          } else {
+            this.customers = [];
+          }
+        },
+
+        async loadSales() {
+          const data = await this.api('/api/v1/pipelines');
+          if (data.data?.items) {
+            this.opportunities = data.data.items;
+          } else {
+            this.opportunities = [];
+          }
+        },
+
+        async loadTickets() {
+          const data = await this.api('/api/v1/tickets?page=1&page_size=50');
+          if (data.data?.items) {
+            this.tickets = data.data.items;
+          } else {
+            this.tickets = [];
+          }
+        },
+
+        openCustomerModal(customer = null) {
+          this.editingCustomer = customer;
+          if (customer) {
+            this.customerForm = { ...customer };
+          } else {
+            this.customerForm = { name: '', email: '', phone: '', company: '', status: 'lead' };
+          }
+          this.showCustomerModal = true;
+        },
+
+        async saveCustomer() {
+          if (!this.customerForm.name?.trim()) {
+            this.showToast('客户名称不能为空', 'error');
+            return;
+          }
+          const method = this.editingCustomer ? 'PUT' : 'POST';
+          const url = this.editingCustomer ? `/api/v1/customers/${this.editingCustomer.id}` : '/api/v1/customers';
+          await this.api(url, { method, body: JSON.stringify(this.customerForm) });
+          this.showCustomerModal = false;
+          this.loadCustomers();
+          this.showToast(this.editingCustomer ? '客户已更新' : '客户已创建');
+        },
+
+        async deleteCustomer(id) {
+          if (!confirm('确定要删除这个客户吗？此操作不可撤销。')) return;
+          await this.api(`/api/v1/customers/${id}`, { method: 'DELETE' });
+          this.loadCustomers();
+          this.showToast('客户已删除');
+        },
+
+        getStageCount(stageId) {
+          return this.opportunities.filter(o => o.stage === stageId).length;
+        },
+
+        getOpportunitiesByStage(stageId) {
+          return this.opportunities.filter(o => o.stage === stageId);
+        },
+
+        statusLabel(status) {
+          const labels = { active: '活跃', lead: '线索', prospect: '潜在', inactive: '非活跃', open: '开启', pending: '处理中', resolved: '已解决', closed: '已关闭' };
+          return labels[status] || status || '-';
+        },
+
+        priorityLabel(priority) {
+          const labels = { high: '高', medium: '中', low: '低' };
+          return labels[priority] || priority || '-';
+        },
+
+        formatDate(dateStr) {
+          if (!dateStr) return '-';
+          const d = new Date(dateStr);
+          return d.toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' });
+        },
+
+        showToast(msg, type = 'success') {
+          this.toast.message = msg;
+          this.toast.show = true;
+          setTimeout(() => this.toast.show = false, 3000);
+        },
+
+        debounceSearch() {
+          clearTimeout(this._searchTimer);
+          this._searchTimer = setTimeout(() => this.loadCustomers(), 400);
+        }
+      };
+    }
+  </script>
+</body>
+</html>

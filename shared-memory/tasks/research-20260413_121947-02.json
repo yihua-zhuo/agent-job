@@ -1,0 +1,18 @@
+{
+  "task_id": "research-20260413_121947-02",
+  "created_at": "2026-04-13T12:19:47.204760Z",
+  "source": "research",
+  "claimed_at": "2026-04-13T12:25:18.167233Z",
+  "result_path": "shared-memory/results/task-research-20260413_121947-02-result.json",
+  "title": "Add notification_service.get_unread_count unit test",
+  "kind": "test",
+  "priority": "low",
+  "target_files": [
+    "src/services/notification_service.py",
+    "tests/unit/test_notification_service.py"
+  ],
+  "description": "Add test_get_unread_count to tests/unit/test_notification_service.py. Calls notification_service.send_notification to create 3 notifications for a user, then calls get_unread_count(user_id) and asserts it returns 3. Then calls mark_as_read on one and asserts count decreases to 2.",
+  "acceptance": "pytest tests/unit/test_notification_service.py -v -k get_unread_count passes; assert notification_service.get_unread_count(user_id) == 3 after 3 sends.",
+  "implementation_obsolete": true,
+  "obsolete_reason": "deferred while DB migration is in flight; will revisit after Task 1+"
+}

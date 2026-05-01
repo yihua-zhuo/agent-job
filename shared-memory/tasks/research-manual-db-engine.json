@@ -1,0 +1,22 @@
+{
+  "task_id": "research-manual-db-engine",
+  "created_at": "2026-04-13T12:30:00Z",
+  "source": "manual",
+  "claimed_at": "2026-04-13T12:26:15.636549Z",
+  "result_path": "shared-memory/results/task-research-manual-db-engine-result.json",
+  "title": "Add SQLAlchemy engine/session/Base infra in src/internal/db/ (Supabase-only)",
+  "kind": "refactor",
+  "priority": "medium",
+  "target_files": [
+    "src/internal/db/__init__.py",
+    "src/internal/db/engine.py",
+    "tests/unit/conftest.py",
+    "tests/unit/test_db_engine.py"
+  ],
+  "description": "Step 1 of services-to-database migration (deps PR #8 already merged). Add src/internal/db/engine.py providing: create_engine_from_env() that reads DATABASE_URL from os.environ and FAILS FAST with ValueError if unset (no sqlite fallback - schema in sql/001_schema.sql is Postgres-specific); returns Engine with pool_pre_ping=True and pool_size=5. SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False). Base = declarative_base() (or class Base(DeclarativeBase)). session_scope() context manager: yields a Session, commits on normal exit, rolls back on exception, closes always. Add src/internal/db/__init__.py re-exporting engine, SessionLocal, Base, session_scope, create_engine_from_env. Add tests/unit/conftest.py that loads .env via dotenv.find_dotenv (so DATABASE_URL propagates) AND defines a db_session fixture using the connection-transaction-rollback pattern: open a connection on engine, begin a transaction, bind a SessionLocal to that connection, yield the session, then roll back the transaction on teardown - guarantees zero pollution to Supabase. Add tests/unit/test_db_engine.py with four tests: test_create_engine_requires_url (monkeypatch DATABASE_URL out of env, expect ValueError), test_engine_can_select_one (using db_session fixture, run SELECT 1, assert returns 1), test_session_scope_rollback_on_exception (insert then raise inside session_scope; verify row not present after - use a temp table created+dropped within the same test), test_base_is_declarative (Base has metadata attribute and is a class).",
+  "acceptance": "1) src/internal/db/engine.py exports create_engine_from_env, SessionLocal, Base, session_scope. 2) create_engine_from_env() raises ValueError when DATABASE_URL is unset. 3) tests/unit/conftest.py defines a db_session fixture using transaction rollback (no rows committed to Supabase). 4) tests/unit/test_db_engine.py has test_create_engine_requires_url, test_engine_can_select_one, test_session_scope_rollback_on_exception, test_base_is_declarative - all four pass. 5) pytest tests/unit/test_db_engine.py -v passes against the real Supabase DB. 6) Importing engine, SessionLocal, Base, session_scope, create_engine_from_env from src.internal.db succeeds. 7) Net diff under 250 lines.",
+  "implementation_branch": "auto/research-manual-db-engine",
+  "implementation_commit_msg": "feat(db): add SQLAlchemy engine/session/Base infrastructure",
+  "pr_url": "https://github.com/yihua-zhuo/agent-job/pull/10",
+  "pr_error": null
+}

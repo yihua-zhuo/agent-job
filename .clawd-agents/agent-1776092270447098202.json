@@ -1,0 +1,40 @@
+{
+  "agentId": "agent-1776092270447098202",
+  "name": "fix-sync-test-methods",
+  "description": "Fix sync test methods",
+  "subagentType": "general-purpose",
+  "model": "claude-opus-4-6",
+  "status": "failed",
+  "outputFile": "/home/node/.openclaw/workspace/dev-agent-system/.clawd-agents/agent-1776092270447098202.md",
+  "manifestFile": "/home/node/.openclaw/workspace/dev-agent-system/.clawd-agents/agent-1776092270447098202.json",
+  "createdAt": "1776092270",
+  "startedAt": "1776092270",
+  "completedAt": "1776092273",
+  "laneEvents": [
+    {
+      "event": "lane.started",
+      "status": "running",
+      "emittedAt": "1776092273"
+    },
+    {
+      "event": "lane.blocked",
+      "status": "blocked",
+      "emittedAt": "1776092273",
+      "failureClass": "infra",
+      "detail": "context_window_blocked for claude-opus-4-6: estimated input 759482 + requested output 32000 = 791482 tokens exceeds the 200000-token context window; compact the session or reduce request size before retrying"
+    },
+    {
+      "event": "lane.failed",
+      "status": "failed",
+      "emittedAt": "1776092273",
+      "failureClass": "infra",
+      "detail": "context_window_blocked for claude-opus-4-6: estimated input 759482 + requested output 32000 = 791482 tokens exceeds the 200000-token context window; compact the session or reduce request size before retrying"
+    }
+  ],
+  "currentBlocker": {
+    "failureClass": "infra",
+    "detail": "context_window_blocked for claude-opus-4-6: estimated input 759482 + requested output 32000 = 791482 tokens exceeds the 200000-token context window; compact the session or reduce request size before retrying"
+  },
+  "derivedState": "truly_idle",
+  "error": "context_window_blocked for claude-opus-4-6: estimated input 759482 + requested output 32000 = 791482 tokens exceeds the 200000-token context window; compact the session or reduce request size before retrying"
+}

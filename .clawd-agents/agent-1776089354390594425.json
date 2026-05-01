@@ -1,0 +1,46 @@
+{
+  "agentId": "agent-1776089354390594425",
+  "name": "rewrite-activity-analytics-marke",
+  "description": "Rewrite activity + analytics + marketing services with PostgreSQL",
+  "subagentType": "Agent",
+  "model": "claude-opus-4-6",
+  "status": "completed",
+  "outputFile": "/home/node/.openclaw/workspace/dev-agent-system/.clawd-agents/agent-1776089354390594425.md",
+  "manifestFile": "/home/node/.openclaw/workspace/dev-agent-system/.clawd-agents/agent-1776089354390594425.json",
+  "createdAt": "1776089354",
+  "startedAt": "1776089354",
+  "completedAt": "1776089654",
+  "laneEvents": [
+    {
+      "event": "lane.started",
+      "status": "running",
+      "emittedAt": "1776089354"
+    },
+    {
+      "event": "lane.finished",
+      "status": "completed",
+      "emittedAt": "1776089654",
+      "detail": "All 6 files pass Python syntax checks. Here's a summary of everything written:\n---\n## Files Created\n| File | Contents |\n- All 9 public methods + `_scope` are now `async def`\n- Uses `async with get_db_session()` and `text(...)` for every DB call\n- `_scope()` returns a SQL `WHERE` snippet scoped to `tenant_id`\n- All enum values, Chinese error messages, and return types are unchanged\n- All dashboard and report methods are now `async def`\n- `create_dashboard / get_dashboard / update_dashboard / list_dashboards / add_widget / remove_widget` → PostgreSQL `dashboards` table\n- `create_report / get_report / update_report / list_reports / run_report` → PostgreSQL `reports` table\n- Report generation helpers (`get_sales_revenue_report`, etc.) remain synchronous pure-Python as they have no DB dependency\n- All Chinese messages preserved\n- All campaign/event methods are now `async def`\n- `create_campaign / get_campaign / update_campaign / delete_campaign / list_campaigns / launch_campaign / pause_campaign` → PostgreSQL `campaigns` table\n- `record_event / get_campaign_events / get_user_events` → PostgreSQL `campaign_events` table\n- `get_campaign_stats` reads counters directly from DB",
+      "data": {
+        "artifactProvenance": {
+          "files": [
+            "activity.py",
+            "analytics.py",
+            "marketing.py",
+            "src/services/activity_service.py",
+            "src/services/analytics_service.py",
+            "src/services/marketing_service.py"
+          ],
+          "sourceLanes": [
+            "rewrite-activity-analytics-marke"
+          ]
+        },
+        "qualityFloorApplied": false,
+        "rawSummary": "All 6 files pass Python syntax checks. Here's a summary of everything written:\n\n---\n\n## Files Created\n\n### ORM Models (new — `src/db/models/`)\n| File | Contents |\n|------|----------|\n| `activity.py` | `ActivityModel` → `activities` table (id, tenant_id, customer_id, opportunity_id, type, content, created_by, created_at) |\n| `marketing.py` | `CampaignModel` → `campaigns` table; `CampaignEventModel` → `campaign_events` table |\n| `analytics.py` | `DashboardModel` → `dashboards` table; `ReportModel` → `reports` table |\n\n---\n\n## Files Rewritten\n\n### `src/services/activity_service.py`\n- All 9 public methods + `_scope` are now `async def`\n- Uses `async with get_db_session()` and `text(...)` for every DB call\n- `_scope()` returns a SQL `WHERE` snippet scoped to `tenant_id`\n- All enum values, Chinese error messages, and return types are unchanged\n\n### `src/services/analytics_service.py`\n- All dashboard and report methods are now `async def`\n- `create_dashboard / get_dashboard / update_dashboard / list_dashboards / add_widget / remove_widget` → PostgreSQL `dashboards` table\n- `create_report / get_report / update_report / list_reports / run_report` → PostgreSQL `reports` table\n- Report generation helpers (`get_sales_revenue_report`, etc.) remain synchronous pure-Python as they have no DB dependency\n- All Chinese messages preserved\n\n### `src/services/marketing_service.py`\n- All campaign/event methods are now `async def`\n- `create_campaign / get_campaign / update_campaign / delete_campaign / list_campaigns / launch_campaign / pause_campaign` → PostgreSQL `campaigns` table\n- `record_event / get_campaign_events / get_user_events` → PostgreSQL `campaign_events` table\n- `get_campaign_stats` reads counters directly from DB\n- `add_audience / trigger_campaign / get_campaign_by_trigger` implemented on top of DB\n- All `CampaignStatus`, `CampaignType`, `TriggerType` enum values and Chinese messages preserved",
+        "reasons": [],
+        "wordCount": 269
+      }
+    }
+  ],
+  "derivedState": "finished_cleanable"
+}

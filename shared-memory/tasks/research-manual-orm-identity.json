@@ -1,0 +1,17 @@
+{
+  "task_id": "research-manual-orm-identity",
+  "created_at": "2026-04-13T12:50:00Z",
+  "source": "manual",
+  "claimed_at": "2026-04-13T12:44:54.489321Z",
+  "result_path": "shared-memory/results/task-research-manual-orm-identity-result.json",
+  "title": "ORM models batch 1 — identity tables (tenants, users, roles, permissions)",
+  "kind": "refactor",
+  "priority": "medium",
+  "target_files": [
+    "src/internal/db/models/__init__.py",
+    "src/internal/db/models/identity.py",
+    "tests/unit/test_db_models_identity.py"
+  ],
+  "description": "Step 2 of services-to-database migration. Read sql/001_schema.sql (lines 18-208 cover the identity batch) for ground truth on column names, types, and constraints. Add SQLAlchemy ORM model classes for these 8 tables in src/internal/db/models/identity.py, all subclassing src.internal.db.Base: Tenant (table 'tenants'), Organization (table 'organizations'), Department (table 'departments'), User (table 'users'), Role (table 'roles'), Permission (table 'permissions'), RolePermission (table 'role_permissions'), UserRole (table 'user_roles'). Use Postgres-compatible SQLAlchemy types: BigInteger for BIGINT PKs and FKs, String(N) for VARCHAR(N), Text for unbounded strings, Integer for INT, SmallInteger for TINYINT, DateTime for DATETIME/TIMESTAMP, JSON (SQLAlchemy generic, becomes JSONB on pg) for JSON columns. Map snake_case column names exactly as the schema declares (id, tenant_id, name, code, status, settings, deleted_at, created_at, updated_at, etc.). Mark id as primary_key=True; set nullable=True/False to match NULL/NOT NULL in schema. Provide string FK declarations using SQLAlchemy ForeignKey('users.id') style for at minimum: organizations.parent_id, departments.org_id, departments.parent_id, departments.leader_id, users.dept_id, role_permissions.role_id, role_permissions.permission_id, user_roles.user_id, user_roles.role_id. Skip relationships() and indexes for now — keep this PR focused on column declarations only. Add src/internal/db/models/__init__.py that re-exports all 8 model classes. Add tests/unit/test_db_models_identity.py with at least these tests, ALL using metadata-inspection only (no Engine/Session calls — keeps the test fast and independent of Supabase availability): test_all_models_import (each of 8 classes is importable), test_tablenames (each model.__tablename__ matches expected), test_primary_keys (each model has exactly one primary_key column named 'id'), test_tenant_scoped_models_have_tenant_id (Tenant excluded; Organization/Department/User/Role/Permission have tenant_id column), test_user_table_has_email_column (str-typed, not nullable), test_user_roles_fk_targets (UserRole has FK to users.id and roles.id).",
+  "acceptance": "1) src/internal/db/models/identity.py defines 8 classes: Tenant, Organization, Department, User, Role, Permission, RolePermission, UserRole — each subclasses Base from src.internal.db. 2) src/internal/db/models/__init__.py re-exports all 8. 3) Importing all 8 from src.internal.db.models succeeds without DATABASE_URL touching. 4) test_db_models_identity.py contains test_all_models_import, test_tablenames, test_primary_keys, test_tenant_scoped_models_have_tenant_id, test_user_table_has_email_column, test_user_roles_fk_targets — all pass. 5) Each model.__tablename__ matches the SQL schema name exactly (snake_case plural). 6) pytest tests/unit/test_db_models_identity.py -v passes. 7) Net diff under 400 lines."
+}

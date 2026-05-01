@@ -1,0 +1,18 @@
+{
+  "task_id": "roadmap-db-migration-13-archive-legacy-sql",
+  "created_at": "2026-04-13T13:11:00Z",
+  "source": "roadmap",
+  "claimed_at": null,
+  "result_path": null,
+  "title": "MANUAL: archive legacy MySQL sql/001_schema.sql after Alembic is canonical",
+  "kind": "docs",
+  "priority": "high",
+  "target_files": [
+    "src/internal/db/MIGRATION_NOTES.md"
+  ],
+  "description": "MANUAL human task. Depends on roadmap-db-migration-12-alembic-init being merged AND `alembic upgrade head` confirmed against Supabase. Once Alembic is the source of truth for schema, sql/001_schema.sql is dead code in MySQL syntax that Postgres cannot apply. Two acceptable outcomes — the human picks one: (a) MOVE sql/001_schema.sql to sql/legacy/001_schema.sql.mysql.bak with a header comment 'LEGACY — superseded by alembic in src/internal/db/migrations/. Kept for reference only.' OR (b) DELETE the file outright. Either way, also create a short src/internal/db/MIGRATION_NOTES.md (this IS in the bot allowlist) explaining: schema is now declared in src/internal/db/models/*.py; migrations live in src/internal/db/migrations/versions/; new schema changes follow `alembic revision --autogenerate -m '<desc>' && alembic upgrade head`; the original MySQL file is archived/removed. The bot CANNOT do this task because sql/ is outside the implementer allowlist — file is here only to keep the roadmap honest about the final cleanup step.",
+  "acceptance": "MANUAL — verify by hand: 1) sql/001_schema.sql is moved to sql/legacy/ with .mysql.bak suffix OR deleted; assert via `git log --diff-filter=D -- sql/001_schema.sql` returns at least one commit. 2) src/internal/db/MIGRATION_NOTES.md exists and contains the words 'alembic' and 'migrations' (assert via grep). 3) git log shows the file rename/deletion as a separate commit, not bundled into a feature PR.",
+  "roadmap": "db-migration",
+  "roadmap_index": 13,
+  "roadmap_total": 13
+}

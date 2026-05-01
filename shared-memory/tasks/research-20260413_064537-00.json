@@ -1,0 +1,17 @@
+{
+  "task_id": "research-20260413_064537-00",
+  "created_at": "2026-04-13T06:45:37.759886Z",
+  "source": "research",
+  "claimed_at": "2026-04-13T06:46:19.188948Z",
+  "result_path": "shared-memory/results/task-research-20260413_064537-00-result.json",
+  "title": "Restore broken CI/CD pipeline stages",
+  "kind": "bugfix",
+  "priority": "high",
+  "target_files": [
+    ".github/workflows/",
+    "pyproject.toml",
+    "pytest.ini"
+  ],
+  "description": "All four pipeline stages (test, code-review, qc, deploy) are missing. Set up GitHub Actions workflows or CI configuration to invoke the test, code-review, qc, and deploy agents on every push to master/develop.",
+  "acceptance": "Pipeline runs successfully on next push and all four stages report status"
+}

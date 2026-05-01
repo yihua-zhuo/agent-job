@@ -1,0 +1,24 @@
+{
+  "task_id": "roadmap-db-migration-07-orm-batch3-marketing-activity",
+  "created_at": "2026-04-13T12:53:00Z",
+  "source": "roadmap",
+  "claimed_at": null,
+  "result_path": null,
+  "title": "ORM models batch 3 — marketing, activity & ticket tables (19 tables)",
+  "kind": "refactor",
+  "priority": "medium",
+  "target_files": [
+    "src/internal/db/models/__init__.py",
+    "src/internal/db/models/marketing.py",
+    "src/internal/db/models/activity.py",
+    "src/internal/db/models/ticket.py",
+    "tests/unit/test_db_models_marketing.py",
+    "tests/unit/test_db_models_activity.py",
+    "tests/unit/test_db_models_ticket.py"
+  ],
+  "description": "Add SQLAlchemy ORM model classes for 19 marketing/activity/ticket tables from sql/001_schema.sql sections 4 and 5 and 6 (lines 858-1180, 1190-1460, 1468-1600). marketing.py: Campaign, CampaignMember, EmailTemplate, EmailSend, EmailEvent, SmsSend, MarketingSegment, SegmentFilter (8). activity.py: Activity, ActivityType, Task, TaskComment, Meeting, CallLog, EmailLog, Reminder, CalendarEvent, EventAttendee (10). ticket.py: Ticket, TicketComment, TicketStatusHistory, TicketSla, TicketAssignment (5). Total 23 tables in batch 3. All subclass src.internal.db.Base. No relationships(). No indexes(). Depends on roadmap-db-migration-06-orm-batch2-customers-sales.",
+  "acceptance": "src/internal/db/models/marketing.py has 8 classes; activity.py has 10 classes; ticket.py has 5 classes; __init__.py re-exports all 23; test files each have 5 tests; pytest tests/unit/test_db_models_marketing.py tests/unit/test_db_models_activity.py tests/unit/test_db_models_ticket.py -v all pass; net diff under 400 lines",
+  "roadmap": "db-migration",
+  "roadmap_index": 7,
+  "roadmap_total": 11
+}

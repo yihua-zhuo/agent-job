@@ -1,0 +1,18 @@
+{
+  "task_id": "research-manual-list-by-owner",
+  "created_at": "2026-04-13T11:50:00.000000Z",
+  "source": "manual",
+  "claimed_at": "2026-04-13T12:37:02.730473Z",
+  "result_path": null,
+  "title": "Add CustomerService.list_by_owner for owner-scoped customer queries",
+  "kind": "test",
+  "priority": "medium",
+  "target_files": [
+    "src/services/customer_service.py",
+    "tests/unit/test_customer_service.py"
+  ],
+  "description": "Add a new method list_by_owner(owner_id: int, tenant_id: int) -> ApiResponse on CustomerService. It returns all customers assigned to the given owner_id, scoped to tenant_id. tenant_id <= 0 returns empty items list for safety. The response data should be a dict with 'owner_id' and 'items' keys.",
+  "acceptance": "1) CustomerService.list_by_owner(owner_id, tenant_id) exists and returns ApiResponse. 2) Result data is a dict with keys 'owner_id' and 'items'. 3) tenant_id <= 0 returns empty items list. 4) Unit tests: test_list_by_owner_basic (owner with 2 customers, asserts set of names), test_list_by_owner_empty (no match returns []), test_list_by_owner_wrong_tenant (tenant isolation). 5) Full tests/unit suite still passes.",
+  "implementation_obsolete": true,
+  "obsolete_reason": "deferred while DB migration is in flight; will revisit after Task 1+"
+}

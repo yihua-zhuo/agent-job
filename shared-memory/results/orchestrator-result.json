@@ -1,10 +1,10 @@
 {
   "agent": "orchestrator",
-  "status": "pass",
-  "generated_at": "2026-04-13T06:03:54.071155Z",
+  "status": "fail",
+  "generated_at": "2026-04-14T02:01:45.469944Z",
   "details": {
-    "report_id": "task_20260413_060354",
-    "generated_at": "2026-04-13T06:03:54.070946Z",
+    "report_id": "task_20260414_020145",
+    "generated_at": "2026-04-14T02:01:45.460422Z",
     "ran": [
       "test",
       "code-review",
@@ -13,8 +13,9 @@
     "summary": {
       "test": "pass",
       "code-review": "pass",
-      "qc": "pass"
+      "qc": "fail"
     },
-    "recommendation": "deploy"
+    "recommendation": "fix-and-retry",
+    "llm_reason": "qc stage is failing (mypy 20 type errors in 7 files); test and code-review are green but quality gate blocks deployment"
   }
 }

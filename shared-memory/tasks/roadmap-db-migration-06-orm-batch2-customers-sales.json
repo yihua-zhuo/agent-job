@@ -1,0 +1,22 @@
+{
+  "task_id": "roadmap-db-migration-06-orm-batch2-customers-sales",
+  "created_at": "2026-04-13T12:53:00Z",
+  "source": "roadmap",
+  "claimed_at": null,
+  "result_path": null,
+  "title": "ORM models batch 2 — customer & sales tables (16 tables)",
+  "kind": "refactor",
+  "priority": "medium",
+  "target_files": [
+    "src/internal/db/models/__init__.py",
+    "src/internal/db/models/customer.py",
+    "src/internal/db/models/sales.py",
+    "tests/unit/test_db_models_customer.py",
+    "tests/unit/test_db_models_sales.py"
+  ],
+  "description": "Add SQLAlchemy ORM model classes for 16 customer/sales tables from sql/001_schema.sql sections 2 and 3 (lines 208-780). customer.py: Customer, CustomerContact, CustomerAddress, CustomerTag, Tag, CustomerOwnerHistory, CustomerMergeLog, CustomerFollower, CustomerCustomField, CustomerFieldValue. sales.py: Lead, LeadSource, LeadAssignment, Opportunity, OpportunityStage, OpportunityStageHistory, OpportunityProduct, Quote, QuoteItem, Contract. All subclass src.internal.db.Base. No relationships(). No indexes(). String FK using ForeignKey('table.id'). Depends on roadmap-db-migration-02-orm-batch1-identity already landed (src/internal/db/engine.py and Base must already exist).",
+  "acceptance": "src/internal/db/models/customer.py imports 10 classes; src/internal/db/models/sales.py imports 10 classes; src/internal/db/models/__init__.py re-exports all 20; test_db_models_customer.py has 5 tests (test_all_import, test_tablenames, test_primary_keys, test_tenant_scoped, test_fks); test_db_models_sales.py has 5 tests; pytest tests/unit/test_db_models_customer.py tests/unit/test_db_models_sales.py -v all pass; net diff under 400 lines",
+  "roadmap": "db-migration",
+  "roadmap_index": 6,
+  "roadmap_total": 11
+}
