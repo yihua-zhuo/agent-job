@@ -12,8 +12,7 @@ class Settings(BaseSettings):
 
     # Database
     database_url: str = Field(
-        default="postgresql+asyncpg://postgres:postgres@localhost:5432/postgres",
-        description="Async DB connection string",
+        description="Async DB connection string (postgresql+asyncpg://...)",
     )
     database_pool_size: int = Field(default=5, ge=1)
     database_max_overflow: int = Field(default=10, ge=0)
