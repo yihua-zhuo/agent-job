@@ -324,7 +324,7 @@ class TestSalesServiceIntegration:
         uid = await _seed_user(async_session, tenant_id)
         result = await sales_svc.create_opportunity(
             tenant_id=tenant_id,
-            data={"name": "Big Deal", "customer_id": cid, "pipeline_id": pid, "amount": "50000", "stage": "qualification", "owner_id": uid},
+            data={"name": "Big Deal", "customer_id": cid, "pipeline_id": pid, "amount": "50000", "stage": "qualified", "owner_id": uid},
         )
         assert result.status == ResponseStatus.SUCCESS
         oid = result.data["id"]
@@ -363,9 +363,9 @@ class TestSalesServiceIntegration:
         )
         oid = created.data["id"]
 
-        changed = await sales_svc.change_stage(tenant_id, oid, "qualification")
+        changed = await sales_svc.change_stage(tenant_id, oid, "qualified")
         assert changed.status == ResponseStatus.SUCCESS
-        assert changed.data["stage"] == "qualification"
+        assert changed.data["stage"] == "qualified"
 
     async def test_list_opportunities(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
