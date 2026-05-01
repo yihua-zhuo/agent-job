@@ -9,7 +9,12 @@ Services import `get_db_session` at module load time by name:
 so we monkey-patch that attribute on every service module (not just on
 db.connection) so the services transparently use the test DB session.
 """
-from __future__ import annotations
+from dotenv import load_dotenv
+from pathlib import Path
+
+# Load .env so DATABASE_URL is available at module load time.
+_dotenv_path = Path(__file__).resolve().parents[2] / ".env"
+load_dotenv(_dotenv_path)
 
 import asyncio
 import contextlib
@@ -18,7 +23,6 @@ import os
 import pkgutil
 import random
 import sys
-from pathlib import Path
 from typing import AsyncGenerator, Generator
 
 # Ensure src/ is on sys.path so top-level package imports resolve
