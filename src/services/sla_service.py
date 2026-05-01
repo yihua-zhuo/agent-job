@@ -3,15 +3,16 @@ from datetime import datetime, timedelta, UTC
 from typing import List, Literal, Optional
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
 from models.ticket import Ticket, SLALevel, SLA_CONFIGS
 
 
 class SLAService:
     """SLA管理"""
 
-    def __init__(self, ticket_service=None):
+    def __init__(self, session: AsyncSession, ticket_service=None):
+        self.session = session
         self._ticket_service = ticket_service
 
     async def check_sla_status(
@@ -47,8 +48,8 @@ class SLAService:
     ) -> List[Ticket]:
         """获取所有超时的工单（按租户隔离）"""
         now = datetime.now(UTC)
-        async with get_db_session() as session:
-            result = await session.execute(
+        async with self.session:
+            result = await self.session.execute(
                 text(
                     """
                     SELECT id, subject, description, status, priority, channel,

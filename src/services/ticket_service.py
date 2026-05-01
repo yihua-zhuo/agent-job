@@ -10,7 +10,6 @@ from typing import Optional, List, Dict
 from sqlalchemy import select, update, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
 from db.models.ticket import TicketModel
 from db.models.ticket_reply import TicketReplyModel
 from models.ticket import (
@@ -66,7 +65,8 @@ def _row_to_reply(row: TicketReplyModel) -> TicketReply:
 # ---------------------------------------------------------------------------
 
 class TicketService:
-    def __init__(self) -> None:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
         # Agent pool – kept as instance state (not persisted to DB) to preserve
         # the original round-robin auto_assign behaviour.
         self._agent_pool: List[int] = [1, 2, 3]
@@ -116,7 +116,7 @@ class TicketService:
         sla_config = SLA_CONFIGS[sla_level]
         response_deadline = now + timedelta(hours=sla_config.first_response_hours)
 
-        async with get_db_session() as session:
+        async with self.session:
             row = TicketModel(
                 tenant_id=tenant_id,
                 subject=subject,
@@ -133,8 +133,8 @@ class TicketService:
                 created_at=now,
                 updated_at=now,
             )
-            session.add(row)
-            await session.flush()  # populate row.id before commit
+            self.session.add(row)
+            await self.session.flush()  # populate row.id before commit
 
             ticket = _row_to_ticket(row)
 
@@ -143,8 +143,8 @@ class TicketService:
         if assigned_to is None and ticket.id is not None:
             await self.auto_assign(ticket.id, tenant_id=tenant_id)
             # Re-fetch to get the assigned_to value set by auto_assign.
-            async with get_db_session() as session:
-                updated_row = await self._fetch_ticket(session, ticket.id, tenant_id)
+            async with self.session:
+                updated_row = await self._fetch_ticket(self.session, ticket.id, tenant_id)
                 if updated_row is not None:
                     ticket = _row_to_ticket(updated_row)
 
@@ -152,8 +152,8 @@ class TicketService:
 
     async def get_ticket(self, ticket_id: int, tenant_id: int = 0) -> ApiResponse[Ticket]:
         """获取工单"""
-        async with get_db_session() as session:
-            row = await self._fetch_ticket(session, ticket_id, tenant_id)
+        async with self.session:
+            row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
         if row is None:
             return ApiResponse.error(message='工单不存在', code=1404)
         return ApiResponse.success(data=_row_to_ticket(row))
@@ -174,8 +174,8 @@ class TicketService:
         _updatable = {'subject', 'description', 'status', 'priority',
                       'channel', 'assigned_to', 'sla_level', 'tags'}
 
-        async with get_db_session() as session:
-            row = await self._fetch_ticket(session, ticket_id, tenant_id)
+        async with self.session:
+            row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
             if row is None:
                 return ApiResponse.error(message='工单不存在', code=1404)
 
@@ -209,8 +209,8 @@ class TicketService:
         tenant_id: int = 0,
     ) -> ApiResponse[TicketReply]:
         """添加回复"""
-        async with get_db_session() as session:
-            ticket_row = await self._fetch_ticket(session, ticket_id, tenant_id)
+        async with self.session:
+            ticket_row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
             if ticket_row is None:
                 return ApiResponse.error(message='工单不存在', code=1404)
 
@@ -223,14 +223,14 @@ class TicketService:
                 created_by=created_by,
                 created_at=now,
             )
-            session.add(reply_row)
+            self.session.add(reply_row)
 
             # 更新 first_response_at（首次回复时间）
             if not ticket_row.first_response_at and not is_internal:
                 ticket_row.first_response_at = now
                 ticket_row.updated_at = now
 
-            await session.flush()
+            await self.session.flush()
             reply = _row_to_reply(reply_row)
 
         return ApiResponse.success(data=reply, message='回复添加成功')
@@ -239,8 +239,8 @@ class TicketService:
         self, ticket_id: int, new_status: TicketStatus, tenant_id: int = 0
     ) -> ApiResponse[Ticket]:
         """改变状态"""
-        async with get_db_session() as session:
-            row = await self._fetch_ticket(session, ticket_id, tenant_id)
+        async with self.session:
+            row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
             if row is None:
                 return ApiResponse.error(message='工单不存在', code=1404)
 
@@ -260,13 +260,13 @@ class TicketService:
         self, customer_id: int, tenant_id: int = 0
     ) -> List[Ticket]:
         """获取客户的所有工单"""
-        async with get_db_session() as session:
+        async with self.session:
             stmt = select(TicketModel).where(TicketModel.customer_id == customer_id)
             if tenant_id:
                 stmt = stmt.where(
                     or_(TicketModel.tenant_id == tenant_id)
                 )
-            result = await session.execute(stmt)
+            result = await self.session.execute(stmt)
             rows = result.scalars().all()
 
         return [_row_to_ticket(r) for r in rows]
@@ -281,7 +281,7 @@ class TicketService:
         tenant_id: int = 0,
     ) -> ApiResponse[PaginatedData[Ticket]]:
         """工单列表"""
-        async with get_db_session() as session:
+        async with self.session:
             stmt = select(TicketModel)
             if tenant_id:
                 stmt = stmt.where(
@@ -296,7 +296,7 @@ class TicketService:
 
             # Total count
             count_stmt = select(func.count()).select_from(stmt.subquery())
-            total: int = (await session.execute(count_stmt)).scalar_one()
+            total: int = (await self.session.execute(count_stmt)).scalar_one()
 
             # Paginated results, ordered by created_at DESC
             stmt = (
@@ -304,7 +304,7 @@ class TicketService:
                 .offset((page - 1) * page_size)
                 .limit(page_size)
             )
-            result = await session.execute(stmt)
+            result = await self.session.execute(stmt)
             rows = result.scalars().all()
 
         items = [_row_to_ticket(r) for r in rows]
@@ -319,7 +319,7 @@ class TicketService:
     async def get_sla_breaches(self, tenant_id: int = 0) -> List[Ticket]:
         """获取SLA超时的工单"""
         now = datetime.now(UTC)
-        async with get_db_session() as session:
+        async with self.session:
             stmt = select(TicketModel).where(
                 and_(
                     TicketModel.response_deadline < now,
@@ -330,15 +330,15 @@ class TicketService:
                 stmt = stmt.where(
                     or_(TicketModel.tenant_id == tenant_id)
                 )
-            result = await session.execute(stmt)
+            result = await self.session.execute(stmt)
             rows = result.scalars().all()
 
         return [_row_to_ticket(r) for r in rows]
 
     async def auto_assign(self, ticket_id: int, tenant_id: int = 0) -> ApiResponse[Dict]:
         """自动分配客服"""
-        async with get_db_session() as session:
-            row = await self._fetch_ticket(session, ticket_id, tenant_id)
+        async with self.session:
+            row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
             if row is None:
                 return ApiResponse.error(message='工单不存在', code=1404)
             if row.assigned_to is not None:

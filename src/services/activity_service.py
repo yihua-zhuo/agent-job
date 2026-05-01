@@ -4,7 +4,7 @@ from typing import List, Dict, Optional
 
 from models.activity import Activity, ActivityType
 from models.response import ApiResponse, PaginatedData
-from db.connection import get_db_session
+from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.activity import ActivityModel
 from sqlalchemy import text
 
@@ -12,10 +12,10 @@ from sqlalchemy import text
 class ActivityService:
     """活动记录服务"""
 
-    def __init__(self):
-        pass  # No local state needed; all data lives in the DB.
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
-    async def _scope(self, session, tenant_id: int) -> str:
+    async def _scope(self, tenant_id: int) -> str:
         """Return a SQL WHERE clause snippet scoped to tenant_id."""
         if tenant_id and tenant_id > 0:
             return "tenant_id = :tenant_id"
@@ -80,10 +80,9 @@ class ActivityService:
         }
 
         try:
-            async with get_db_session() as session:
-                result = await session.execute(sql, params)
+            async with self.session:
+                result = await self.session.execute(sql, params)
                 row = result.fetchone()
-                # commit is handled by get_db_session context manager
                 activity = self._row_to_activity(row)
                 return ApiResponse.success(data=activity, message="活动记录创建成功")
         except Exception as e:
@@ -91,7 +90,7 @@ class ActivityService:
 
     async def get_activity(self, activity_id: int, tenant_id: int = 0) -> ApiResponse[Activity]:
         """获取活动详情"""
-        scope = await self._scope(None, tenant_id)
+        scope = await self._scope(tenant_id)
         sql = text(
             f"""
             SELECT id, tenant_id, customer_id, opportunity_id, type, content, created_by, created_at
@@ -100,8 +99,8 @@ class ActivityService:
             """
         )
         try:
-            async with get_db_session() as session:
-                result = await session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
+            async with self.session:
+                result = await self.session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
                 row = result.fetchone()
                 if not row:
                     return ApiResponse.error(message="活动记录不存在", code=1404)
@@ -114,7 +113,7 @@ class ActivityService:
         self, activity_id: int, tenant_id: int = 0, **kwargs
     ) -> ApiResponse[Activity]:
         """更新活动"""
-        scope = await self._scope(None, tenant_id)
+        scope = await self._scope(tenant_id)
 
         # First verify the record exists
         check_sql = text(
@@ -125,8 +124,8 @@ class ActivityService:
             """
         )
         try:
-            async with get_db_session() as session:
-                result = await session.execute(check_sql, {"activity_id": activity_id, "tenant_id": tenant_id})
+            async with self.session:
+                result = await self.session.execute(check_sql, {"activity_id": activity_id, "tenant_id": tenant_id})
                 row = result.fetchone()
                 if not row:
                     return ApiResponse.error(message="活动记录不存在", code=1404)
@@ -161,7 +160,7 @@ class ActivityService:
                     RETURNING id, tenant_id, customer_id, opportunity_id, type, content, created_by, created_at
                     """
                 )
-                result = await session.execute(update_sql, params)
+                result = await self.session.execute(update_sql, params)
                 updated_row = result.fetchone()
                 activity = self._row_to_activity(updated_row)
                 return ApiResponse.success(data=activity, message="活动记录更新成功")
@@ -170,7 +169,7 @@ class ActivityService:
 
     async def delete_activity(self, activity_id: int, tenant_id: int = 0) -> ApiResponse[Dict]:
         """删除活动"""
-        scope = await self._scope(None, tenant_id)
+        scope = await self._scope(tenant_id)
         sql = text(
             f"""
             DELETE FROM activities
@@ -179,8 +178,8 @@ class ActivityService:
             """
         )
         try:
-            async with get_db_session() as session:
-                result = await session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
+            async with self.session:
+                result = await self.session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
                 row = result.fetchone()
                 if not row:
                     return ApiResponse.error(message="活动记录不存在", code=1404)
@@ -197,7 +196,7 @@ class ActivityService:
         tenant_id: int = 0,
     ) -> ApiResponse[PaginatedData[Activity]]:
         """活动列表"""
-        scope = await self._scope(None, tenant_id)
+        scope = await self._scope(tenant_id)
         conditions = [scope]
         params: dict = {"tenant_id": tenant_id}
 
@@ -214,9 +213,9 @@ class ActivityService:
         offset_val = (page - 1) * page_size
 
         try:
-            async with get_db_session() as session:
+            async with self.session:
                 # Total count
-                count_result = await session.execute(count_sql, params)
+                count_result = await self.session.execute(count_sql, params)
                 count_row = count_result.fetchone()
                 total = int(count_row[0]) if count_row else 0
 
@@ -232,7 +231,7 @@ class ActivityService:
                 )
                 params["page_size"] = page_size
                 params["offset"] = offset_val
-                rows_result = await session.execute(list_sql, params)
+                rows_result = await self.session.execute(list_sql, params)
                 rows = rows_result.fetchall()
 
                 items = [self._row_to_activity(row) for row in rows]
@@ -250,7 +249,7 @@ class ActivityService:
         self, customer_id: int, limit: int = 50, tenant_id: int = 0
     ) -> ApiResponse[List[Dict]]:
         """获取客户的所有活动"""
-        scope = await self._scope(None, tenant_id)
+        scope = await self._scope(tenant_id)
         sql = text(
             f"""
             SELECT id, tenant_id, customer_id, opportunity_id, type, content, created_by, created_at
@@ -261,8 +260,8 @@ class ActivityService:
             """
         )
         try:
-            async with get_db_session() as session:
-                result = await session.execute(sql, {"customer_id": customer_id, "limit": limit, "tenant_id": tenant_id})
+            async with self.session:
+                result = await self.session.execute(sql, {"customer_id": customer_id, "limit": limit, "tenant_id": tenant_id})
                 rows = result.fetchall()
                 return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
         except Exception as e:
@@ -272,7 +271,7 @@ class ActivityService:
         self, opportunity_id: int, tenant_id: int = 0
     ) -> ApiResponse[List[Dict]]:
         """获取商机的所有活动"""
-        scope = await self._scope(None, tenant_id)
+        scope = await self._scope(tenant_id)
         sql = text(
             f"""
             SELECT id, tenant_id, customer_id, opportunity_id, type, content, created_by, created_at
@@ -282,8 +281,8 @@ class ActivityService:
             """
         )
         try:
-            async with get_db_session() as session:
-                result = await session.execute(sql, {"opportunity_id": opportunity_id, "tenant_id": tenant_id})
+            async with self.session:
+                result = await self.session.execute(sql, {"opportunity_id": opportunity_id, "tenant_id": tenant_id})
                 rows = result.fetchall()
                 return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
         except Exception as e:
@@ -293,7 +292,7 @@ class ActivityService:
         self, keyword: str, filters: Optional[Dict] = None, tenant_id: int = 0
     ) -> ApiResponse[List[Dict]]:
         """搜索活动"""
-        scope = await self._scope(None, tenant_id)
+        scope = await self._scope(tenant_id)
         conditions = [scope, "LOWER(content) LIKE LOWER(:keyword)"]
         params: dict = {"keyword": f"%{keyword}%", "tenant_id": tenant_id}
 
@@ -321,8 +320,8 @@ class ActivityService:
             """
         )
         try:
-            async with get_db_session() as session:
-                result = await session.execute(sql, params)
+            async with self.session:
+                result = await self.session.execute(sql, params)
                 rows = result.fetchall()
                 return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
         except Exception as e:
@@ -336,7 +335,7 @@ class ActivityService:
         tenant_id: int = 0,
     ) -> ApiResponse[Dict]:
         """获取活动摘要"""
-        scope = await self._scope(None, tenant_id)
+        scope = await self._scope(tenant_id)
         conditions = [scope, "customer_id = :customer_id"]
         params: dict = {"customer_id": customer_id, "tenant_id": tenant_id}
 
@@ -357,8 +356,8 @@ class ActivityService:
             """
         )
         try:
-            async with get_db_session() as session:
-                result = await session.execute(sql, params)
+            async with self.session:
+                result = await self.session.execute(sql, params)
                 rows = result.fetchall()
 
                 activities = [self._row_to_activity(row) for row in rows]
