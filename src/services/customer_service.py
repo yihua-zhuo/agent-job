@@ -28,8 +28,6 @@ class CustomerService:
     via Depends(get_db) dependency injection).
     """
 
-    __init__: "classmethod"
-
     def __init__(self, session: "AsyncSession"):
         self.session = session
 
@@ -481,12 +479,12 @@ class CustomerService:
 
         counts: Dict[CustomerStatus, int] = {}
         for row in rows:
-            status_str = row["status"]
+            status_str = row._mapping["status"]
             try:
                 cs = CustomerStatus(status_str)
             except ValueError:
                 cs = CustomerStatus.LEAD
-            counts[cs] = row["cnt"]
+            counts[cs] = row._mapping["cnt"]
 
         return counts
 
