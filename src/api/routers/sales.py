@@ -120,9 +120,10 @@ async def list_pipelines(
     service = SalesService(session)
     resp = await service.list_pipelines(ctx.tenant_id)
     items = [PipelineData.model_validate(p) for p in resp.data["items"]]
+    total = resp.data.get("total", len(items))
     return PipelineListResponse(
         message=resp.message,
-        data=PipelineListData(items=items, total=resp.data["total"]),
+        data=PipelineListData(items=items, total=total),
     )
 
 

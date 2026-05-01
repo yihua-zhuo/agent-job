@@ -65,17 +65,6 @@ class CustomerData(BaseModel):
     updated_at: Optional[datetime] = None
 
 
-class CustomerSearchData(BaseModel):
-    """Non-paginated search result data field."""
-    keyword: str
-    items: List[CustomerData]
-
-
-class CustomerSearchResponse(SuccessEnvelope):
-    """GET /search — keyword search without pagination."""
-    data: CustomerSearchData
-
-
 class CustomerListData(BaseModel):
     """Paginated customer list data field."""
     items: List[CustomerData]
@@ -93,7 +82,7 @@ class CustomerResponse(SuccessEnvelope):
 
 
 class CustomerListResponse(SuccessEnvelope):
-    """GET /customers — paginated customer list."""
+    """GET /customers · GET /search — paginated customer list."""
     data: CustomerListData
 
 
@@ -145,6 +134,7 @@ class PipelineData(BaseModel):
     stages: List[str]
     is_default: bool
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class PipelineListData(BaseModel):
@@ -196,7 +186,7 @@ class OpportunityData(BaseModel):
     customer_id: int
     pipeline_id: int
     stage: str
-    amount: float = Field(..., ge=0)
+    amount: str
     probability: int = Field(..., ge=0, le=100)
     expected_close_date: Optional[str] = None
     owner_id: int

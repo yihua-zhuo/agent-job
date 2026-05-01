@@ -255,7 +255,20 @@ class CustomerService:
         rows = result.fetchall()
 
         items = [self._row_to_dict(row._mapping) for row in rows]
-        return ApiResponse.success(data={"keyword": keyword, "items": items}, message="")
+        total = len(items)
+
+        return ApiResponse.success(
+            data={
+                "items": items,
+                "total": total,
+                "page": 1,
+                "page_size": total,
+                "total_pages": 1,
+                "has_next": False,
+                "has_prev": False,
+            },
+            message=""
+        )
 
     # ------------------------------------------------------------------
     # add_tag
