@@ -1,19 +1,8 @@
 """User model for CRM system."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Optional
-
-
-class Role(Enum):
-    """User role enumeration (alias for UserRole)."""
-    ADMIN = "admin"
-    MANAGER = "manager"
-    SALES = "sales"
-    SUPPORT = "support"
-    USER = "user"
-    GUEST = "guest"
-    VIEWER = "viewer"
 
 
 class UserRole(Enum):
@@ -48,8 +37,8 @@ class User:
     status: UserStatus = UserStatus.PENDING
     bio: Optional[str] = None
     tags: list = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Initialize default values after dataclass initialization."""
@@ -64,9 +53,9 @@ class User:
         if self.tags is None:
             self.tags = []
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
         if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+            self.updated_at = datetime.now(UTC)
 
     @property
     def is_active(self) -> bool:
@@ -124,13 +113,13 @@ class User:
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.utcnow()
+            created_at = datetime.now(UTC)
 
         updated_at = data.get('updated_at')
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at)
         elif updated_at is None:
-            updated_at = datetime.utcnow()
+            updated_at = datetime.now(UTC)
 
         status_value = data.get('status')
         if isinstance(status_value, str):

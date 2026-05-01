@@ -20,11 +20,16 @@ from utils.file_helper import FileHelper
 # mappings. Keeps SQL building type-safe enough for pylint and SQLAlchemy.
 _customers_t = table(
     "customers",
-    column("id"), column("tenant_id"), column("status"), column("company"),
+    column("id"), column("tenant_id"), column("name"), column("email"),
+    column("phone"), column("company"), column("status"), column("owner_id"),
+    column("tags"), column("created_at"), column("updated_at"),
 )
 _opportunities_t = table(
     "opportunities",
-    column("id"), column("tenant_id"), column("stage"), column("pipeline_id"),
+    column("id"), column("tenant_id"), column("customer_id"), column("name"),
+    column("stage"), column("amount"), column("probability"),
+    column("expected_close_date"), column("owner_id"), column("pipeline_id"),
+    column("created_at"), column("updated_at"),
 )
 
 
@@ -117,7 +122,10 @@ class ImportExportService:
             # Persist to DB
             async with get_db_session() as session:
                 for row in data:
-                    stmt = pg_insert("customers").values(
+                    tags_val = row.get("tags", [])
+                    # Serialize tags list as JSON string for asyncpg compatibility
+                    tags_str = json.dumps(tags_val) if isinstance(tags_val, list) else tags_val
+                    stmt = pg_insert(_customers_t).values(
                         tenant_id=tenant_id,
                         name=row["name"],
                         email=row.get("email", ""),
@@ -125,7 +133,7 @@ class ImportExportService:
                         company=row.get("company", ""),
                         status=row.get("status", "lead"),
                         owner_id=owner_id or row.get("owner_id", 0),
-                        tags=row.get("tags", []),
+                        tags=tags_str,
                         created_at=datetime.now(),
                         updated_at=datetime.now(),
                     )
@@ -193,7 +201,7 @@ class ImportExportService:
                     elif expected_close is None:
                         expected_close = datetime.now()
 
-                    stmt = pg_insert("opportunities").values(
+                    stmt = pg_insert(_opportunities_t).values(
                         tenant_id=tenant_id,
                         customer_id=int(row["customer_id"]),
                         name=row["name"],
@@ -261,7 +269,9 @@ class ImportExportService:
             # Persist leads as customers with status "lead"
             async with get_db_session() as session:
                 for row in data:
-                    stmt = pg_insert("customers").values(
+                    tags_val = row.get("tags", [])
+                    tags_str = json.dumps(tags_val) if isinstance(tags_val, list) else tags_val
+                    stmt = pg_insert(_customers_t).values(
                         tenant_id=tenant_id,
                         name=row["name"],
                         email=row.get("email", ""),
@@ -269,7 +279,7 @@ class ImportExportService:
                         company=row.get("company", ""),
                         status="lead",
                         owner_id=owner_id or row.get("owner_id", 0),
-                        tags=row.get("tags", []),
+                        tags=tags_str,
                         created_at=datetime.now(),
                         updated_at=datetime.now(),
                     )
@@ -553,9 +563,9 @@ class ImportExportService:
                 return self.file_helper.write_excel(data, "Data")
             return b""
         elif file_format == self.FORMAT_JSON:
-            return json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8")
+            return json.dumps(data, ensure_ascii=False, indent=2, default=str).encode("utf-8")
         elif file_format == self.FORMAT_PDF:
             # Synchronous – run in executor if needed in production
-            return self._generate_simple_pdf({"details": data}, "导出数据").encode("utf-8")
+            return self._generate_simple_pdf({"details": data}, "导出数据")
         else:
             raise ValueError(f"不支持的导出格式: {file_format}")

@@ -1,5 +1,5 @@
 """Activity service for CRM system — async SQLAlchemy implementation."""
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import List, Dict, Optional
 
 from models.activity import Activity, ActivityType
@@ -18,7 +18,7 @@ class ActivityService:
     async def _scope(self, session, tenant_id: int) -> str:
         """Return a SQL WHERE clause snippet scoped to tenant_id."""
         if tenant_id and tenant_id > 0:
-            return f"tenant_id = {tenant_id}"
+            return "tenant_id = :tenant_id"
         return "1=1"
 
     # ------------------------------------------------------------------
@@ -58,7 +58,7 @@ class ActivityService:
             return ApiResponse.error(message=f"创建活动记录失败: {str(e)}", code=1001)
 
         opportunity_id = kwargs.get("opportunity_id")
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(UTC)
 
         sql = text(
             """
@@ -101,7 +101,7 @@ class ActivityService:
         )
         try:
             async with get_db_session() as session:
-                result = await session.execute(sql, {"activity_id": activity_id})
+                result = await session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
                 row = result.fetchone()
                 if not row:
                     return ApiResponse.error(message="活动记录不存在", code=1404)
@@ -126,7 +126,7 @@ class ActivityService:
         )
         try:
             async with get_db_session() as session:
-                result = await session.execute(check_sql, {"activity_id": activity_id})
+                result = await session.execute(check_sql, {"activity_id": activity_id, "tenant_id": tenant_id})
                 row = result.fetchone()
                 if not row:
                     return ApiResponse.error(message="活动记录不存在", code=1404)
@@ -180,7 +180,7 @@ class ActivityService:
         )
         try:
             async with get_db_session() as session:
-                result = await session.execute(sql, {"activity_id": activity_id})
+                result = await session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
                 row = result.fetchone()
                 if not row:
                     return ApiResponse.error(message="活动记录不存在", code=1404)
@@ -199,7 +199,7 @@ class ActivityService:
         """活动列表"""
         scope = await self._scope(None, tenant_id)
         conditions = [scope]
-        params: dict = {}
+        params: dict = {"tenant_id": tenant_id}
 
         if customer_id is not None:
             conditions.append("customer_id = :customer_id")
@@ -248,7 +248,7 @@ class ActivityService:
 
     async def get_customer_activities(
         self, customer_id: int, limit: int = 50, tenant_id: int = 0
-    ) -> List[Dict]:
+    ) -> ApiResponse[List[Dict]]:
         """获取客户的所有活动"""
         scope = await self._scope(None, tenant_id)
         sql = text(
@@ -262,15 +262,15 @@ class ActivityService:
         )
         try:
             async with get_db_session() as session:
-                result = await session.execute(sql, {"customer_id": customer_id, "limit": limit})
+                result = await session.execute(sql, {"customer_id": customer_id, "limit": limit, "tenant_id": tenant_id})
                 rows = result.fetchall()
-                return [self._row_to_activity(row).to_dict() for row in rows]
-        except Exception:
-            return []
+                return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
+        except Exception as e:
+            return ApiResponse.error(message=f"获取客户活动失败: {str(e)}", code=1001)
 
     async def get_opportunity_activities(
         self, opportunity_id: int, tenant_id: int = 0
-    ) -> List[Dict]:
+    ) -> ApiResponse[List[Dict]]:
         """获取商机的所有活动"""
         scope = await self._scope(None, tenant_id)
         sql = text(
@@ -283,19 +283,19 @@ class ActivityService:
         )
         try:
             async with get_db_session() as session:
-                result = await session.execute(sql, {"opportunity_id": opportunity_id})
+                result = await session.execute(sql, {"opportunity_id": opportunity_id, "tenant_id": tenant_id})
                 rows = result.fetchall()
-                return [self._row_to_activity(row).to_dict() for row in rows]
-        except Exception:
-            return []
+                return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
+        except Exception as e:
+            return ApiResponse.error(message=f"获取商机活动失败: {str(e)}", code=1001)
 
     async def search_activities(
         self, keyword: str, filters: Optional[Dict] = None, tenant_id: int = 0
-    ) -> List[Dict]:
+    ) -> ApiResponse[List[Dict]]:
         """搜索活动"""
         scope = await self._scope(None, tenant_id)
         conditions = [scope, "LOWER(content) LIKE LOWER(:keyword)"]
-        params: dict = {"keyword": f"%{keyword}%"}
+        params: dict = {"keyword": f"%{keyword}%", "tenant_id": tenant_id}
 
         if filters:
             if "customer_id" in filters:
@@ -324,9 +324,9 @@ class ActivityService:
             async with get_db_session() as session:
                 result = await session.execute(sql, params)
                 rows = result.fetchall()
-                return [self._row_to_activity(row).to_dict() for row in rows]
-        except Exception:
-            return []
+                return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
+        except Exception as e:
+            return ApiResponse.error(message=f"搜索活动失败: {str(e)}", code=1001)
 
     async def get_activity_summary(
         self,
@@ -338,7 +338,7 @@ class ActivityService:
         """获取活动摘要"""
         scope = await self._scope(None, tenant_id)
         conditions = [scope, "customer_id = :customer_id"]
-        params: dict = {"customer_id": customer_id}
+        params: dict = {"customer_id": customer_id, "tenant_id": tenant_id}
 
         if start_date:
             conditions.append("created_at >= :start_date")

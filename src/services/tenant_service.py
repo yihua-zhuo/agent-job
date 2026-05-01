@@ -1,6 +1,6 @@
 """租户管理服务 - async PostgreSQL via SQLAlchemy."""
 from typing import Dict, List, Optional, Any
-from datetime import datetime
+from datetime import datetime, UTC
 import json
 
 from sqlalchemy import text, func
@@ -15,7 +15,7 @@ class TenantService:
     async def create_tenant(self, name: str, plan: str, admin_email: str = None, **kwargs) -> ApiResponse[Dict]:
         """创建租户（公司）"""
         async with get_db_session() as session:
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             settings = kwargs.get("settings", {})
             settings_json = json.dumps(settings) if isinstance(settings, dict) else settings
             result = await session.execute(
@@ -77,7 +77,7 @@ class TenantService:
                 return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
 
             set_clauses.append("updated_at = :now")
-            params["now"] = datetime.utcnow()
+            params["now"] = datetime.now(UTC)
 
             sql = text(
                 f"UPDATE tenants SET {', '.join(set_clauses)} "
@@ -139,7 +139,7 @@ class TenantService:
     async def delete_tenant(self, tenant_id: int) -> ApiResponse[Dict]:
         """删除租户（软删除）"""
         async with get_db_session() as session:
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             result = await session.execute(
                 text(
                     """

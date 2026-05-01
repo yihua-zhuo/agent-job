@@ -1,6 +1,6 @@
 """Activity model for CRM system."""
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, UTC
 from enum import Enum
 from typing import Optional
 
@@ -23,7 +23,7 @@ class Activity:
     id: Optional[int] = None
     tenant_id: int = 0
     opportunity_id: Optional[int] = None
-    created_at: datetime = field(default_factory=datetime.utcnow)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __post_init__(self) -> None:
         """Initialize default values after dataclass initialization."""
@@ -32,7 +32,7 @@ class Activity:
         if self.opportunity_id is None:
             self.opportunity_id = None
         if self.created_at is None:
-            self.created_at = datetime.utcnow()
+            self.created_at = datetime.now(UTC)
 
     def to_dict(self) -> dict:
         """Convert activity to dictionary representation."""
@@ -60,7 +60,7 @@ class Activity:
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.utcnow()
+            created_at = datetime.now(UTC)
 
         return cls(
             id=data.get('id'),

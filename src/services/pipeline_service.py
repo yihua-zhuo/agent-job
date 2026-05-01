@@ -1,5 +1,5 @@
 """Pipeline service layer - handles pipeline and stage CRUD via PostgreSQL/SQLAlchemy async."""
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Optional, List
 
 from sqlalchemy import select, update, delete, func, text
@@ -38,7 +38,7 @@ class PipelineService:
             if existing.scalar_one_or_none():
                 return ApiResponse.error(message="管道名称已存在", code=3002)
 
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             pipeline = PipelineModel(
                 tenant_id=tenant_id,
                 name=data["name"],
@@ -165,7 +165,7 @@ class PipelineService:
             if not pipeline:
                 return ApiResponse.error(message="管道不存在", code=3001)
 
-            update_values: dict = {"updated_at": datetime.utcnow()}
+            update_values: dict = {"updated_at": datetime.now(UTC)}
             for key in ["name", "is_default"]:
                 if key in data:
                     update_values[key] = data[key]
@@ -262,7 +262,7 @@ class PipelineService:
                 pipeline_id=pipeline_id,
                 name=stage_name,
                 display_order=max_order + 1,
-                created_at=datetime.utcnow(),
+                created_at=datetime.now(UTC),
             )
             session.add(stage)
             await session.commit()

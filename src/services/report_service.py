@@ -1,7 +1,7 @@
 """报表生成服务"""
 import csv
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Dict, List, Optional
 
 
@@ -19,7 +19,7 @@ class ReportService:
             "status": "generated",
             "title": title,
             "format": "pdf",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "data_summary": {
                 "labels_count": len(report_data.get("labels", [])),
                 "datasets_count": len(report_data.get("datasets", [])),
@@ -35,7 +35,7 @@ class ReportService:
             "status": "generated",
             "title": title,
             "format": "excel",
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
             "data_summary": {
                 "labels_count": len(report_data.get("labels", [])),
                 "datasets_count": len(report_data.get("datasets", [])),
@@ -58,7 +58,11 @@ class ReportService:
                 rows.append([str(v) for v in row])
 
         # Write CSV file
-        filepath = f"/home/node/.openclaw/workspace/dev-agent-system/shared-memory/results/{filename}"
+        import os as _os
+        import tempfile as _tmp
+        _base = _os.environ.get("EXPORT_DIR") or _os.path.join(_tmp.gettempdir(), "exports")
+        _os.makedirs(_base, exist_ok=True)
+        filepath = _os.path.join(_base, filename)
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if headers:
@@ -70,7 +74,7 @@ class ReportService:
             "filename": filename,
             "filepath": filepath,
             "rows_exported": len(rows),
-            "generated_at": datetime.utcnow().isoformat(),
+            "generated_at": datetime.now(UTC).isoformat(),
         }
 
     async def schedule_report(
@@ -83,7 +87,7 @@ class ReportService:
         schedule_entry = {
             "report_id": report_id,
             "schedule": schedule,
-            "created_at": datetime.utcnow().isoformat(),
+            "created_at": datetime.now(UTC).isoformat(),
             "active": True,
         }
         self._scheduled_reports[report_id] = schedule_entry

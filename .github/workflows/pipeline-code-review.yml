@@ -1,0 +1,113 @@
+name: Pipeline · Code Review
+
+on:
+  schedule:
+    - cron: "5 * * * *"          # hourly at :05
+  push:
+    branches: [develop]
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  SHARED_MEMORY_REPO: yihua-zhuo/agent-job-shared-memory
+  SHARED_MEMORY_BRANCH: main
+
+jobs:
+  code-review:
+    name: Code Review
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Set up claw wrapper
+        run: |
+          mkdir -p bin
+          cp scripts/ci/claw bin/claw
+          chmod +x bin/claw
+          echo "$(pwd)/bin" >> $GITHUB_PATH
+
+      - name: Clone shared-memory
+        env:
+          SM_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || github.token }}
+        run: |
+          git clone --branch "$SHARED_MEMORY_BRANCH" \
+            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
+            shared-memory
+
+      - name: Check test gate
+        id: gate
+        run: |
+          python3 -c "
+          import json, os
+          from datetime import datetime, timezone
+          path = 'shared-memory/results/test-result.json'
+          if not os.path.exists(path):
+              print('TEST_GATE=skip')
+          else:
+              try:
+                  with open(path) as f:
+                      data = json.load(f)
+                  gen = datetime.fromisoformat(data['generated_at'].rstrip('Z')).replace(tzinfo=timezone.utc)
+                  age_h = (datetime.now(timezone.utc) - gen).total_seconds() / 3600
+                  if data.get('status') == 'pass' and age_h < 0.5:
+                      print('TEST_GATE=ok')
+                  else:
+                      print('TEST_GATE=skip')
+              except Exception:
+                  print('TEST_GATE=skip')
+          " >> $GITHUB_OUTPUT
+
+      - name: Skip if test not green
+        if: steps.gate.outputs.TEST_GATE == 'skip' && github.event_name != 'workflow_dispatch'
+        run: echo "Test gate not met — code-review deferred"
+
+      - name: Run Code Review Agent
+        if: steps.gate.outputs.TEST_GATE == 'ok' || github.event_name == 'workflow_dispatch'
+        env:
+          AI_GATEWAY_URL: ${{ secrets.AI_GATEWAY_URL }}
+          AI_GATEWAY_KEY: ${{ secrets.AI_GATEWAY_KEY }}
+          CLAW_BIN: ${{ github.workspace }}/bin/claw
+          COMMIT_GITHUB_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          python3 scripts/cron/pipeline.py code-review 2>&1 | tee /tmp/code-review-output.txt || true
+
+      - name: Push shared-memory
+        if: always()
+        env:
+          SM_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || github.token }}
+        run: |
+          cd shared-memory
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git pull --rebase \
+            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
+            "$SHARED_MEMORY_BRANCH" 2>/dev/null || true
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "pipeline(code-review): update results"
+          git push \
+            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
+            "$SHARED_MEMORY_BRANCH"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipeline-code-review-result
+          path: shared-memory/results/code-review-result.json
+          retention-days: 3
+
+      - name: Create GitHub Issue on critical issues
+        if: steps.gate.outputs.TEST_GATE == 'ok'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_RUN_ID: ${{ github.run_id }}
+          ARTIFACT_PATH: shared-memory/results/code-review-result.json
+        run: python3 scripts/ci/create_cr_issue.py

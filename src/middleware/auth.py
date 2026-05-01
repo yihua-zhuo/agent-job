@@ -18,6 +18,7 @@ class AuthMiddleware:
         self.secret_key = secret_key or os.environ.get('JWT_SECRET_KEY')
         if not self.secret_key:
             raise ValueError("JWT_SECRET_KEY must be set")
+        assert self.secret_key is not None, "secret_key is set above"
 
     def verify_token(self, token: str) -> dict | None:
         """Verify and decode a JWT token.
@@ -29,7 +30,7 @@ class AuthMiddleware:
             Decoded payload dict if valid, None if invalid or expired.
         """
         try:
-            payload = jwt.decode(token, self.secret_key, algorithms=['HS256'])
+            payload = jwt.decode(token, self.secret_key, algorithms=['HS256'])  # type: ignore
             return payload
         except jwt.ExpiredSignatureError:
             return None

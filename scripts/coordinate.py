@@ -8,6 +8,7 @@ import json
 import subprocess
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -50,15 +51,20 @@ class AgentCoordinator:
             return {"agent": agent, "error": "timeout", "success": False}
 
     def parallel_execute(self, tasks: List[Dict], agents: List[str]) -> List[Dict]:
-        """Execute tasks in parallel across specified agents"""
-        results = []
-        
-        for i, (task, agent) in enumerate(zip(tasks, agents)):
-            task["task_id"] = f"task_{i:03d}"
-            result = self.send_task(agent, task)
-            results.append(result)
-            self.workflow_state[task["task_id"]] = result
-        
+        """Execute tasks in parallel across specified agents using a thread pool."""
+        results: List[Dict] = []
+        with ThreadPoolExecutor(max_workers=len(agents)) as executor:
+            future_to_i = {
+                executor.submit(self.send_task, agent, task): i
+                for i, (task, agent) in enumerate(zip(tasks, agents))
+            }
+            for future in as_completed(future_to_i):
+                i = future_to_i[future]
+                task = tasks[i]
+                result = future.result()
+                task["task_id"] = f"task_{i:03d}"
+                results.append(result)
+                self.workflow_state[task["task_id"]] = result
         return results
 
     def run_workflow(self, workflow: List[Dict]) -> Dict:

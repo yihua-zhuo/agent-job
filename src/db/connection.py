@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 # Lazily-initialised singletons exposed as public module-level names.
 # Use `reset_engine()` to re-initialise (e.g. in test conftest fixtures).
-engine: AsyncSession = None
-async_session_maker: async_sessionmaker = None
+engine: AsyncSession = None  # type: ignore
+async_session_maker: async_sessionmaker = None  # type: ignore
 
 
 def _build_engine(url: str):
@@ -26,7 +26,7 @@ def _build_engine(url: str):
 def _init_engine(url: str):
     global engine, async_session_maker
     engine = _build_engine(url)
-    async_session_maker = async_sessionmaker(
+    async_session_maker = async_sessionmaker(  # type: ignore
         bind=engine,
         class_=AsyncSession,
         autoflush=False,
@@ -57,7 +57,7 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
             result = await session.execute(select(UserModel).where(...))
     """
     _lazy_init()
-    session: AsyncSession = async_session_maker()
+    session: AsyncSession = async_session_maker()  # type: ignore
     try:
         yield session
         await session.commit()

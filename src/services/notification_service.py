@@ -1,6 +1,6 @@
 """Notification service for CRM system - async PostgreSQL via SQLAlchemy."""
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, UTC
 
 from sqlalchemy import text, func, and_, or_
 
@@ -24,7 +24,7 @@ class NotificationService:
             tenant_id = kwargs.get("tenant_id", 0)
             related_type = kwargs.get("related_type")
             related_id = kwargs.get("related_id")
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             result = await session.execute(
                 text(
                     """
@@ -201,7 +201,7 @@ class NotificationService:
         """创建提醒"""
         async with get_db_session() as session:
             tenant_id = 0  # derived from user lookup if needed
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             remind_at_val = remind_at if isinstance(remind_at, datetime) else datetime.fromisoformat(str(remind_at))
             result = await session.execute(
                 text(
@@ -260,7 +260,7 @@ class NotificationService:
     ) -> List[Dict]:
         """获取用户的提醒列表"""
         async with get_db_session() as session:
-            now = datetime.utcnow()
+            now = datetime.now(UTC)
             sql = text(
                 """
                 SELECT id, tenant_id, user_id, title, content, remind_at,
