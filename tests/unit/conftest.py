@@ -301,12 +301,6 @@ def _make_mock_session():
 
 @pytest.fixture(autouse=True)
 def mock_get_db_session(monkeypatch):
-    import os
-
-    os.environ.setdefault(
-        "DATABASE_URL", "postgresql://test:test@localhost/test"
-    )
-
     session = _make_mock_session()
 
     @asynccontextmanager

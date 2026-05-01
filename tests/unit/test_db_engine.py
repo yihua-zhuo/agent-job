@@ -56,7 +56,7 @@ class TestSessionScope:
 
         table_name = f"rollback_test_{random.randint(10000, 99999)}"
 
-        # Create the table in a committed transaction.
+        # Create the table in a committed transaction using the real .env database.
         with session_scope() as s:
             s.execute(
                 text(

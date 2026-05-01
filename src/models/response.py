@@ -75,10 +75,21 @@ class PaginatedData(Generic[T]):
     @property
     def has_next(self) -> bool:
         return self.page < self.total_pages
-    
+
     @property
     def has_prev(self) -> bool:
         return self.page > 1
+
+    def to_dict(self) -> dict:
+        return {
+            "items": self.items,
+            "total": self.total,
+            "page": self.page,
+            "page_size": self.page_size,
+            "total_pages": self.total_pages,
+            "has_next": self.has_next,
+            "has_prev": self.has_prev,
+        }
 
 
 @dataclass

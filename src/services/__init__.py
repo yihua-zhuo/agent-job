@@ -1,62 +1,54 @@
-"""Services package for CRM system."""
-from services.activity_service import ActivityService
-from services.analytics_service import AnalyticsService
-from services.auth_service import AuthService, is_valid_email, sanitize_string, validate_id
-from services.automation_rules import AutomationRules
-from services.churn_prediction import ChurnPredictionService
-from services.customer_service import CustomerService
-from services.data_isolation import (
-    DataIsolationError,
-    TenantScope,
-    is_cross_tenant_safe,
-    require_tenant_id,
-    sanitize_tenant_write,
-    get_cross_tenant_fields,
-)
-from services.import_export_service import ImportExportService
-from services.marketing_service import MarketingService
-from services.notification_service import NotificationService
-from services.report_service import ReportService
-from services.rbac_service import RBACService, Permission
-from services.sales_recommendation import SalesRecommendationService
-from services.sales_service import SalesService
-from services.smart_categorization import SmartCategorizationService
-from services.sla_service import SLAService
-from services.task_service import TaskService
-from services.tenant_service import TenantService
-from services.trigger_service import TriggerService
-from services.user_service import UserService
-from services.workflow_service import WorkflowService
+"""Services package for CRM system — lazy loading to avoid SQLAlchemy duplicate table registration."""
+from types import ModuleType
+from typing import TYPE_CHECKING
 
-__all__ = [
-    "ActivityService",
-    "AnalyticsService",
-    "AuthService",
-    "AutomationRules",
-    "ChurnPredictionService",
-    "CustomerService",
-    "DataIsolationError",
-    "ImportExportService",
-    "is_valid_email",
-    "is_cross_tenant_safe",
-    "MarketingService",
-    "NotificationService",
-    "Permission",
-    "RBACService",
-    "ReportService",
-    "require_tenant_id",
-    "sanitize_string",
-    "sanitize_tenant_write",
-    "SalesRecommendationService",
-    "SalesService",
-    "SmartCategorizationService",
-    "SLAService",
-    "get_cross_tenant_fields",
-    "TaskService",
-    "TenantScope",
-    "TenantService",
-    "TriggerService",
-    "UserService",
-    "validate_id",
-    "WorkflowService",
-]
+_lazy_map = {
+    "ActivityService": "services.activity_service",
+    "AnalyticsService": "services.analytics_service",
+    "AuthService": "services.auth_service",
+    "AutomationRules": "services.automation_rules",
+    "ChurnPredictionService": "services.churn_prediction",
+    "CustomerService": "services.customer_service",
+    "DataIsolationError": "services.data_isolation",
+    "DataIsolationService": "services.data_isolation",
+    "ImportExportService": "services.import_export_service",
+    "is_valid_email": "services.auth_service",
+    "is_cross_tenant_safe": "services.data_isolation",
+    "MarketingService": "services.marketing_service",
+    "NotificationService": "services.notification_service",
+    "Permission": "services.rbac_service",
+    "RBACService": "services.rbac_service",
+    "ReportService": "services.report_service",
+    "require_tenant_id": "services.data_isolation",
+    "sanitize_string": "services.auth_service",
+    "sanitize_tenant_write": "services.data_isolation",
+    "SalesRecommendationService": "services.sales_recommendation",
+    "SalesService": "services.sales_service",
+    "SmartCategorizationService": "services.smart_categorization",
+    "SLAService": "services.sla_service",
+    "get_cross_tenant_fields": "services.data_isolation",
+    "TaskService": "services.task_service",
+    "TenantScope": "services.data_isolation",
+    "TenantService": "services.tenant_service",
+    "TriggerService": "services.trigger_service",
+    "UserService": "services.user_service",
+    "validate_id": "services.auth_service",
+    "WorkflowService": "services.workflow_service",
+}
+
+
+def __getattr__(name: str):
+    if name in _lazy_map:
+        module_path = _lazy_map[name]
+        module = __import__(module_path, fromlist=[name])
+        val = getattr(module, name)
+        globals()[name] = val
+        return val
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return list(__all__)
+
+
+__all__ = list(_lazy_map.keys())

@@ -1,7 +1,7 @@
 """Unit tests for Ticket and TicketReply models."""
 import pytest
 from datetime import datetime, timedelta, UTC
-from src.models.ticket import (
+from models.ticket import (
     Ticket, TicketReply, TicketStatus, TicketPriority,
     TicketChannel, SLALevel, SLAConfig, SLA_CONFIGS
 )
