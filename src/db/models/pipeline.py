@@ -5,8 +5,8 @@ from typing import List
 from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from db.base import Base
-from db.models.pipeline_stage import PipelineStageModel
+from src.db.base import Base
+from src.db.models.pipeline_stage import PipelineStageModel
 
 
 class PipelineModel(Base):

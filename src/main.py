@@ -12,11 +12,11 @@ from src.api.routes import customers_router, sales_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown events. Keep engine warm for asyncpg connections."""
-    from db.connection import ensure_engine
+    from src.db.connection import ensure_engine
     ensure_engine()
     yield
     # Shutdown: dispose engine pool
-    from db.connection import dispose_engine
+    from src.db.connection import dispose_engine
     dispose_engine()
 
 

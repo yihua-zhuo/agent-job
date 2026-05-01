@@ -6,7 +6,7 @@ from typing import Optional
 from sqlalchemy import DateTime, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from db.base import Base
+from src.db.base import Base
 
 
 class OpportunityModel(Base):
