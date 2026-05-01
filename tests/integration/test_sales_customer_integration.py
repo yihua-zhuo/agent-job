@@ -304,7 +304,7 @@ class TestPipelineServiceIntegration:
         s1 = await pipe_svc.add_stage(tenant_id, pid, {"name": "Stage 1", "order": 1})
         s2 = await pipe_svc.add_stage(tenant_id, pid, {"name": "Stage 2", "order": 2})
 
-        reordered = await pipe_svc.reorder_stages(tenant_id, s1.data["id"], s2.data["id"])
+        reordered = await pipe_svc.reorder_stages(tenant_id, pid, [s1.data["id"], s2.data["id"]])
         assert reordered.status == ResponseStatus.SUCCESS
 
 
@@ -318,36 +318,48 @@ class TestSalesServiceIntegration:
     async def test_create_and_get_opportunity(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
+        pipe_svc = PipelineService()
+        pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Opp Pipe"})
+        pid = pipe.data["id"]
+        uid = await _seed_user(async_session, tenant_id)
         result = await sales_svc.create_opportunity(
             tenant_id=tenant_id,
-            data={"title": "Big Deal", "customer_id": cid, "amount": "50000", "stage": "qualification"},
+            data={"name": "Big Deal", "customer_id": cid, "pipeline_id": pid, "amount": "50000", "stage": "qualification", "owner_id": uid},
         )
         assert result.status == ResponseStatus.SUCCESS
         oid = result.data["id"]
 
         fetched = await sales_svc.get_opportunity(tenant_id, oid)
         assert fetched.status == ResponseStatus.SUCCESS
-        assert fetched.data["title"] == "Big Deal"
+        assert fetched.data["name"] == "Big Deal"
 
     async def test_update_opportunity(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
+        pipe_svc = PipelineService()
+        pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Upd Pipe"})
+        pid = pipe.data["id"]
+        uid = await _seed_user(async_session, tenant_id)
         created = await sales_svc.create_opportunity(
             tenant_id=tenant_id,
-            data={"title": "Old Title", "customer_id": cid, "amount": "1000", "stage": "lead"},
+            data={"name": "Old Title", "customer_id": cid, "pipeline_id": pid, "amount": "1000", "stage": "lead", "owner_id": uid},
         )
         oid = created.data["id"]
 
-        updated = await sales_svc.update_opportunity(tenant_id, oid, {"title": "New Title"})
+        updated = await sales_svc.update_opportunity(tenant_id, oid, {"name": "New Title"})
         assert updated.status == ResponseStatus.SUCCESS
-        assert updated.data["title"] == "New Title"
+        assert updated.data["name"] == "New Title"
 
     async def test_change_stage(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
+        pipe_svc = PipelineService()
+        pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Chg Pipe"})
+        pid = pipe.data["id"]
+        uid = await _seed_user(async_session, tenant_id)
         created = await sales_svc.create_opportunity(
             tenant_id=tenant_id,
-            data={"title": "Stage Change", "customer_id": cid, "amount": "500", "stage": "lead"},
+            data={"name": "Stage Change", "customer_id": cid, "pipeline_id": pid, "amount": "500", "stage": "lead", "owner_id": uid},
         )
         oid = created.data["id"]
 
@@ -357,16 +369,20 @@ class TestSalesServiceIntegration:
 
     async def test_list_opportunities(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
+        pipe_svc = PipelineService()
+        pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "List Opp Pipe"})
+        pid = pipe.data["id"]
+        uid = await _seed_user(async_session, tenant_id)
         for i in range(3):
             cid = (await _seed_customer(async_session, tenant_id)).data["id"]
             await sales_svc.create_opportunity(
                 tenant_id=tenant_id,
-                data={"title": f"List Opp {i}", "customer_id": cid, "amount": "100", "stage": "lead"},
+                data={"name": f"List Opp {i}", "customer_id": cid, "pipeline_id": pid, "amount": "100", "stage": "lead", "owner_id": uid},
             )
 
         result = await sales_svc.list_opportunities(tenant_id)
         assert result.status == ResponseStatus.SUCCESS
-        assert len(result.data["items"]) >= 3
+        assert len(result.data.items) >= 3
 
     async def test_get_forecast(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
