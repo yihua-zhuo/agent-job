@@ -10,6 +10,7 @@ from services.customer_service import CustomerService
 from models.response import ResponseStatus
 from pkg.response.schemas import (
     CustomerData,
+    CustomerResponse,
     CustomerSearchData,
     CustomerSearchResponse,
     CustomerListData,
