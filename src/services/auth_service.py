@@ -9,7 +9,7 @@ from typing import cast, Optional, Dict
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
+from db.connection import get_db_session  # noqa: F401
 
 
 class AuthService:
@@ -70,7 +70,7 @@ class AuthService:
         Returns:
             User dict if authentication succeeds, None otherwise.
         """
-        result = await session.execute(
+        result = await self.session.execute(
             text(
                 """
                 SELECT id, tenant_id, username, email, password_hash, role,
@@ -186,7 +186,7 @@ class AuthService:
         if not user_id:
             return None
 
-        result = await session.execute(
+        result = await self.session.execute(
             text(
                 """
                 SELECT id, tenant_id, username, email, role, status,
@@ -257,7 +257,7 @@ class AuthService:
 
         jti = payload.get("jti") or payload.get("sub")
         exp = payload.get("exp")
-        await session.execute(
+        await self.session.execute(
             text(
                 """
                 INSERT INTO revoked_tokens (jti, revoked_at, expires_at)
@@ -271,7 +271,7 @@ class AuthService:
                 "exp": datetime.utcfromtimestamp(exp) if exp else None,
             },
         )
-        await session.commit()
+        await self.session.commit()
         return True
 
     @staticmethod
