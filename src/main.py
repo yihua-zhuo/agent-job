@@ -11,8 +11,7 @@ from configs.settings import settings
 from middleware.logging import LoggingMiddleware, logger
 from pkg.errors.app_exceptions import AppException
 
-# Import routes after creating app to avoid circular imports
-from api.routes import customers_router, sales_router
+from api import customers_router, sales_router
 
 
 @asynccontextmanager
