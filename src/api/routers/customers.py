@@ -32,6 +32,9 @@ def _is_valid_email(email: str) -> bool:
 def _sanitize(s: str) -> str:
     if not s:
         return s
+    # Remove matched tag pairs with their content first (e.g. <script>...)</n    # Use case-insensitive flag so <SCRIPT> is also stripped
+    s = re.sub(r'<(script)[^>]*>.*?</\1>', '', s, flags=re.DOTALL | re.IGNORECASE)
+    # Now remove any remaining tags
     s = re.sub(r'<[^>]*>', '', s)
     s = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s)
     return s.strip()

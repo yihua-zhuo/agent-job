@@ -260,9 +260,10 @@ class TestCustomerServiceMappingsUsage:
         """list_customers returns data with pagination fields."""
         result = await customer_service.list_customers(page=1, page_size=20, tenant_id=1)
         assert bool(result) is True
-        assert "items" in result.data
-        assert "total" in result.data
-        assert "page" in result.data
+        # result.data is a PaginatedData Pydantic model, not a plain dict
+        assert hasattr(result.data, "items")
+        assert hasattr(result.data, "total")
+        assert hasattr(result.data, "page")
 
     async def test_search_customers_returns_keyword_and_items(self, customer_service):
         """search_customers returns data with keyword and items keys."""

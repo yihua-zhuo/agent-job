@@ -264,6 +264,19 @@ def _make_mock_session():
         if sql_text.strip().startswith("delete") and "customers" in sql_text:
             # Simulate DELETE ... RETURNING id — always return a row for any id
             return MockResult([MockRow({"id": params.get("id", 1)})])
+
+        # UPDATE ... RETURNING * for customers — return the updated row as if SELECT * WHERE id
+        if sql_text.strip().startswith("update") and "customers" in sql_text:
+            if params.get("id") != 1:
+                return MockResult([])
+            return MockResult([MockRow({
+                "id": 1, "tenant_id": params.get("tenant_id", 1),
+                "name": "Customer A", "email": "a@test.com",
+                "phone": "123", "company": "Acme",
+                "status": "lead", "owner_id": 1,
+                "tags": [], "created_at": None, "updated_at": None,
+            })])
+
         if "from customers where id" in sql_text:
             # Single-row lookup by id — only match fixture id=1
             # Non-matching ids simulate "not found" (returns empty)
