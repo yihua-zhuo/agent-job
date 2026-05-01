@@ -65,6 +65,17 @@ class CustomerData(BaseModel):
     updated_at: Optional[datetime] = None
 
 
+class CustomerSearchData(BaseModel):
+    """Non-paginated search result data field."""
+    keyword: str
+    items: List[CustomerData]
+
+
+class CustomerSearchResponse(SuccessEnvelope):
+    """GET /search — keyword search without pagination."""
+    data: CustomerSearchData
+
+
 class CustomerListData(BaseModel):
     """Paginated customer list data field."""
     items: List[CustomerData]
@@ -82,7 +93,7 @@ class CustomerResponse(SuccessEnvelope):
 
 
 class CustomerListResponse(SuccessEnvelope):
-    """GET /customers · GET /search — paginated customer list."""
+    """GET /customers — paginated customer list."""
     data: CustomerListData
 
 

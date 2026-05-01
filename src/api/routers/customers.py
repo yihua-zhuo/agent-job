@@ -10,8 +10,9 @@ from services.customer_service import CustomerService
 from models.response import ResponseStatus
 from pkg.response.schemas import (
     CustomerData,
+    CustomerSearchData,
+    CustomerSearchResponse,
     CustomerListData,
-    CustomerResponse,
     CustomerListResponse,
     TagResponse,
     StatusChangeResponse,
@@ -157,7 +158,7 @@ async def list_customers(
 
 @customers_router.get(
     '/search',
-    response_model=CustomerListResponse,
+    response_model=CustomerSearchResponse,
     responses={401: {"model": ErrorEnvelope}},
 )
 async def search_customers(
@@ -168,16 +169,11 @@ async def search_customers(
     service = CustomerService(session)
     resp = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
     items = [CustomerData.model_validate(c) for c in resp.data["items"]]
-    return CustomerListResponse(
+    return CustomerSearchResponse(
         message=resp.message,
-        data=CustomerListData(
+        data=CustomerSearchData(
+            keyword=resp.data["keyword"],
             items=items,
-            total=resp.data["total"],
-            page=resp.data["page"],
-            page_size=resp.data["page_size"],
-            total_pages=resp.data["total_pages"],
-            has_next=resp.data["has_next"],
-            has_prev=resp.data["has_prev"],
         ),
     )
 
