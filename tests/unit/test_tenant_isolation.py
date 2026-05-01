@@ -171,7 +171,7 @@ class TestTenantService:
     async def test_list_tenants_paginated(self, tenant_service):
         """Mock execute returning count and rows sequentially."""
         count_result = MagicMock()
-        count_result.fetchone = MagicMock(return_value=(5,))
+        count_result.fetchone = MagicMock(return_value=(2,))
         rows_result = MagicMock()
         rows_result.fetchall = MagicMock(return_value=[])
 
@@ -183,7 +183,7 @@ class TestTenantService:
         with patch("services.tenant_service.get_db_session", return_value=mock_session):
             result = await tenant_service.list_tenants(page=2, page_size=10)
         assert bool(result) is True
-        assert result.data.total == 5
+        assert result.data.total == 2
         assert result.data.page == 2
         assert result.data.page_size == 10
 

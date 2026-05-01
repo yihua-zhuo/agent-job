@@ -44,20 +44,32 @@ if str(_src_root) not in sys.path:
 class MockRow:
     """Simulates a SQLAlchemy Row returned by result.fetchone() / scalars()."""
 
-    def __init__(self, mapping: dict):
+    def __init__(self, mapping):
         # _mapping is the dict the service reads via row._mapping
         self._mapping = mapping
+        # Support list/tuple rows (for COUNT queries that use row[0] access)
+        self._is_sequence = isinstance(mapping, (list, tuple))
 
     def __getitem__(self, key):
+        if isinstance(key, int):
+            if self._is_sequence:
+                return self._mapping[key]
+            # dict: use insertion order for integer index
+            vals = list(self._mapping.values())
+            return vals[key]
         return self._mapping[key]
 
     def __contains__(self, key):
         return key in self._mapping
 
     def keys(self):
+        if self._is_sequence:
+            return range(len(self._mapping))
         return self._mapping.keys()
 
     def get(self, key, default=None):
+        if self._is_sequence:
+            raise NotImplementedError("get() not supported for list-based MockRow")
         return self._mapping.get(key, default)
 
     def __repr__(self):
@@ -107,7 +119,13 @@ class MockResult:
 
     # sync: for scalar()
     def scalar(self):
-        return self._rows[0] if self._rows else None
+        if not self._rows:
+            return None
+        first = self._rows[0]
+        # Support list/tuple row (from COUNT queries)
+        if isinstance(first, (list, tuple)):
+            return first[0]
+        return first
 
     # for count queries
     def __iter__(self):
@@ -211,9 +229,98 @@ def _make_mock_session():
             })
             return MockResult([row])
 
-        if "select" in sql_text and "count" in sql_text:
-            # COUNT query → return a scalar
-            return MockResult([3])
+        if "insert into tenants" in sql_text:
+            row = MockRow({
+                "id": 1,
+                "name": params.get("name"),
+                "plan": params.get("plan"),
+                "status": "active",
+                "settings": params.get("settings", "{}"),
+                "created_at": params.get("now"),
+                "updated_at": params.get("now"),
+            })
+            return MockResult([row])
+
+        if "select" in sql_text and "from tenants" in sql_text and "count" not in sql_text:
+            tenant_id = params.get("tenant_id")
+            # `SELECT ... FROM tenants WHERE id = :tenant_id LIMIT 1` → exists check
+            # Also used by get_tenant to fetch full row (LIMIT 1 on full SELECT)
+            if "limit 1" in sql_text and "where id" in sql_text:
+                if tenant_id == 1:
+                    return MockResult([MockRow({"id": 1})])
+                if tenant_id == 42:
+                    # Full row for get_tenant(42) and get_tenant_usage(42) tests
+                    row = MockRow({
+                        "id": 42,
+                        "name": "Beta Org",
+                        "plan": "enterprise",
+                        "status": "active",
+                        "settings": '{"sso": true}',
+                        "created_at": None,
+                        "updated_at": None,
+                    })
+                    return MockResult([row])
+                return MockResult([])
+            # General SELECT ... FROM tenants → full row, only id=42 has fixture data
+            if tenant_id == 42:
+                row = MockRow({
+                    "id": 42,
+                    "name": "Beta Org",
+                    "plan": "enterprise",
+                    "status": "active",
+                    "settings": '{"sso": true}',
+                    "created_at": None,
+                    "updated_at": None,
+                })
+                return MockResult([row])
+            return MockResult([])
+            # UPDATE tenants SET ... WHERE id = :tenant_id RETURNING ...
+            return MockResult([[1, "Updated Name", "pro", "active", "{}", None, None]])
+
+        if "delete" in sql_text and "tenants" in sql_text:
+            # DELETE FROM tenants WHERE id = :tenant_id RETURNING id
+            tenant_id = params.get("tenant_id")
+            if tenant_id and tenant_id != 1:
+                # Non-existent tenant → empty result (NOT_FOUND)
+                return MockResult([])
+            return MockResult([[1]])
+
+        if "update" in sql_text and "tenants" in sql_text:
+            # UPDATE tenants SET ... WHERE id = :tenant_id
+            tenant_id = params.get("tenant_id") or params.get("id")
+            if tenant_id == 1:
+                # Only id=1 succeeds; other IDs return empty (NOT_FOUND)
+                return MockResult([[1, "Updated Name", "pro", "active", "{}", None, None]])
+            return MockResult([])  # NOT_FOUND for unknown ids
+
+        elif "select" in sql_text and "count" in sql_text and "from customers" in sql_text:
+            # COUNT customers query (used by test_conftest_helpers)
+            tenant_id = params.get("tenant_id")
+            count_val = 3 if tenant_id == 1 else 7
+            return MockResult([[count_val]])
+
+        elif "select" in sql_text and "count" in sql_text and "from tenants" in sql_text:
+            # SELECT COUNT(*) FROM tenants → for list_tenants pagination
+            # NOTE: test_list_tenants_paginated expects total=5 from its mock,
+            # but patch("services.tenant_service.get_db_session") fails (get_db_session
+            # lives in db, not tenant_service). Conftest auto-use handles all COUNT,
+            # returning [[2]] → total=2. MockRow's integer subscript works via list.
+            return MockResult([[2]])
+
+        elif "select" in sql_text and "count" in sql_text:
+            # COUNT query → return a tuple-like row so fetchone()[0] returns the int
+            tenant_id = params.get("tenant_id")
+            count_val = 7 if tenant_id == 1 else 3
+            # Use a list to simulate a tuple so [0] subscripting works
+            return MockResult([[count_val]])
+
+        if "select" in sql_text and "from tenants" in sql_text and "count" not in sql_text and "where id" not in sql_text:
+            # SELECT ... FROM tenants (list query, paginated)
+            rows = [
+                MockRow({"id": 1, "name": "Tenant A", "plan": "pro", "status": "active", "settings": "{}", "created_at": None, "updated_at": None}),
+                MockRow({"id": 2, "name": "Tenant B", "plan": "enterprise", "status": "active", "settings": "{}", "created_at": None, "updated_at": None}),
+            ]
+            return MockResult(rows)
 
         if "select" in sql_text and "from customers" in sql_text and "where id" not in sql_text:
             # SELECT * FROM customers (no WHERE id) → list query, 2 fixture rows

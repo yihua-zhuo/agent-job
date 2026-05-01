@@ -139,6 +139,34 @@ async def create_activity(
     return ActivityResponse(message=resp.message, data=_activity_to_data(resp.data))
 
 
+
+@activities_router.get(
+    '/summary',
+    response_model=ActivitySummaryResponse,
+    responses={401: {"model": ErrorEnvelope}},
+)
+async def get_activity_summary(
+    customer_id: int = Query(..., ge=1),
+    start_date: Optional[str] = Query(None),
+    end_date: Optional[str] = Query(None),
+    ctx: AuthContext = Depends(require_auth),
+    session=Depends(get_db),
+):
+    from datetime import datetime
+    service = ActivityService(session)
+    start = datetime.fromisoformat(start_date) if start_date else None
+    end = datetime.fromisoformat(end_date) if end_date else None
+    resp = await service.get_activity_summary(
+        customer_id=customer_id,
+        start_date=start,
+        end_date=end,
+        tenant_id=ctx.tenant_id or 0,
+    )
+    status_code = _http_status(resp.status)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail=resp.message)
+    return ActivitySummaryResponse(message=resp.message, data=resp.data)
+
 @activities_router.get(
     '/{activity_id}',
     response_model=ActivityResponse,
@@ -341,30 +369,3 @@ async def search_activities(
         data=ActivitySearchData(items=items),
     )
 
-
-@activities_router.get(
-    '/summary',
-    response_model=ActivitySummaryResponse,
-    responses={401: {"model": ErrorEnvelope}},
-)
-async def get_activity_summary(
-    customer_id: int = Query(..., ge=1),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
-    ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
-):
-    from datetime import datetime
-    service = ActivityService(session)
-    start = datetime.fromisoformat(start_date) if start_date else None
-    end = datetime.fromisoformat(end_date) if end_date else None
-    resp = await service.get_activity_summary(
-        customer_id=customer_id,
-        start_date=start,
-        end_date=end,
-        tenant_id=ctx.tenant_id or 0,
-    )
-    status_code = _http_status(resp.status)
-    if status_code != 200:
-        raise HTTPException(status_code=status_code, detail=resp.message)
-    return ActivitySummaryResponse(message=resp.message, data=resp.data)
