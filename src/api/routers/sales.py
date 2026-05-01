@@ -122,7 +122,7 @@ async def list_pipelines(
     items = [PipelineData.model_validate(p) for p in resp.data["items"]]
     return PipelineListResponse(
         message=resp.message,
-        data=PipelineListData(items=items, total=resp.data["total"]),
+        data=PipelineListData(items=items, total=len(items)),
     )
 
 
