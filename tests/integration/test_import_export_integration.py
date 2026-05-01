@@ -13,7 +13,7 @@ if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 
 import pytest
-from src.services.import_export_service import ImportExportService
+from services.import_export_service import ImportExportService
 
 
 class TestImportExportServiceInit:

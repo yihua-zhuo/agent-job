@@ -5,10 +5,10 @@ from pydantic import BaseModel, Field, field_validator
 from typing import Optional, List
 import re
 
-from src.internal.middleware.fastapi_auth import require_auth, get_current_tenant_id, AuthContext
-from src.services.customer_service import CustomerService
-from src.services.sales_service import SalesService
-from src.models.response import ResponseStatus
+from internal.middleware.fastapi_auth import require_auth, get_current_tenant_id, AuthContext
+from services.customer_service import CustomerService
+from services.sales_service import SalesService
+from models.response import ResponseStatus
 
 # ---------------------------------------------------------------------------
 # Helpers

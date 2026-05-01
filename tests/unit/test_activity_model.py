@@ -1,7 +1,7 @@
 """Unit tests for Activity model."""
 import pytest
 from datetime import datetime, UTC
-from src.models.activity import Activity, ActivityType
+from models.activity import Activity, ActivityType
 
 
 class TestActivityInit:

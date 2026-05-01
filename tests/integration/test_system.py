@@ -13,14 +13,14 @@ import uuid
 
 import pytest
 
-from src.models.response import ResponseStatus
-from src.models.ticket import TicketChannel, TicketPriority, TicketStatus
-from src.services.auth_service import AuthService
-from src.services.customer_service import CustomerService
-from src.services.pipeline_service import PipelineService
-from src.services.sales_service import SalesService
-from src.services.ticket_service import TicketService
-from src.services.user_service import UserService
+from models.response import ResponseStatus
+from models.ticket import TicketChannel, TicketPriority, TicketStatus
+from services.auth_service import AuthService
+from services.customer_service import CustomerService
+from services.pipeline_service import PipelineService
+from services.sales_service import SalesService
+from services.ticket_service import TicketService
+from services.user_service import UserService
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

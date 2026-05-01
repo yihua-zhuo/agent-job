@@ -14,16 +14,16 @@ from datetime import datetime, timedelta
 
 import pytest
 
-from src.models.marketing import TriggerType, CampaignType
-from src.models.response import ResponseStatus
-from src.services.activity_service import ActivityService
-from src.services.customer_service import CustomerService
-from src.services.marketing_service import MarketingService
-from src.services.notification_service import NotificationService
-from src.services.task_service import TaskService
-from src.services.tenant_service import TenantService
-from src.services.user_service import UserService
-from src.services.workflow_service import WorkflowService
+from models.marketing import TriggerType, CampaignType
+from models.response import ResponseStatus
+from services.activity_service import ActivityService
+from services.customer_service import CustomerService
+from services.marketing_service import MarketingService
+from services.notification_service import NotificationService
+from services.task_service import TaskService
+from services.tenant_service import TenantService
+from services.user_service import UserService
+from services.workflow_service import WorkflowService
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

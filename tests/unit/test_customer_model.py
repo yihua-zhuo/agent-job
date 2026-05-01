@@ -3,7 +3,7 @@ Unit tests for Customer model.
 """
 import pytest
 from datetime import datetime
-from src.models.customer import Customer, CustomerStatus
+from models.customer import Customer, CustomerStatus
 
 
 class TestCustomerModel:

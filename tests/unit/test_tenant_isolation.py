@@ -2,8 +2,8 @@
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from src.services.tenant_service import TenantService
-from src.services.data_isolation import (
+from services.tenant_service import TenantService
+from services.data_isolation import (
     DataIsolationError,
     TenantScope,
     require_tenant_id,

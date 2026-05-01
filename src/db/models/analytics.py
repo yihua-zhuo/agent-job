@@ -5,7 +5,7 @@ from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
-from src.db.base import Base
+from db.base import Base
 
 
 class DashboardModel(Base):

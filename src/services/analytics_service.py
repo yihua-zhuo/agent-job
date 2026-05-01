@@ -5,8 +5,8 @@ from typing import Optional, List, Dict
 
 from sqlalchemy import text, func, and_, or_
 
-from src.db.connection import get_db_session
-from src.models.response import ApiResponse, PaginatedData
+from db.connection import get_db_session
+from models.response import ApiResponse, PaginatedData
 
 
 def _json_loads(val):

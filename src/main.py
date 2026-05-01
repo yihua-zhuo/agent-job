@@ -6,7 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 # Import routes after creating app to avoid circular imports
-from src.api.routes import customers_router, sales_router
+from api.routes import customers_router, sales_router
 
 
 @asynccontextmanager

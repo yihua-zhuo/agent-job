@@ -4,7 +4,7 @@ from datetime import datetime, UTC
 
 from sqlalchemy import text, func, and_, or_
 
-from src.db.connection import get_db_session
+from db.connection import get_db_session
 
 
 class TaskService:

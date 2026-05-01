@@ -1,7 +1,7 @@
 """Tests for response model."""
 import pytest
 from datetime import datetime
-from src.models.response import (
+from models.response import (
     ApiResponse, ApiError, PaginatedData, ResponseStatus, ErrorCode
 )
 

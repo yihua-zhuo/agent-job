@@ -1,7 +1,7 @@
 """自动化触发器"""
 from typing import Any, Dict, List, Optional
 
-from src.models.marketing import TriggerType
+from models.marketing import TriggerType
 
 
 class TriggerService:

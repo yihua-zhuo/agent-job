@@ -2,7 +2,7 @@
 import pytest
 import pytest_asyncio
 from unittest.mock import AsyncMock, MagicMock, patch
-from src.services.workflow_service import WorkflowService, _as_trigger_value, _as_status_value
+from services.workflow_service import WorkflowService, _as_trigger_value, _as_status_value
 
 
 @pytest.fixture

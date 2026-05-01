@@ -1,6 +1,6 @@
 """Unit tests for RBACService."""
 import pytest
-from src.services.rbac_service import RBACService, Permission
+from services.rbac_service import RBACService, Permission
 
 
 @pytest.fixture

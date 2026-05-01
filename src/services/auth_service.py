@@ -8,7 +8,7 @@ from typing import cast, Optional, Dict
 
 from sqlalchemy import text
 
-from src.db.connection import get_db_session
+from db.connection import get_db_session
 
 
 class AuthService:

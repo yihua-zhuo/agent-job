@@ -3,10 +3,10 @@ import json
 from datetime import datetime, UTC
 from typing import Optional, List, Dict
 from sqlalchemy import select, update, delete, func, text
-from src.db.connection import get_db_session
-from src.db.models.customer import CustomerModel
-from src.models.response import ApiResponse
-from src.models.customer import Customer, CustomerStatus
+from db.connection import get_db_session
+from db.models.customer import CustomerModel
+from models.response import ApiResponse
+from models.customer import Customer, CustomerStatus
 
 
 def _dumps_tags(tags) -> str:

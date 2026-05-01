@@ -4,8 +4,8 @@ from typing import List, Literal, Optional
 
 from sqlalchemy import text
 
-from src.db.connection import get_db_session
-from src.models.ticket import Ticket, SLALevel, SLA_CONFIGS
+from db.connection import get_db_session
+from models.ticket import Ticket, SLALevel, SLA_CONFIGS
 
 
 class SLAService:

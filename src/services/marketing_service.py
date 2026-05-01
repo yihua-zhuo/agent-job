@@ -4,16 +4,16 @@ from typing import Optional, List, Dict, Any
 
 from sqlalchemy import text, func
 
-from src.db.connection import get_db_session
-from src.db.models.marketing import CampaignModel, CampaignEventModel
-from src.models.marketing import (
+from db.connection import get_db_session
+from db.models.marketing import CampaignModel, CampaignEventModel
+from models.marketing import (
     Campaign,
     CampaignEvent,
     CampaignStatus,
     CampaignType,
     TriggerType,
 )
-from src.models.response import ApiResponse, PaginatedData
+from models.response import ApiResponse, PaginatedData
 
 
 def _row_to_campaign(row) -> Campaign:
