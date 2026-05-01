@@ -1,8 +1,4 @@
-from flask import Flask
-from api.customers import customer_bp
-from api.sales import sales_bp
+"""src/api - FastAPI routes (customers + sales)."""
+from src.api.routes import customers_router, sales_router
 
-
-def register_routes(app: Flask):
-    app.register_blueprint(customer_bp)
-    app.register_blueprint(sales_bp)
+__all__ = ['customers_router', 'sales_router']

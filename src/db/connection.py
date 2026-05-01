@@ -5,15 +5,15 @@ import os
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine, AsyncEngine
 
 # Lazily-initialised singletons exposed as public module-level names.
 # Use `reset_engine()` to re-initialise (e.g. in test conftest fixtures).
-engine: AsyncSession = None  # type: ignore
+engine: AsyncEngine = None  # type: ignore
 async_session_maker: async_sessionmaker = None  # type: ignore
 
 
-def _build_engine(url: str):
+def _build_engine(url: str) -> AsyncEngine:
     """Create the async engine from *url*."""
     # Ensure the URL uses the asyncpg driver.
     if url.startswith("postgresql://"):
@@ -66,6 +66,25 @@ async def get_db_session() -> AsyncGenerator[AsyncSession, None]:
         raise
     finally:
         await session.close()
+
+
+def ensure_engine():
+    """Warm-up entry point for FastAPI lifespan. Idempotent."""
+    _lazy_init()
+
+
+def dispose_engine():
+    """Dispose engine pool on FastAPI shutdown."""
+    global engine, async_session_maker
+    if engine is not None:
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+        loop.run_until_complete(engine.dispose())
+    engine = None
+    async_session_maker = None
 
 
 def reset_engine(database_url: str):

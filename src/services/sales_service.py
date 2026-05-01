@@ -6,12 +6,12 @@ from typing import Optional
 from sqlalchemy import select, update, delete, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
-from db.models.pipeline import PipelineModel
-from db.models.pipeline_stage import PipelineStageModel
-from db.models.opportunity import OpportunityModel
-from models.response import ApiResponse
-from models.opportunity import Stage as OpportunityStage
+from src.db.connection import get_db_session
+from src.db.models.pipeline import PipelineModel
+from src.db.models.pipeline_stage import PipelineStageModel
+from src.db.models.opportunity import OpportunityModel
+from src.models.response import ApiResponse
+from src.models.opportunity import Stage as OpportunityStage
 
 
 class SalesService:
