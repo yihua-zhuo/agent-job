@@ -4,21 +4,24 @@ from datetime import datetime, UTC
 import json
 
 from sqlalchemy import text, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
 from models.response import ApiResponse, PaginatedData
 
 
 class TenantService:
     """租户管理服务"""
 
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
     async def create_tenant(self, name: str, plan: str, admin_email: str = None, **kwargs) -> ApiResponse[Dict]:
         """创建租户（公司）"""
-        async with get_db_session() as session:
+        async with self.session:
             now = datetime.now(UTC)
             settings = kwargs.get("settings", {})
             settings_json = json.dumps(settings) if isinstance(settings, dict) else settings
-            result = await session.execute(
+            result = await self.session.execute(
                 text(
                     """
                     INSERT INTO tenants (name, plan, status, settings, created_at, updated_at)
@@ -33,15 +36,15 @@ class TenantService:
                     "now": now,
                 },
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             tenant = self._row_to_dict(row)
             return ApiResponse.success(data=tenant, message="租户创建成功")
 
     async def get_tenant(self, tenant_id: int) -> ApiResponse[Dict]:
         """获取租户详情"""
-        async with get_db_session() as session:
-            result = await session.execute(
+        async with self.session:
+            result = await self.session.execute(
                 text(
                     """
                     SELECT id, name, plan, status, settings, created_at, updated_at
@@ -59,7 +62,7 @@ class TenantService:
 
     async def update_tenant(self, tenant_id: int, **kwargs) -> ApiResponse[Dict]:
         """更新租户信息"""
-        async with get_db_session() as session:
+        async with self.session:
             set_clauses = []
             params: Dict = {"tenant_id": tenant_id}
             allowed_fields = {"name", "plan", "status"}
@@ -84,8 +87,8 @@ class TenantService:
                 f"WHERE id = :tenant_id "
                 f"RETURNING id, name, plan, status, settings, created_at, updated_at"
             )
-            result = await session.execute(sql, params)
-            await session.commit()
+            result = await self.session.execute(sql, params)
+            await self.session.commit()
             row = result.fetchone()
             if row is None:
                 return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
@@ -98,14 +101,14 @@ class TenantService:
         status: Optional[str] = None,
     ) -> ApiResponse[PaginatedData[Dict]]:
         """租户列表"""
-        async with get_db_session() as session:
+        async with self.session:
             # Count total
             count_sql = text("SELECT COUNT(*) FROM tenants")
             count_params: Dict = {}
             if status:
                 count_sql = text("SELECT COUNT(*) FROM tenants WHERE status = :status")
                 count_params = {"status": status}
-            total_result = await session.execute(count_sql, count_params)
+            total_result = await self.session.execute(count_sql, count_params)
             total = total_result.fetchone()[0]
 
             # Fetch page
@@ -126,7 +129,7 @@ class TenantService:
                 fetch_params["status"] = status
             fetch_params["limit"] = page_size
             fetch_params["offset"] = offset
-            rows = await session.execute(fetch_sql, fetch_params)
+            rows = await self.session.execute(fetch_sql, fetch_params)
             items = [self._row_to_dict(r) for r in rows.fetchall()]
             return ApiResponse.paginated(
                 items=items,
@@ -138,9 +141,9 @@ class TenantService:
 
     async def delete_tenant(self, tenant_id: int) -> ApiResponse[Dict]:
         """删除租户（软删除）"""
-        async with get_db_session() as session:
+        async with self.session:
             now = datetime.now(UTC)
-            result = await session.execute(
+            result = await self.session.execute(
                 text(
                     """
                     UPDATE tenants
@@ -151,7 +154,7 @@ class TenantService:
                 ),
                 {"tenant_id": tenant_id, "now": now},
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if row is None:
                 return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
@@ -163,9 +166,9 @@ class TenantService:
 
     async def get_tenant_usage(self, tenant_id: int) -> ApiResponse[Dict]:
         """获取租户使用量统计（用户数、存储量、API调用量）"""
-        async with get_db_session() as session:
+        async with self.session:
             # Check tenant exists
-            tenant_result = await session.execute(
+            tenant_result = await self.session.execute(
                 text("SELECT id FROM tenants WHERE id = :tenant_id LIMIT 1"),
                 {"tenant_id": tenant_id},
             )
@@ -173,7 +176,7 @@ class TenantService:
                 return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
 
             # Count users under this tenant
-            user_count_result = await session.execute(
+            user_count_result = await self.session.execute(
                 text("SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id"),
                 {"tenant_id": tenant_id},
             )

@@ -5,7 +5,6 @@ from typing import Optional, List
 from sqlalchemy import select, update, delete, func, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
 from db.models.pipeline import PipelineModel
 from db.models.pipeline_stage import PipelineStageModel
 from models.response import ApiResponse
@@ -13,6 +12,9 @@ from models.response import ApiResponse
 
 class PipelineService:
     """Pipeline service backed by PostgreSQL via SQLAlchemy async."""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
     DEFAULT_STAGES = ["lead", "qualified", "proposal", "negotiation", "closed_won"]
 
@@ -27,9 +29,9 @@ class PipelineService:
         if not data.get("name"):
             return ApiResponse.error(message="管道名称不能为空", code=3001)
 
-        async with get_db_session() as session:
+        async with self.session:
             # Check for duplicate name within tenant
-            existing = await session.execute(
+            existing = await self.session.execute(
                 select(PipelineModel).where(
                     PipelineModel.tenant_id == tenant_id,
                     PipelineModel.name == data["name"],
@@ -46,8 +48,8 @@ class PipelineService:
                 created_at=now,
                 updated_at=now,
             )
-            session.add(pipeline)
-            await session.flush()
+            self.session.add(pipeline)
+            await self.session.flush()
             pipeline_id = pipeline.id
 
             # Create default or custom stages
@@ -59,16 +61,16 @@ class PipelineService:
                     display_order=idx,
                     created_at=now,
                 )
-                session.add(stage)
+                self.session.add(stage)
 
-            await session.commit()
+            await self.session.commit()
 
             # Reload pipeline with stages for response
-            result = await session.execute(
+            result = await self.session.execute(
                 select(PipelineModel).where(PipelineModel.id == pipeline_id)
             )
             pipeline = result.scalar_one()
-            stages_result = await session.execute(
+            stages_result = await self.session.execute(
                 select(PipelineStageModel)
                 .where(PipelineStageModel.pipeline_id == pipeline_id)
                 .order_by(PipelineStageModel.display_order)
@@ -85,8 +87,8 @@ class PipelineService:
 
     async def get_pipeline(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """Get a pipeline by ID (tenant-scoped)."""
-        async with get_db_session() as session:
-            result = await session.execute(
+        async with self.session:
+            result = await self.session.execute(
                 select(PipelineModel).where(
                     PipelineModel.id == pipeline_id,
                     PipelineModel.tenant_id == tenant_id,
@@ -96,7 +98,7 @@ class PipelineService:
             if not pipeline:
                 return ApiResponse.error(message="管道不存在", code=3001)
 
-            stages_result = await session.execute(
+            stages_result = await self.session.execute(
                 select(PipelineStageModel)
                 .where(PipelineStageModel.pipeline_id == pipeline_id)
                 .order_by(PipelineStageModel.display_order)
@@ -112,9 +114,9 @@ class PipelineService:
         self, tenant_id: int, page: int = 1, page_size: int = 20
     ) -> ApiResponse:
         """List all pipelines for a tenant with pagination."""
-        async with get_db_session() as session:
+        async with self.session:
             # Count
-            count_result = await session.execute(
+            count_result = await self.session.execute(
                 select(func.count(PipelineModel.id)).where(
                     PipelineModel.tenant_id == tenant_id
                 )
@@ -123,7 +125,7 @@ class PipelineService:
 
             # Data
             offset = (page - 1) * page_size
-            result = await session.execute(
+            result = await self.session.execute(
                 select(PipelineModel)
                 .where(PipelineModel.tenant_id == tenant_id)
                 .order_by(PipelineModel.id)
@@ -134,7 +136,7 @@ class PipelineService:
 
             items = []
             for p in pipelines:
-                stages_result = await session.execute(
+                stages_result = await self.session.execute(
                     select(PipelineStageModel)
                     .where(PipelineStageModel.pipeline_id == p.id)
                     .order_by(PipelineStageModel.display_order)
@@ -154,8 +156,8 @@ class PipelineService:
         self, tenant_id: int, pipeline_id: int, data: dict
     ) -> ApiResponse:
         """Update pipeline fields (tenant-scoped)."""
-        async with get_db_session() as session:
-            result = await session.execute(
+        async with self.session:
+            result = await self.session.execute(
                 select(PipelineModel).where(
                     PipelineModel.id == pipeline_id,
                     PipelineModel.tenant_id == tenant_id,
@@ -172,7 +174,7 @@ class PipelineService:
 
             if "name" in update_values:
                 # Check duplicate name
-                dup = await session.execute(
+                dup = await self.session.execute(
                     select(PipelineModel).where(
                         PipelineModel.tenant_id == tenant_id,
                         PipelineModel.name == update_values["name"],
@@ -182,18 +184,18 @@ class PipelineService:
                 if dup.scalar_one_or_none():
                     return ApiResponse.error(message="管道名称已存在", code=3002)
 
-            await session.execute(
+            await self.session.execute(
                 update(PipelineModel)
                 .where(PipelineModel.id == pipeline_id)
                 .values(**update_values)
             )
-            await session.commit()
+            await self.session.commit()
 
-            refreshed = await session.execute(
+            refreshed = await self.session.execute(
                 select(PipelineModel).where(PipelineModel.id == pipeline_id)
             )
             pipeline = refreshed.scalar_one()
-            stages_result = await session.execute(
+            stages_result = await self.session.execute(
                 select(PipelineStageModel)
                 .where(PipelineStageModel.pipeline_id == pipeline_id)
                 .order_by(PipelineStageModel.display_order)
@@ -207,8 +209,8 @@ class PipelineService:
 
     async def delete_pipeline(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """Delete a pipeline and its stages (tenant-scoped)."""
-        async with get_db_session() as session:
-            result = await session.execute(
+        async with self.session:
+            result = await self.session.execute(
                 select(PipelineModel).where(
                     PipelineModel.id == pipeline_id,
                     PipelineModel.tenant_id == tenant_id,
@@ -217,13 +219,13 @@ class PipelineService:
             if not result.scalar_one_or_none():
                 return ApiResponse.error(message="管道不存在", code=3001)
 
-            await session.execute(
+            await self.session.execute(
                 delete(PipelineModel).where(
                     PipelineModel.id == pipeline_id,
                     PipelineModel.tenant_id == tenant_id,
                 )
             )
-            await session.commit()
+            await self.session.commit()
 
             return ApiResponse.success(message="管道删除成功")
 
@@ -235,9 +237,9 @@ class PipelineService:
         self, tenant_id: int, pipeline_id: int, data: dict
     ) -> ApiResponse:
         """Add a stage to a pipeline."""
-        async with get_db_session() as session:
+        async with self.session:
             # Verify pipeline belongs to tenant
-            pipeline_result = await session.execute(
+            pipeline_result = await self.session.execute(
                 select(PipelineModel).where(
                     PipelineModel.id == pipeline_id,
                     PipelineModel.tenant_id == tenant_id,
@@ -251,7 +253,7 @@ class PipelineService:
                 return ApiResponse.error(message="阶段名称不能为空", code=1001)
 
             # Get current max display_order
-            max_order_result = await session.execute(
+            max_order_result = await self.session.execute(
                 select(func.max(PipelineStageModel.display_order)).where(
                     PipelineStageModel.pipeline_id == pipeline_id
                 )
@@ -264,8 +266,8 @@ class PipelineService:
                 display_order=max_order + 1,
                 created_at=datetime.now(UTC),
             )
-            session.add(stage)
-            await session.commit()
+            self.session.add(stage)
+            await self.session.commit()
 
             return ApiResponse.success(
                 data=stage.to_dict(),
@@ -276,9 +278,9 @@ class PipelineService:
         self, tenant_id: int, pipeline_id: int, stage_id: int, data: dict
     ) -> ApiResponse:
         """Update a pipeline stage (tenant-scoped)."""
-        async with get_db_session() as session:
+        async with self.session:
             # Verify tenant owns the pipeline
-            pipeline_result = await session.execute(
+            pipeline_result = await self.session.execute(
                 select(PipelineModel).where(
                     PipelineModel.id == pipeline_id,
                     PipelineModel.tenant_id == tenant_id,
@@ -287,7 +289,7 @@ class PipelineService:
             if not pipeline_result.scalar_one_or_none():
                 return ApiResponse.error(message="管道不存在", code=3001)
 
-            stage_result = await session.execute(
+            stage_result = await self.session.execute(
                 select(PipelineStageModel).where(
                     PipelineStageModel.id == stage_id,
                     PipelineStageModel.pipeline_id == pipeline_id,
@@ -303,14 +305,14 @@ class PipelineService:
                     update_values[key] = data[key]
 
             if update_values:
-                await session.execute(
+                await self.session.execute(
                     update(PipelineStageModel)
                     .where(PipelineStageModel.id == stage_id)
                     .values(**update_values)
                 )
-                await session.commit()
+                await self.session.commit()
 
-            refreshed = await session.execute(
+            refreshed = await self.session.execute(
                 select(PipelineStageModel).where(PipelineStageModel.id == stage_id)
             )
             stage = refreshed.scalar_one()
@@ -324,8 +326,8 @@ class PipelineService:
         self, tenant_id: int, pipeline_id: int, stage_id: int
     ) -> ApiResponse:
         """Delete a stage from a pipeline (tenant-scoped)."""
-        async with get_db_session() as session:
-            pipeline_result = await session.execute(
+        async with self.session:
+            pipeline_result = await self.session.execute(
                 select(PipelineModel).where(
                     PipelineModel.id == pipeline_id,
                     PipelineModel.tenant_id == tenant_id,
@@ -334,7 +336,7 @@ class PipelineService:
             if not pipeline_result.scalar_one_or_none():
                 return ApiResponse.error(message="管道不存在", code=3001)
 
-            stage_result = await session.execute(
+            stage_result = await self.session.execute(
                 select(PipelineStageModel).where(
                     PipelineStageModel.id == stage_id,
                     PipelineStageModel.pipeline_id == pipeline_id,
@@ -343,13 +345,13 @@ class PipelineService:
             if not stage_result.scalar_one_or_none():
                 return ApiResponse.error(message="阶段不存在", code=3001)
 
-            await session.execute(
+            await self.session.execute(
                 delete(PipelineStageModel).where(
                     PipelineStageModel.id == stage_id,
                     PipelineStageModel.pipeline_id == pipeline_id,
                 )
             )
-            await session.commit()
+            await self.session.commit()
 
             return ApiResponse.success(message="阶段删除成功")
 
@@ -357,8 +359,8 @@ class PipelineService:
         self, tenant_id: int, pipeline_id: int, stage_ids: List[int]
     ) -> ApiResponse:
         """Reorder pipeline stages by assigning display_order from the stage_ids list."""
-        async with get_db_session() as session:
-            pipeline_result = await session.execute(
+        async with self.session:
+            pipeline_result = await self.session.execute(
                 select(PipelineModel).where(
                     PipelineModel.id == pipeline_id,
                     PipelineModel.tenant_id == tenant_id,
@@ -368,7 +370,7 @@ class PipelineService:
                 return ApiResponse.error(message="管道不存在", code=3001)
 
             for idx, stage_id in enumerate(stage_ids):
-                await session.execute(
+                await self.session.execute(
                     update(PipelineStageModel)
                     .where(
                         PipelineStageModel.id == stage_id,
@@ -377,5 +379,5 @@ class PipelineService:
                     .values(display_order=idx)
                 )
 
-            await session.commit()
+            await self.session.commit()
             return ApiResponse.success(message="阶段顺序更新成功")

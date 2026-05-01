@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, UTC
 from typing import cast, Optional, Dict
 
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db_session
 
@@ -18,12 +19,14 @@ class AuthService:
     TOKEN_ISSUER = "crm-agent-system"
     TOKEN_AUDIENCE = "crm-api"
 
-    def __init__(self, secret_key: Optional[str] = None):
-        """Initialize with the secret key for JWT operations.
+    def __init__(self, session: AsyncSession, secret_key: Optional[str] = None):
+        """Initialize with session and secret key for JWT operations.
 
         Args:
+            session: Async SQLAlchemy session.
             secret_key: Secret key used for JWT encoding. Defaults to JWT_SECRET_KEY env var.
         """
+        self.session = session
         self.secret_key: str = cast(str, secret_key) or os.environ["JWT_SECRET_KEY"]
         if not self.secret_key:
             raise ValueError("JWT_SECRET_KEY must be set")
@@ -67,38 +70,37 @@ class AuthService:
         Returns:
             User dict if authentication succeeds, None otherwise.
         """
-        async with get_db_session() as session:
-            result = await session.execute(
-                text(
-                    """
-                    SELECT id, tenant_id, username, email, password_hash, role,
-                           status, full_name, bio, created_at, updated_at
-                    FROM users
-                    WHERE username = :username
-                    LIMIT 1
-                    """
-                ),
-                {"username": username},
-            )
-            row = result.fetchone()
-            if row is None:
-                return None
+        result = await session.execute(
+            text(
+                """
+                SELECT id, tenant_id, username, email, password_hash, role,
+                       status, full_name, bio, created_at, updated_at
+                FROM users
+                WHERE username = :username
+                LIMIT 1
+                """
+            ),
+            {"username": username},
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
 
-            if not self.verify_password(password, row[4]):
-                return None
+        if not self.verify_password(password, row[4]):
+            return None
 
-            return {
-                "id": row[0],
-                "tenant_id": row[1],
-                "username": row[2],
-                "email": row[3],
-                "role": row[5],
-                "status": row[6],
-                "full_name": row[7],
-                "bio": row[8],
-                "created_at": row[9].isoformat() if row[9] else None,
-                "updated_at": row[10].isoformat() if row[10] else None,
-            }
+        return {
+            "id": row[0],
+            "tenant_id": row[1],
+            "username": row[2],
+            "email": row[3],
+            "role": row[5],
+            "status": row[6],
+            "full_name": row[7],
+            "bio": row[8],
+            "created_at": row[9].isoformat() if row[9] else None,
+            "updated_at": row[10].isoformat() if row[10] else None,
+        }
 
     async def create_token(self, user_id: int, username: str, role: str, tenant_id: int = None) -> str:
         """Create a JWT token for an existing user.
@@ -156,7 +158,7 @@ class AuthService:
         """
         from services.user_service import UserService
 
-        user_svc = UserService()
+        user_svc = UserService(self.session)
         return await user_svc.create_user(
             username=username,
             email=email,
@@ -184,34 +186,33 @@ class AuthService:
         if not user_id:
             return None
 
-        async with get_db_session() as session:
-            result = await session.execute(
-                text(
-                    """
-                    SELECT id, tenant_id, username, email, role, status,
-                           full_name, bio, created_at, updated_at
-                    FROM users
-                    WHERE id = :user_id
-                    LIMIT 1
-                    """
-                ),
-                {"user_id": user_id},
-            )
-            row = result.fetchone()
-            if row is None:
-                return None
-            return {
-                "id": row[0],
-                "tenant_id": row[1],
-                "username": row[2],
-                "email": row[3],
-                "role": row[4],
-                "status": row[5],
-                "full_name": row[6],
-                "bio": row[7],
-                "created_at": row[8].isoformat() if row[8] else None,
-                "updated_at": row[9].isoformat() if row[9] else None,
-            }
+        result = await session.execute(
+            text(
+                """
+                SELECT id, tenant_id, username, email, role, status,
+                       full_name, bio, created_at, updated_at
+                FROM users
+                WHERE id = :user_id
+                LIMIT 1
+                """
+            ),
+            {"user_id": user_id},
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row[0],
+            "tenant_id": row[1],
+            "username": row[2],
+            "email": row[3],
+            "role": row[4],
+            "status": row[5],
+            "full_name": row[6],
+            "bio": row[7],
+            "created_at": row[8].isoformat() if row[8] else None,
+            "updated_at": row[9].isoformat() if row[9] else None,
+        }
 
     async def refresh_token(self, old_token: str) -> Optional[str]:
         """Refresh an existing token with a new expiry time.
@@ -256,22 +257,21 @@ class AuthService:
 
         jti = payload.get("jti") or payload.get("sub")
         exp = payload.get("exp")
-        async with get_db_session() as session:
-            await session.execute(
-                text(
-                    """
-                    INSERT INTO revoked_tokens (jti, revoked_at, expires_at)
-                    VALUES (:jti, :revoked_at, :exp)
-                    ON CONFLICT (jti) DO NOTHING
-                    """
-                ),
-                {
-                    "jti": str(jti),
-                    "revoked_at": datetime.now(UTC),
-                    "exp": datetime.utcfromtimestamp(exp) if exp else None,
-                },
-            )
-            await session.commit()
+        await session.execute(
+            text(
+                """
+                INSERT INTO revoked_tokens (jti, revoked_at, expires_at)
+                VALUES (:jti, :revoked_at, :exp)
+                ON CONFLICT (jti) DO NOTHING
+                """
+            ),
+            {
+                "jti": str(jti),
+                "revoked_at": datetime.now(UTC),
+                "exp": datetime.utcfromtimestamp(exp) if exp else None,
+            },
+        )
+        await session.commit()
         return True
 
     @staticmethod

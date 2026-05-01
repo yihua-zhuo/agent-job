@@ -9,8 +9,8 @@ from typing import Optional, Tuple
 
 import bcrypt
 from sqlalchemy import select, update, delete, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
 from db.models.user import UserModel
 from models.user import User, UserRole, UserStatus
 from models.response import ApiResponse, PaginatedData, ApiError
@@ -43,6 +43,9 @@ def _row_to_user(row: UserModel) -> User:
 
 class UserService:
     """用户服务 — async PostgreSQL backend."""
+
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
     # ------------------------------------------------------------------
     # Validation helpers (unchanged from original)
@@ -120,78 +123,74 @@ class UserService:
                 errors=[ApiError(code=1001, message=error_msg, field="password")],
             )
 
-        async with get_db_session() as session:
-            # Check duplicate username
-            existing_username = await session.execute(
-                select(UserModel).where(UserModel.username == username)
-            )
-            if existing_username.scalar_one_or_none() is not None:
-                return ApiResponse.error(
-                    message="用户名已存在",
-                    code=2002,
-                    errors=[ApiError(code=2002, message="用户名已被使用", field="username")],
-                )
-
-            # Check duplicate email
-            existing_email = await session.execute(
-                select(UserModel).where(UserModel.email == email)
-            )
-            if existing_email.scalar_one_or_none() is not None:
-                return ApiResponse.error(
-                    message="邮箱已被注册",
-                    code=2005,
-                    errors=[ApiError(code=2005, message="邮箱已被使用", field="email")],
-                )
-
-            # Determine initial status
-            initial_status = (
-                UserStatus.ACTIVE if role == UserRole.ADMIN else UserStatus.PENDING
+        # Check duplicate username
+        existing_username = await self.session.execute(
+            select(UserModel).where(UserModel.username == username)
+        )
+        if existing_username.scalar_one_or_none() is not None:
+            return ApiResponse.error(
+                message="用户名已存在",
+                code=2002,
+                errors=[ApiError(code=2002, message="用户名已被使用", field="username")],
             )
 
-            now = datetime.now(UTC)
-            row = UserModel(
-                tenant_id=tenant_id,
-                username=username,
-                email=email,
-                password_hash=self._hash_password(password),
-                role=role.value if hasattr(role, "value") else role,
-                status=initial_status.value,
-                full_name=full_name,
-                created_at=now,
-                updated_at=now,
+        # Check duplicate email
+        existing_email = await self.session.execute(
+            select(UserModel).where(UserModel.email == email)
+        )
+        if existing_email.scalar_one_or_none() is not None:
+            return ApiResponse.error(
+                message="邮箱已被注册",
+                code=2005,
+                errors=[ApiError(code=2005, message="邮箱已被使用", field="email")],
             )
-            session.add(row)
-            await session.flush()  # Populate row.id before commit
-            user = _row_to_user(row)
+
+        # Determine initial status
+        initial_status = (
+            UserStatus.ACTIVE if role == UserRole.ADMIN else UserStatus.PENDING
+        )
+
+        now = datetime.now(UTC)
+        row = UserModel(
+            tenant_id=tenant_id,
+            username=username,
+            email=email,
+            password_hash=self._hash_password(password),
+            role=role.value if hasattr(role, "value") else role,
+            status=initial_status.value,
+            full_name=full_name,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(row)
+        await self.session.flush()  # Populate row.id before commit
+        user = _row_to_user(row)
 
         return ApiResponse.success(data=user, message="用户创建成功")
 
     async def get_user_by_id(self, user_id: int) -> Optional[User]:
         """根据ID获取用户"""
-        async with get_db_session() as session:
-            result = await session.execute(
-                select(UserModel).where(UserModel.id == user_id)
-            )
-            row = result.scalar_one_or_none()
-            return _row_to_user(row) if row is not None else None
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.id == user_id)
+        )
+        row = result.scalar_one_or_none()
+        return _row_to_user(row) if row is not None else None
 
     async def get_user_by_username(self, username: str) -> Optional[User]:
         """根据用户名获取用户"""
-        async with get_db_session() as session:
-            result = await session.execute(
-                select(UserModel).where(UserModel.username == username)
-            )
-            row = result.scalar_one_or_none()
-            return _row_to_user(row) if row is not None else None
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.username == username)
+        )
+        row = result.scalar_one_or_none()
+        return _row_to_user(row) if row is not None else None
 
     async def get_user_by_email(self, email: str) -> Optional[User]:
         """根据邮箱获取用户"""
-        async with get_db_session() as session:
-            result = await session.execute(
-                select(UserModel).where(UserModel.email == email)
-            )
-            row = result.scalar_one_or_none()
-            return _row_to_user(row) if row is not None else None
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.email == email)
+        )
+        row = result.scalar_one_or_none()
+        return _row_to_user(row) if row is not None else None
 
     async def list_users(
         self,
@@ -201,27 +200,26 @@ class UserService:
         status: Optional[UserStatus] = None,
     ) -> ApiResponse[PaginatedData[User]]:
         """获取用户列表"""
-        async with get_db_session() as session:
-            base_query = select(UserModel)
-            count_query = select(func.count()).select_from(UserModel)
+        base_query = select(UserModel)
+        count_query = select(func.count()).select_from(UserModel)
 
-            if role is not None:
-                base_query = base_query.where(UserModel.role == role.value)
-                count_query = count_query.where(UserModel.role == role.value)
-            if status is not None:
-                base_query = base_query.where(UserModel.status == status.value)
-                count_query = count_query.where(UserModel.status == status.value)
+        if role is not None:
+            base_query = base_query.where(UserModel.role == role.value)
+            count_query = count_query.where(UserModel.role == role.value)
+        if status is not None:
+            base_query = base_query.where(UserModel.status == status.value)
+            count_query = count_query.where(UserModel.status == status.value)
 
-            # Total count
-            total_result = await session.execute(count_query)
-            total = total_result.scalar_one()
+        # Total count
+        total_result = await self.session.execute(count_query)
+        total = total_result.scalar_one()
 
-            # Paginated rows
-            offset = (page - 1) * page_size
-            rows_result = await session.execute(
-                base_query.offset(offset).limit(page_size)
-            )
-            items = [_row_to_user(r) for r in rows_result.scalars().all()]
+        # Paginated rows
+        offset = (page - 1) * page_size
+        rows_result = await self.session.execute(
+            base_query.offset(offset).limit(page_size)
+        )
+        items = [_row_to_user(r) for r in rows_result.scalars().all()]
 
         return ApiResponse.paginated(
             items=items,
@@ -233,79 +231,77 @@ class UserService:
 
     async def update_user(self, user_id: int, **kwargs) -> ApiResponse[User]:
         """更新用户"""
-        async with get_db_session() as session:
-            # Fetch existing record
-            result = await session.execute(
-                select(UserModel).where(UserModel.id == user_id)
+        # Fetch existing record
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.id == user_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return ApiResponse.error(
+                message="用户不存在",
+                code=2001,
+                errors=[ApiError(code=2001, message="用户不存在", field="id")],
             )
-            row = result.scalar_one_or_none()
-            if row is None:
+
+        # Validate and check duplicate email
+        if "email" in kwargs:
+            if not self._validate_email(kwargs["email"]):
                 return ApiResponse.error(
-                    message="用户不存在",
-                    code=2001,
-                    errors=[ApiError(code=2001, message="用户不存在", field="id")],
+                    message="邮箱格式不正确",
+                    code=1001,
+                    errors=[ApiError(code=1001, message="邮箱格式无效", field="email")],
+                )
+            dup_result = await self.session.execute(
+                select(UserModel).where(
+                    UserModel.email == kwargs["email"],
+                    UserModel.id != user_id,
+                )
+            )
+            if dup_result.scalar_one_or_none() is not None:
+                return ApiResponse.error(
+                    message="邮箱已被使用",
+                    code=2005,
+                    errors=[ApiError(code=2005, message="邮箱已被使用", field="email")],
                 )
 
-            # Validate and check duplicate email
-            if "email" in kwargs:
-                if not self._validate_email(kwargs["email"]):
-                    return ApiResponse.error(
-                        message="邮箱格式不正确",
-                        code=1001,
-                        errors=[ApiError(code=1001, message="邮箱格式无效", field="email")],
-                    )
-                dup_result = await session.execute(
-                    select(UserModel).where(
-                        UserModel.email == kwargs["email"],
-                        UserModel.id != user_id,
-                    )
-                )
-                if dup_result.scalar_one_or_none() is not None:
-                    return ApiResponse.error(
-                        message="邮箱已被使用",
-                        code=2005,
-                        errors=[ApiError(code=2005, message="邮箱已被使用", field="email")],
-                    )
+        # Apply allowed field updates
+        allowed_fields = ["email", "bio", "full_name", "status"]
+        values: dict = {}
+        for field in allowed_fields:
+            if field in kwargs:
+                value = kwargs[field]
+                # Coerce enum to its string value for storage
+                if hasattr(value, "value"):
+                    value = value.value
+                values[field] = value
 
-            # Apply allowed field updates
-            allowed_fields = ["email", "bio", "full_name", "status"]
-            values: dict = {}
-            for field in allowed_fields:
-                if field in kwargs:
-                    value = kwargs[field]
-                    # Coerce enum to its string value for storage
-                    if hasattr(value, "value"):
-                        value = value.value
-                    values[field] = value
+        values["updated_at"] = datetime.now(UTC)
 
-            values["updated_at"] = datetime.now(UTC)
+        await self.session.execute(
+            update(UserModel).where(UserModel.id == user_id).values(**values)
+        )
+        await self.session.flush()
 
-            await session.execute(
-                update(UserModel).where(UserModel.id == user_id).values(**values)
-            )
-            await session.flush()
-
-            # Re-fetch updated row
-            refreshed = await session.execute(
-                select(UserModel).where(UserModel.id == user_id)
-            )
-            updated_row = refreshed.scalar_one()
-            user = _row_to_user(updated_row)
+        # Re-fetch updated row
+        refreshed = await self.session.execute(
+            select(UserModel).where(UserModel.id == user_id)
+        )
+        updated_row = refreshed.scalar_one()
+        user = _row_to_user(updated_row)
 
         return ApiResponse.success(data=user, message="用户更新成功")
 
     async def delete_user(self, user_id: int) -> ApiResponse:
         """删除用户"""
-        async with get_db_session() as session:
-            result = await session.execute(
-                select(UserModel).where(UserModel.id == user_id)
-            )
-            if result.scalar_one_or_none() is None:
-                return ApiResponse.error(message="用户不存在", code=2001)
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.id == user_id)
+        )
+        if result.scalar_one_or_none() is None:
+            return ApiResponse.error(message="用户不存在", code=2001)
 
-            await session.execute(
-                delete(UserModel).where(UserModel.id == user_id)
-            )
+        await self.session.execute(
+            delete(UserModel).where(UserModel.id == user_id)
+        )
 
         return ApiResponse.success(message="用户删除成功")
 
@@ -313,40 +309,39 @@ class UserService:
         self, user_id: int, old_password: str, new_password: str
     ) -> ApiResponse:
         """修改密码"""
-        async with get_db_session() as session:
-            result = await session.execute(
-                select(UserModel).where(UserModel.id == user_id)
-            )
-            row = result.scalar_one_or_none()
-            if row is None:
-                return ApiResponse.error(message="用户不存在", code=2001)
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.id == user_id)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            return ApiResponse.error(message="用户不存在", code=2001)
 
-            # Verify old password against the stored hash
-            if row.password_hash:
-                if not self._verify_password(old_password, row.password_hash):
-                    return ApiResponse.error(
-                        message="旧密码不正确",
-                        code=2003,
-                        errors=[
-                            ApiError(code=2003, message="旧密码验证失败", field="old_password")
-                        ],
-                    )
-
-            # Validate new password strength
-            is_valid, error_msg = self._validate_password(new_password)
-            if not is_valid:
+        # Verify old password against the stored hash
+        if row.password_hash:
+            if not self._verify_password(old_password, row.password_hash):
                 return ApiResponse.error(
-                    message=error_msg,
-                    code=2004,
-                    errors=[ApiError(code=2004, message=error_msg, field="new_password")],
+                    message="旧密码不正确",
+                    code=2003,
+                    errors=[
+                        ApiError(code=2003, message="旧密码验证失败", field="old_password")
+                    ],
                 )
 
-            new_hash = self._hash_password(new_password)
-            await session.execute(
-                update(UserModel)
-                .where(UserModel.id == user_id)
-                .values(password_hash=new_hash, updated_at=datetime.now(UTC))
+        # Validate new password strength
+        is_valid, error_msg = self._validate_password(new_password)
+        if not is_valid:
+            return ApiResponse.error(
+                message=error_msg,
+                code=2004,
+                errors=[ApiError(code=2004, message=error_msg, field="new_password")],
             )
+
+        new_hash = self._hash_password(new_password)
+        await self.session.execute(
+            update(UserModel)
+            .where(UserModel.id == user_id)
+            .values(password_hash=new_hash, updated_at=datetime.now(UTC))
+        )
 
         return ApiResponse.success(message="密码修改成功")
 
@@ -356,25 +351,24 @@ class UserService:
         """搜索用户"""
         pattern = f"%{keyword}%"
 
-        async with get_db_session() as session:
-            from sqlalchemy import or_
+        from sqlalchemy import or_
 
-            where_clause = or_(
-                UserModel.username.ilike(pattern),
-                UserModel.email.ilike(pattern),
-                UserModel.bio.ilike(pattern),
-            )
+        where_clause = or_(
+            UserModel.username.ilike(pattern),
+            UserModel.email.ilike(pattern),
+            UserModel.bio.ilike(pattern),
+        )
 
-            count_result = await session.execute(
-                select(func.count()).select_from(UserModel).where(where_clause)
-            )
-            total = count_result.scalar_one()
+        count_result = await self.session.execute(
+            select(func.count()).select_from(UserModel).where(where_clause)
+        )
+        total = count_result.scalar_one()
 
-            offset = (page - 1) * page_size
-            rows_result = await session.execute(
-                select(UserModel).where(where_clause).offset(offset).limit(page_size)
-            )
-            items = [_row_to_user(r) for r in rows_result.scalars().all()]
+        offset = (page - 1) * page_size
+        rows_result = await self.session.execute(
+            select(UserModel).where(where_clause).offset(offset).limit(page_size)
+        )
+        items = [_row_to_user(r) for r in rows_result.scalars().all()]
 
         return ApiResponse.paginated(
             items=items,
