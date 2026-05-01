@@ -35,7 +35,8 @@ class CampaignModel(Base):
     )
 
     events: Mapped[list["CampaignEventModel"]] = relationship(
-        "CampaignEventModel", back_populates="campaign", cascade="all, delete-orphan"
+        "CampaignEventModel", back_populates="campaign",
+        cascade="all, delete-orphan", lazy="raise",
     )
 
     def to_dict(self) -> dict:
@@ -74,7 +75,9 @@ class CampaignEventModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    campaign: Mapped["CampaignModel"] = relationship("CampaignModel", back_populates="events")
+    campaign: Mapped["CampaignModel"] = relationship(
+        "CampaignModel", back_populates="events", lazy="raise",
+    )
 
     def to_dict(self) -> dict:
         return {

@@ -76,6 +76,17 @@ class MockResult:
     def fetchall(self):
         return self._rows
 
+    # sync+async: for raw SQL via result.mappings()
+    def mappings(self):
+        class MappingResult:
+            def __init__(self, rows):
+                self._rows = rows
+            def one_or_none(self):
+                return self._rows[0] if self._rows else None
+            def all(self):
+                return self._rows
+        return MappingResult(self._rows)
+
     # async: for ORM via result.scalars()
     def scalars(self):
         return MagicMock(

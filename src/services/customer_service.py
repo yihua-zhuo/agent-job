@@ -79,10 +79,10 @@ class CustomerService:
                 "updated_at": now,
             },
         )
-        row = result.fetchone()
+        row = result.mappings().one_or_none()
         if row is None:
             return ApiResponse.error(message="客户创建失败", code=1500)
-        customer_dict = self._row_to_dict(row._mapping)
+        customer_dict = self._row_to_dict(row)
         return ApiResponse.success(data=customer_dict, message="客户创建成功")
 
     # ------------------------------------------------------------------
@@ -130,7 +130,7 @@ class CustomerService:
         data_result = await self.session.execute(data_sql, params)
         rows = data_result.fetchall()
 
-        items = [self._row_to_dict(row._mapping) for row in rows]
+        items = [self._row_to_dict(row) for row in rows]
 
         return ApiResponse.paginated(
             items=items,
@@ -147,10 +147,10 @@ class CustomerService:
         """Get customer by ID"""
         sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(sql, {"id": customer_id})
-        row = result.fetchone()
-        if not row:
+        row = result.mappings().one_or_none()
+        if row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
-        customer_dict = self._row_to_dict(row._mapping)
+        customer_dict = self._row_to_dict(row)
 
         if tenant_id and customer_dict.get("tenant_id") != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
@@ -166,10 +166,10 @@ class CustomerService:
         """Update customer fields"""
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
-        row = result.fetchone()
-        if not row:
+        row = result.mappings().one_or_none()
+        if row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
-        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+        if tenant_id and row.get("tenant_id") != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
 
         update_fields = []
@@ -210,10 +210,10 @@ class CustomerService:
         )
 
         result = await self.session.execute(update_sql, params)
-        updated_row = result.fetchone()
-        if not updated_row:
+        updated_row = result.mappings().one_or_none()
+        if updated_row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
-        customer_dict = self._row_to_dict(updated_row._mapping)
+        customer_dict = self._row_to_dict(updated_row)
 
         return ApiResponse.success(data=customer_dict, message="客户更新成功")
 
@@ -232,8 +232,8 @@ class CustomerService:
         del_sql = text(f"DELETE FROM customers WHERE {where_clause} RETURNING id")
 
         result = await self.session.execute(del_sql, params)
-        deleted_row = result.fetchone()
-        if not deleted_row:
+        deleted_row = result.mappings().one_or_none()
+        if deleted_row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
 
         return ApiResponse.success(message="客户删除成功")
@@ -254,7 +254,7 @@ class CustomerService:
         result = await self.session.execute(sql, params)
         rows = result.fetchall()
 
-        items = [self._row_to_dict(row._mapping) for row in rows]
+        items = [self._row_to_dict(row) for row in rows]
         return ApiResponse.success(data={"keyword": keyword, "items": items}, message="")
 
     # ------------------------------------------------------------------
@@ -264,13 +264,13 @@ class CustomerService:
         """Add a tag to customer"""
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
-        row = result.fetchone()
-        if not row:
+        row = result.mappings().one_or_none()
+        if row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
-        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+        if tenant_id and row.get("tenant_id") != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
 
-        existing_tags = row._mapping.get("tags") or []
+        existing_tags = row.get("tags") or []
         if isinstance(existing_tags, str):
             existing_tags = json.loads(existing_tags)
 
@@ -297,13 +297,13 @@ class CustomerService:
         """Remove a tag from customer"""
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
-        row = result.fetchone()
-        if not row:
+        row = result.mappings().one_or_none()
+        if row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
-        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+        if tenant_id and row.get("tenant_id") != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
 
-        existing_tags = row._mapping.get("tags") or []
+        existing_tags = row.get("tags") or []
         if isinstance(existing_tags, str):
             existing_tags = json.loads(existing_tags)
 
@@ -330,10 +330,10 @@ class CustomerService:
         """Change customer status"""
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
-        row = result.fetchone()
-        if not row:
+        row = result.mappings().one_or_none()
+        if row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
-        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+        if tenant_id and row.get("tenant_id") != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
 
         try:
@@ -355,8 +355,8 @@ class CustomerService:
 
         await self.session.execute(update_sql, params)
         result = await self.session.execute(fetch_sql, {"id": customer_id})
-        updated_row = result.fetchone()
-        if not updated_row:
+        updated_row = result.mappings().one_or_none()
+        if updated_row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
 
         return ApiResponse.success(
@@ -372,10 +372,10 @@ class CustomerService:
         """Assign owner to customer"""
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
-        row = result.fetchone()
-        if not row:
+        row = result.mappings().one_or_none()
+        if row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
-        if tenant_id and row._mapping.get("tenant_id") != tenant_id:
+        if tenant_id and row.get("tenant_id") != tenant_id:
             return ApiResponse.error(message="客户不存在", code=3001)
 
         params: dict = {"id": customer_id, "owner_id": owner_id, "updated_at": datetime.now(UTC)}
@@ -392,8 +392,8 @@ class CustomerService:
 
         await self.session.execute(update_sql, params)
         result = await self.session.execute(fetch_sql, {"id": customer_id})
-        updated_row = result.fetchone()
-        if not updated_row:
+        updated_row = result.mappings().one_or_none()
+        if updated_row is None:
             return ApiResponse.error(message="客户不存在", code=3001)
 
         return ApiResponse.success(
@@ -450,7 +450,7 @@ class CustomerService:
                         "updated_at": now,
                     },
                 )
-                row = result.fetchone()
+                row = result.mappings().one_or_none()
                 if row is None:
                     errors.append({"index": i, "error": "客户创建失败"})
                     continue
@@ -481,12 +481,12 @@ class CustomerService:
 
         counts: Dict[CustomerStatus, int] = {}
         for row in rows:
-            status_str = row._mapping["status"]
+            status_str = row["status"]
             try:
                 cs = CustomerStatus(status_str)
             except ValueError:
                 cs = CustomerStatus.LEAD
-            counts[cs] = row._mapping["cnt"]
+            counts[cs] = row["cnt"]
 
         return counts
 
@@ -494,8 +494,9 @@ class CustomerService:
     # helpers
     # ------------------------------------------------------------------
     @staticmethod
-    def _row_to_dict(mapping) -> dict:
-        """Convert a RowMapping from a result row to a plain dict."""
+    def _row_to_dict(row) -> dict:
+        """Convert a Row or RowMapping to a plain dict."""
+        mapping = getattr(row, "_mapping", row)
         result = dict(mapping)
         if "status" in result and hasattr(result["status"], "value"):
             result["status"] = result["status"].value
