@@ -26,7 +26,9 @@ class PipelineStageModel(Base):
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
 
-    pipeline: Mapped["PipelineModel"] = relationship("PipelineModel", back_populates="stages")
+    pipeline: Mapped["PipelineModel"] = relationship(
+        "PipelineModel", back_populates="stages", lazy="raise",
+    )
 
     def to_dict(self) -> dict:
         return {

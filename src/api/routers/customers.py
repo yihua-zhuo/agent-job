@@ -8,6 +8,19 @@ from db.connection import get_db
 from internal.middleware.fastapi_auth import require_auth, AuthContext
 from services.customer_service import CustomerService
 from models.response import ResponseStatus
+from pkg.response.schemas import (
+    CustomerData,
+    CustomerResponse,
+    CustomerSearchData,
+    CustomerSearchResponse,
+    CustomerListData,
+    CustomerListResponse,
+    TagResponse,
+    StatusChangeResponse,
+    OwnerChangeResponse,
+    BulkImportResponse,
+    ErrorEnvelope,
+)
 
 customers_router = APIRouter(prefix='/api/v1/customers', tags=['customers'])
 
@@ -88,35 +101,33 @@ class PaginationQuery(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# Generic API response wrapper
-# ---------------------------------------------------------------------------
-
-class ApiDataResponse(BaseModel):
-    status: str
-    message: str
-    data: Optional[Any] = None
-    errors: Optional[List[dict]] = None
-    meta: Optional[dict] = None
-    timestamp: Optional[str] = None
-
-
-# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@customers_router.post('', status_code=201, response_model=ApiDataResponse)
+@customers_router.post(
+    '',
+    status_code=201,
+    response_model=CustomerResponse,
+    responses={400: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def create_customer(
     body: CustomerCreate,
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
-    from sqlalchemy.ext.asyncio import AsyncSession
     service = CustomerService(session)
     resp = await service.create_customer(body.model_dump(), tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
 
 
-@customers_router.get('', response_model=ApiDataResponse)
+@customers_router.get(
+    '',
+    response_model=CustomerListResponse,
+    responses={401: {"model": ErrorEnvelope}},
+)
 async def list_customers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -131,10 +142,29 @@ async def list_customers(
         page=page, page_size=page_size, status=status,
         owner_id=owner_id, tags=tags, tenant_id=ctx.tenant_id,
     )
-    return ApiDataResponse(**resp.to_dict())
+    status_code = _http_status(resp.status)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail=resp.message)
+    items = [CustomerData.model_validate(c) for c in resp.data["items"]]
+    return CustomerListResponse(
+        message=resp.message,
+        data=CustomerListData(
+            items=items,
+            total=resp.data["total"],
+            page=resp.data["page"],
+            page_size=resp.data["page_size"],
+            total_pages=resp.data["total_pages"],
+            has_next=resp.data["has_next"],
+            has_prev=resp.data["has_prev"],
+        ),
+    )
 
 
-@customers_router.get('/search', response_model=ApiDataResponse)
+@customers_router.get(
+    '/search',
+    response_model=CustomerSearchResponse,
+    responses={401: {"model": ErrorEnvelope}},
+)
 async def search_customers(
     keyword: str = Query('', max_length=200),
     ctx: AuthContext = Depends(require_auth),
@@ -142,10 +172,24 @@ async def search_customers(
 ):
     service = CustomerService(session)
     resp = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status_code = _http_status(resp.status)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail=resp.message)
+    items = [CustomerData.model_validate(c) for c in resp.data["items"]]
+    return CustomerSearchResponse(
+        message=resp.message,
+        data=CustomerSearchData(
+            keyword=resp.data["keyword"],
+            items=items,
+        ),
+    )
 
 
-@customers_router.get('/{customer_id}', response_model=ApiDataResponse)
+@customers_router.get(
+    '/{customer_id}',
+    response_model=CustomerResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def get_customer(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -153,10 +197,17 @@ async def get_customer(
 ):
     service = CustomerService(session)
     resp = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
 
 
-@customers_router.put('/{customer_id}', response_model=ApiDataResponse)
+@customers_router.put(
+    '/{customer_id}',
+    response_model=CustomerResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def update_customer(
     customer_id: int,
     body: dict,
@@ -165,10 +216,17 @@ async def update_customer(
 ):
     service = CustomerService(session)
     resp = await service.update_customer(customer_id, body, tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
 
 
-@customers_router.delete('/{customer_id}', response_model=ApiDataResponse)
+@customers_router.delete(
+    '/{customer_id}',
+    response_model=CustomerResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def delete_customer(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -176,10 +234,17 @@ async def delete_customer(
 ):
     service = CustomerService(session)
     resp = await service.delete_customer(customer_id, tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return CustomerResponse(message=resp.message, data=None)
 
 
-@customers_router.post('/{customer_id}/tags', response_model=ApiDataResponse)
+@customers_router.post(
+    '/{customer_id}/tags',
+    response_model=TagResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def add_tag(
     customer_id: int,
     body: TagOp,
@@ -188,10 +253,17 @@ async def add_tag(
 ):
     service = CustomerService(session)
     resp = await service.add_tag(customer_id, _sanitize(body.tag), tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return TagResponse(message=resp.message, data=resp.data)
 
 
-@customers_router.delete('/{customer_id}/tags/{tag}', response_model=ApiDataResponse)
+@customers_router.delete(
+    '/{customer_id}/tags/{tag}',
+    response_model=TagResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def remove_tag(
     customer_id: int,
     tag: str,
@@ -200,10 +272,17 @@ async def remove_tag(
 ):
     service = CustomerService(session)
     resp = await service.remove_tag(customer_id, _sanitize(tag), tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return TagResponse(message=resp.message, data=resp.data)
 
 
-@customers_router.put('/{customer_id}/status', response_model=ApiDataResponse)
+@customers_router.put(
+    '/{customer_id}/status',
+    response_model=StatusChangeResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def change_status(
     customer_id: int,
     body: StatusChange,
@@ -212,10 +291,17 @@ async def change_status(
 ):
     service = CustomerService(session)
     resp = await service.change_status(customer_id, body.status, tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return StatusChangeResponse(message=resp.message, data=resp.data)
 
 
-@customers_router.put('/{customer_id}/owner', response_model=ApiDataResponse)
+@customers_router.put(
+    '/{customer_id}/owner',
+    response_model=OwnerChangeResponse,
+    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def assign_owner(
     customer_id: int,
     body: OwnerChange,
@@ -224,10 +310,17 @@ async def assign_owner(
 ):
     service = CustomerService(session)
     resp = await service.assign_owner(customer_id, body.owner_id, tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return OwnerChangeResponse(message=resp.message, data=resp.data)
 
 
-@customers_router.post('/import', response_model=ApiDataResponse)
+@customers_router.post(
+    '/import',
+    response_model=BulkImportResponse,
+    responses={400: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
 async def bulk_import(
     body: BulkImport,
     ctx: AuthContext = Depends(require_auth),
@@ -237,4 +330,7 @@ async def bulk_import(
         raise HTTPException(status_code=400, detail='Maximum 1000 customers per import')
     service = CustomerService(session)
     resp = await service.bulk_import(body.customers, tenant_id=ctx.tenant_id)
-    return ApiDataResponse(**resp.to_dict())
+    status = _http_status(resp.status)
+    if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return BulkImportResponse(message=resp.message, data=resp.data)

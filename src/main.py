@@ -3,7 +3,7 @@ import os
 import secrets
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -66,7 +66,15 @@ def create_app() -> FastAPI:
         logger.error("app_exception", code=exc.code, detail=exc.detail, path=request.url.path)
         return JSONResponse(
             status_code=exc.status_code,
-            content={"code": exc.code, "detail": exc.detail},
+            content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        """Reshape HTTPException to ErrorEnvelope shape for Swagger consistency."""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail},
         )
 
     @app.exception_handler(Exception)
@@ -74,7 +82,7 @@ def create_app() -> FastAPI:
         logger.error("unhandled_exception", type=type(exc).__name__, detail=str(exc))
         return JSONResponse(
             status_code=500,
-            content={"code": "INTERNAL_ERROR", "detail": "Internal server error"},
+            content={"success": False, "message": "Internal server error", "code": "INTERNAL_ERROR"},
         )
 
     # ── Routes ─────────────────────────────────────────────────────────────

@@ -5,6 +5,7 @@ import sys
 from pathlib import Path
 from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
+from sqlalchemy.exc import MultipleResultsFound
 
 import pytest
 from dotenv import load_dotenv
@@ -75,6 +76,21 @@ class MockResult:
 
     def fetchall(self):
         return self._rows
+
+    # sync+async: for raw SQL via result.mappings()
+    def mappings(self):
+        class MappingResult:
+            def __init__(self, rows):
+                self._rows = rows
+            def one_or_none(self):
+                if not self._rows:
+                    return None
+                if len(self._rows) == 1:
+                    return self._rows[0]
+                raise MultipleResultsFound("one_or_none() expected 0 or 1 rows, got multiple")
+            def all(self):
+                return self._rows
+        return MappingResult(self._rows)
 
     # async: for ORM via result.scalars()
     def scalars(self):
@@ -199,7 +215,8 @@ def _make_mock_session():
             # COUNT query → return a scalar
             return MockResult([3])
 
-        if "select" in sql_text and "from customers" in sql_text:
+        if "select" in sql_text and "from customers" in sql_text and "where id" not in sql_text:
+            # SELECT * FROM customers (no WHERE id) → list query, 2 fixture rows
             tenant_filter = params.get("tenant_id", 0)
             rows = [
                 MockRow({
@@ -221,9 +238,39 @@ def _make_mock_session():
                 rows = []
             return MockResult(rows)
 
-        if "from customers" in sql_text:
+        if "from customers" in sql_text and "where id" not in sql_text:
+            # Non-SELECT or SELECT without WHERE id → list/other queries
+            tenant_filter = params.get("tenant_id", 0)
+            rows = [
+                MockRow({
+                    "id": 1, "tenant_id": tenant_filter,
+                    "name": "Customer A", "email": "a@test.com",
+                    "phone": "123", "company": "Acme",
+                    "status": "lead", "owner_id": 1,
+                    "tags": [], "created_at": None, "updated_at": None,
+                }),
+                MockRow({
+                    "id": 2, "tenant_id": tenant_filter,
+                    "name": "Customer B", "email": "b@test.com",
+                    "phone": "456", "company": "Beta",
+                    "status": "customer", "owner_id": 1,
+                    "tags": [], "created_at": None, "updated_at": None,
+                }),
+            ]
+            if tenant_filter == 2:
+                rows = []
+            return MockResult(rows)
+
+        if sql_text.strip().startswith("delete") and "customers" in sql_text:
+            # Simulate DELETE ... RETURNING id — always return a row for any id
+            return MockResult([MockRow({"id": params.get("id", 1)})])
+        if "from customers where id" in sql_text:
+            # Single-row lookup by id — only match fixture id=1
+            # Non-matching ids simulate "not found" (returns empty)
+            if params.get("id") != 1:
+                return MockResult([])
             return MockResult([MockRow({
-                "id": 1, "tenant_id": params.get("id", 1),
+                "id": 1, "tenant_id": params.get("tenant_id", 1),
                 "name": "Customer A", "email": "a@test.com",
                 "phone": "123", "company": "Acme",
                 "status": "lead", "owner_id": 1,
@@ -274,6 +321,10 @@ def _make_mock_session():
                 "is_active": True,
                 "created_at": None,
             })])
+
+        if "delete from customers" in sql_text:
+            # Simulate DELETE ... RETURNING id — id must match fixture row
+            return MockResult([MockRow({"id": params.get("id", 1)})])
 
         # Default: empty result
         return MockResult([])

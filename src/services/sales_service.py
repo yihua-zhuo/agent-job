@@ -226,7 +226,7 @@ class SalesService:
         count_result = await self.session.execute(
             select(
                 OpportunityModel.stage,
-                func.count(OpportunityModel.id).label("count"),
+                func.count(OpportunityModel.id).label("opp_count"),
             )
             .where(
                 OpportunityModel.pipeline_id == pipeline_id,
@@ -237,7 +237,7 @@ class SalesService:
         for row in count_result.all():
             stage_name = row.stage
             if stage_name in stage_counts:
-                stage_counts[stage_name] = row.count
+                stage_counts[stage_name] = row.opp_count
 
         return ApiResponse.success(
             data={"pipeline_id": pipeline_id, "stages": stage_counts},

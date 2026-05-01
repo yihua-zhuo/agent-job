@@ -27,7 +27,8 @@ class PipelineModel(Base):
 
     # Reverse relationship — use back_populates in PipelineStageModel
     stages: Mapped[List["PipelineStageModel"]] = relationship(
-        "PipelineStageModel", back_populates="pipeline", cascade="all, delete-orphan"
+        "PipelineStageModel", back_populates="pipeline",
+        cascade="all, delete-orphan", lazy="raise",
     )
 
     def to_dict(self) -> dict:
