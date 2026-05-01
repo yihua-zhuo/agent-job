@@ -22,9 +22,6 @@ def create_engine_from_env():
     url = os.environ.get("DATABASE_URL", "").strip()
     if not url:
         raise ValueError("DATABASE_URL environment variable is required")
-    # Normalise the scheme so SQLAlchemy recognises it.
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
     return create_engine(url, pool_pre_ping=True, pool_size=5)
 
 
