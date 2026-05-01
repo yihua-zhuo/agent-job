@@ -145,6 +145,7 @@ class PipelineData(BaseModel):
     stages: List[str]
     is_default: bool
     created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 
 class PipelineListData(BaseModel):
@@ -196,7 +197,7 @@ class OpportunityData(BaseModel):
     customer_id: int
     pipeline_id: int
     stage: str
-    amount: float = Field(..., ge=0)
+    amount: str
     probability: int = Field(..., ge=0, le=100)
     expected_close_date: Optional[str] = None
     owner_id: int

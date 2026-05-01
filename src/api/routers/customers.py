@@ -141,6 +141,9 @@ async def list_customers(
         page=page, page_size=page_size, status=status,
         owner_id=owner_id, tags=tags, tenant_id=ctx.tenant_id,
     )
+    status_code = _http_status(resp.status)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail=resp.message)
     items = [CustomerData.model_validate(c) for c in resp.data["items"]]
     return CustomerListResponse(
         message=resp.message,
@@ -168,6 +171,9 @@ async def search_customers(
 ):
     service = CustomerService(session)
     resp = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
+    status_code = _http_status(resp.status)
+    if status_code != 200:
+        raise HTTPException(status_code=status_code, detail=resp.message)
     items = [CustomerData.model_validate(c) for c in resp.data["items"]]
     return CustomerSearchResponse(
         message=resp.message,
