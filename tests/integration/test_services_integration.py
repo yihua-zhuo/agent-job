@@ -342,7 +342,7 @@ class TestTaskIntegration:
 class TestActivityIntegration:
     """Full activity lifecycle via the real DB."""
 
-    async def _seed_user(self, tenant_id: int) -> int:
+    async def _seed_user(self, tenant_id: int, async_session) -> int:
         user_svc = UserService()
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
@@ -353,8 +353,8 @@ class TestActivityIntegration:
         )
         return reg.data.id
 
-    async def _seed_customer(self, tenant_id: int) -> int:
-        cust_svc = CustomerService()
+    async def _seed_customer(self, tenant_id: int, async_session) -> int:
+        cust_svc = CustomerService(async_session)
         suffix = uuid.uuid4().hex[:8]
         result = await cust_svc.create_customer(
             data={"name": f"Activity Cust {suffix}", "email": f"act_{suffix}@example.com"},
@@ -362,10 +362,10 @@ class TestActivityIntegration:
         )
         return result.data["id"]
 
-    async def test_create_and_get_activity(self, db_schema, tenant_id):
+    async def test_create_and_get_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService()
-        uid = await self._seed_user(tenant_id)
-        cid = await self._seed_customer(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
+        cid = await self._seed_customer(tenant_id, async_session)
         result = await svc.create_activity(
             customer_id=cid,
             activity_type="call",
@@ -381,10 +381,10 @@ class TestActivityIntegration:
         assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data.content == "Follow-up call - Discussed pricing"
 
-    async def test_update_activity(self, db_schema, tenant_id):
+    async def test_update_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService()
-        uid = await self._seed_user(tenant_id)
-        cid = await self._seed_customer(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
+        cid = await self._seed_customer(tenant_id, async_session)
         created = await svc.create_activity(
             customer_id=cid,
             activity_type="email",
@@ -398,10 +398,10 @@ class TestActivityIntegration:
         assert updated.status == ResponseStatus.SUCCESS
         assert updated.data.content == "Updated Subject"
 
-    async def test_list_activities(self, db_schema, tenant_id):
+    async def test_list_activities(self, db_schema, tenant_id, async_session):
         svc = ActivityService()
-        uid = await self._seed_user(tenant_id)
-        cid = await self._seed_customer(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
+        cid = await self._seed_customer(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
         await svc.create_activity(
             customer_id=cid, activity_type="call",
@@ -418,10 +418,10 @@ class TestActivityIntegration:
         assert any(f"Call {suffix}" in c for c in contents)
         assert any(f"Email {suffix}" in c for c in contents)
 
-    async def test_get_customer_activities(self, db_schema, tenant_id):
+    async def test_get_customer_activities(self, db_schema, tenant_id, async_session):
         svc = ActivityService()
-        uid = await self._seed_user(tenant_id)
-        cid = await self._seed_customer(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
+        cid = await self._seed_customer(tenant_id, async_session)
         await svc.create_activity(customer_id=cid, activity_type="call", content="Call 1", created_by=uid, tenant_id=tenant_id)
         await svc.create_activity(customer_id=cid, activity_type="call", content="Call 2", created_by=uid, tenant_id=tenant_id)
 
@@ -429,10 +429,10 @@ class TestActivityIntegration:
         assert result.status == ResponseStatus.SUCCESS
         assert len(result.data) >= 2
 
-    async def test_delete_activity(self, db_schema, tenant_id):
+    async def test_delete_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService()
-        uid = await self._seed_user(tenant_id)
-        cid = await self._seed_customer(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
+        cid = await self._seed_customer(tenant_id, async_session)
         created = await svc.create_activity(
             customer_id=cid, activity_type="note", content="To Delete", created_by=uid, tenant_id=tenant_id
         )

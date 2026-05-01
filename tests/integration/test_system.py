@@ -2,8 +2,7 @@
 Integration tests using a real PostgreSQL database.
 
 All service calls use the current class-based service APIs. Each test
-exercises a full code path against the test database via get_db_session()
-(see conftest.py for how this is wired to the test DB).
+exercises a full code path against the test database.
 
 Run with:  pytest tests/integration/ -v
 """
@@ -85,8 +84,8 @@ class TestPipelineIntegration:
 class TestCustomerIntegration:
     """Full customer CRUD via the real DB."""
 
-    async def test_create_and_get_customer(self, db_schema, tenant_id):
-        svc = CustomerService()
+    async def test_create_and_get_customer(self, db_schema, tenant_id, async_session):
+        svc = CustomerService(async_session)
         result = await svc.create_customer(
             data={
                 "name": "Acme Corp",
@@ -103,15 +102,15 @@ class TestCustomerIntegration:
         assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data["email"] == "acme@example.com"
 
-    async def test_customer_not_found_returns_404(self, db_schema, tenant_id):
-        svc = CustomerService()
+    async def test_customer_not_found_returns_404(self, db_schema, tenant_id, async_session):
+        svc = CustomerService(async_session)
         result = await svc.get_customer(customer_id=999_999_999, tenant_id=tenant_id)
         assert result.status == ResponseStatus.NOT_FOUND
 
     async def test_customer_cross_tenant_isolation(
-        self, db_schema, tenant_id, tenant_id_2
+        self, db_schema, tenant_id, tenant_id_2, async_session
     ):
-        svc = CustomerService()
+        svc = CustomerService(async_session)
         c1 = await svc.create_customer(
             data={"name": "Customer One", "email": "c1@example.com"},
             tenant_id=tenant_id,
@@ -177,8 +176,8 @@ class TestUserIntegration:
 class TestSalesIntegration:
     """Opportunity CRUD via the real DB."""
 
-    async def _setup_pipeline_and_customer(self, tenant_id):
-        cust_svc = CustomerService()
+    async def _setup_pipeline_and_customer(self, tenant_id, session):
+        cust_svc = CustomerService(session)
         pipe_svc = PipelineService()
         suffix = uuid.uuid4().hex[:8]
         cust = await cust_svc.create_customer(
@@ -192,9 +191,9 @@ class TestSalesIntegration:
         assert pipe.status == ResponseStatus.SUCCESS
         return cust.data["id"], pipe.data["id"]
 
-    async def test_create_and_get_opportunity(self, db_schema, tenant_id):
-        sales_svc = SalesService()
-        cid, pid = await self._setup_pipeline_and_customer(tenant_id)
+    async def test_create_and_get_opportunity(self, db_schema, tenant_id, async_session):
+        sales_svc = SalesService(async_session)
+        cid, pid = await self._setup_pipeline_and_customer(tenant_id, async_session)
 
         opp = await sales_svc.create_opportunity(
             tenant_id=tenant_id,
@@ -213,9 +212,9 @@ class TestSalesIntegration:
         assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data["name"] == "Big Deal"
 
-    async def test_update_opportunity_stage(self, db_schema, tenant_id):
-        sales_svc = SalesService()
-        cid, pid = await self._setup_pipeline_and_customer(tenant_id)
+    async def test_update_opportunity_stage(self, db_schema, tenant_id, async_session):
+        sales_svc = SalesService(async_session)
+        cid, pid = await self._setup_pipeline_and_customer(tenant_id, async_session)
 
         opp = await sales_svc.create_opportunity(
             tenant_id=tenant_id,
@@ -244,17 +243,17 @@ class TestSalesIntegration:
 class TestTicketIntegration:
     """Ticket CRUD via the real DB."""
 
-    async def _ensure_customer(self, tenant_id) -> int:
-        svc = CustomerService()
+    async def _ensure_customer(self, tenant_id, session) -> int:
+        svc = CustomerService(session)
         result = await svc.create_customer(
             data={"name": "Ticket Cust", "email": f"tc_{uuid.uuid4().hex[:8]}@example.com"},
             tenant_id=tenant_id,
         )
         return result.data["id"]
 
-    async def test_create_and_get_ticket(self, db_schema, tenant_id):
+    async def test_create_and_get_ticket(self, db_schema, tenant_id, async_session):
         svc = TicketService()
-        cid = await self._ensure_customer(tenant_id)
+        cid = await self._ensure_customer(tenant_id, async_session)
 
         result = await svc.create_ticket(
             subject="Critical Bug",
@@ -271,9 +270,9 @@ class TestTicketIntegration:
         assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data.priority == TicketPriority.HIGH
 
-    async def test_update_ticket_status(self, db_schema, tenant_id):
+    async def test_update_ticket_status(self, db_schema, tenant_id, async_session):
         svc = TicketService()
-        cid = await self._ensure_customer(tenant_id)
+        cid = await self._ensure_customer(tenant_id, async_session)
 
         tkt = await svc.create_ticket(
             subject="Issue",
@@ -291,9 +290,9 @@ class TestTicketIntegration:
         assert updated.status == ResponseStatus.SUCCESS
         assert updated.data.status == TicketStatus.CLOSED
 
-    async def test_list_tickets_with_filters(self, db_schema, tenant_id):
+    async def test_list_tickets_with_filters(self, db_schema, tenant_id, async_session):
         svc = TicketService()
-        cid = await self._ensure_customer(tenant_id)
+        cid = await self._ensure_customer(tenant_id, async_session)
 
         await svc.create_ticket(
             subject="P1 Bug",

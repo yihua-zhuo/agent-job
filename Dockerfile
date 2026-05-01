@@ -7,16 +7,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY pyproject.toml ./
-RUN pip install --no-cache-dir flask gunicorn python-dotenv pymysql flask-cors
+RUN pip install --no-cache-dir -e ".[dev]"
 
 COPY src/ ./src/
+COPY alembic/ ./alembic/
+COPY alembic.ini ./
 
-ENV PORT=8080
 ENV HOST=0.0.0.0
 ENV PYTHONPATH=/app/src
 
 EXPOSE 8080
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 CMD curl -f http://localhost:8080/ || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+    CMD curl -f http://localhost:8080/ || exit 1
 
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "2", "--threads", "4", "--chdir", "/app/src", "app:app"]
+CMD ["uvicorn", "--host", "0.0.0.0", "--port", "8080", "--workers", "2", "main:app"]

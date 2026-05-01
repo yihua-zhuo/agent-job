@@ -95,3 +95,37 @@ def reset_engine(database_url: str):
     """
     global engine, async_session_maker
     _init_engine(database_url)
+
+
+# ---------------------------------------------------------------------------
+# FastAPI dependency — use this in route handlers via Depends(get_session)
+# ---------------------------------------------------------------------------
+from fastapi import Depends
+from typing import Annotated
+
+
+async def get_db() -> AsyncGenerator[AsyncSession, None]:
+    """FastAPI dependency that provides an async SQLAlchemy session.
+
+    Commits on normal exit, rolls back on exception, always closes the session.
+
+    Usage::
+
+        @router.get("/")
+        async def list_users(session: AsyncSession = Depends(get_db)):
+            ...
+    """
+    _lazy_init()
+    session: AsyncSession = async_session_maker()  # type: ignore
+    try:
+        yield session
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
+    finally:
+        await session.close()
+
+
+# Convenience type alias for route dependency injection
+SessionDep = Annotated[AsyncSession, Depends(get_db)]
