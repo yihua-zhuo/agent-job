@@ -56,35 +56,54 @@ class TestSessionScope:
 
         table_name = f"rollback_test_{random.randint(10000, 99999)}"
 
-        # Create the table in a committed transaction.
-        with session_scope() as s:
-            s.execute(
-                text(
-                    f"CREATE TABLE IF NOT EXISTS {table_name} "
-                    "(id SERIAL PRIMARY KEY, val TEXT)"
-                )
-            )
+        # Use a SQLite in-memory database for this unit test so it runs
+        # without an external PostgreSQL server.
+        from sqlalchemy import create_engine
+        from internal.db.engine import Base
+        sqlite_engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(sqlite_engine)
 
+        # Patch get_engine to return the SQLite engine, then restore.
+        import internal.db.engine
+        orig_engine = internal.db.engine._engine
+        internal.db.engine._engine = sqlite_engine
+        # Re-create SessionLocal bound to the SQLite engine.
+        from sqlalchemy.orm import sessionmaker
+        internal.db.engine.SessionLocal = sessionmaker(bind=sqlite_engine, autoflush=False, autocommit=False)
         try:
+            # Create the table in a committed transaction.
             with session_scope() as s:
                 s.execute(
-                    text(f"INSERT INTO {table_name}(val) VALUES ('to_rollback')")
+                    text(
+                        f"CREATE TABLE IF NOT EXISTS {table_name} "
+                        "(id INTEGER PRIMARY KEY, val TEXT)"
+                    )
                 )
-                raise RuntimeError("trigger rollback")
-        except RuntimeError:
-            pass  # Expected.
 
-        # Verify the row was rolled back (table still exists, row not present).
-        with session_scope() as s:
-            result = s.execute(
-                text(f"SELECT COUNT(*) FROM {table_name} WHERE val = 'to_rollback'")
-            )
-            count = result.scalar()
-            assert count == 0, f"Expected 0 rows after rollback, got {count}"
+            try:
+                with session_scope() as s:
+                    s.execute(
+                        text(f"INSERT INTO {table_name}(val) VALUES ('to_rollback')")
+                    )
+                    raise RuntimeError("trigger rollback")
+            except RuntimeError:
+                pass  # Expected.
 
-        # Clean up test table.
-        with session_scope() as s:
-            s.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+            # Verify the row was rolled back (table still exists, row not present).
+            with session_scope() as s:
+                result = s.execute(
+                    text(f"SELECT COUNT(*) FROM {table_name} WHERE val = 'to_rollback'")
+                )
+                count = result.scalar()
+                assert count == 0, f"Expected 0 rows after rollback, got {count}"
+
+            # Clean up test table.
+            with session_scope() as s:
+                s.execute(text(f"DROP TABLE IF EXISTS {table_name}"))
+        finally:
+            internal.db.engine._engine = orig_engine
+            internal.db.engine.SessionLocal = sessionmaker(bind=orig_engine, autoflush=False, autocommit=False)
+            sqlite_engine.dispose()
 
 
 class TestDatabaseConnection:
