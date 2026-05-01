@@ -217,7 +217,7 @@ class TestUserServiceIntegration:
         # list_users() returns PaginatedData[User]; User objects have .username
         result = await user_svc.list_users(page=1, page_size=20)
         assert result.status == ResponseStatus.SUCCESS
-        assert any(f"lu_{suffix}_0" in u.username for u in result.data.items)
+        assert any(u.username.startswith(f"lu_{suffix}_0") for u in result.data.items)
 
     async def test_search_users(self, db_schema, tenant_id, async_session):
         user_svc = UserService()
