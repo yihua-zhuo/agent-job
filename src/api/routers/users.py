@@ -428,8 +428,10 @@ async def get_current_active_user(
     """Return the user profile for the currently authenticated user.
     Powered by the JWT token obtained via the /auth/login endpoint.
     """
+    if ctx.tenant_id is None or ctx.tenant_id == 0:
+        raise HTTPException(status_code=401, detail="无效的租户信息")
     service = UserService(session)
-    user = await service.get_user_by_id(ctx.user_id, tenant_id=ctx.tenant_id or 0)
+    user = await service.get_user_by_id(ctx.user_id, tenant_id=ctx.tenant_id)
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
     return UserResponse(
