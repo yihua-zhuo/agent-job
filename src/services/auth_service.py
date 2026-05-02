@@ -84,22 +84,21 @@ class AuthService:
             row = result.fetchone()
             if row is None:
                 return None
+        if not self.verify_password(password, row[4]):
+            return None
 
-            if not self.verify_password(password, row[4]):
-                return None
-
-            return {
-                "id": row[0],
-                "tenant_id": row[1],
-                "username": row[2],
-                "email": row[3],
-                "role": row[5],
-                "status": row[6],
-                "full_name": row[7],
-                "bio": row[8],
-                "created_at": row[9].isoformat() if row[9] else None,
-                "updated_at": row[10].isoformat() if row[10] else None,
-            }
+        return {
+            "id": row[0],
+            "tenant_id": row[1],
+            "username": row[2],
+            "email": row[3],
+            "role": row[5],
+            "status": row[6],
+            "full_name": row[7],
+            "bio": row[8],
+            "created_at": row[9].isoformat() if row[9] else None,
+            "updated_at": row[10].isoformat() if row[10] else None,
+        }
 
     async def create_token(self, user_id: int, username: str, role: str, tenant_id: int = None) -> str:
         """Create a JWT token for an existing user.
