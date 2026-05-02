@@ -47,12 +47,13 @@ from sqlalchemy.pool import NullPool
 def _resolve_test_db_url() -> str | None:
     explicit = os.environ.get("TEST_DATABASE_URL", "").strip()
     if explicit:
+        # Rewrite bare postgresql:// to asyncpg driver for async SQLAlchemy
+        if explicit.startswith("postgresql://"):
+            return explicit.replace("postgresql://", "postgresql+asyncpg://", 1)
         return explicit
     inherited = os.environ.get("DATABASE_URL", "").strip()
     if not inherited:
         return None
-    # Rewrite sync driver hints to asyncpg; leave bare ``postgresql://`` alone
-    # so SQLAlchemy picks asyncpg via the next replace step.
     if inherited.startswith("postgresql+asyncpg://"):
         return inherited
     if inherited.startswith("postgresql+psycopg2://"):
@@ -89,8 +90,15 @@ _test_sync_engine = None
 def _get_test_async_engine():
     global _test_async_engine
     if _test_async_engine is None:
+        # Supabase pgbouncer (pool_mode=transaction) breaks prepared statements;
+        # pass statement_cache_size=0 to asyncpg via connect_args to disable caching.
         _test_async_engine = create_async_engine(
-            TEST_DATABASE_URL, poolclass=NullPool, echo=False
+            TEST_DATABASE_URL,
+            poolclass=NullPool,
+            echo=False,
+            connect_args={
+                "statement_cache_size": 0,
+            },
         )
     return _test_async_engine
 
@@ -256,3 +264,101 @@ def tenant_id_2() -> int:
 @pytest.fixture(scope="session")
 def event_loop_policy():
     return asyncio.DefaultEventLoopPolicy()
+
+
+# ── Web-layer integration fixtures (FastAPI router tests) ─────────────────────
+# These are imported so pytest discovers them without needing web_conftest.py
+# to be explicitly listed as a conftest.py plugin.
+
+import pytest_asyncio
+from httpx import AsyncClient, ASGITransport
+from typing import AsyncGenerator
+
+
+@pytest.fixture(scope="session")
+def fastapi_app():
+    """Import and return the FastAPI app from main.py."""
+    from main import app
+    return app
+
+
+@pytest_asyncio.fixture(scope="function")
+async def client(fastapi_app) -> AsyncGenerator[AsyncClient, None]:
+    """Async HTTP client that hits the FastAPI app directly via ASGI."""
+    transport = ASGITransport(app=fastapi_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        yield ac
+
+
+# auth_headers_* fixtures need async_session from above — they are declared
+# after async_session so pytest resolves them in the correct order.
+_tenant_id_web: int | None = None
+_tenant_id_2_web: int | None = None
+
+
+@pytest.fixture
+def tenant_id_web() -> int:
+    global _tenant_id_web
+    if _tenant_id_web is None:
+        _tenant_id_web = random.randint(10_000_000, 99_999_999)
+    return _tenant_id_web
+
+
+@pytest.fixture
+def tenant_id_2_web() -> int:
+    global _tenant_id_2_web
+    if _tenant_id_2_web is None:
+        _tenant_id_2_web = random.randint(10_000_000, 99_999_999)
+    return _tenant_id_2_web
+
+
+@pytest_asyncio.fixture(scope="function")
+async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
+    """Return a valid JWT Authorization header for the test tenant."""
+    os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
+    from services.auth_service import AuthService
+
+    auth_svc = AuthService(async_session)
+    token = auth_svc.generate_token(
+        user_id=999,
+        username="webtest",
+        role="admin",
+        tenant_id=tenant_id_web,
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture(scope="function")
+async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str]:
+    """Return a valid JWT Authorization header for tenant 2."""
+    os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
+    from services.auth_service import AuthService
+
+    auth_svc = AuthService(async_session)
+    token = auth_svc.generate_token(
+        user_id=999,
+        username="webtest2",
+        role="admin",
+        tenant_id=tenant_id_2_web,
+    )
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest_asyncio.fixture(scope="function")
+async def api_client(
+    client: AsyncClient,
+    auth_headers_web: dict[str, str],
+) -> AsyncClient:
+    """HTTP client pre-populated with valid auth headers."""
+    client.headers.update(auth_headers_web)
+    return client
+
+
+@pytest_asyncio.fixture(scope="function")
+async def api_client_tenant_2(
+    client: AsyncClient,
+    auth_headers_tenant_2: dict[str, str],
+) -> AsyncClient:
+    """HTTP client authenticated as tenant 2."""
+    client.headers.update(auth_headers_tenant_2)
+    return client
