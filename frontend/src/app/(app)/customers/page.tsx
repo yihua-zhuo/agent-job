@@ -1,8 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useCustomers, useCreateCustomer } from "@/lib/api/queries";
-import { useAuthStore } from "@/lib/store/auth-store";
-import { Badge } from "@/components/ui/badge";
+import { useCustomers, useSearchCustomers } from "@/lib/api/queries";
 
 const STATUS_COLORS: Record<string, string> = {
   lead: "bg-blue-100 text-blue-800",
@@ -35,10 +33,20 @@ function CustomerRow({ c }: { c: Record<string, unknown> }) {
   );
 }
 
+function useCustomersData(page: number, keyword: string) {
+  const search = useSearchCustomers(keyword);
+  const list = useCustomers(page);
+  if (keyword) return search;
+  return list;
+}
+
 export default function CustomersPage() {
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState("");
-  const { data, isLoading, isError } = useCustomers(keyword ? 1 : page);
+  const { data, isLoading, isError } = useCustomersData(
+    keyword ? 1 : page,
+    keyword
+  );
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
 

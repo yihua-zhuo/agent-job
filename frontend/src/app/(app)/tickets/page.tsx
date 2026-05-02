@@ -22,7 +22,7 @@ function Badge({ label, cls }: { label: string; cls: string }) {
 export default function TicketsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
-  const { data, isLoading, isError } = useTickets(statusFilter ? 1 : page);
+  const { data, isLoading, isError } = useTickets(page, statusFilter);
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
 

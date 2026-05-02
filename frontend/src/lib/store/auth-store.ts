@@ -1,5 +1,4 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
 
 export interface AuthUser {
   id: number;
@@ -16,20 +15,17 @@ export interface AuthUser {
 interface AuthState {
   token: string | null;
   user: AuthUser | null;
+  isHydrated: boolean;
   setAuth: (token: string, user: AuthUser) => void;
   clearAuth: () => void;
   isAuthenticated: () => boolean;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set, get) => ({
-      token: null,
-      user: null,
-      setAuth: (token, user) => set({ token, user }),
-      clearAuth: () => set({ token: null, user: null }),
-      isAuthenticated: () => !!get().token,
-    }),
-    { name: "crm-auth", partialize: (s) => ({ token: s.token, user: s.user }) }
-  )
-);
+export const useAuthStore = create<AuthState>()((set, get) => ({
+  token: null,
+  user: null,
+  isHydrated: true,
+  setAuth: (token, user) => set({ token, user }),
+  clearAuth: () => set({ token: null, user: null }),
+  isAuthenticated: () => !!get().token,
+}));

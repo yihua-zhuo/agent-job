@@ -8,7 +8,7 @@ export const qk = {
   customer: (id: number) => ["customer", id] as const,
   opportunities: (page = 1) => ["opportunities", page] as const,
   pipelines: () => ["pipelines"] as const,
-  tickets: (page = 1) => ["tickets", page] as const,
+  tickets: (page = 1, status = "") => ["tickets", page, status] as const,
   users: (page = 1) => ["users", page] as const,
 } as const;
 
@@ -92,11 +92,13 @@ export function useCreateOpportunity() {
 }
 
 // ── Tickets ─────────────────────────────────────────────────────────────────
-export function useTickets(page = 1) {
+export function useTickets(page = 1, status = "") {
   const token = useAuthStore((s) => s.token);
+  const params = new URLSearchParams({ page: String(page), page_size: "20" });
+  if (status) params.set("status", status);
   return useQuery({
-    queryKey: qk.tickets(page),
-    queryFn: () => apiClient.get(`/api/v1/tickets?page=${page}&page_size=20`, token ?? undefined),
+    queryKey: qk.tickets(page, status),
+    queryFn: () => apiClient.get(`/api/v1/tickets?${params}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
