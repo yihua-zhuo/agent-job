@@ -1,5 +1,6 @@
 """Users router — /api/v1/users and /api/v1/auth endpoints."""
 from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
@@ -54,6 +55,17 @@ class PasswordChange(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class Token(BaseModel):
+    """Standard OAuth2 token response for Swagger UI Authorize button."""
+    access_token: str
+    token_type: str = "bearer"
+
+
+# OAuth2 scheme — tokenUrl MUST match the login endpoint path.
+# This is what powers Swagger UI's "Authorize" button.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 class UserData(BaseModel):
@@ -375,16 +387,19 @@ async def register(
 
 @users_router.post(
     '/auth/login',
-    response_model=LoginResponse,
+    response_model=Token,
     responses={401: {"model": ErrorEnvelope}},
 )
 async def login(
-    body: LoginRequest,
+    form_data: OAuth2PasswordRequestForm = Depends(),
     session=Depends(get_db),
 ):
+    """Standard OAuth2 password flow — accepts form data (username + password).
+    Swagger UI 'Authorize' button sends credentials here as form-encoded.
+    """
     from configs.settings import settings
     auth_svc = AuthService(session, secret_key=settings.jwt_secret)
-    user_dict = await auth_svc.authenticate_user(body.username, body.password)
+    user_dict = await auth_svc.authenticate_user(form_data.username, form_data.password)
     if user_dict is None:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     token = auth_svc.generate_token(
@@ -393,12 +408,4 @@ async def login(
         role=user_dict["role"],
         tenant_id=user_dict.get("tenant_id"),
     )
-    return LoginResponse(
-        message="登录成功",
-        data={
-            "token": token,
-            "username": user_dict["username"],
-            "tenant_id": user_dict.get("tenant_id"),
-            "role": user_dict["role"],
-        },
-    )
+    return Token(access_token=token, token_type="bearer")
