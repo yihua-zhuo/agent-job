@@ -16,16 +16,14 @@ class SLAService:
         if session is None:
             context = get_db_session()
             try:
-                session = context.__enter__()
                 self._session_context = context
+                self.session = context
             except (AttributeError, TypeError):
-                # sync __enter__ not supported — leave session=None
-                # (async context callers must pass session explicitly)
-                session = None
                 self._session_context = None
+                self.session = None
         else:
             self._session_context = None
-        self.session = session
+            self.session = session
         self._ticket_service = ticket_service
 
     async def check_sla_status(
