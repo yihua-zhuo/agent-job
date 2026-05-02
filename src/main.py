@@ -18,6 +18,7 @@ from api import (
     tenants_router,
     tickets_router,
     activities_router,
+    notifications_router,
 )
 
 
@@ -99,6 +100,7 @@ def create_app() -> FastAPI:
     app.include_router(tenants_router)
     app.include_router(tickets_router)
     app.include_router(activities_router)
+    app.include_router(notifications_router)
 
     @app.get("/")
     async def health():

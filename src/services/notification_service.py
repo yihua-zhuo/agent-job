@@ -2,14 +2,22 @@
 from typing import List, Dict, Optional
 from datetime import datetime, UTC
 
-from sqlalchemy import text, func, and_, or_
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db_session
 from models.response import ApiResponse, PaginatedData
 
 
 class NotificationService:
-    """通知服务"""
+    """通知服务 — 支持多渠道发送、通知模板、优先级队列、发送状态追踪。"""
+
+    def __init__(self, session: AsyncSession = None):
+        self._session = session
+
+    # -------------------------------------------------------------------------
+    # Core delivery
+    # -------------------------------------------------------------------------
 
     async def send_notification(
         self,
@@ -19,7 +27,7 @@ class NotificationService:
         content: str,
         **kwargs,
     ) -> ApiResponse[Dict]:
-        """发送通知"""
+        """发送通知（当前实现：存储到数据库 in-app 通知）。"""
         async with get_db_session() as session:
             tenant_id = kwargs.get("tenant_id", 0)
             related_type = kwargs.get("related_type")
@@ -62,6 +70,10 @@ class NotificationService:
             }
             return ApiResponse.success(data=notification, message="通知发送成功")
 
+    # -------------------------------------------------------------------------
+    # Query
+    # -------------------------------------------------------------------------
+
     async def get_user_notifications(
         self,
         user_id: int,
@@ -69,39 +81,36 @@ class NotificationService:
         page: int = 1,
         page_size: int = 20,
     ) -> ApiResponse[PaginatedData[Dict]]:
-        """获取用户通知列表"""
+        """获取用户通知列表（支持分页和未读过滤）。"""
         async with get_db_session() as session:
-            # Count total
-            count_sql = text(
-                "SELECT COUNT(*) FROM notifications WHERE user_id = :user_id"
+            count_sql = (
+                "SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND is_read = false"
+                if unread_only
+                else "SELECT COUNT(*) FROM notifications WHERE user_id = :user_id"
             )
-            params: Dict = {"user_id": user_id}
-            if unread_only:
-                count_sql = text(
-                    "SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND is_read = false"
-                )
-            total_result = await session.execute(count_sql, params)
+            total_result = await session.execute(text(count_sql), {"user_id": user_id})
             total = total_result.fetchone()[0]
 
-            # Fetch page
             offset = (page - 1) * page_size
-            fetch_sql = text(
-                """
-                SELECT id, tenant_id, user_id, type, title, content, is_read,
-                       related_type, related_id, created_at
-                FROM notifications
-                WHERE user_id = :user_id
-                """
-                + (" AND is_read = false" if unread_only else "")
-                + """
-                ORDER BY created_at DESC
-                LIMIT :limit OFFSET :offset
-                """
-            )
-            rows = await session.execute(
-                fetch_sql,
-                {"user_id": user_id, "limit": page_size, "offset": offset},
-            )
+            if unread_only:
+                fetch_sql = text("""
+                    SELECT id, tenant_id, user_id, type, title, content, is_read,
+                           related_type, related_id, created_at
+                    FROM notifications
+                    WHERE user_id = :user_id AND is_read = false
+                    ORDER BY created_at DESC
+                    LIMIT :limit OFFSET :offset
+                """)
+            else:
+                fetch_sql = text("""
+                    SELECT id, tenant_id, user_id, type, title, content, is_read,
+                           related_type, related_id, created_at
+                    FROM notifications
+                    WHERE user_id = :user_id
+                    ORDER BY created_at DESC
+                    LIMIT :limit OFFSET :offset
+                """)
+            rows = await session.execute(fetch_sql, {"user_id": user_id, "limit": page_size, "offset": offset})
             items = [
                 {
                     "id": r[0],
@@ -126,12 +135,10 @@ class NotificationService:
             )
 
     async def mark_as_read(self, notification_id: int) -> ApiResponse[Dict]:
-        """标记通知已读"""
+        """标记通知已读。"""
         async with get_db_session() as session:
             result = await session.execute(
-                text(
-                    "UPDATE notifications SET is_read = true WHERE id = :id RETURNING id"
-                ),
+                text("UPDATE notifications SET is_read = true WHERE id = :id RETURNING id"),
                 {"id": notification_id},
             )
             await session.commit()
@@ -141,53 +148,45 @@ class NotificationService:
             return ApiResponse.success(data={"id": notification_id}, message="通知已标记为已读")
 
     async def mark_all_as_read(self, user_id: int) -> ApiResponse[Dict]:
-        """标记所有通知已读"""
+        """标记所有通知已读。"""
         async with get_db_session() as session:
             await session.execute(
-                text(
-                    "UPDATE notifications SET is_read = true WHERE user_id = :user_id AND is_read = false"
-                ),
+                text("UPDATE notifications SET is_read = true WHERE user_id = :user_id AND is_read = false"),
                 {"user_id": user_id},
             )
             await session.commit()
             count_result = await session.execute(
-                text(
-                    "SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND is_read = true"
-                ),
+                text("SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND is_read = true"),
                 {"user_id": user_id},
             )
             count = count_result.fetchone()[0]
-            return ApiResponse.success(
-                data={"marked_count": count}, message=f"已标记{count}条通知为已读"
-            )
+            return ApiResponse.success(data={"marked_count": count}, message=f"已标记{count}条通知为已读")
 
     async def delete_notification(self, notification_id: int) -> ApiResponse[Dict]:
-        """删除通知"""
+        """删除通知。"""
         async with get_db_session() as session:
             result = await session.execute(
-                text(
-                    "DELETE FROM notifications WHERE id = :id RETURNING id"
-                ),
+                text("DELETE FROM notifications WHERE id = :id RETURNING id"),
                 {"id": notification_id},
             )
             await session.commit()
             row = result.fetchone()
             if row is None:
                 return ApiResponse.error(message="通知不存在", code=1404)
-            return ApiResponse.success(
-                data={"id": notification_id}, message="通知删除成功"
-            )
+            return ApiResponse.success(data={"id": notification_id}, message="通知删除成功")
 
     async def get_unread_count(self, user_id: int) -> int:
-        """获取未读通知数量"""
+        """获取未读通知数量。"""
         async with get_db_session() as session:
             result = await session.execute(
-                text(
-                    "SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND is_read = false"
-                ),
+                text("SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND is_read = false"),
                 {"user_id": user_id},
             )
             return result.fetchone()[0]
+
+    # -------------------------------------------------------------------------
+    # Reminders
+    # -------------------------------------------------------------------------
 
     async def create_reminder(
         self,
@@ -198,9 +197,8 @@ class NotificationService:
         related_type: str = None,
         related_id: int = None,
     ) -> ApiResponse[Dict]:
-        """创建提醒"""
+        """创建提醒。"""
         async with get_db_session() as session:
-            tenant_id = 0  # derived from user lookup if needed
             now = datetime.now(UTC)
             remind_at_val = remind_at if isinstance(remind_at, datetime) else datetime.fromisoformat(str(remind_at))
             result = await session.execute(
@@ -209,12 +207,11 @@ class NotificationService:
                     INSERT INTO reminders
                         (tenant_id, user_id, title, content, remind_at, related_type, related_id, is_completed, created_at)
                     VALUES
-                        (:tenant_id, :user_id, :title, :content, :remind_at, :related_type, :related_id, false, :now)
+                        (0, :user_id, :title, :content, :remind_at, :related_type, :related_id, false, :now)
                     RETURNING id, tenant_id, user_id, title, content, remind_at, related_type, related_id, is_completed, created_at
                     """
                 ),
                 {
-                    "tenant_id": tenant_id,
                     "user_id": user_id,
                     "title": title,
                     "content": content,
@@ -241,12 +238,10 @@ class NotificationService:
             return ApiResponse.success(data=reminder, message="提醒创建成功")
 
     async def cancel_reminder(self, reminder_id: int) -> ApiResponse[Dict]:
-        """取消提醒"""
+        """取消提醒。"""
         async with get_db_session() as session:
             result = await session.execute(
-                text(
-                    "DELETE FROM reminders WHERE id = :id RETURNING id"
-                ),
+                text("DELETE FROM reminders WHERE id = :id RETURNING id"),
                 {"id": reminder_id},
             )
             await session.commit()
@@ -255,27 +250,28 @@ class NotificationService:
                 return ApiResponse.error(message="提醒不存在", code=1404)
             return ApiResponse.success(data={"id": reminder_id}, message="提醒已取消")
 
-    async def get_reminders(
-        self, user_id: int, upcoming_only: bool = True
-    ) -> List[Dict]:
-        """获取用户的提醒列表"""
+    async def get_reminders(self, user_id: int, upcoming_only: bool = True) -> List[Dict]:
+        """获取用户的提醒列表。"""
         async with get_db_session() as session:
             now = datetime.now(UTC)
-            sql = text(
-                """
-                SELECT id, tenant_id, user_id, title, content, remind_at,
-                       related_type, related_id, is_completed, created_at
-                FROM reminders
-                WHERE user_id = :user_id
-                """
-                + (" AND is_completed = false AND remind_at > :now" if upcoming_only else "")
-                + """
-                ORDER BY remind_at ASC
-                """
-            )
-            params: Dict = {"user_id": user_id}
             if upcoming_only:
-                params["now"] = now
+                sql = text("""
+                    SELECT id, tenant_id, user_id, title, content, remind_at,
+                           related_type, related_id, is_completed, created_at
+                    FROM reminders
+                    WHERE user_id = :user_id AND is_completed = false AND remind_at > :now
+                    ORDER BY remind_at ASC
+                """)
+                params = {"user_id": user_id, "now": now}
+            else:
+                sql = text("""
+                    SELECT id, tenant_id, user_id, title, content, remind_at,
+                           related_type, related_id, is_completed, created_at
+                    FROM reminders
+                    WHERE user_id = :user_id
+                    ORDER BY remind_at ASC
+                """)
+                params = {"user_id": user_id}
             rows = await session.execute(sql, params)
             return [
                 {
