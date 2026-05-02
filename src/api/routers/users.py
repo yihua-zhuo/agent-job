@@ -194,6 +194,42 @@ async def list_users(
 
 
 @users_router.get(
+    '/users/me',
+    response_model=UserResponse,
+    responses={401: {"model": ErrorEnvelope}, 404: {"model": ErrorEnvelope}},
+    summary="Get current authenticated user",
+)
+async def get_current_active_user(
+    current_user: AuthContext = Depends(get_current_user),
+    session=Depends(get_db),
+):
+    """Return the user profile for the currently authenticated user.
+    Powered by the JWT token obtained via the /auth/login endpoint.
+    """
+    if current_user.tenant_id is None or current_user.tenant_id == 0:
+        raise HTTPException(status_code=401, detail="无效的租户信息")
+    service = UserService(session)
+    user = await service.get_user_by_id(current_user.user_id, tenant_id=current_user.tenant_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return UserResponse(
+        message="查询成功",
+        data=UserData(
+            id=user.id,
+            tenant_id=user.tenant_id,
+            username=user.username,
+            email=user.email,
+            role=user.role.value if hasattr(user.role, "value") else str(user.role),
+            status=user.status.value if hasattr(user.status, "value") else str(user.status),
+            full_name=user.full_name,
+            bio=user.bio,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+            updated_at=user.updated_at.isoformat() if user.updated_at else None,
+        ),
+    )
+
+
+@users_router.get(
     '/users/{user_id}',
     response_model=UserResponse,
     responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
@@ -412,41 +448,3 @@ async def login(
     return Token(access_token=token, token_type="bearer")
 
 
-# ---------------------------------------------------------------------------
-# Current user endpoint — protected, uses oauth2_scheme directly
-# ---------------------------------------------------------------------------
-
-@users_router.get(
-    '/users/me',
-    response_model=UserResponse,
-    responses={401: {"model": ErrorEnvelope}},
-    summary="Get current authenticated user",
-)
-async def get_current_active_user(
-    current_user: AuthContext = Depends(get_current_user),
-    session=Depends(get_db),
-):
-    """Return the user profile for the currently authenticated user.
-    Powered by the JWT token obtained via the /auth/login endpoint.
-    """
-    if current_user.tenant_id is None or current_user.tenant_id == 0:
-        raise HTTPException(status_code=401, detail="无效的租户信息")
-    service = UserService(session)
-    user = await service.get_user_by_id(current_user.user_id, tenant_id=current_user.tenant_id)
-    if user is None:
-        raise HTTPException(status_code=404, detail="用户不存在")
-    return UserResponse(
-        message="查询成功",
-        data=UserData(
-            id=user.id,
-            tenant_id=user.tenant_id,
-            username=user.username,
-            email=user.email,
-            role=user.role.value if hasattr(user.role, "value") else str(user.role),
-            status=user.status.value if hasattr(user.status, "value") else str(user.status),
-            full_name=user.full_name,
-            bio=user.bio,
-            created_at=user.created_at.isoformat() if user.created_at else None,
-            updated_at=user.updated_at.isoformat() if user.updated_at else None,
-        ),
-    )
