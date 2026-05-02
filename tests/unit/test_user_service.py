@@ -4,8 +4,8 @@ from services.user_service import UserService
 
 
 @pytest.fixture
-def service(mock_get_db_session):
-    return UserService(mock_get_db_session)
+def service(mock_db_session):
+    return UserService(mock_db_session)
 
 
 @pytest.mark.asyncio

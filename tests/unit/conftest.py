@@ -475,10 +475,12 @@ def _make_mock_session():
 # ---------------------------------------------------------------------------
 # Auto-use fixture: patches get_db_session in every service module so tests
 # never need a real DATABASE_URL or database connection.
+# Exposed as mock_db_session so service-level fixtures can inject it explicitly
+# instead of each test re-creating its own session.
 # ---------------------------------------------------------------------------
 
 @pytest.fixture(autouse=True)
-def mock_get_db_session(monkeypatch):
+def mock_db_session(monkeypatch):
     session = _make_mock_session()
 
     @asynccontextmanager
