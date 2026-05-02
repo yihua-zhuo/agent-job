@@ -409,3 +409,41 @@ async def login(
         tenant_id=user_dict.get("tenant_id"),
     )
     return Token(access_token=token, token_type="bearer")
+
+
+# ---------------------------------------------------------------------------
+# Current user endpoint — protected, uses oauth2_scheme directly
+# ---------------------------------------------------------------------------
+
+@users_router.get(
+    '/users/me',
+    response_model=UserResponse,
+    responses={401: {"model": ErrorEnvelope}},
+    summary="Get current authenticated user",
+)
+async def get_current_active_user(
+    ctx: AuthContext = Depends(require_auth),
+    session=Depends(get_db),
+):
+    """Return the user profile for the currently authenticated user.
+    Powered by the JWT token obtained via the /auth/login endpoint.
+    """
+    service = UserService(session)
+    user = await service.get_user_by_id(ctx.user_id, tenant_id=ctx.tenant_id or 0)
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return UserResponse(
+        message="查询成功",
+        data=UserData(
+            id=user.id,
+            tenant_id=user.tenant_id,
+            username=user.username,
+            email=user.email,
+            role=user.role.value if hasattr(user.role, "value") else str(user.role),
+            status=user.status.value if hasattr(user.status, "value") else str(user.status),
+            full_name=user.full_name,
+            bio=user.bio,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+            updated_at=user.updated_at.isoformat() if user.updated_at else None,
+        ),
+    )
