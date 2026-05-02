@@ -24,11 +24,11 @@ export const apiClient = {
 
   async request<T>(path: string, options: RequestInit & { token?: string } = {}): Promise<T> {
     const { token, ...fetchOptions } = options;
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...(fetchOptions.headers as Record<string, string> || {}),
-    };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const headers = new Headers(fetchOptions.headers as Record<string, string> | undefined);
+    if (fetchOptions.body != null) {
+      headers.set("Content-Type", "application/json");
+    }
+    if (token) headers.set("Authorization", `Bearer ${token}`);
 
     const response = await fetch(`${this.baseUrl}${path}`, {
       ...fetchOptions,
