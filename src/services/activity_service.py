@@ -18,17 +18,18 @@ class ActivityService:
         if session is None:
             context = get_db_session()
             try:
-                session = context.__enter__()
+                # Store the async context manager itself — 'async with self.session'
+                # will call __aenter__() correctly rather than the sync version.
                 self._session_context = context
+                self.session = context
             except (AttributeError, TypeError):
-                # sync __enter__ not supported — leave session=None
+                # get_db_session returned something weird — leave session=None
                 # (async context callers must pass session explicitly)
-                session = None
                 self._session_context = None
+                self.session = None
         else:
             self._session_context = None
-        self.session = session
-        self.session = session
+            self.session = session
 
     async def _scope(self, tenant_id: int) -> str:
         """Return a SQL WHERE clause snippet scoped to tenant_id."""
