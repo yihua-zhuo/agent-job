@@ -178,6 +178,7 @@ class ActivityService:
                 )
                 result = await self.session.execute(update_sql, params)
                 updated_row = result.fetchone()
+                await self.session.commit()
                 activity = self._row_to_activity(updated_row)
                 return ApiResponse.success(data=activity, message="活动记录更新成功")
         except Exception as e:
@@ -199,6 +200,7 @@ class ActivityService:
                 row = result.fetchone()
                 if not row:
                     return ApiResponse.error(message="活动记录不存在", code=1404)
+                await self.session.commit()
                 return ApiResponse.success(data={"id": activity_id}, message="活动记录删除成功")
         except Exception as e:
             return ApiResponse.error(message=f"删除活动记录失败: {str(e)}", code=1001)
