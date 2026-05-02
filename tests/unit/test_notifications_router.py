@@ -33,6 +33,14 @@ def _app():
     return TestClient(app, raise_server_exceptions=False)
 
 
+def _app_invalid_tenant(tenant_id: int = 0):
+    app = FastAPI()
+    app.include_router(notifications_router)
+    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=tenant_id)
+    app.dependency_overrides[get_db] = lambda: MagicMock()
+    return TestClient(app, raise_server_exceptions=False)
+
+
 # ---------------------------------------------------------------------------
 # GET /notifications
 # ---------------------------------------------------------------------------
@@ -240,3 +248,68 @@ class TestCancelReminder:
             client = _app()
             response = client.delete("/api/v1/reminders/999")
             assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Invalid tenant tests
+# ---------------------------------------------------------------------------
+
+class TestInvalidTenant:
+    def test_list_notifications_invalid_tenant(self):
+        client = _app_invalid_tenant(tenant_id=0)
+        response = client.get("/api/v1/notifications")
+        assert response.status_code == 401
+
+    def test_send_notification_invalid_tenant(self):
+        client = _app_invalid_tenant(tenant_id=0)
+        response = client.post("/api/v1/notifications/send", json={
+            "user_id": 1, "notification_type": "info",
+            "title": "Test", "content": "Test",
+        })
+        assert response.status_code == 401
+
+    def test_mark_read_invalid_tenant(self):
+        client = _app_invalid_tenant(tenant_id=0)
+        response = client.put("/api/v1/notifications/1/read")
+        assert response.status_code == 401
+
+    def test_mark_all_read_invalid_tenant(self):
+        client = _app_invalid_tenant(tenant_id=0)
+        response = client.post("/api/v1/notifications/mark-all-read")
+        assert response.status_code == 401
+
+    def test_get_preferences_invalid_tenant(self):
+        client = _app_invalid_tenant(tenant_id=0)
+        response = client.get("/api/v1/notifications/preferences")
+        assert response.status_code == 401
+
+    def test_update_preferences_invalid_tenant(self):
+        client = _app_invalid_tenant(tenant_id=0)
+        response = client.put("/api/v1/notifications/preferences", json={"email": False})
+        assert response.status_code == 401
+
+    def test_create_reminder_invalid_tenant(self):
+        client = _app_invalid_tenant(tenant_id=0)
+        response = client.post("/api/v1/reminders", json={
+            "title": "Test", "remind_at": "2026-12-31T09:00:00",
+        })
+        assert response.status_code == 401
+
+    def test_list_reminders_invalid_tenant(self):
+        client = _app_invalid_tenant(tenant_id=0)
+        response = client.get("/api/v1/reminders")
+        assert response.status_code == 401
+
+    def test_cancel_reminder_invalid_tenant(self):
+        client = _app_invalid_tenant(tenant_id=0)
+        response = client.delete("/api/v1/reminders/1")
+        assert response.status_code == 401
+
+    def test_list_notifications_invalid_tenant_none(self):
+        app = FastAPI()
+        app.include_router(notifications_router)
+        app.dependency_overrides[require_auth] = lambda: AuthContext(user_id=99, tenant_id=None, roles=[])
+        app.dependency_overrides[get_db] = lambda: MagicMock()
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/api/v1/notifications")
+        assert response.status_code == 401

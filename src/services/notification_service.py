@@ -13,19 +13,20 @@ class NotificationService:
     """通知服务 — 支持多渠道发送、通知模板、优先级队列、发送状态追踪。"""
 
     def __init__(self, session: AsyncSession = None):
-        self._session = session
-
-    def _session_scope(self):
-        """Return a session from injected self._session or obtain a fresh one."""
-        if self._session is not None:
-            return self._session
-        return get_db_session().__aenter__
-
-    async def _run_in_session(self, coro):
-        if self._session is not None:
-            return await coro
-        async with get_db_session() as session:
-            return await coro(session)
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                session = context.__enter__()
+                self._session_context = context
+            except (AttributeError, TypeError):
+                # sync __enter__ not supported — leave session=None
+                # (async context callers must pass session explicitly)
+                session = None
+                self._session_context = None
+        else:
+            self._session_context = None
+        self.session = session
 
     # -------------------------------------------------------------------------
     # Core delivery
@@ -42,9 +43,9 @@ class NotificationService:
         related_id: Optional[int] = None,
     ) -> ApiResponse[Dict]:
         """发送通知（当前实现：存储到数据库 in-app 通知）。"""
-        async with get_db_session() as session:
+        async with self.session:
             now = datetime.now(UTC)
-            result = await session.execute(
+            result = await self.session.execute(
                 text(
                     """
                     INSERT INTO notifications
@@ -65,7 +66,7 @@ class NotificationService:
                     "now": now,
                 },
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             notification = {
                 "id": row[0],
@@ -94,13 +95,13 @@ class NotificationService:
         page_size: int = 20,
     ) -> ApiResponse[PaginatedData[Dict]]:
         """获取用户通知列表（支持分页和未读过滤，多租户隔离）。"""
-        async with get_db_session() as session:
+        async with self.session:
             count_sql = (
                 "SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND tenant_id = :tenant_id AND is_read = false"
                 if unread_only
                 else "SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND tenant_id = :tenant_id"
             )
-            total_result = await session.execute(text(count_sql), {"user_id": user_id, "tenant_id": tenant_id})
+            total_result = await self.session.execute(text(count_sql), {"user_id": user_id, "tenant_id": tenant_id})
             total = total_result.fetchone()[0]
 
             offset = (page - 1) * page_size
@@ -122,7 +123,7 @@ class NotificationService:
                     ORDER BY created_at DESC
                     LIMIT :limit OFFSET :offset
                 """)
-            rows = await session.execute(fetch_sql, {"user_id": user_id, "tenant_id": tenant_id, "limit": page_size, "offset": offset})
+            rows = await self.session.execute(fetch_sql, {"user_id": user_id, "tenant_id": tenant_id, "limit": page_size, "offset": offset})
             items = [
                 {
                     "id": r[0],
@@ -148,12 +149,12 @@ class NotificationService:
 
     async def mark_as_read(self, notification_id: int, tenant_id: int) -> ApiResponse[Dict]:
         """标记通知已读（多租户隔离）。"""
-        async with get_db_session() as session:
-            result = await session.execute(
+        async with self.session:
+            result = await self.session.execute(
                 text("UPDATE notifications SET is_read = true WHERE id = :id AND tenant_id = :tenant_id RETURNING id, tenant_id, user_id, is_read"),
                 {"id": notification_id, "tenant_id": tenant_id},
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if row is None:
                 return ApiResponse.error(message="通知不存在", code=1404)
@@ -161,13 +162,13 @@ class NotificationService:
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int) -> ApiResponse[Dict]:
         """标记所有通知已读（多租户隔离）。"""
-        async with get_db_session() as session:
-            await session.execute(
+        async with self.session:
+            await self.session.execute(
                 text("UPDATE notifications SET is_read = true WHERE user_id = :user_id AND tenant_id = :tenant_id AND is_read = false"),
                 {"user_id": user_id, "tenant_id": tenant_id},
             )
-            await session.commit()
-            count_result = await session.execute(
+            await self.session.commit()
+            count_result = await self.session.execute(
                 text("SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND tenant_id = :tenant_id AND is_read = true"),
                 {"user_id": user_id, "tenant_id": tenant_id},
             )
@@ -176,12 +177,12 @@ class NotificationService:
 
     async def delete_notification(self, notification_id: int, tenant_id: int) -> ApiResponse[Dict]:
         """删除通知（多租户隔离）。"""
-        async with get_db_session() as session:
-            result = await session.execute(
+        async with self.session:
+            result = await self.session.execute(
                 text("DELETE FROM notifications WHERE id = :id AND tenant_id = :tenant_id RETURNING id"),
                 {"id": notification_id, "tenant_id": tenant_id},
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if row is None:
                 return ApiResponse.error(message="通知不存在", code=1404)
@@ -189,8 +190,8 @@ class NotificationService:
 
     async def get_unread_count(self, user_id: int, tenant_id: int) -> int:
         """获取未读通知数量（多租户隔离）。"""
-        async with get_db_session() as session:
-            result = await session.execute(
+        async with self.session:
+            result = await self.session.execute(
                 text("SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND tenant_id = :tenant_id AND is_read = false"),
                 {"user_id": user_id, "tenant_id": tenant_id},
             )
@@ -211,12 +212,12 @@ class NotificationService:
         related_id: Optional[int] = None,
     ) -> ApiResponse[Dict]:
         """创建提醒（多租户隔离）。"""
-        async with get_db_session() as session:
+        async with self.session:
             if tenant_id is None or tenant_id == 0:
                 raise ValueError("invalid tenant_id for create_reminder")
             now = datetime.now(UTC)
             remind_at_val = remind_at if isinstance(remind_at, datetime) else datetime.fromisoformat(str(remind_at))
-            result = await session.execute(
+            result = await self.session.execute(
                 text(
                     """
                     INSERT INTO reminders
@@ -237,7 +238,7 @@ class NotificationService:
                     "now": now,
                 },
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             reminder = {
                 "id": row[0],
@@ -255,12 +256,12 @@ class NotificationService:
 
     async def cancel_reminder(self, reminder_id: int, tenant_id: int) -> ApiResponse[Dict]:
         """取消提醒（多租户隔离）。"""
-        async with get_db_session() as session:
-            result = await session.execute(
+        async with self.session:
+            result = await self.session.execute(
                 text("DELETE FROM reminders WHERE id = :id AND tenant_id = :tenant_id RETURNING id"),
                 {"id": reminder_id, "tenant_id": tenant_id},
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if row is None:
                 return ApiResponse.error(message="提醒不存在", code=1404)
@@ -268,7 +269,7 @@ class NotificationService:
 
     async def get_reminders(self, user_id: int, tenant_id: int, upcoming_only: bool = True) -> List[Dict]:
         """获取用户的提醒列表（多租户隔离）。"""
-        async with get_db_session() as session:
+        async with self.session:
             now = datetime.now(UTC)
             if upcoming_only:
                 sql = text("""
@@ -288,7 +289,7 @@ class NotificationService:
                     ORDER BY remind_at ASC
                 """)
                 params = {"user_id": user_id, "tenant_id": tenant_id}
-            rows = await session.execute(sql, params)
+            rows = await self.session.execute(sql, params)
             return [
                 {
                     "id": r[0],
