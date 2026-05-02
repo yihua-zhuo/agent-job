@@ -42,7 +42,10 @@ class ImportExportService:
     FORMAT_JSON = "json"
     FORMAT_PDF = "pdf"
 
-    def __init__(self):
+    def __init__(self, session: AsyncSession = None):
+        self.session = session
+        if session is not None:
+            self._require_session()
         self.file_helper = FileHelper()
         # 必填字段配置
         self.required_fields = {
@@ -81,14 +84,6 @@ class ImportExportService:
             return True
         except (ValueError, TypeError):
             return False
-
-    # ------------------------------------------------------------------
-    #  Import – customers
-    # ------------------------------------------------------------------
-
-    def __init__(self, session: AsyncSession = None):
-        self.session = session
-        self._require_session()
 
     def _require_session(self):
         if self.session is None:
@@ -134,25 +129,26 @@ class ImportExportService:
                     "errors": validation_result["errors"],
                 }
 
-            # Persist to DB
-            async with self.session:
-                for row in data:
-                    tags_val = row.get("tags", [])
-                    # Serialize tags list as JSON string for asyncpg compatibility
-                    tags_str = json.dumps(tags_val) if isinstance(tags_val, list) else tags_val
-                    stmt = pg_insert(_customers_t).values(
-                        tenant_id=tenant_id,
-                        name=row["name"],
-                        email=row.get("email", ""),
-                        phone=row.get("phone", ""),
-                        company=row.get("company", ""),
-                        status=row.get("status", "lead"),
-                        owner_id=owner_id or row.get("owner_id", 0),
-                        tags=tags_str,
-                        created_at=datetime.now(),
-                        updated_at=datetime.now(),
-                    )
-                    await self.session.execute(stmt)
+            # Persist to DB — execute inserts directly (no async with wrapper, which
+            # creates an inner savepoint that prevents the outer commit from seeing
+            # the buffered changes in some SQLAlchemy/asyncpg configurations).
+            for row in data:
+                tags_val = row.get("tags", [])
+                tags_str = json.dumps(tags_val) if isinstance(tags_val, list) else tags_val
+                stmt = pg_insert(_customers_t).values(
+                    tenant_id=tenant_id,
+                    name=row["name"],
+                    email=row.get("email", ""),
+                    phone=row.get("phone", ""),
+                    company=row.get("company", ""),
+                    status=row.get("status", "lead"),
+                    owner_id=owner_id or row.get("owner_id", 0),
+                    tags=tags_str,
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                )
+                await self.session.execute(stmt)
+            await self.session.commit()
 
             return {
                 "success_count": len(data),
@@ -206,31 +202,34 @@ class ImportExportService:
                 }
 
             # Persist to DB
-            async with self.session:
-                for row in data:
-                    amount_val = row.get("amount", 0)
-                    if isinstance(amount_val, str):
-                        amount_val = Decimal(amount_val)
-                    expected_close = row.get("expected_close_date")
-                    if isinstance(expected_close, str):
-                        expected_close = datetime.fromisoformat(expected_close)
-                    elif expected_close is None:
-                        expected_close = datetime.now()
+            # Persist to DB — execute inserts directly (no async with wrapper, which
+            # creates an inner savepoint that prevents the outer commit from seeing
+            # the buffered changes in some SQLAlchemy/asyncpg configurations).
+            for row in data:
+                amount_val = row.get("amount", 0)
+                if isinstance(amount_val, str):
+                    amount_val = Decimal(amount_val)
+                expected_close = row.get("expected_close_date")
+                if isinstance(expected_close, str):
+                    expected_close = datetime.fromisoformat(expected_close)
+                elif expected_close is None:
+                    expected_close = datetime.now()
 
-                    stmt = pg_insert(_opportunities_t).values(
-                        tenant_id=tenant_id,
-                        customer_id=int(row["customer_id"]),
-                        name=row["name"],
-                        stage=row.get("stage", "lead"),
-                        amount=amount_val,
-                        probability=int(row.get("probability", 0)),
-                        expected_close_date=expected_close,
-                        owner_id=owner_id or row.get("owner_id", 0),
-                        pipeline_id=row.get("pipeline_id"),
-                        created_at=datetime.now(),
-                        updated_at=datetime.now(),
-                    )
-                    await self.session.execute(stmt)
+                stmt = pg_insert(_opportunities_t).values(
+                    tenant_id=tenant_id,
+                    customer_id=int(row["customer_id"]),
+                    name=row["name"],
+                    stage=row.get("stage", "lead"),
+                    amount=amount_val,
+                    probability=int(row.get("probability", 0)),
+                    expected_close_date=expected_close,
+                    owner_id=owner_id or row.get("owner_id", 0),
+                    pipeline_id=row.get("pipeline_id"),
+                    created_at=datetime.now(),
+                    updated_at=datetime.now(),
+                )
+                await self.session.execute(stmt)
+            await self.session.commit()
 
             return {
                 "success_count": len(data),

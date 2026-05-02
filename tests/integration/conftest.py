@@ -236,6 +236,7 @@ async def async_session(db_schema) -> AsyncGenerator[AsyncSession, None]:
     factory = _get_test_async_session_factory()
     async with factory() as session:
         yield session
+        await session.rollback()
 
 
 @pytest.fixture(scope="function")
