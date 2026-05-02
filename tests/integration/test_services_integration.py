@@ -33,9 +33,9 @@ from services.workflow_service import WorkflowService
 class TestWorkflowIntegration:
     """Full workflow lifecycle via the real DB."""
 
-    async def _seed_user(self, tenant_id: int) -> int:
+    async def _seed_user(self, tenant_id: int, async_session) -> int:
         """Create a user and return their id (needed for created_by)."""
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"wfuser_{suffix}",
@@ -45,8 +45,8 @@ class TestWorkflowIntegration:
         )
         return reg.data.id
 
-    async def test_create_and_get_workflow(self, db_schema, tenant_id):
-        uid = await self._seed_user(tenant_id)
+    async def test_create_and_get_workflow(self, db_schema, tenant_id, async_session):
+        uid = await self._seed_user(tenant_id, async_session)
         svc = WorkflowService()
         result = await svc.create_workflow(
             name="Lead Follow-up",
@@ -66,8 +66,8 @@ class TestWorkflowIntegration:
         assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data["name"] == "Lead Follow-up"
 
-    async def test_workflow_activate_and_pause(self, db_schema, tenant_id):
-        uid = await self._seed_user(tenant_id)
+    async def test_workflow_activate_and_pause(self, db_schema, tenant_id, async_session):
+        uid = await self._seed_user(tenant_id, async_session)
         svc = WorkflowService()
         created = await svc.create_workflow(
             name="Activation Test",
@@ -87,8 +87,8 @@ class TestWorkflowIntegration:
         assert paused.status == ResponseStatus.SUCCESS
         assert paused.data["status"] == "paused"
 
-    async def test_workflow_evaluate_conditions(self, db_schema, tenant_id):
-        uid = await self._seed_user(tenant_id)
+    async def test_workflow_evaluate_conditions(self, db_schema, tenant_id, async_session):
+        uid = await self._seed_user(tenant_id, async_session)
         svc = WorkflowService()
         created = await svc.create_workflow(
             name="Condition Test",
@@ -115,7 +115,7 @@ class TestWorkflowIntegration:
         )
         assert no_match is False
 
-    async def test_workflow_execute_not_found(self, db_schema, tenant_id):
+    async def test_workflow_execute_not_found(self, db_schema, tenant_id, async_session):
         """execute_workflow with a non-existent id returns NOT_FOUND."""
         svc = WorkflowService()
         executed = await svc.execute_workflow(
@@ -132,8 +132,8 @@ class TestWorkflowIntegration:
 class TestMarketingIntegration:
     """Full campaign lifecycle via the real DB."""
 
-    async def test_create_and_get_campaign(self, db_schema, tenant_id):
-        user_svc = UserService()
+    async def test_create_and_get_campaign(self, db_schema, tenant_id, async_session):
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         user_reg = await user_svc.create_user(
             username=f"mktuser_{suffix}",
@@ -161,8 +161,8 @@ class TestMarketingIntegration:
         assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data.name == "Summer Sale 2026"
 
-    async def test_launch_and_pause_campaign(self, db_schema, tenant_id):
-        user_svc = UserService()
+    async def test_launch_and_pause_campaign(self, db_schema, tenant_id, async_session):
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         user_reg = await user_svc.create_user(
             username=f"mktuser_{suffix}",
@@ -191,8 +191,8 @@ class TestMarketingIntegration:
         assert paused.status == ResponseStatus.SUCCESS
         assert paused.data.status.value == "paused"
 
-    async def test_campaign_stats(self, db_schema, tenant_id):
-        user_svc = UserService()
+    async def test_campaign_stats(self, db_schema, tenant_id, async_session):
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         user_reg = await user_svc.create_user(
             username=f"mktuser_{suffix}",
@@ -219,8 +219,8 @@ class TestMarketingIntegration:
         assert "opened" in stats.data or "open_count" in stats.data
         assert "clicked" in stats.data or "click_count" in stats.data
 
-    async def test_list_campaigns(self, db_schema, tenant_id):
-        user_svc = UserService()
+    async def test_list_campaigns(self, db_schema, tenant_id, async_session):
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         user_reg = await user_svc.create_user(
             username=f"mktuser_{suffix}",
@@ -263,8 +263,8 @@ class TestMarketingIntegration:
 class TestTaskIntegration:
     """Full task lifecycle via the real DB."""
 
-    async def _seed_user(self, tenant_id: int) -> int:
-        user_svc = UserService()
+    async def _seed_user(self, tenant_id: int, async_session) -> int:
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"taskuser_{suffix}",
@@ -274,10 +274,10 @@ class TestTaskIntegration:
         )
         return reg.data.id  # User is a dataclass, not a dict
 
-    async def test_create_and_get_task(self, db_schema, tenant_id):
+    async def test_create_and_get_task(self, db_schema, tenant_id, async_session):
         from datetime import date
         svc = TaskService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
         result = await svc.create_task(
             tenant_id=tenant_id,
             title="Review PR #42",
@@ -294,9 +294,9 @@ class TestTaskIntegration:
         fetched = await svc.get_task(task["id"])
         assert fetched["data"]["title"] == "Review PR #42"
 
-    async def test_update_and_complete_task(self, db_schema, tenant_id):
+    async def test_update_and_complete_task(self, db_schema, tenant_id, async_session):
         svc = TaskService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
         created = await svc.create_task(
             tenant_id=tenant_id,
             title="Original Task",
@@ -312,9 +312,9 @@ class TestTaskIntegration:
         completed = await svc.complete_task(tid)
         assert completed["data"]["status"] == "completed"
 
-    async def test_delete_task(self, db_schema, tenant_id):
+    async def test_delete_task(self, db_schema, tenant_id, async_session):
         svc = TaskService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
         created = await svc.create_task(tenant_id=tenant_id, title="To Delete", assigned_to=uid)
         tid = created["data"]["id"]
 
@@ -322,9 +322,9 @@ class TestTaskIntegration:
         fetched = await svc.get_task(tid)
         assert fetched["data"] is None
 
-    async def test_list_tasks(self, db_schema, tenant_id):
+    async def test_list_tasks(self, db_schema, tenant_id, async_session):
         svc = TaskService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
         await svc.create_task(tenant_id=tenant_id, title=f"List Task 1 {suffix}", assigned_to=uid)
         await svc.create_task(tenant_id=tenant_id, title=f"List Task 2 {suffix}", assigned_to=uid)
@@ -343,7 +343,7 @@ class TestActivityIntegration:
     """Full activity lifecycle via the real DB."""
 
     async def _seed_user(self, tenant_id: int, async_session) -> int:
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"actuser_{suffix}",
@@ -363,7 +363,7 @@ class TestActivityIntegration:
         return result.data["id"]
 
     async def test_create_and_get_activity(self, db_schema, tenant_id, async_session):
-        svc = ActivityService()
+        svc = ActivityService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         cid = await self._seed_customer(tenant_id, async_session)
         result = await svc.create_activity(
@@ -382,7 +382,7 @@ class TestActivityIntegration:
         assert fetched.data.content == "Follow-up call - Discussed pricing"
 
     async def test_update_activity(self, db_schema, tenant_id, async_session):
-        svc = ActivityService()
+        svc = ActivityService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         cid = await self._seed_customer(tenant_id, async_session)
         created = await svc.create_activity(
@@ -399,7 +399,7 @@ class TestActivityIntegration:
         assert updated.data.content == "Updated Subject"
 
     async def test_list_activities(self, db_schema, tenant_id, async_session):
-        svc = ActivityService()
+        svc = ActivityService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         cid = await self._seed_customer(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
@@ -419,7 +419,7 @@ class TestActivityIntegration:
         assert any(f"Email {suffix}" in c for c in contents)
 
     async def test_get_customer_activities(self, db_schema, tenant_id, async_session):
-        svc = ActivityService()
+        svc = ActivityService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         cid = await self._seed_customer(tenant_id, async_session)
         await svc.create_activity(customer_id=cid, activity_type="call", content="Call 1", created_by=uid, tenant_id=tenant_id)
@@ -430,7 +430,7 @@ class TestActivityIntegration:
         assert len(result.data) >= 2
 
     async def test_delete_activity(self, db_schema, tenant_id, async_session):
-        svc = ActivityService()
+        svc = ActivityService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         cid = await self._seed_customer(tenant_id, async_session)
         created = await svc.create_activity(
@@ -449,8 +449,8 @@ class TestActivityIntegration:
 class TestNotificationIntegration:
     """Notification and reminder lifecycle via the real DB."""
 
-    async def _seed_user(self, tenant_id: int) -> int:
-        user_svc = UserService()
+    async def _seed_user(self, tenant_id: int, async_session) -> int:
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"notif_{suffix}",
@@ -460,9 +460,9 @@ class TestNotificationIntegration:
         )
         return reg.data.id
 
-    async def test_send_and_get_notification(self, db_schema, tenant_id):
+    async def test_send_and_get_notification(self, db_schema, tenant_id, async_session):
         svc = NotificationService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
         result = await svc.send_notification(
             user_id=uid,
             notification_type="info",
@@ -478,9 +478,9 @@ class TestNotificationIntegration:
         ids = [n["id"] for n in fetched.data.items]
         assert nid in ids
 
-    async def test_mark_notification_as_read(self, db_schema, tenant_id):
+    async def test_mark_notification_as_read(self, db_schema, tenant_id, async_session):
         svc = NotificationService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
         sent = await svc.send_notification(
             user_id=uid, notification_type="info", title="Test", content="Body", tenant_id=tenant_id
         )
@@ -492,18 +492,18 @@ class TestNotificationIntegration:
         unread = await svc.get_unread_count(user_id=uid)
         assert unread == 0
 
-    async def test_unread_count(self, db_schema, tenant_id):
+    async def test_unread_count(self, db_schema, tenant_id, async_session):
         svc = NotificationService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
         await svc.send_notification(user_id=uid, notification_type="info", title="N1", content="m", tenant_id=tenant_id)
         await svc.send_notification(user_id=uid, notification_type="info", title="N2", content="m", tenant_id=tenant_id)
 
         count = await svc.get_unread_count(user_id=uid)
         assert count >= 2
 
-    async def test_create_and_cancel_reminder(self, db_schema, tenant_id):
+    async def test_create_and_cancel_reminder(self, db_schema, tenant_id, async_session):
         svc = NotificationService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
         result = await svc.create_reminder(
             user_id=uid,
             title="Team standup",
@@ -524,8 +524,8 @@ class TestNotificationIntegration:
 class TestTenantIntegration:
     """Tenant lifecycle via the real DB."""
 
-    async def test_create_and_get_tenant(self, db_schema):
-        svc = TenantService()
+    async def test_create_and_get_tenant(self, db_schema, async_session):
+        svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         result = await svc.create_tenant(
             name=f"Acme Corp {suffix}",
@@ -541,8 +541,8 @@ class TestTenantIntegration:
         assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data["name"] == f"Acme Corp {suffix}"
 
-    async def test_update_tenant(self, db_schema):
-        svc = TenantService()
+    async def test_update_tenant(self, db_schema, async_session):
+        svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await svc.create_tenant(
             name=f"Original {suffix}", plan="free", admin_email=f"admin_{suffix}@example.com"
@@ -554,8 +554,8 @@ class TestTenantIntegration:
         assert updated.data["plan"] == "enterprise"
         assert updated.data["name"] == f"Updated {suffix}"
 
-    async def test_list_tenants(self, db_schema):
-        svc = TenantService()
+    async def test_list_tenants(self, db_schema, async_session):
+        svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         await svc.create_tenant(name=f"List Tenant A {suffix}", plan="free", admin_email=f"a_{suffix}@x.com")
         await svc.create_tenant(name=f"List Tenant B {suffix}", plan="pro", admin_email=f"b_{suffix}@x.com")
@@ -566,8 +566,8 @@ class TestTenantIntegration:
         assert any(f"List Tenant A {suffix}" in n for n in names)
         assert any(f"List Tenant B {suffix}" in n for n in names)
 
-    async def test_get_tenant_stats(self, db_schema):
-        svc = TenantService()
+    async def test_get_tenant_stats(self, db_schema, async_session):
+        svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await svc.create_tenant(name=f"Stats Tenant {suffix}", plan="pro", admin_email=f"s_{suffix}@x.com")
         tid = created.data["id"]

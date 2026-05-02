@@ -26,7 +26,7 @@ from services.user_service import UserService
 
 async def _seed_user(async_session, tenant_id: int = 1) -> int:
     """Create a user and return their id."""
-    user_svc = UserService()
+    user_svc = UserService(async_session)
     suffix = uuid.uuid4().hex[:8]
     reg = await user_svc.create_user(
         username=f"scuser_{suffix}",
@@ -233,7 +233,7 @@ class TestPipelineServiceIntegration:
     """Full pipeline lifecycle via the real DB using the shared async_session fixture."""
 
     async def test_create_and_get_pipeline(self, db_schema, tenant_id, async_session):
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         result = await pipe_svc.create_pipeline(
             tenant_id=tenant_id,
             data={"name": "Sales Pipeline"},
@@ -246,7 +246,7 @@ class TestPipelineServiceIntegration:
         assert fetched.data["name"] == "Sales Pipeline"
 
     async def test_update_pipeline(self, db_schema, tenant_id, async_session):
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         created = await pipe_svc.create_pipeline(
             tenant_id=tenant_id,
             data={"name": "Old Name"},
@@ -258,7 +258,7 @@ class TestPipelineServiceIntegration:
         assert updated.data["name"] == "New Name"
 
     async def test_delete_pipeline(self, db_schema, tenant_id, async_session):
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         created = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "To Delete"})
         pid = created.data["id"]
 
@@ -269,7 +269,7 @@ class TestPipelineServiceIntegration:
         assert fetched.status == ResponseStatus.NOT_FOUND
 
     async def test_list_pipelines(self, db_schema, tenant_id, async_session):
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         for name in ["Pipe A", "Pipe B"]:
             await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": name})
 
@@ -278,7 +278,7 @@ class TestPipelineServiceIntegration:
         assert len(result.data.items) >= 2
 
     async def test_add_stage(self, db_schema, tenant_id, async_session):
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         created = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Stage Test"})
         pid = created.data["id"]
 
@@ -287,7 +287,7 @@ class TestPipelineServiceIntegration:
         assert stage.data["name"] == "Qualification"
 
     async def test_update_stage(self, db_schema, tenant_id, async_session):
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         created = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Stage Update"})
         pid = created.data["id"]
         stage = await pipe_svc.add_stage(tenant_id, pid, {"name": "Initial", "order": 1})
@@ -298,7 +298,7 @@ class TestPipelineServiceIntegration:
         assert updated.data["name"] == "Updated Stage Name"
 
     async def test_reorder_stages(self, db_schema, tenant_id, async_session):
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         created = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Reorder Pipeline"})
         pid = created.data["id"]
         s1 = await pipe_svc.add_stage(tenant_id, pid, {"name": "Stage 1", "order": 1})
@@ -318,7 +318,7 @@ class TestSalesServiceIntegration:
     async def test_create_and_get_opportunity(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Opp Pipe"})
         pid = pipe.data["id"]
         uid = await _seed_user(async_session, tenant_id)
@@ -336,7 +336,7 @@ class TestSalesServiceIntegration:
     async def test_update_opportunity(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Upd Pipe"})
         pid = pipe.data["id"]
         uid = await _seed_user(async_session, tenant_id)
@@ -353,7 +353,7 @@ class TestSalesServiceIntegration:
     async def test_change_stage(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Chg Pipe"})
         pid = pipe.data["id"]
         uid = await _seed_user(async_session, tenant_id)
@@ -369,7 +369,7 @@ class TestSalesServiceIntegration:
 
     async def test_list_opportunities(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "List Opp Pipe"})
         pid = pipe.data["id"]
         uid = await _seed_user(async_session, tenant_id)
@@ -394,7 +394,7 @@ class TestSalesServiceIntegration:
 
     async def test_get_pipeline_stats(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Stats Pipe"})
         pid = pipe.data["id"]
 
@@ -403,7 +403,7 @@ class TestSalesServiceIntegration:
 
     async def test_get_pipeline_funnel(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(async_session)
         pipe = await pipe_svc.create_pipeline(tenant_id=tenant_id, data={"name": "Funnel Pipe"})
         pid = pipe.data["id"]
 

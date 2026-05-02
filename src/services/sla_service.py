@@ -11,7 +11,21 @@ from models.ticket import Ticket, SLALevel, SLA_CONFIGS
 class SLAService:
     """SLA管理"""
 
-    def __init__(self, session: AsyncSession, ticket_service=None):
+    def __init__(self, session: AsyncSession = None, ticket_service=None):
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                session = context.__enter__()
+                self._session_context = context
+            except (AttributeError, TypeError):
+                # sync __enter__ not supported — leave session=None
+                # (async context callers must pass session explicitly)
+                session = None
+                self._session_context = None
+        else:
+            self._session_context = None
+        self.session = session
         self.session = session
         self._ticket_service = ticket_service
 

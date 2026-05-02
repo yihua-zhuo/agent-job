@@ -65,7 +65,14 @@ def _row_to_reply(row: TicketReplyModel) -> TicketReply:
 # ---------------------------------------------------------------------------
 
 class TicketService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession = None) -> None:
+        if session is None:
+            from db.connection import get_db_session
+            context = get_db_session()
+            session = context.__enter__()
+            self._session_context = context
+        else:
+            self._session_context = None
         self.session = session
         # Agent pool – kept as instance state (not persisted to DB) to preserve
         # the original round-robin auto_assign behaviour.
@@ -135,6 +142,7 @@ class TicketService:
             )
             self.session.add(row)
             await self.session.flush()  # populate row.id before commit
+            await self.session.commit()  # commit so auto_assign sees the ticket
 
             ticket = _row_to_ticket(row)
 
@@ -350,5 +358,6 @@ class TicketService:
             self._agent_index += 1
             row.assigned_to = agent_id
             row.updated_at = datetime.now(UTC)
+            await self.session.commit()
 
         return ApiResponse.success(data={'agent_id': agent_id}, message='自动分配客服成功')

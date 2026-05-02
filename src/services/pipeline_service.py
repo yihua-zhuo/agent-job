@@ -1,5 +1,6 @@
 """Pipeline service layer - handles pipeline and stage CRUD via PostgreSQL/SQLAlchemy async."""
 from datetime import datetime, UTC
+from db.connection import get_db_session
 from typing import Optional, List
 
 from sqlalchemy import select, update, delete, func, text
@@ -13,7 +14,21 @@ from models.response import ApiResponse
 class PipelineService:
     """Pipeline service backed by PostgreSQL via SQLAlchemy async."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession = None):
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                session = context.__enter__()
+                self._session_context = context
+            except (AttributeError, TypeError):
+                # sync __enter__ not supported — leave session=None
+                # (async context callers must pass session explicitly)
+                session = None
+                self._session_context = None
+        else:
+            self._session_context = None
+        self.session = session
         self.session = session
 
     DEFAULT_STAGES = ["lead", "qualified", "proposal", "negotiation", "closed_won"]

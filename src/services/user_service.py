@@ -41,10 +41,24 @@ def _row_to_user(row: UserModel) -> User:
     )
 
 
+from db.connection import get_db_session
 class UserService:
     """用户服务 — async PostgreSQL backend."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession = None):
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                session = context.__enter__()
+                self._session_context = context
+            except (AttributeError, TypeError):
+                # sync __enter__ not supported — leave session=None
+                # (async context callers must pass session explicitly)
+                session = None
+                self._session_context = None
+        else:
+            self._session_context = None
         self.session = session
 
     # ------------------------------------------------------------------

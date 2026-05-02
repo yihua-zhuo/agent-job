@@ -8,11 +8,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.response import ApiResponse, PaginatedData
 
+from db.connection import get_db_session
+
 
 class TenantService:
     """租户管理服务"""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession = None):
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                session = context.__enter__()
+                self._session_context = context
+            except (AttributeError, TypeError):
+                # sync __enter__ not supported — leave session=None
+                # (async context callers must pass session explicitly)
+                session = None
+                self._session_context = None
+        else:
+            self._session_context = None
         self.session = session
 
     async def create_tenant(self, name: str, plan: str, admin_email: str = None, **kwargs) -> ApiResponse[Dict]:

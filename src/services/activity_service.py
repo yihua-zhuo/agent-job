@@ -1,5 +1,6 @@
 """Activity service for CRM system — async SQLAlchemy implementation."""
 from datetime import datetime, UTC
+from db.connection import get_db_session
 from typing import List, Dict, Optional
 
 from models.activity import Activity, ActivityType
@@ -12,7 +13,21 @@ from sqlalchemy import text
 class ActivityService:
     """活动记录服务"""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession = None):
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                session = context.__enter__()
+                self._session_context = context
+            except (AttributeError, TypeError):
+                # sync __enter__ not supported — leave session=None
+                # (async context callers must pass session explicitly)
+                session = None
+                self._session_context = None
+        else:
+            self._session_context = None
+        self.session = session
         self.session = session
 
     async def _scope(self, tenant_id: int) -> str:
@@ -83,6 +98,7 @@ class ActivityService:
             async with self.session:
                 result = await self.session.execute(sql, params)
                 row = result.fetchone()
+                await self.session.commit()
                 activity = self._row_to_activity(row)
                 return ApiResponse.success(data=activity, message="活动记录创建成功")
         except Exception as e:
