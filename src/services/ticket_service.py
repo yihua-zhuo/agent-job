@@ -65,7 +65,14 @@ def _row_to_reply(row: TicketReplyModel) -> TicketReply:
 # ---------------------------------------------------------------------------
 
 class TicketService:
-    def __init__(self, session: AsyncSession) -> None:
+    def __init__(self, session: AsyncSession = None) -> None:
+        if session is None:
+            from db.connection import get_db_session
+            context = get_db_session()
+            session = context.__enter__()
+            self._session_context = context
+        else:
+            self._session_context = None
         self.session = session
         # Agent pool – kept as instance state (not persisted to DB) to preserve
         # the original round-robin auto_assign behaviour.
@@ -135,6 +142,7 @@ class TicketService:
             )
             self.session.add(row)
             await self.session.flush()  # populate row.id before commit
+            await self.session.commit()  # commit so auto_assign sees the ticket
 
             ticket = _row_to_ticket(row)
 
@@ -187,6 +195,7 @@ class TicketService:
                 else:
                     setattr(row, key, value)
             row.updated_at = datetime.now(UTC)
+            await self.session.commit()
             ticket = _row_to_ticket(row)
 
         return ApiResponse.success(data=ticket, message='工单更新成功')
@@ -231,6 +240,7 @@ class TicketService:
                 ticket_row.updated_at = now
 
             await self.session.flush()
+            await self.session.commit()
             reply = _row_to_reply(reply_row)
 
         return ApiResponse.success(data=reply, message='回复添加成功')
@@ -252,6 +262,7 @@ class TicketService:
             if new_status == TicketStatus.RESOLVED:
                 row.resolved_at = now
 
+            await self.session.commit()
             ticket = _row_to_ticket(row)
 
         return ApiResponse.success(data=ticket, message=f'工单状态已更新为{new_status}')
@@ -337,18 +348,18 @@ class TicketService:
 
     async def auto_assign(self, ticket_id: int, tenant_id: int = 0) -> ApiResponse[Dict]:
         """自动分配客服"""
-        async with self.session:
-            row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
-            if row is None:
-                return ApiResponse.error(message='工单不存在', code=1404)
-            if row.assigned_to is not None:
-                return ApiResponse.success(
-                    data={'agent_id': row.assigned_to}, message='工单已分配客服'
-                )
+        row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
+        if row is None:
+            return ApiResponse.error(message='工单不存在', code=1404)
+        if row.assigned_to is not None:
+            return ApiResponse.success(
+                data={'agent_id': row.assigned_to}, message='工单已分配客服'
+            )
 
-            agent_id = self._agent_pool[self._agent_index % len(self._agent_pool)]
-            self._agent_index += 1
-            row.assigned_to = agent_id
-            row.updated_at = datetime.now(UTC)
+        agent_id = self._agent_pool[self._agent_index % len(self._agent_pool)]
+        self._agent_index += 1
+        row.assigned_to = agent_id
+        row.updated_at = datetime.now(UTC)
+        await self.session.commit()
 
         return ApiResponse.success(data={'agent_id': agent_id}, message='自动分配客服成功')

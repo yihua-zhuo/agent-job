@@ -148,7 +148,7 @@ async def list_users(
     session=Depends(get_db),
 ):
     service = UserService(session)
-    resp = await service.list_users(page=page, page_size=page_size)
+    resp = await service.list_users(page=page, page_size=page_size, tenant_id=ctx.tenant_id or 0)
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
@@ -191,7 +191,7 @@ async def get_user(
     session=Depends(get_db),
 ):
     service = UserService(session)
-    user = await service.get_user_by_id(user_id)
+    user = await service.get_user_by_id(user_id, tenant_id=ctx.tenant_id or 0)
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
     return UserResponse(
@@ -224,7 +224,7 @@ async def update_user(
 ):
     service = UserService(session)
     update_data = body.model_dump(exclude_none=True)
-    resp = await service.update_user(user_id, **update_data)
+    resp = await service.update_user(user_id, tenant_id=ctx.tenant_id or 0, **update_data)
     status = _http_status(resp.status)
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
@@ -257,7 +257,7 @@ async def delete_user(
     session=Depends(get_db),
 ):
     service = UserService(session)
-    resp = await service.delete_user(user_id)
+    resp = await service.delete_user(user_id, tenant_id=ctx.tenant_id or 0)
     status = _http_status(resp.status)
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
@@ -275,7 +275,7 @@ async def search_users(
     session=Depends(get_db),
 ):
     service = UserService(session)
-    resp = await service.search_users(keyword)
+    resp = await service.search_users(keyword, tenant_id=ctx.tenant_id or 0)
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)

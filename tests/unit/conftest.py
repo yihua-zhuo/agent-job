@@ -283,7 +283,7 @@ def _make_mock_session():
             if tenant_id and tenant_id != 1:
                 # Non-existent tenant → empty result (NOT_FOUND)
                 return MockResult([])
-            return MockResult([[1]])
+            return MockResult([[1, "Deleted Tenant", "pro", "deleted", "{}", None, None]])
 
         if "update" in sql_text and "tenants" in sql_text:
             # UPDATE tenants SET ... WHERE id = :tenant_id

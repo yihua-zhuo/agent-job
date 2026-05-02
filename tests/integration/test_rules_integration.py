@@ -309,10 +309,10 @@ class TestSLAIntegration:
     """SLAService against the real DB — needs tickets table."""
 
     async def _seed_ticket(
-        self, tenant_id: int, sla_level: SLALevel = SLALevel.STANDARD
+        self, tenant_id: int, async_session, sla_level: SLALevel = SLALevel.STANDARD
     ) -> Ticket:
         """Create a ticket via TicketService and return the domain model."""
-        ticket_svc = TicketService()
+        ticket_svc = TicketService(async_session)
         result = await ticket_svc.create_ticket(
             subject=f"SLA Test Ticket {uuid.uuid4().hex[:8]}",
             description="Testing SLA status",
@@ -325,8 +325,8 @@ class TestSLAIntegration:
         assert result.status == ResponseStatus.SUCCESS
         return result.data
 
-    async def _seed_user(self, tenant_id: int) -> int:
-        user_svc = UserService()
+    async def _seed_user(self, tenant_id: int, async_session) -> int:
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"slauser_{suffix}",
@@ -336,18 +336,18 @@ class TestSLAIntegration:
         )
         return reg.data.id
 
-    async def test_check_sla_status_normal(self, db_schema, tenant_id):
-        ticket = await self._seed_ticket(tenant_id, sla_level=SLALevel.PREMIUM)
-        sla_svc = SLAService()
+    async def test_check_sla_status_normal(self, db_schema, tenant_id, async_session):
+        ticket = await self._seed_ticket(tenant_id, async_session, sla_level=SLALevel.PREMIUM)
+        sla_svc = SLAService(async_session)
         status = await sla_svc.check_sla_status(ticket)
         # Fresh ticket well within SLA window
         assert status in ("normal", "warning")
 
-    async def test_check_sla_status_breached(self, db_schema, tenant_id):
+    async def test_check_sla_status_breached(self, db_schema, tenant_id, async_session):
         from datetime import datetime, timedelta, UTC
 
         # Create a ticket that's already past response_deadline
-        ticket = await self._seed_ticket(tenant_id, sla_level=SLALevel.STANDARD)
+        ticket = await self._seed_ticket(tenant_id, async_session, sla_level=SLALevel.STANDARD)
         # Manually expire it
         expired_ticket = Ticket(
             id=ticket.id,
@@ -366,14 +366,14 @@ class TestSLAIntegration:
             first_response_at=None,
             response_deadline=datetime.now(UTC) - timedelta(hours=40),
         )
-        sla_svc = SLAService()
+        sla_svc = SLAService(async_session)
         status = await sla_svc.check_sla_status(expired_ticket)
         assert status == "breached"
 
-    async def test_check_sla_status_resolved_is_normal(self, db_schema, tenant_id):
+    async def test_check_sla_status_resolved_is_normal(self, db_schema, tenant_id, async_session):
         from datetime import datetime, timedelta, UTC
 
-        ticket = await self._seed_ticket(tenant_id)
+        ticket = await self._seed_ticket(tenant_id, async_session)
         # Resolved ticket is always "normal"
         resolved_ticket = Ticket(
             id=ticket.id,
@@ -392,20 +392,20 @@ class TestSLAIntegration:
             first_response_at=datetime.now(UTC) - timedelta(hours=41),
             response_deadline=datetime.now(UTC) - timedelta(hours=40),
         )
-        sla_svc = SLAService()
+        sla_svc = SLAService(async_session)
         status = await sla_svc.check_sla_status(resolved_ticket)
         assert status == "normal"
 
-    async def test_calculate_remaining_time_positive(self, db_schema, tenant_id):
-        ticket = await self._seed_ticket(tenant_id, sla_level=SLALevel.ENTERPRISE)
-        sla_svc = SLAService()
+    async def test_calculate_remaining_time_positive(self, db_schema, tenant_id, async_session):
+        ticket = await self._seed_ticket(tenant_id, async_session, sla_level=SLALevel.ENTERPRISE)
+        sla_svc = SLAService(async_session)
         remaining = await sla_svc.calculate_remaining_time(ticket)
         assert remaining.total_seconds() > 0
 
-    async def test_calculate_remaining_time_zero_if_resolved(self, db_schema, tenant_id):
+    async def test_calculate_remaining_time_zero_if_resolved(self, db_schema, tenant_id, async_session):
         from datetime import datetime, timedelta, UTC
 
-        ticket = await self._seed_ticket(tenant_id)
+        ticket = await self._seed_ticket(tenant_id, async_session)
         resolved_ticket = Ticket(
             id=ticket.id,
             subject=ticket.subject,
@@ -423,18 +423,18 @@ class TestSLAIntegration:
             first_response_at=datetime.now(UTC),
             response_deadline=datetime.now(UTC) + timedelta(hours=1),
         )
-        sla_svc = SLAService()
+        sla_svc = SLAService(async_session)
         remaining = await sla_svc.calculate_remaining_time(resolved_ticket)
         assert remaining == timedelta(0)
 
-    async def test_get_breach_tickets_returns_list(self, db_schema, tenant_id):
+    async def test_get_breach_tickets_returns_list(self, db_schema, tenant_id, async_session):
         # Create an already-breached ticket by setting deadline in the past
         import asyncio
         from datetime import datetime, timedelta, UTC
         from sqlalchemy import text
         from db.connection import get_db_session
 
-        ticket = await self._seed_ticket(tenant_id, sla_level=SLALevel.BASIC)
+        ticket = await self._seed_ticket(tenant_id, async_session, sla_level=SLALevel.BASIC)
         # Force deadline to the past
         async with get_db_session() as session:
             await session.execute(
@@ -445,7 +445,7 @@ class TestSLAIntegration:
             )
             await session.commit()
 
-        sla_svc = SLAService()
+        sla_svc = SLAService(async_session)
         breached = await sla_svc.get_breach_tickets(tenant_id)
         breached_ids = [t.id for t in breached]
         assert ticket.id in breached_ids
@@ -458,8 +458,8 @@ class TestSLAIntegration:
 class TestTriggerIntegration:
     """TriggerService against the real DB — needs MarketingService + campaigns."""
 
-    async def _seed_user(self, tenant_id: int) -> int:
-        user_svc = UserService()
+    async def _seed_user(self, tenant_id: int, async_session) -> int:
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"triguser_{suffix}",
@@ -484,8 +484,8 @@ class TestTriggerIntegration:
         assert result.status == ResponseStatus.SUCCESS
         return result.data
 
-    async def test_check_triggers_user_register(self, db_schema, tenant_id):
-        uid = await self._seed_user(tenant_id)
+    async def test_check_triggers_user_register(self, db_schema, tenant_id, async_session):
+        uid = await self._seed_user(tenant_id, async_session)
         campaign = await self._seed_campaign(
             tenant_id, uid, trigger_type=TriggerType.USER_REGISTER
         )
@@ -497,8 +497,8 @@ class TestTriggerIntegration:
         )
         assert campaign.id in triggered_ids
 
-    async def test_check_triggers_unknown_event_returns_empty(self, db_schema, tenant_id):
-        uid = await self._seed_user(tenant_id)
+    async def test_check_triggers_unknown_event_returns_empty(self, db_schema, tenant_id, async_session):
+        uid = await self._seed_user(tenant_id, async_session)
         marketing_svc = MarketingService()
         trigger_svc = TriggerService(marketing_svc)
 
@@ -507,8 +507,8 @@ class TestTriggerIntegration:
         )
         assert triggered_ids == []
 
-    async def test_check_triggers_no_matching_campaign(self, db_schema, tenant_id):
-        uid = await self._seed_user(tenant_id)
+    async def test_check_triggers_no_matching_campaign(self, db_schema, tenant_id, async_session):
+        uid = await self._seed_user(tenant_id, async_session)
         # Campaign with different trigger type
         campaign = await self._seed_campaign(
             tenant_id, uid, trigger_type=TriggerType.PURCHASE_MADE
@@ -525,8 +525,8 @@ class TestTriggerIntegration:
                 c = await marketing_svc.get_campaign(cid, tenant_id=tenant_id)
                 assert c.data.trigger_type != TriggerType.USER_REGISTER
 
-    async def test_execute_trigger_success(self, db_schema, tenant_id):
-        uid = await self._seed_user(tenant_id)
+    async def test_execute_trigger_success(self, db_schema, tenant_id, async_session):
+        uid = await self._seed_user(tenant_id, async_session)
         campaign = await self._seed_campaign(
             tenant_id, uid, trigger_type=TriggerType.USER_REGISTER
         )
@@ -545,8 +545,8 @@ class TestTriggerIntegration:
         assert result["success"] is False
         assert "not configured" in result["message"]
 
-    async def test_execute_trigger_campaign_not_found(self, db_schema, tenant_id):
-        uid = await self._seed_user(tenant_id)
+    async def test_execute_trigger_campaign_not_found(self, db_schema, tenant_id, async_session):
+        uid = await self._seed_user(tenant_id, async_session)
         marketing_svc = MarketingService()
         trigger_svc = TriggerService(marketing_svc)
 

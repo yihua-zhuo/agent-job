@@ -166,7 +166,7 @@ class TestTenantService:
         with patch("services.tenant_service.get_db_session", return_value=mock_session):
             result = await tenant_service.delete_tenant(1)
         assert bool(result) is True
-        assert result.data["tenant_id"] == 1
+        assert result.data["id"] == 1
 
     async def test_list_tenants_paginated(self, tenant_service):
         """Mock execute returning count and rows sequentially."""

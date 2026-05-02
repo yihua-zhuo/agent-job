@@ -28,8 +28,19 @@ class CustomerService:
     via Depends(get_db) dependency injection).
     """
 
-    def __init__(self, session: "AsyncSession"):
-        self.session = session
+    def __init__(self, session: "AsyncSession" = None):
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                self._session_context = context
+                self.session = context
+            except (AttributeError, TypeError):
+                self._session_context = None
+                self.session = None
+        else:
+            self._session_context = None
+            self.session = session
 
     # ------------------------------------------------------------------
     # create

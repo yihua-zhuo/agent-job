@@ -1,5 +1,6 @@
 """Activity service for CRM system — async SQLAlchemy implementation."""
 from datetime import datetime, UTC
+from db.connection import get_db_session
 from typing import List, Dict, Optional
 
 from models.activity import Activity, ActivityType
@@ -12,8 +13,23 @@ from sqlalchemy import text
 class ActivityService:
     """活动记录服务"""
 
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def __init__(self, session: AsyncSession = None):
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                # Store the async context manager itself — 'async with self.session'
+                # will call __aenter__() correctly rather than the sync version.
+                self._session_context = context
+                self.session = context
+            except (AttributeError, TypeError):
+                # get_db_session returned something weird — leave session=None
+                # (async context callers must pass session explicitly)
+                self._session_context = None
+                self.session = None
+        else:
+            self._session_context = None
+            self.session = session
 
     async def _scope(self, tenant_id: int) -> str:
         """Return a SQL WHERE clause snippet scoped to tenant_id."""
@@ -83,6 +99,7 @@ class ActivityService:
             async with self.session:
                 result = await self.session.execute(sql, params)
                 row = result.fetchone()
+                await self.session.commit()
                 activity = self._row_to_activity(row)
                 return ApiResponse.success(data=activity, message="活动记录创建成功")
         except Exception as e:
@@ -162,6 +179,7 @@ class ActivityService:
                 )
                 result = await self.session.execute(update_sql, params)
                 updated_row = result.fetchone()
+                await self.session.commit()
                 activity = self._row_to_activity(updated_row)
                 return ApiResponse.success(data=activity, message="活动记录更新成功")
         except Exception as e:
@@ -183,6 +201,7 @@ class ActivityService:
                 row = result.fetchone()
                 if not row:
                     return ApiResponse.error(message="活动记录不存在", code=1404)
+                await self.session.commit()
                 return ApiResponse.success(data={"id": activity_id}, message="活动记录删除成功")
         except Exception as e:
             return ApiResponse.error(message=f"删除活动记录失败: {str(e)}", code=1001)

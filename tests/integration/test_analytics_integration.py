@@ -26,9 +26,9 @@ from services.user_service import UserService
 class TestDashboardIntegration:
     """Full dashboard lifecycle via the real DB."""
 
-    async def _seed_user(self, tenant_id: int) -> int:
+    async def _seed_user(self, tenant_id: int, async_session) -> int:
         """Create a user and return their id (needed for owner_id)."""
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"dashuser_{suffix}",
@@ -38,10 +38,10 @@ class TestDashboardIntegration:
         )
         return reg.data.id
 
-    async def test_create_and_get_dashboard(self, db_schema, tenant_id):
+    async def test_create_and_get_dashboard(self, db_schema, tenant_id, async_session):
         """Create a dashboard and verify it can be retrieved."""
         svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
 
         result = await svc.create_dashboard(
             name="Sales Overview",
@@ -61,10 +61,10 @@ class TestDashboardIntegration:
         assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data["name"] == "Sales Overview"
 
-    async def test_update_dashboard(self, db_schema, tenant_id):
+    async def test_update_dashboard(self, db_schema, tenant_id, async_session):
         """Update dashboard name, description, and widgets."""
         svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
 
         created = await svc.create_dashboard(
             name="Original Name",
@@ -91,10 +91,10 @@ class TestDashboardIntegration:
         result = await svc.get_dashboard(dashboard_id=999_999_999, tenant_id=tenant_id)
         assert result.status == ResponseStatus.NOT_FOUND
 
-    async def test_list_dashboards(self, db_schema, tenant_id):
+    async def test_list_dashboards(self, db_schema, tenant_id, async_session):
         """List returns all dashboards for the tenant."""
         svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
 
         await svc.create_dashboard(
@@ -110,11 +110,11 @@ class TestDashboardIntegration:
         assert any(f"Dash A {suffix}" in n for n in names)
         assert any(f"Dash B {suffix}" in n for n in names)
 
-    async def test_list_dashboards_by_owner(self, db_schema, tenant_id):
+    async def test_list_dashboards_by_owner(self, db_schema, tenant_id, async_session):
         """List dashboards filtered by owner_id."""
         svc = AnalyticsService()
-        uid1 = await self._seed_user(tenant_id)
-        uid2 = await self._seed_user(tenant_id)
+        uid1 = await self._seed_user(tenant_id, async_session)
+        uid2 = await self._seed_user(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
 
         await svc.create_dashboard(name=f"Owner1 Dash {suffix}", owner_id=uid1, tenant_id=tenant_id)
@@ -126,12 +126,12 @@ class TestDashboardIntegration:
         assert all(d["owner_id"] == uid1 for d in result.data.items)
 
     async def test_dashboard_cross_tenant_isolation(
-        self, db_schema, tenant_id, tenant_id_2
+        self, db_schema, tenant_id, tenant_id_2, async_session
     ):
         """Dashboards are not visible across tenants."""
         svc = AnalyticsService()
-        uid1 = await self._seed_user(tenant_id)
-        uid2 = await self._seed_user(tenant_id)
+        uid1 = await self._seed_user(tenant_id, async_session)
+        uid2 = await self._seed_user(tenant_id, async_session)
 
         d1 = await svc.create_dashboard(
             name="Tenant 1 Dash", owner_id=uid1, tenant_id=tenant_id
@@ -153,10 +153,10 @@ class TestDashboardIntegration:
         assert d2.data["id"] in ids_t2
         assert d1.data["id"] not in ids_t2
 
-    async def test_add_widget_to_dashboard(self, db_schema, tenant_id):
+    async def test_add_widget_to_dashboard(self, db_schema, tenant_id, async_session):
         """Add a widget to an existing dashboard."""
         svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
 
         created = await svc.create_dashboard(
             name="Widget Test", owner_id=uid, tenant_id=tenant_id
@@ -173,10 +173,10 @@ class TestDashboardIntegration:
         fetched = await svc.get_dashboard(did, tenant_id=tenant_id)
         assert len(fetched.data["widgets"]) >= 1
 
-    async def test_remove_widget_from_dashboard(self, db_schema, tenant_id):
+    async def test_remove_widget_from_dashboard(self, db_schema, tenant_id, async_session):
         """Remove a widget from a dashboard."""
         svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
 
         created = await svc.create_dashboard(
             name="Remove Widget Test", owner_id=uid, tenant_id=tenant_id
@@ -202,10 +202,10 @@ class TestDashboardIntegration:
         )
         assert removed.status == ResponseStatus.SUCCESS
 
-    async def test_dashboard_is_default_flag(self, db_schema, tenant_id):
+    async def test_dashboard_is_default_flag(self, db_schema, tenant_id, async_session):
         """Update and verify is_default flag on dashboard."""
         svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
 
         created = await svc.create_dashboard(
             name="Default Dash", owner_id=uid, tenant_id=tenant_id
@@ -227,9 +227,9 @@ class TestDashboardIntegration:
 class TestReportIntegration:
     """Report generation and export via the real DB."""
 
-    async def _seed_user(self, tenant_id: int) -> int:
+    async def _seed_user(self, tenant_id: int, async_session) -> int:
         """Create a user and return their id (needed for created_by)."""
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"repuser_{suffix}",
@@ -239,10 +239,10 @@ class TestReportIntegration:
         )
         return reg.data.id
 
-    async def test_create_and_get_report(self, db_schema, tenant_id):
+    async def test_create_and_get_report(self, db_schema, tenant_id, async_session):
         """Create a report and verify it can be retrieved via run_report."""
         analytics_svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
 
         result = await analytics_svc.create_report(
             tenant_id=tenant_id,
@@ -258,10 +258,10 @@ class TestReportIntegration:
         assert data["tenant_id"] == tenant_id
         assert data["created_by"] == uid
 
-    async def test_create_report_different_types(self, db_schema, tenant_id):
+    async def test_create_report_different_types(self, db_schema, tenant_id, async_session):
         """Create reports of different types (sales_revenue, sales_conversion, etc.)."""
         analytics_svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
 
         for rtype in ["sales_revenue", "sales_conversion", "customer_growth", "pipeline_forecast"]:
             result = await analytics_svc.create_report(
@@ -274,10 +274,10 @@ class TestReportIntegration:
             assert result.status == ResponseStatus.SUCCESS, f"Failed for type {rtype}: {result.message}"
             assert result.data["type"] == rtype
 
-    async def test_generate_pdf_report(self, db_schema, tenant_id):
+    async def test_generate_pdf_report(self, db_schema, tenant_id, async_session):
         """Generate a PDF report and verify structure."""
         svc = ReportService()
-        await self._seed_user(tenant_id)
+        await self._seed_user(tenant_id, async_session)
 
         generated = await svc.generate_pdf_report(
             report_data={
@@ -291,10 +291,10 @@ class TestReportIntegration:
         assert generated["title"] == "Monthly Sales PDF"
         assert "generated_at" in generated
 
-    async def test_generate_excel_report(self, db_schema, tenant_id):
+    async def test_generate_excel_report(self, db_schema, tenant_id, async_session):
         """Generate an Excel report and verify structure."""
         svc = ReportService()
-        await self._seed_user(tenant_id)
+        await self._seed_user(tenant_id, async_session)
 
         generated = await svc.generate_excel_report(
             report_data={
@@ -307,10 +307,10 @@ class TestReportIntegration:
         assert generated["format"] == "excel"
         assert generated["title"] == "Monthly Sales Excel"
 
-    async def test_export_to_csv(self, db_schema, tenant_id):
+    async def test_export_to_csv(self, db_schema, tenant_id, async_session):
         """Export data to CSV and verify file structure."""
         svc = ReportService()
-        await self._seed_user(tenant_id)
+        await self._seed_user(tenant_id, async_session)
 
         data = [
             {"name": "Alice", "email": "alice@example.com", "amount": 1000},
@@ -331,10 +331,10 @@ class TestReportIntegration:
         assert result["status"] == "error"
         assert "No data to export" in result["message"]
 
-    async def test_schedule_report(self, db_schema, tenant_id):
+    async def test_schedule_report(self, db_schema, tenant_id, async_session):
         """Schedule a report and verify scheduling returns success."""
         analytics_svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
 
         created = await analytics_svc.create_report(
             tenant_id=tenant_id,
@@ -357,10 +357,10 @@ class TestReportIntegration:
         assert result["schedule"]["frequency"] == "daily"
         assert result["active"] is True
 
-    async def test_schedule_report_multiple(self, db_schema, tenant_id):
+    async def test_schedule_report_multiple(self, db_schema, tenant_id, async_session):
         """Scheduling the same report twice updates the schedule (idempotent key)."""
         analytics_svc = AnalyticsService()
-        uid = await self._seed_user(tenant_id)
+        uid = await self._seed_user(tenant_id, async_session)
 
         created = await analytics_svc.create_report(
             tenant_id=tenant_id,
@@ -391,8 +391,8 @@ class TestReportIntegration:
 class TestChartHelpersIntegration:
     """Sync chart helper methods that wrap async DB queries."""
 
-    async def _seed_user(self, tenant_id: int) -> int:
-        user_svc = UserService()
+    async def _seed_user(self, tenant_id: int, async_session) -> int:
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"chartuser_{suffix}",
@@ -402,10 +402,10 @@ class TestChartHelpersIntegration:
         )
         return reg.data.id
 
-    async def test_get_sales_revenue_report(self, db_schema, tenant_id):
+    async def test_get_sales_revenue_report(self, db_schema, tenant_id, async_session):
         """get_sales_revenue_report returns chart data structure."""
         svc = AnalyticsService()
-        await self._seed_user(tenant_id)
+        await self._seed_user(tenant_id, async_session)
 
         result = await svc.get_sales_revenue_report(
             start_date="2026-01-01", end_date="2026-01-31", group_by="day"
@@ -414,10 +414,10 @@ class TestChartHelpersIntegration:
         assert "datasets" in result
         assert result["chart_type"] == "line"
 
-    async def test_get_sales_conversion_report(self, db_schema, tenant_id):
+    async def test_get_sales_conversion_report(self, db_schema, tenant_id, async_session):
         """get_sales_conversion_report returns funnel chart data."""
         svc = AnalyticsService()
-        await self._seed_user(tenant_id)
+        await self._seed_user(tenant_id, async_session)
 
         result = svc.get_sales_conversion_report(
             start_date="2026-01-01", end_date="2026-01-31"
@@ -426,10 +426,10 @@ class TestChartHelpersIntegration:
         assert "datasets" in result
         assert result["chart_type"] == "funnel"
 
-    async def test_get_customer_growth_report(self, db_schema, tenant_id):
+    async def test_get_customer_growth_report(self, db_schema, tenant_id, async_session):
         """get_customer_growth_report returns bar chart data."""
         svc = AnalyticsService()
-        await self._seed_user(tenant_id)
+        await self._seed_user(tenant_id, async_session)
 
         result = svc.get_customer_growth_report(
             start_date="2026-01-01", end_date="2026-03-31"
@@ -438,20 +438,20 @@ class TestChartHelpersIntegration:
         assert "datasets" in result
         assert result["chart_type"] == "bar"
 
-    async def test_get_pipeline_forecast(self, db_schema, tenant_id):
+    async def test_get_pipeline_forecast(self, db_schema, tenant_id, async_session):
         """get_pipeline_forecast returns pipeline forecast data."""
         svc = AnalyticsService()
-        await self._seed_user(tenant_id)
+        await self._seed_user(tenant_id, async_session)
 
         result = svc.get_pipeline_forecast(pipeline_id=1)
         assert "labels" in result
         assert result["pipeline_id"] == 1
         assert result["chart_type"] == "bar"
 
-    async def test_get_team_performance(self, db_schema, tenant_id):
+    async def test_get_team_performance(self, db_schema, tenant_id, async_session):
         """get_team_performance returns team绩效 chart data."""
         svc = AnalyticsService()
-        await self._seed_user(tenant_id)
+        await self._seed_user(tenant_id, async_session)
 
         result = svc.get_team_performance(
             start_date="2026-01-01", end_date="2026-01-31"
@@ -461,10 +461,10 @@ class TestChartHelpersIntegration:
         assert result["chart_type"] == "bar"
         assert len(result["datasets"]) == 2  # Deals Closed + Revenue
 
-    async def test_get_chart_data(self, db_schema, tenant_id):
+    async def test_get_chart_data(self, db_schema, tenant_id, async_session):
         """get_chart_data helper constructs a chart dict from raw data."""
         svc = AnalyticsService()
-        await self._seed_user(tenant_id)
+        await self._seed_user(tenant_id, async_session)
 
         result = svc.get_chart_data(
             chart_type="pie",

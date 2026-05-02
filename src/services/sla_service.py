@@ -11,8 +11,19 @@ from models.ticket import Ticket, SLALevel, SLA_CONFIGS
 class SLAService:
     """SLA管理"""
 
-    def __init__(self, session: AsyncSession, ticket_service=None):
-        self.session = session
+    def __init__(self, session: AsyncSession = None, ticket_service=None):
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                self._session_context = context
+                self.session = context
+            except (AttributeError, TypeError):
+                self._session_context = None
+                self.session = None
+        else:
+            self._session_context = None
+            self.session = session
         self._ticket_service = ticket_service
 
     async def check_sla_status(
@@ -48,24 +59,23 @@ class SLAService:
     ) -> List[Ticket]:
         """获取所有超时的工单（按租户隔离）"""
         now = datetime.now(UTC)
-        async with self.session:
-            result = await self.session.execute(
-                text(
-                    """
-                    SELECT id, subject, description, status, priority, channel,
-                           customer_id, sla_level, tenant_id, assigned_to,
-                           created_at, updated_at, resolved_at,
-                           first_response_at, response_deadline
-                    FROM tickets
-                    WHERE tenant_id = :tenant_id
-                      AND response_deadline < :now
-                      AND resolved_at IS NULL
-                    """
-                ),
-                {"tenant_id": tenant_id, "now": now},
-            )
-            rows = result.fetchall()
-            return [self._row_to_ticket(r) for r in rows]
+        result = await self.session.execute(
+            text(
+                """
+                SELECT id, subject, description, status, priority, channel,
+                       customer_id, sla_level, tenant_id, assigned_to,
+                       created_at, updated_at, resolved_at,
+                       first_response_at, response_deadline
+                FROM tickets
+                WHERE tenant_id = :tenant_id
+                  AND response_deadline < :now
+                  AND resolved_at IS NULL
+                """
+            ),
+            {"tenant_id": tenant_id, "now": now},
+        )
+        rows = result.fetchall()
+        return [self._row_to_ticket(r) for r in rows]
 
     async def calculate_remaining_time(self, ticket: Ticket) -> timedelta:
         """计算剩余时间"""

@@ -29,8 +29,8 @@ from services.user_service import UserService
 class TestPipelineIntegration:
     """Full pipeline lifecycle via the real DB."""
 
-    async def test_create_and_get_pipeline(self, db_schema, tenant_id):
-        svc = PipelineService()
+    async def test_create_and_get_pipeline(self, db_schema, tenant_id, async_session):
+        svc = PipelineService(async_session)
         result = await svc.create_pipeline(
             tenant_id=tenant_id,
             data={"name": "Deal Pipeline", "description": "Main sales pipeline"},
@@ -45,9 +45,9 @@ class TestPipelineIntegration:
         assert fetched.data["name"] == "Deal Pipeline"
 
     async def test_pipeline_cross_tenant_isolation(
-        self, db_schema, tenant_id, tenant_id_2
+        self, db_schema, tenant_id, tenant_id_2, async_session
     ):
-        svc = PipelineService()
+        svc = PipelineService(async_session)
         p1 = await svc.create_pipeline(tenant_id=tenant_id, data={"name": "Tenant 1 Pipeline"})
         p2 = await svc.create_pipeline(tenant_id=tenant_id_2, data={"name": "Tenant 2 Pipeline"})
         assert p1.status == ResponseStatus.SUCCESS
@@ -61,8 +61,8 @@ class TestPipelineIntegration:
         ids_t2 = [p["id"] for p in list_t2.data.items]
         assert p1.data["id"] not in ids_t2
 
-    async def test_update_and_delete_pipeline(self, db_schema, tenant_id):
-        svc = PipelineService()
+    async def test_update_and_delete_pipeline(self, db_schema, tenant_id, async_session):
+        svc = PipelineService(async_session)
         created = await svc.create_pipeline(tenant_id=tenant_id, data={"name": "Original Name"})
         pid = created.data["id"]
 
@@ -132,9 +132,9 @@ class TestCustomerIntegration:
 class TestUserIntegration:
     """Full user lifecycle via the real DB."""
 
-    async def test_register_and_authenticate_user(self, db_schema, tenant_id):
-        user_svc = UserService()
-        auth_svc = AuthService()
+    async def test_register_and_authenticate_user(self, db_schema, tenant_id, async_session):
+        user_svc = UserService(async_session)
+        auth_svc = AuthService(async_session)
         suffix = uuid.uuid4().hex[:8]
         username = f"user_{suffix}"
         email = f"user_{suffix}@example.com"
@@ -153,9 +153,9 @@ class TestUserIntegration:
         assert auth is not None, "authenticate_user should return a user dict on success"
         assert auth["username"] == username
 
-    async def test_login_wrong_password_returns_none(self, db_schema, tenant_id):
-        user_svc = UserService()
-        auth_svc = AuthService()
+    async def test_login_wrong_password_returns_none(self, db_schema, tenant_id, async_session):
+        user_svc = UserService(async_session)
+        auth_svc = AuthService(async_session)
         suffix = uuid.uuid4().hex[:8]
         username = f"wrongpw_{suffix}"
 
@@ -178,7 +178,7 @@ class TestSalesIntegration:
 
     async def _setup_pipeline_and_customer(self, tenant_id, session):
         cust_svc = CustomerService(session)
-        pipe_svc = PipelineService()
+        pipe_svc = PipelineService(session)
         suffix = uuid.uuid4().hex[:8]
         cust = await cust_svc.create_customer(
             data={"name": f"Opp Cust {suffix}", "email": f"opp_{suffix}@example.com"},
@@ -252,7 +252,7 @@ class TestTicketIntegration:
         return result.data["id"]
 
     async def test_create_and_get_ticket(self, db_schema, tenant_id, async_session):
-        svc = TicketService()
+        svc = TicketService(async_session)
         cid = await self._ensure_customer(tenant_id, async_session)
 
         result = await svc.create_ticket(
@@ -271,7 +271,7 @@ class TestTicketIntegration:
         assert fetched.data.priority == TicketPriority.HIGH
 
     async def test_update_ticket_status(self, db_schema, tenant_id, async_session):
-        svc = TicketService()
+        svc = TicketService(async_session)
         cid = await self._ensure_customer(tenant_id, async_session)
 
         tkt = await svc.create_ticket(
@@ -291,7 +291,7 @@ class TestTicketIntegration:
         assert updated.data.status == TicketStatus.CLOSED
 
     async def test_list_tickets_with_filters(self, db_schema, tenant_id, async_session):
-        svc = TicketService()
+        svc = TicketService(async_session)
         cid = await self._ensure_customer(tenant_id, async_session)
 
         await svc.create_ticket(

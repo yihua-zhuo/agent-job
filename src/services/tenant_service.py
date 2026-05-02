@@ -8,11 +8,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.response import ApiResponse, PaginatedData
 
+from db.connection import get_db_session
+
 
 class TenantService:
     """租户管理服务"""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession = None):
+        self._session_context = None
+        if session is None:
+            context = get_db_session()
+            try:
+                session = context.__enter__()
+                self._session_context = context
+            except (AttributeError, TypeError):
+                # sync __enter__ not supported — leave session=None
+                # (async context callers must pass session explicitly)
+                session = None
+                self._session_context = None
+        else:
+            self._session_context = None
         self.session = session
 
     async def create_tenant(self, name: str, plan: str, admin_email: str = None, **kwargs) -> ApiResponse[Dict]:
@@ -158,7 +173,7 @@ class TenantService:
             row = result.fetchone()
             if row is None:
                 return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
-            return ApiResponse.success(data={"tenant_id": tenant_id}, message="租户已删除")
+            return ApiResponse.success(data={"id": row[0], "name": row[1], "plan": row[2], "status": row[3], "settings": row[4], "created_at": row[5].isoformat() if row[5] else None, "updated_at": row[6].isoformat() if row[6] else None}, message="租户已删除")
 
     async def get_tenant_stats(self, tenant_id: int) -> ApiResponse[Dict]:
         """获取租户统计信息"""

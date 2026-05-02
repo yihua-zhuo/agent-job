@@ -10,6 +10,9 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
+from db.connection import get_db_session
+
+
 class AuthService:
     """Service for handling authentication operations including token generation and verification."""
 
@@ -17,13 +20,15 @@ class AuthService:
     TOKEN_ISSUER = "crm-agent-system"
     TOKEN_AUDIENCE = "crm-api"
 
-    def __init__(self, session: AsyncSession, secret_key: Optional[str] = None):
-        """Initialize with the secret key for JWT operations.
-
-        Args:
-            session: AsyncSession instance.
-            secret_key: Secret key used for JWT encoding. Defaults to JWT_SECRET_KEY env var.
-        """
+    def __init__(self, session: AsyncSession = None, secret_key: Optional[str] = None):
+        self._session_context = None
+        if session is None:
+            try:
+                context = get_db_session()
+                # async generator — only use in async context; otherwise leave session=None
+                session = None
+            except Exception:
+                session = None
         self.session = session
         self.secret_key: str = cast(str, secret_key) or os.environ["JWT_SECRET_KEY"]
         if not self.secret_key:
@@ -84,22 +89,21 @@ class AuthService:
             row = result.fetchone()
             if row is None:
                 return None
+        if not self.verify_password(password, row[4]):
+            return None
 
-            if not self.verify_password(password, row[4]):
-                return None
-
-            return {
-                "id": row[0],
-                "tenant_id": row[1],
-                "username": row[2],
-                "email": row[3],
-                "role": row[5],
-                "status": row[6],
-                "full_name": row[7],
-                "bio": row[8],
-                "created_at": row[9].isoformat() if row[9] else None,
-                "updated_at": row[10].isoformat() if row[10] else None,
-            }
+        return {
+            "id": row[0],
+            "tenant_id": row[1],
+            "username": row[2],
+            "email": row[3],
+            "role": row[5],
+            "status": row[6],
+            "full_name": row[7],
+            "bio": row[8],
+            "created_at": row[9].isoformat() if row[9] else None,
+            "updated_at": row[10].isoformat() if row[10] else None,
+        }
 
     async def create_token(self, user_id: int, username: str, role: str, tenant_id: int = None) -> str:
         """Create a JWT token for an existing user.

@@ -28,7 +28,7 @@ from services.user_service import UserService
 
 async def _seed_tenant() -> int:
     suffix = uuid.uuid4().hex[:8]
-    result = await TenantService().create_tenant(
+    result = await TenantService(async_session).create_tenant(
         name=f"Test Tenant {suffix}",
         plan="pro",
         admin_email=f"admin_{suffix}@example.com",
@@ -37,7 +37,7 @@ async def _seed_tenant() -> int:
 
 
 async def _seed_user(async_session, tenant_id: int = 1, **overrides) -> int:
-    user_svc = UserService()
+    user_svc = UserService(async_session)
     suffix = uuid.uuid4().hex[:8]
     reg = await user_svc.create_user(
         username=overrides.get("username", f"u_{suffix}"),
@@ -63,8 +63,8 @@ async def _seed_customer(async_session, tenant_id: int = 1, **overrides) -> dict
 class TestTenantServiceIntegration:
     """Full tenant lifecycle via the real DB."""
 
-    async def test_create_and_get_tenant(self, db_schema, tenant_id):
-        svc = TenantService()
+    async def test_create_and_get_tenant(self, db_schema, tenant_id, async_session):
+        svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         result = await svc.create_tenant(
             name=f"Tenant Create {suffix}",
@@ -79,8 +79,8 @@ class TestTenantServiceIntegration:
         assert fetched.data["name"] == f"Tenant Create {suffix}"
         assert fetched.data["plan"] == "enterprise"
 
-    async def test_update_tenant(self, db_schema, tenant_id):
-        svc = TenantService()
+    async def test_update_tenant(self, db_schema, tenant_id, async_session):
+        svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await svc.create_tenant(
             name=f"Tenant Old {suffix}",
@@ -93,8 +93,8 @@ class TestTenantServiceIntegration:
         assert updated.status == ResponseStatus.SUCCESS
         assert updated.data["name"] == f"Tenant New {suffix}"
 
-    async def test_delete_tenant(self, db_schema, tenant_id):
-        svc = TenantService()
+    async def test_delete_tenant(self, db_schema, tenant_id, async_session):
+        svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await svc.create_tenant(
             name=f"Tenant Del {suffix}",
@@ -110,8 +110,8 @@ class TestTenantServiceIntegration:
         assert fetched.status == ResponseStatus.SUCCESS
         assert fetched.data["status"] == "deleted"
 
-    async def test_list_tenants(self, db_schema, tenant_id):
-        svc = TenantService()
+    async def test_list_tenants(self, db_schema, tenant_id, async_session):
+        svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         for name in [f"List Ten {suffix} A", f"List Ten {suffix} B"]:
             await svc.create_tenant(name=name, plan="free", admin_email=f"{name.lower().replace(' ', '_')}@example.com")
@@ -120,8 +120,8 @@ class TestTenantServiceIntegration:
         assert result.status == ResponseStatus.SUCCESS
         assert len(result.data.items) >= 2
 
-    async def test_get_tenant_stats(self, db_schema, tenant_id):
-        svc = TenantService()
+    async def test_get_tenant_stats(self, db_schema, tenant_id, async_session):
+        svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await svc.create_tenant(
             name=f"Stats Ten {suffix}",
@@ -142,7 +142,7 @@ class TestUserServiceIntegration:
     """Full user lifecycle via the real DB."""
 
     async def test_create_and_get_user(self, db_schema, tenant_id, async_session):
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         result = await user_svc.create_user(
             username=f"cu_{suffix}",
@@ -158,7 +158,7 @@ class TestUserServiceIntegration:
         assert fetched.username == f"cu_{suffix}"
 
     async def test_get_user_by_username(self, db_schema, tenant_id, async_session):
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         await user_svc.create_user(
             username=f"un_{suffix}",
@@ -172,7 +172,7 @@ class TestUserServiceIntegration:
         assert fetched.username == f"un_{suffix}"
 
     async def test_update_user(self, db_schema, tenant_id, async_session):
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await user_svc.create_user(
             username=f"uu_{suffix}",
@@ -187,7 +187,7 @@ class TestUserServiceIntegration:
         assert updated.data.bio == "Updated bio"
 
     async def test_delete_user(self, db_schema, tenant_id, async_session):
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await user_svc.create_user(
             username=f"du_{suffix}",
@@ -204,7 +204,7 @@ class TestUserServiceIntegration:
         assert fetched is None
 
     async def test_list_users(self, db_schema, tenant_id, async_session):
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         for i in range(2):
             await user_svc.create_user(
@@ -221,7 +221,7 @@ class TestUserServiceIntegration:
         assert any(u.username == f"lu_{suffix}_0" for u in result.data.items)
 
     async def test_search_users(self, db_schema, tenant_id, async_session):
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         await user_svc.create_user(
             username=f"su_{suffix}",
@@ -235,7 +235,7 @@ class TestUserServiceIntegration:
         assert any(suffix in u.username for u in result.data.items)
 
     async def test_change_password(self, db_schema, tenant_id, async_session):
-        user_svc = UserService()
+        user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
         reg = await user_svc.create_user(
             username=f"cp_{suffix}",
@@ -258,7 +258,7 @@ class TestTicketServiceIntegration:
     """Full ticket lifecycle via the real DB using the shared async_session fixture."""
 
     async def test_create_and_get_ticket(self, db_schema, tenant_id, async_session):
-        ticket_svc = TicketService()
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         result = await ticket_svc.create_ticket(
@@ -277,7 +277,7 @@ class TestTicketServiceIntegration:
         assert fetched.data.subject == "Support Issue"
 
     async def test_update_ticket(self, db_schema, tenant_id, async_session):
-        ticket_svc = TicketService()
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         created = await ticket_svc.create_ticket(
@@ -296,7 +296,7 @@ class TestTicketServiceIntegration:
         assert updated.data.subject == "Updated Title"
 
     async def test_assign_ticket(self, db_schema, tenant_id, async_session):
-        ticket_svc = TicketService()
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         created = await ticket_svc.create_ticket(
@@ -313,7 +313,7 @@ class TestTicketServiceIntegration:
         assert assigned.status == ResponseStatus.SUCCESS
 
     async def test_add_reply(self, db_schema, tenant_id, async_session):
-        ticket_svc = TicketService()
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         created = await ticket_svc.create_ticket(
@@ -332,7 +332,7 @@ class TestTicketServiceIntegration:
         assert reply.data.content == "Here is the fix"
 
     async def test_change_ticket_status(self, db_schema, tenant_id, async_session):
-        ticket_svc = TicketService()
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         created = await ticket_svc.create_ticket(
@@ -351,7 +351,7 @@ class TestTicketServiceIntegration:
         assert changed.data.status == TicketStatus.IN_PROGRESS
 
     async def test_list_tickets(self, db_schema, tenant_id, async_session):
-        ticket_svc = TicketService()
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         suffix = uuid.uuid4().hex[:8]
@@ -370,7 +370,7 @@ class TestTicketServiceIntegration:
         assert any(f"List Ticket {suffix}" in t.subject for t in result.data.items)
 
     async def test_get_customer_tickets(self, db_schema, tenant_id, async_session):
-        ticket_svc = TicketService()
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         await ticket_svc.create_ticket(
@@ -387,7 +387,7 @@ class TestTicketServiceIntegration:
         assert len(result) >= 1
 
     async def test_get_sla_breaches(self, db_schema, tenant_id, async_session):
-        ticket_svc = TicketService()
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         await ticket_svc.create_ticket(
@@ -412,8 +412,8 @@ class TestSLAServiceIntegration:
     """SLA breach checking via the real DB using the shared async_session fixture."""
 
     async def test_check_sla_status(self, db_schema, tenant_id, async_session):
-        sla_svc = SLAService()
-        ticket_svc = TicketService()
+        sla_svc = SLAService(async_session)
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         created = await ticket_svc.create_ticket(
@@ -432,8 +432,8 @@ class TestSLAServiceIntegration:
         assert status in ("normal", "warning", "breached")
 
     async def test_get_breach_tickets(self, db_schema, tenant_id, async_session):
-        sla_svc = SLAService()
-        ticket_svc = TicketService()
+        sla_svc = SLAService(async_session)
+        ticket_svc = TicketService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         cid = (await _seed_customer(async_session, tenant_id)).data["id"]
         await ticket_svc.create_ticket(
@@ -458,7 +458,7 @@ class TestAuthServiceIntegration:
     """Auth service (password hashing / JWT) via the real DB using the shared async_session fixture."""
 
     async def test_create_user_with_auth(self, db_schema, tenant_id, async_session):
-        auth_svc = AuthService()
+        auth_svc = AuthService(async_session)
         suffix = uuid.uuid4().hex[:8]
         # AuthService.create_user delegates to UserService.create_user which returns ApiResponse[User]
         result = await auth_svc.create_user(
@@ -471,7 +471,7 @@ class TestAuthServiceIntegration:
         assert result.data.username == f"auth_{suffix}"
 
     async def test_login(self, db_schema, tenant_id, async_session):
-        auth_svc = AuthService()
+        auth_svc = AuthService(async_session)
         suffix = uuid.uuid4().hex[:8]
         await auth_svc.create_user(
             username=f"login_{suffix}",

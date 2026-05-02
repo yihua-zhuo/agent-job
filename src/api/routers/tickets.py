@@ -216,8 +216,14 @@ async def list_tickets(
     session=Depends(get_db),
 ):
     service = TicketService(session)
-    status_enum = TicketStatus(status) if status else None
-    priority_enum = TicketPriority(priority) if priority else None
+    try:
+        status_enum = TicketStatus(status) if status else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid status value")
+    try:
+        priority_enum = TicketPriority(priority) if priority else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid priority value")
     resp = await service.list_tickets(
         page=page, page_size=page_size,
         status=status_enum, priority=priority_enum,
@@ -320,7 +326,7 @@ async def add_reply(
     resp = await service.add_reply(
         ticket_id=ticket_id,
         content=body.content,
-        created_by=body.created_by,
+        created_by=ctx.user_id,
         is_internal=body.is_internal,
         tenant_id=ctx.tenant_id or 0,
     )
