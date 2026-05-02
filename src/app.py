@@ -1,4 +1,4 @@
-from flask import Flask, jsonify
+from flask import Flask, jsonify, send_from_directory
 import os
 import secrets
 from api import register_routes
@@ -52,8 +52,11 @@ def create_app():
     def internal_error(e):
         return jsonify({'code': 500, 'message': 'Internal server error'}), 500
 
-    return app
+    @app.route('/docs/<path:filename>')
+    def serve_static(filename):
+        return send_from_directory('../docs', filename)
 
+    return app
 
 app = create_app()
 

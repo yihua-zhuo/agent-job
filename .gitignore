@@ -25,4 +25,5 @@ shared-memory/
 .sandbox-home/
 coverage.json
 cat_all.py
-all-code.txt
+all-code.txt.clawd-agents/
+.clawd-agents/
