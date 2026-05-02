@@ -11,7 +11,7 @@ from models.response import ApiResponse, PaginatedData
 class NotificationService:
     """通知服务 — 支持多渠道发送、通知模板、优先级队列、发送状态追踪。"""
 
-    def __init__(self, session: AsyncSession = None):
+    def __init__(self, session: AsyncSession):
         self.session = session
 
     def _require_session(self):
