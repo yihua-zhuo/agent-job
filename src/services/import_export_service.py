@@ -44,8 +44,6 @@ class ImportExportService:
 
     def __init__(self, session: AsyncSession = None):
         self.session = session
-        if session is not None:
-            self._require_session()
         self.file_helper = FileHelper()
         # 必填字段配置
         self.required_fields = {
@@ -59,6 +57,14 @@ class ImportExportService:
             "phone": lambda x: self._is_valid_phone(x),
             "amount": lambda x: self._is_valid_number(x),
         }
+
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     # ------------------------------------------------------------------
     #  Validation helpers
@@ -84,6 +90,10 @@ class ImportExportService:
             return True
         except (ValueError, TypeError):
             return False
+
+    # ------------------------------------------------------------------
+    #  Import – customers
+    # ------------------------------------------------------------------
 
     def _require_session(self):
         if self.session is None:
@@ -129,26 +139,41 @@ class ImportExportService:
                     "errors": validation_result["errors"],
                 }
 
-            # Persist to DB — execute inserts directly (no async with wrapper, which
-            # creates an inner savepoint that prevents the outer commit from seeing
-            # the buffered changes in some SQLAlchemy/asyncpg configurations).
+            # Persist to DB
             for row in data:
+
                 tags_val = row.get("tags", [])
+
+                # Serialize tags list as JSON string for asyncpg compatibility
+
                 tags_str = json.dumps(tags_val) if isinstance(tags_val, list) else tags_val
+
                 stmt = pg_insert(_customers_t).values(
+
                     tenant_id=tenant_id,
+
                     name=row["name"],
+
                     email=row.get("email", ""),
+
                     phone=row.get("phone", ""),
+
                     company=row.get("company", ""),
+
                     status=row.get("status", "lead"),
+
                     owner_id=owner_id or row.get("owner_id", 0),
+
                     tags=tags_str,
+
                     created_at=datetime.now(),
+
                     updated_at=datetime.now(),
+
                 )
+
                 await self.session.execute(stmt)
-            await self.session.commit()
+
 
             return {
                 "success_count": len(data),
@@ -202,34 +227,53 @@ class ImportExportService:
                 }
 
             # Persist to DB
-            # Persist to DB — execute inserts directly (no async with wrapper, which
-            # creates an inner savepoint that prevents the outer commit from seeing
-            # the buffered changes in some SQLAlchemy/asyncpg configurations).
             for row in data:
+
                 amount_val = row.get("amount", 0)
+
                 if isinstance(amount_val, str):
+
                     amount_val = Decimal(amount_val)
+
                 expected_close = row.get("expected_close_date")
+
                 if isinstance(expected_close, str):
+
                     expected_close = datetime.fromisoformat(expected_close)
+
                 elif expected_close is None:
+
                     expected_close = datetime.now()
 
+
                 stmt = pg_insert(_opportunities_t).values(
+
                     tenant_id=tenant_id,
+
                     customer_id=int(row["customer_id"]),
+
                     name=row["name"],
+
                     stage=row.get("stage", "lead"),
+
                     amount=amount_val,
+
                     probability=int(row.get("probability", 0)),
+
                     expected_close_date=expected_close,
+
                     owner_id=owner_id or row.get("owner_id", 0),
+
                     pipeline_id=row.get("pipeline_id"),
+
                     created_at=datetime.now(),
+
                     updated_at=datetime.now(),
+
                 )
+
                 await self.session.execute(stmt)
-            await self.session.commit()
+
 
             return {
                 "success_count": len(data),
@@ -283,23 +327,38 @@ class ImportExportService:
                 }
 
             # Persist leads as customers with status "lead"
-            async with self.session:
-                for row in data:
-                    tags_val = row.get("tags", [])
-                    tags_str = json.dumps(tags_val) if isinstance(tags_val, list) else tags_val
-                    stmt = pg_insert(_customers_t).values(
-                        tenant_id=tenant_id,
-                        name=row["name"],
-                        email=row.get("email", ""),
-                        phone=row.get("phone", ""),
-                        company=row.get("company", ""),
-                        status="lead",
-                        owner_id=owner_id or row.get("owner_id", 0),
-                        tags=tags_str,
-                        created_at=datetime.now(),
-                        updated_at=datetime.now(),
-                    )
-                    await self.session.execute(stmt)
+            for row in data:
+
+                tags_val = row.get("tags", [])
+
+                tags_str = json.dumps(tags_val) if isinstance(tags_val, list) else tags_val
+
+                stmt = pg_insert(_customers_t).values(
+
+                    tenant_id=tenant_id,
+
+                    name=row["name"],
+
+                    email=row.get("email", ""),
+
+                    phone=row.get("phone", ""),
+
+                    company=row.get("company", ""),
+
+                    status="lead",
+
+                    owner_id=owner_id or row.get("owner_id", 0),
+
+                    tags=tags_str,
+
+                    created_at=datetime.now(),
+
+                    updated_at=datetime.now(),
+
+                )
+
+                await self.session.execute(stmt)
+
 
             return {
                 "success_count": len(data),
@@ -327,19 +386,18 @@ class ImportExportService:
     ) -> bytes:
         """导出客户数据"""
 
-        async with self.session:
-            stmt = select(_customers_t).where(
-                and_(
-                    _customers_t.c.tenant_id == tenant_id,
-                )
+        stmt = select(_customers_t).where(
+            and_(
+                _customers_t.c.tenant_id == tenant_id,
             )
-            # Apply filters
-            for key, value in filters.items():
-                if key in ["status", "company"]:
-                    stmt = stmt.where(getattr(_customers_t.c, key) == value)
-            result = await self.session.execute(stmt)
-            rows = result.fetchall()
-            sample_data = [dict(row._mapping) for row in rows]
+        )
+        # Apply filters
+        for key, value in filters.items():
+            if key in ["status", "company"]:
+                stmt = stmt.where(getattr(_customers_t.c, key) == value)
+        result = await self.session.execute(stmt)
+        rows = result.fetchall()
+        sample_data = [dict(row._mapping) for row in rows]
 
         if not sample_data:
             sample_data = [
@@ -371,16 +429,15 @@ class ImportExportService:
     ) -> bytes:
         """导出商机数据"""
 
-        async with self.session:
-            stmt = select(_opportunities_t).where(
-                _opportunities_t.c.tenant_id == tenant_id
-            )
-            for key, value in filters.items():
-                if key in ["stage", "pipeline_id"]:
-                    stmt = stmt.where(getattr(_opportunities_t.c, key) == value)
-            result = await self.session.execute(stmt)
-            rows = result.fetchall()
-            sample_data = [dict(row._mapping) for row in rows]
+        stmt = select(_opportunities_t).where(
+            _opportunities_t.c.tenant_id == tenant_id
+        )
+        for key, value in filters.items():
+            if key in ["stage", "pipeline_id"]:
+                stmt = stmt.where(getattr(_opportunities_t.c, key) == value)
+        result = await self.session.execute(stmt)
+        rows = result.fetchall()
+        sample_data = [dict(row._mapping) for row in rows]
 
         if not sample_data:
             sample_data = [
