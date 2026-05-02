@@ -3,8 +3,8 @@ from datetime import datetime, UTC
 from typing import Optional, List, Dict, Any
 
 from sqlalchemy import text, func
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
 from db.models.marketing import CampaignModel, CampaignEventModel
 from models.marketing import (
     Campaign,
@@ -49,6 +49,16 @@ def _row_to_event(row) -> CampaignEvent:
 class MarketingService:
     """营销服务 — backed by PostgreSQL."""
 
+    def __init__(self, session: AsyncSession = None):
+        self.session = session
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
+
     async def create_campaign(
         self,
         name: str,
@@ -59,8 +69,9 @@ class MarketingService:
         **kwargs,
     ) -> ApiResponse[Campaign]:
         """创建营销活动"""
+        self._require_session()
         now = datetime.now(UTC)
-        async with get_db_session() as session:
+        async with self.session:
             stmt = text(
                 """
                 INSERT INTO campaigns (tenant_id, name, type, status, subject, content,
@@ -74,7 +85,7 @@ class MarketingService:
                           sent_count, open_count, click_count, created_at, updated_at
                 """
             )
-            result = await session.execute(
+            result = await self.session.execute(
                 stmt,
                 {
                     "tenant_id": tenant_id,
@@ -98,7 +109,7 @@ class MarketingService:
                     "now": now,
                 },
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="创建营销活动失败", code=500)
@@ -106,7 +117,8 @@ class MarketingService:
 
     async def get_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """获取活动详情"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             stmt = text(
                 """
                 SELECT id, name, type, status, subject, content, target_audience,
@@ -115,7 +127,7 @@ class MarketingService:
                 FROM campaigns WHERE id = :id
                 """
             )
-            result = await session.execute(stmt, {"id": campaign_id})
+            result = await self.session.execute(stmt, {"id": campaign_id})
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="营销活动不存在", code=1404)
@@ -125,6 +137,7 @@ class MarketingService:
         self, campaign_id: int, tenant_id: int = 0, **kwargs
     ) -> ApiResponse[Campaign]:
         """更新活动"""
+        self._require_session()
         updates: List[str] = []
         params: Dict[str, Any] = {"id": campaign_id}
         for key in ["name", "type", "status", "subject", "content", "target_audience", "trigger_type", "trigger_days"]:
@@ -138,7 +151,7 @@ class MarketingService:
         if not updates:
             return await self.get_campaign(campaign_id, tenant_id)
 
-        async with get_db_session() as session:
+        async with self.session:
             where = "id = :id"
             if tenant_id > 0:
                 where += " AND tenant_id = :tenant_id"
@@ -154,8 +167,8 @@ class MarketingService:
                 """
             )
             params["now"] = datetime.now(UTC)
-            result = await session.execute(stmt, params)
-            await session.commit()
+            result = await self.session.execute(stmt, params)
+            await self.session.commit()
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="营销活动不存在", code=1404)
@@ -163,19 +176,22 @@ class MarketingService:
 
     async def launch_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """启动活动"""
+        self._require_session()
         return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.ACTIVE)
 
     async def pause_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """暂停活动"""
+        self._require_session()
         return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.PAUSED)
 
     async def get_campaign_stats(self, campaign_id: int) -> ApiResponse[Dict[str, Any]]:
         """获取活动统计"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             stmt = text(
                 "SELECT sent_count, open_count, click_count FROM campaigns WHERE id = :id"
             )
-            result = await session.execute(stmt, {"id": campaign_id})
+            result = await self.session.execute(stmt, {"id": campaign_id})
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="营销活动不存在", code=1404)
@@ -203,7 +219,8 @@ class MarketingService:
         tenant_id: int = 0,
     ) -> ApiResponse[PaginatedData[Campaign]]:
         """活动列表"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             conditions: List[str] = []
             params: Dict[str, Any] = {"offset": (page - 1) * page_size, "limit": page_size}
             if tenant_id > 0:
@@ -219,7 +236,7 @@ class MarketingService:
             where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
             count_stmt = text(f"SELECT COUNT(*) FROM campaigns {where}")
-            count_result = await session.execute(count_stmt, params)
+            count_result = await self.session.execute(count_stmt, params)
             total = count_result.scalar() or 0
 
             select_stmt = text(
@@ -232,7 +249,7 @@ class MarketingService:
                 OFFSET :offset LIMIT :limit
                 """
             )
-            result = await session.execute(select_stmt, params)
+            result = await self.session.execute(select_stmt, params)
             rows = result.fetchall()
 
             items = [_row_to_campaign(r) for r in rows]
@@ -248,8 +265,9 @@ class MarketingService:
         tenant_id: int = 0,
     ) -> ApiResponse[CampaignEvent]:
         """记录用户事件"""
+        self._require_session()
         now = datetime.now(UTC)
-        async with get_db_session() as session:
+        async with self.session:
             # Insert event
             stmt = text(
                 """
@@ -258,7 +276,7 @@ class MarketingService:
                 RETURNING id, campaign_id, customer_id, event_type, created_at
                 """
             )
-            result = await session.execute(
+            result = await self.session.execute(
                 stmt,
                 {
                     "campaign_id": campaign_id,
@@ -268,7 +286,7 @@ class MarketingService:
                     "now": now,
                 },
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="记录事件失败", code=500)
@@ -280,19 +298,20 @@ class MarketingService:
                 "clicked": "click_count",
             }.get(event_type)
             if count_col:
-                await session.execute(
+                await self.session.execute(
                     text(
                         f"UPDATE campaigns SET {count_col} = {count_col} + 1 WHERE id = :id"
                     ),
                     {"id": campaign_id},
                 )
-                await session.commit()
+                await self.session.commit()
 
             return ApiResponse.success(data=_row_to_event(row), message="事件记录成功")
 
     async def get_user_events(self, customer_id: int, tenant_id: int = 0) -> List[CampaignEvent]:
         """获取用户的所有营销事件"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             stmt = text(
                 """
                 SELECT id, campaign_id, customer_id, event_type, created_at
@@ -302,7 +321,7 @@ class MarketingService:
                 ORDER BY created_at DESC
                 """
             )
-            result = await session.execute(stmt, {"customer_id": customer_id, "tenant_id": tenant_id})
+            result = await self.session.execute(stmt, {"customer_id": customer_id, "tenant_id": tenant_id})
             return [_row_to_event(r) for r in result.fetchall()]
 
     async def setup_trigger(
@@ -313,6 +332,7 @@ class MarketingService:
         tenant_id: int = 0,
     ) -> ApiResponse[Campaign]:
         """设置触发器"""
+        self._require_session()
         return await self.update_campaign(
             campaign_id, tenant_id,
             trigger_type=trigger_type,
@@ -321,6 +341,7 @@ class MarketingService:
 
     async def add_audience(self, campaign_id: int, audience_sql: str, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """添加目标受众"""
+        self._require_session()
         return await self.update_campaign(
             campaign_id, tenant_id, target_audience=audience_sql
         )
@@ -329,6 +350,7 @@ class MarketingService:
         self, campaign_id: int, customer_ids: List[int], tenant_id: int = 0
     ) -> Dict[str, Any]:
         """触发活动发送"""
+        self._require_session()
         sent = 0
         for cid in customer_ids:
             resp = await self.record_event(campaign_id, cid, "sent", tenant_id)
@@ -344,7 +366,8 @@ class MarketingService:
         self, campaign_id: int, tenant_id: int = 0
     ) -> List[CampaignEvent]:
         """获取活动事件列表"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             stmt = text(
                 """
                 SELECT id, campaign_id, customer_id, event_type, created_at
@@ -354,5 +377,5 @@ class MarketingService:
                 ORDER BY created_at DESC
                 """
             )
-            result = await session.execute(stmt, {"campaign_id": campaign_id, "tenant_id": tenant_id})
+            result = await self.session.execute(stmt, {"campaign_id": campaign_id, "tenant_id": tenant_id})
             return [_row_to_event(r) for r in result.fetchall()]

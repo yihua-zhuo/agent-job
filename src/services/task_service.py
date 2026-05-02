@@ -3,12 +3,22 @@ from typing import List, Dict, Optional
 from datetime import datetime, UTC
 
 from sqlalchemy import text, func, and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
 
 
 class TaskService:
     """任务服务"""
+
+    def __init__(self, session: AsyncSession = None):
+        self.session = session
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     async def create_task(
         self,
@@ -19,12 +29,13 @@ class TaskService:
         **kwargs,
     ) -> Dict:
         """创建任务"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             tenant_id = kwargs.get("tenant_id", 0)
             created_by = kwargs.get("created_by") or assigned_to
             priority = kwargs.get("priority", "normal")
             now = datetime.now(UTC)
-            result = await session.execute(
+            result = await self.session.execute(
                 text(
                     """
                     INSERT INTO tasks
@@ -48,15 +59,16 @@ class TaskService:
                     "now": now,
                 },
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             task = self._row_to_dict(row)
             return {"success": True, "data": task, "message": "任务创建成功"}
 
     async def get_task(self, task_id: int) -> Dict:
         """获取任务详情"""
-        async with get_db_session() as session:
-            result = await session.execute(
+        self._require_session()
+        async with self.session:
+            result = await self.session.execute(
                 text(
                     """
                     SELECT id, tenant_id, title, description, assigned_to, due_date,
@@ -74,7 +86,8 @@ class TaskService:
 
     async def update_task(self, task_id: int, **kwargs) -> Dict:
         """更新任务"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             # Build dynamic SET clause
             set_clauses = []
             params: Dict = {"task_id": task_id}
@@ -109,8 +122,8 @@ class TaskService:
                 f"RETURNING id, tenant_id, title, description, assigned_to, due_date, "
                 f"status, priority, created_by, completed_at, created_at, updated_at"
             )
-            result = await session.execute(sql, params)
-            await session.commit()
+            result = await self.session.execute(sql, params)
+            await self.session.commit()
             row = result.fetchone()
             if row is None:
                 return {"success": False, "data": None, "message": "任务不存在"}
@@ -118,9 +131,10 @@ class TaskService:
 
     async def complete_task(self, task_id: int):
         """完成任务"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             now = datetime.now(UTC)
-            result = await session.execute(
+            result = await self.session.execute(
                 text(
                     """
                     UPDATE tasks
@@ -132,7 +146,7 @@ class TaskService:
                 ),
                 {"task_id": task_id, "now": now},
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if row is None:
                 return {"success": False, "data": None, "message": "任务不存在"}
@@ -140,12 +154,13 @@ class TaskService:
 
     async def delete_task(self, task_id: int):
         """删除任务"""
-        async with get_db_session() as session:
-            result = await session.execute(
+        self._require_session()
+        async with self.session:
+            result = await self.session.execute(
                 text("DELETE FROM tasks WHERE id = :task_id RETURNING id"),
                 {"task_id": task_id},
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if row is None:
                 return {"success": False, "data": None, "message": "任务不存在"}
@@ -160,7 +175,8 @@ class TaskService:
         page_size: int = 20,
     ) -> Dict:
         """任务列表"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             # Count
             count_params: Dict = {}
             where_clauses = []
@@ -175,7 +191,7 @@ class TaskService:
                 count_params["status"] = status
             where_sql = "WHERE " + " AND ".join(where_clauses) if where_clauses else ""
 
-            count_result = await session.execute(
+            count_result = await self.session.execute(
                 text(f"SELECT COUNT(*) FROM tasks {where_sql}"),
                 count_params,
             )
@@ -194,7 +210,7 @@ class TaskService:
                 """
             )
             fetch_params = dict(count_params, limit=page_size, offset=offset)
-            rows = await session.execute(fetch_sql, fetch_params)
+            rows = await self.session.execute(fetch_sql, fetch_params)
             items = [self._row_to_dict(r) for r in rows.fetchall()]
             return {
                 "success": True,
@@ -204,7 +220,8 @@ class TaskService:
 
     async def get_my_tasks(self, user_id: int, status: str = None) -> List[Dict]:
         """获取我的任务"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             params: Dict = {"user_id": user_id}
             where_clauses = ["assigned_to = :user_id"]
             if status:
@@ -221,11 +238,12 @@ class TaskService:
                 ORDER BY due_date ASC NULLS LAST
                 """
             )
-            rows = await session.execute(sql, params)
+            rows = await self.session.execute(sql, params)
             return [self._row_to_dict(r) for r in rows.fetchall()]
 
     def _row_to_dict(self, row) -> Dict:
         """Map a tasks row to a dict matching the original shape."""
+        self._require_session()
         return {
             "id": row[0],
             "tenant_id": row[1],

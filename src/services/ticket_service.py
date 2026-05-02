@@ -66,14 +66,15 @@ def _row_to_reply(row: TicketReplyModel) -> TicketReply:
 
 class TicketService:
     def __init__(self, session: AsyncSession = None) -> None:
-        if session is None:
-            from db.connection import get_db_session
-            context = get_db_session()
-            session = context.__enter__()
-            self._session_context = context
-        else:
-            self._session_context = None
         self.session = session
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
+
         # Agent pool – kept as instance state (not persisted to DB) to preserve
         # the original round-robin auto_assign behaviour.
         self._agent_pool: List[int] = [1, 2, 3]
@@ -119,6 +120,7 @@ class TicketService:
         tenant_id: int = 0,
     ) -> ApiResponse[Ticket]:
         """创建工单"""
+        self._require_session()
         now = datetime.now(UTC)
         sla_config = SLA_CONFIGS[sla_level]
         response_deadline = now + timedelta(hours=sla_config.first_response_hours)
@@ -160,6 +162,7 @@ class TicketService:
 
     async def get_ticket(self, ticket_id: int, tenant_id: int = 0) -> ApiResponse[Ticket]:
         """获取工单"""
+        self._require_session()
         async with self.session:
             row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
         if row is None:
@@ -170,6 +173,7 @@ class TicketService:
         self, ticket_id: int, tenant_id: int = 0, **kwargs
     ) -> ApiResponse[Ticket]:
         """更新工单"""
+        self._require_session()
         # tenant_id must never be mutated
         kwargs.pop('tenant_id', None)
         # id and timestamps are read-only
@@ -204,6 +208,7 @@ class TicketService:
         self, ticket_id: int, assigned_to: int, tenant_id: int = 0
     ) -> ApiResponse[Ticket]:
         """分配客服"""
+        self._require_session()
         result = await self.update_ticket(ticket_id, tenant_id=tenant_id, assigned_to=assigned_to)
         if result:
             result.message = '客服分配成功'
@@ -218,6 +223,7 @@ class TicketService:
         tenant_id: int = 0,
     ) -> ApiResponse[TicketReply]:
         """添加回复"""
+        self._require_session()
         async with self.session:
             ticket_row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
             if ticket_row is None:
@@ -249,6 +255,7 @@ class TicketService:
         self, ticket_id: int, new_status: TicketStatus, tenant_id: int = 0
     ) -> ApiResponse[Ticket]:
         """改变状态"""
+        self._require_session()
         async with self.session:
             row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
             if row is None:
@@ -271,6 +278,7 @@ class TicketService:
         self, customer_id: int, tenant_id: int = 0
     ) -> List[Ticket]:
         """获取客户的所有工单"""
+        self._require_session()
         async with self.session:
             stmt = select(TicketModel).where(TicketModel.customer_id == customer_id)
             if tenant_id:
@@ -292,6 +300,7 @@ class TicketService:
         tenant_id: int = 0,
     ) -> ApiResponse[PaginatedData[Ticket]]:
         """工单列表"""
+        self._require_session()
         async with self.session:
             stmt = select(TicketModel)
             if tenant_id:
@@ -329,6 +338,7 @@ class TicketService:
 
     async def get_sla_breaches(self, tenant_id: int = 0) -> List[Ticket]:
         """获取SLA超时的工单"""
+        self._require_session()
         now = datetime.now(UTC)
         async with self.session:
             stmt = select(TicketModel).where(
@@ -348,6 +358,7 @@ class TicketService:
 
     async def auto_assign(self, ticket_id: int, tenant_id: int = 0) -> ApiResponse[Dict]:
         """自动分配客服"""
+        self._require_session()
         row = await self._fetch_ticket(self.session, ticket_id, tenant_id)
         if row is None:
             return ApiResponse.error(message='工单不存在', code=1404)

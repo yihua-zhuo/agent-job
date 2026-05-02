@@ -41,25 +41,18 @@ def _row_to_user(row: UserModel) -> User:
     )
 
 
-from db.connection import get_db_session
 class UserService:
     """用户服务 — async PostgreSQL backend."""
 
     def __init__(self, session: AsyncSession = None):
-        self._session_context = None
-        if session is None:
-            context = get_db_session()
-            try:
-                session = context.__enter__()
-                self._session_context = context
-            except (AttributeError, TypeError):
-                # sync __enter__ not supported — leave session=None
-                # (async context callers must pass session explicitly)
-                session = None
-                self._session_context = None
-        else:
-            self._session_context = None
         self.session = session
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     # ------------------------------------------------------------------
     # Validation helpers (unchanged from original)
@@ -112,6 +105,7 @@ class UserService:
         **kwargs,
     ) -> ApiResponse[User]:
         """创建用户"""
+        self._require_session()
         # Validate username
         if not self._validate_username(username):
             return ApiResponse.error(
@@ -184,6 +178,7 @@ class UserService:
 
     async def get_user_by_id(self, user_id: int, tenant_id: Optional[int] = None) -> Optional[User]:
         """根据ID获取用户"""
+        self._require_session()
         result = await self.session.execute(
             select(UserModel).where(
                 UserModel.id == user_id,
@@ -195,6 +190,7 @@ class UserService:
 
     async def get_user_by_username(self, username: str, tenant_id: Optional[int] = None) -> Optional[User]:
         """根据用户名获取用户"""
+        self._require_session()
         result = await self.session.execute(
             select(UserModel).where(
                 UserModel.username == username,
@@ -206,6 +202,7 @@ class UserService:
 
     async def get_user_by_email(self, email: str, tenant_id: Optional[int] = None) -> Optional[User]:
         """根据邮箱获取用户"""
+        self._require_session()
         result = await self.session.execute(
             select(UserModel).where(
                 UserModel.email == email,
@@ -224,6 +221,7 @@ class UserService:
         tenant_id: Optional[int] = None,
     ) -> ApiResponse[PaginatedData[User]]:
         """获取用户列表"""
+        self._require_session()
         base_query = select(UserModel)
         if tenant_id is not None:
             base_query = base_query.where(UserModel.tenant_id == tenant_id)
@@ -259,6 +257,7 @@ class UserService:
 
     async def update_user(self, user_id: int, tenant_id: Optional[int] = None, **kwargs) -> ApiResponse[User]:
         """更新用户"""
+        self._require_session()
         # Fetch existing record
         result = await self.session.execute(
             select(UserModel).where(
@@ -327,6 +326,7 @@ class UserService:
 
     async def delete_user(self, user_id: int, tenant_id: Optional[int] = None) -> ApiResponse:
         """删除用户"""
+        self._require_session()
         result = await self.session.execute(
             select(UserModel).where(
                 UserModel.id == user_id,
@@ -389,6 +389,7 @@ class UserService:
         self, keyword: str, page: int = 1, page_size: int = 20, tenant_id: Optional[int] = None
     ) -> ApiResponse[PaginatedData[User]]:
         """搜索用户"""
+        self._require_session()
         pattern = f"%{keyword}%"
 
         from sqlalchemy import or_, and_

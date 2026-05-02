@@ -4,8 +4,8 @@ from datetime import datetime, timedelta, UTC
 from typing import Optional, List, Dict
 
 from sqlalchemy import text, func, and_, or_
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
 from models.response import ApiResponse, PaginatedData
 
 
@@ -24,12 +24,23 @@ class AnalyticsService:
     # ------------------------------------------------------------------
     # dashboards
     # ------------------------------------------------------------------
+    def __init__(self, session: AsyncSession = None):
+        self.session = session
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
+
     async def create_dashboard(
         self, name: str, owner_id: int, tenant_id: int = 0, description: Optional[str] = None
     ) -> ApiResponse[Dict]:
         """创建仪表板"""
+        self._require_session()
         now = datetime.now(UTC)
-        async with get_db_session() as session:
+        async with self.session:
             stmt = text(
                 """
                 INSERT INTO dashboards (tenant_id, name, description, widgets, owner_id, is_default, created_at, updated_at)
@@ -37,7 +48,7 @@ class AnalyticsService:
                 RETURNING id, tenant_id, name, description, widgets, owner_id, is_default, created_at, updated_at
                 """
             )
-            result = await session.execute(
+            result = await self.session.execute(
                 stmt,
                 {
                     "tenant_id": tenant_id,
@@ -47,7 +58,7 @@ class AnalyticsService:
                     "now": now,
                 },
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="创建仪表板失败", code=500)
@@ -63,14 +74,15 @@ class AnalyticsService:
 
     async def get_dashboard(self, dashboard_id: int, tenant_id: int = 0) -> ApiResponse[Dict]:
         """获取仪表板"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             stmt = text(
                 """
                 SELECT id, tenant_id, name, description, widgets, owner_id, is_default, created_at, updated_at
                 FROM dashboards WHERE id = :id
                 """
             )
-            result = await session.execute(stmt, {"id": dashboard_id})
+            result = await self.session.execute(stmt, {"id": dashboard_id})
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="仪表板不存在", code=1404)
@@ -85,6 +97,7 @@ class AnalyticsService:
 
     async def update_dashboard(self, dashboard_id: int, tenant_id: int = 0, **kwargs) -> ApiResponse[Dict]:
         """更新仪表板"""
+        self._require_session()
         allowed = ["name", "description", "widgets", "is_default"]
         updates = []
         params: Dict[str, object] = {"id": dashboard_id}
@@ -96,7 +109,7 @@ class AnalyticsService:
         if not updates:
             return await self.get_dashboard(dashboard_id, tenant_id)
 
-        async with get_db_session() as session:
+        async with self.session:
             where = "id = :id"
             if tenant_id > 0:
                 where += " AND tenant_id = :tenant_id"
@@ -110,8 +123,8 @@ class AnalyticsService:
                 """
             )
             params["now"] = datetime.now(UTC)
-            result = await session.execute(stmt, params)
-            await session.commit()
+            result = await self.session.execute(stmt, params)
+            await self.session.commit()
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="仪表板不存在", code=1404)
@@ -129,7 +142,8 @@ class AnalyticsService:
         self, owner_id: Optional[int] = None, tenant_id: int = 0
     ) -> ApiResponse[PaginatedData[Dict]]:
         """仪表板列表"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             conditions = []
             params: Dict[str, object] = {}
             if tenant_id > 0:
@@ -148,7 +162,7 @@ class AnalyticsService:
                 ORDER BY created_at DESC
                 """
             )
-            result = await session.execute(stmt, params)
+            result = await self.session.execute(stmt, params)
             rows = result.fetchall()
 
             items = [
@@ -167,10 +181,11 @@ class AnalyticsService:
         self, dashboard_id: int, widget_config: Dict, tenant_id: int = 0
     ) -> ApiResponse[Dict]:
         """添加组件"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             # Fetch current widgets
             stmt = text("SELECT widgets FROM dashboards WHERE id = :id")
-            result = await session.execute(stmt, {"id": dashboard_id})
+            result = await self.session.execute(stmt, {"id": dashboard_id})
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="仪表板不存在", code=1404)
@@ -182,17 +197,18 @@ class AnalyticsService:
             update_stmt = text(
                 "UPDATE dashboards SET widgets = :widgets, updated_at = :now WHERE id = :id RETURNING widgets"
             )
-            await session.execute(update_stmt, {"widgets": json.dumps(widgets), "now": datetime.now(UTC), "id": dashboard_id})
-            await session.commit()
+            await self.session.execute(update_stmt, {"widgets": json.dumps(widgets), "now": datetime.now(UTC), "id": dashboard_id})
+            await self.session.commit()
             return ApiResponse.success(data={"id": widget_id, **widget_config}, message="组件添加成功")
 
     async def remove_widget(
         self, dashboard_id: int, widget_id: int, tenant_id: int = 0
     ) -> ApiResponse[Dict]:
         """移除组件"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             stmt = text("SELECT widgets FROM dashboards WHERE id = :id")
-            result = await session.execute(stmt, {"id": dashboard_id})
+            result = await self.session.execute(stmt, {"id": dashboard_id})
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="仪表板不存在", code=1404)
@@ -203,8 +219,8 @@ class AnalyticsService:
             update_stmt = text(
                 "UPDATE dashboards SET widgets = :widgets, updated_at = :now WHERE id = :id"
             )
-            await session.execute(update_stmt, {"widgets": json.dumps(widgets), "now": datetime.now(UTC), "id": dashboard_id})
-            await session.commit()
+            await self.session.execute(update_stmt, {"widgets": json.dumps(widgets), "now": datetime.now(UTC), "id": dashboard_id})
+            await self.session.commit()
             return ApiResponse.success(data={"widget_id": widget_id}, message="组件移除成功")
 
     # ------------------------------------------------------------------
@@ -219,8 +235,9 @@ class AnalyticsService:
         tenant_id: int = 0,
     ) -> ApiResponse[Dict]:
         """创建报表"""
+        self._require_session()
         now = datetime.now(UTC)
-        async with get_db_session() as session:
+        async with self.session:
             stmt = text(
                 """
                 INSERT INTO reports (tenant_id, name, type, config, date_range, created_by, created_at)
@@ -228,7 +245,7 @@ class AnalyticsService:
                 RETURNING id, tenant_id, name, type, config, date_range, created_by, created_at, last_run_at
                 """
             )
-            result = await session.execute(
+            result = await self.session.execute(
                 stmt,
                 {
                     "tenant_id": tenant_id,
@@ -239,7 +256,7 @@ class AnalyticsService:
                     "now": now,
                 },
             )
-            await session.commit()
+            await self.session.commit()
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="创建报表失败", code=500)
@@ -258,9 +275,10 @@ class AnalyticsService:
         self, report_id: int, date_range: Dict, tenant_id: int = 0
     ) -> ApiResponse[Dict]:
         """运行报表"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             stmt = text("SELECT type, config FROM reports WHERE id = :id")
-            result = await session.execute(stmt, {"id": report_id})
+            result = await self.session.execute(stmt, {"id": report_id})
             row = result.fetchone()
             if not row:
                 return ApiResponse.error(message="报表不存在", code=1404)
@@ -284,16 +302,17 @@ class AnalyticsService:
                 return ApiResponse.error(message=f"未知报表类型: {report_type}", code=1001)
 
             # Update last_run_at
-            await session.execute(
+            await self.session.execute(
                 text("UPDATE reports SET last_run_at = :now, date_range = :dr WHERE id = :id"),
                 {"now": datetime.now(UTC), "dr": json.dumps(date_range), "id": report_id},
             )
-            await session.commit()
+            await self.session.commit()
             return ApiResponse.success(data=result_data)
 
     async def _get_sales_revenue(self, start_date, end_date, group_by: str = "day") -> Dict:
         """销售营收报表 — aggregates from opportunities table."""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             if start_date and end_date:
                 start = datetime.fromisoformat(start_date) if isinstance(start_date, str) else start_date
                 end = datetime.fromisoformat(end_date) if isinstance(end_date, str) else end_date
@@ -323,7 +342,7 @@ class AnalyticsService:
                     GROUP BY DATE(created_at) ORDER BY day
                     """
                 )
-                rev_result = await session.execute(
+                rev_result = await self.session.execute(
                     revenue_stmt,
                     {"start": start, "end": end},
                 )
@@ -340,6 +359,7 @@ class AnalyticsService:
 
     async def _get_sales_conversion(self, start_date, end_date, tenant_id: int) -> Dict:
         """销售转化报表."""
+        self._require_session()
         return {
             "labels": ["Leads", "Qualified", "Proposal", "Negotiation", "Closed Won"],
             "datasets": [{"label": "Conversion Rate", "data": [100, 65, 40, 25, 15], "color": "#10B981"}],
@@ -348,6 +368,7 @@ class AnalyticsService:
 
     async def _get_customer_growth(self, start_date, end_date, tenant_id: int) -> Dict:
         """客户增长报表."""
+        self._require_session()
         return {
             "labels": ["New Customers", "Churned", "Net Growth"],
             "datasets": [{"label": "Customer Growth", "data": [120, 30, 90], "color": "#F59E0B"}],
@@ -356,6 +377,7 @@ class AnalyticsService:
 
     async def _get_pipeline_forecast(self, pipeline_id, tenant_id: int) -> Dict:
         """管道预测."""
+        self._require_session()
         return {
             "pipeline_id": pipeline_id or "default",
             "labels": ["Stage 1", "Stage 2", "Stage 3", "Closed"],
@@ -365,6 +387,7 @@ class AnalyticsService:
 
     async def _get_team_performance(self, start_date, end_date, tenant_id: int) -> Dict:
         """团队绩效."""
+        self._require_session()
         return {
             "labels": ["Alice", "Bob", "Charlie", "Diana"],
             "datasets": [
@@ -376,6 +399,7 @@ class AnalyticsService:
 
     async def get_sales_revenue_report(self, start_date, end_date, group_by: str = "day") -> Dict:
         """Get sales revenue report."""
+        self._require_session()
         return await self._get_sales_revenue(start_date, end_date, group_by)
 
     def get_sales_conversion_report(self, start_date, end_date) -> Dict:

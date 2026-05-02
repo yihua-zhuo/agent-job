@@ -10,7 +10,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from db.connection import get_db_session
 
 
 class AuthService:
@@ -21,18 +20,17 @@ class AuthService:
     TOKEN_AUDIENCE = "crm-api"
 
     def __init__(self, session: AsyncSession = None, secret_key: Optional[str] = None):
-        self._session_context = None
-        if session is None:
-            try:
-                context = get_db_session()
-                # async generator — only use in async context; otherwise leave session=None
-                session = None
-            except Exception:
-                session = None
         self.session = session
-        self.secret_key: str = cast(str, secret_key) or os.environ["JWT_SECRET_KEY"]
+        self.secret_key: str = cast(str, secret_key) or os.environ.get("JWT_SECRET_KEY", "")
         if not self.secret_key:
             raise ValueError("JWT_SECRET_KEY must be set")
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     def generate_token(
         self, user_id: int, username: str, role: str, tenant_id: int = None
@@ -73,6 +71,7 @@ class AuthService:
         Returns:
             User dict if authentication succeeds, None otherwise.
         """
+        self._require_session()
         async with self.session:
             result = await self.session.execute(
                 text(
@@ -181,6 +180,7 @@ class AuthService:
         Returns:
             User dict if the token is valid, None otherwise.
         """
+        self._require_session()
         payload = self.verify_token(token)
         if payload is None:
             return None
@@ -255,6 +255,7 @@ class AuthService:
         Returns:
             True if the token was successfully revoked, False otherwise.
         """
+        self._require_session()
         payload = self.verify_token(token)
         if payload is None:
             return False

@@ -12,24 +12,21 @@ class SLAService:
     """SLA管理"""
 
     def __init__(self, session: AsyncSession = None, ticket_service=None):
-        self._session_context = None
-        if session is None:
-            context = get_db_session()
-            try:
-                self._session_context = context
-                self.session = context
-            except (AttributeError, TypeError):
-                self._session_context = None
-                self.session = None
-        else:
-            self._session_context = None
-            self.session = session
+        self.session = session
         self._ticket_service = ticket_service
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     async def check_sla_status(
         self, ticket: Ticket
     ) -> Literal["normal", "warning", "breached"]:
         """检查SLA状态"""
+        self._require_session()
         # 返回：正常、临近超时、已超时
         if ticket.resolved_at:
             return "normal"

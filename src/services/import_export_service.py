@@ -12,8 +12,8 @@ from typing import List, Dict, Optional, cast, Any
 
 from sqlalchemy import select, update, delete, func, and_, or_, table, column
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.connection import get_db_session
 from utils.file_helper import FileHelper
 
 # Lightweight Table descriptors for raw-style queries that don't yet have ORM
@@ -63,16 +63,19 @@ class ImportExportService:
 
     def _is_valid_email(self, email: str) -> bool:
         """验证邮箱格式"""
+        self._require_session()
         pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         return bool(re.match(pattern, str(email)))
 
     def _is_valid_phone(self, phone: str) -> bool:
         """验证手机号格式"""
+        self._require_session()
         pattern = r"^1[3-9]\d{9}$"
         return bool(re.match(pattern, str(phone)))
 
     def _is_valid_number(self, value: Any) -> bool:
         """验证数值格式"""
+        self._require_session()
         try:
             float(value)
             return True
@@ -82,6 +85,16 @@ class ImportExportService:
     # ------------------------------------------------------------------
     #  Import – customers
     # ------------------------------------------------------------------
+
+    def __init__(self, session: AsyncSession = None):
+        self.session = session
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     async def import_customers(
         self,
@@ -93,6 +106,7 @@ class ImportExportService:
         """导入客户数据
         返回: {success_count, error_count, errors[]}
         """
+        self._require_session()
         try:
             # 根据格式读取数据
             if file_format == self.FORMAT_CSV:
@@ -120,7 +134,7 @@ class ImportExportService:
                 }
 
             # Persist to DB
-            async with get_db_session() as session:
+            async with self.session:
                 for row in data:
                     tags_val = row.get("tags", [])
                     # Serialize tags list as JSON string for asyncpg compatibility
@@ -137,7 +151,7 @@ class ImportExportService:
                         created_at=datetime.now(),
                         updated_at=datetime.now(),
                     )
-                    await session.execute(stmt)
+                    await self.session.execute(stmt)
 
             return {
                 "success_count": len(data),
@@ -165,6 +179,7 @@ class ImportExportService:
         owner_id: int = 0,
     ) -> Dict:
         """导入商机数据"""
+        self._require_session()
         try:
             if file_format == self.FORMAT_CSV:
                 data = self.file_helper.read_csv(file_data)
@@ -190,7 +205,7 @@ class ImportExportService:
                 }
 
             # Persist to DB
-            async with get_db_session() as session:
+            async with self.session:
                 for row in data:
                     amount_val = row.get("amount", 0)
                     if isinstance(amount_val, str):
@@ -214,7 +229,7 @@ class ImportExportService:
                         created_at=datetime.now(),
                         updated_at=datetime.now(),
                     )
-                    await session.execute(stmt)
+                    await self.session.execute(stmt)
 
             return {
                 "success_count": len(data),
@@ -242,6 +257,7 @@ class ImportExportService:
         owner_id: int = 0,
     ) -> Dict:
         """导入线索数据"""
+        self._require_session()
         try:
             if file_format == self.FORMAT_CSV:
                 data = self.file_helper.read_csv(file_data)
@@ -267,7 +283,7 @@ class ImportExportService:
                 }
 
             # Persist leads as customers with status "lead"
-            async with get_db_session() as session:
+            async with self.session:
                 for row in data:
                     tags_val = row.get("tags", [])
                     tags_str = json.dumps(tags_val) if isinstance(tags_val, list) else tags_val
@@ -283,7 +299,7 @@ class ImportExportService:
                         created_at=datetime.now(),
                         updated_at=datetime.now(),
                     )
-                    await session.execute(stmt)
+                    await self.session.execute(stmt)
 
             return {
                 "success_count": len(data),
@@ -310,7 +326,8 @@ class ImportExportService:
         tenant_id: int = 0,
     ) -> bytes:
         """导出客户数据"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             stmt = select(_customers_t).where(
                 and_(
                     _customers_t.c.tenant_id == tenant_id,
@@ -320,7 +337,7 @@ class ImportExportService:
             for key, value in filters.items():
                 if key in ["status", "company"]:
                     stmt = stmt.where(getattr(_customers_t.c, key) == value)
-            result = await session.execute(stmt)
+            result = await self.session.execute(stmt)
             rows = result.fetchall()
             sample_data = [dict(row._mapping) for row in rows]
 
@@ -353,14 +370,15 @@ class ImportExportService:
         tenant_id: int = 0,
     ) -> bytes:
         """导出商机数据"""
-        async with get_db_session() as session:
+        self._require_session()
+        async with self.session:
             stmt = select(_opportunities_t).where(
                 _opportunities_t.c.tenant_id == tenant_id
             )
             for key, value in filters.items():
                 if key in ["stage", "pipeline_id"]:
                     stmt = stmt.where(getattr(_opportunities_t.c, key) == value)
-            result = await session.execute(stmt)
+            result = await self.session.execute(stmt)
             rows = result.fetchall()
             sample_data = [dict(row._mapping) for row in rows]
 
@@ -393,6 +411,7 @@ class ImportExportService:
         file_format: str,
     ) -> bytes:
         """导出报表"""
+        self._require_session()
         sample_report = {
             "report_type": report_type,
             "date_range": date_range,
@@ -426,6 +445,7 @@ class ImportExportService:
 
     async def generate_pdf_report(self, report_data: Dict, title: str) -> bytes:
         """生成PDF报表"""
+        self._require_session()
         try:
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.styles import getSampleStyleSheet
@@ -479,6 +499,7 @@ class ImportExportService:
 
     def _generate_simple_pdf(self, report_data: Dict, title: str) -> bytes:
         """生成简单的文本PDF（不依赖reportlab）"""
+        self._require_session()
         content = f"{title}\n"
         content += "=" * 50 + "\n\n"
 
@@ -506,6 +527,7 @@ class ImportExportService:
         """验证导入数据
         检查: 必填字段、格式、重复
         """
+        self._require_session()
         errors = []
         required = self.required_fields.get(entity_type, [])
 
@@ -540,6 +562,7 @@ class ImportExportService:
 
     def _export_data(self, data: List[Dict], filters: Dict, file_format: str) -> bytes:
         """内部方法：导出数据"""
+        self._require_session()
         # Apply filters
         if filters:
             filtered_data = []

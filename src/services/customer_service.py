@@ -29,24 +29,21 @@ class CustomerService:
     """
 
     def __init__(self, session: "AsyncSession" = None):
-        self._session_context = None
-        if session is None:
-            context = get_db_session()
-            try:
-                self._session_context = context
-                self.session = context
-            except (AttributeError, TypeError):
-                self._session_context = None
-                self.session = None
-        else:
-            self._session_context = None
-            self.session = session
+        self.session = session
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     # ------------------------------------------------------------------
     # create
     # ------------------------------------------------------------------
     async def create_customer(self, data: dict, tenant_id: int = 0) -> ApiResponse:
         """Create a new customer"""
+        self._require_session()
         if not data.get('name'):
             return ApiResponse.error(message="客户名称不能为空", code=3001)
 
@@ -107,6 +104,7 @@ class CustomerService:
         tenant_id: int = 0,
     ) -> ApiResponse:
         """List customers with pagination and filters"""
+        self._require_session()
         conditions = []
         params: dict = {}
 
@@ -154,6 +152,7 @@ class CustomerService:
     # ------------------------------------------------------------------
     async def get_customer(self, customer_id: int, tenant_id: int = 0) -> ApiResponse:
         """Get customer by ID"""
+        self._require_session()
         sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(sql, {"id": customer_id})
         row = result.mappings().one_or_none()
@@ -173,6 +172,7 @@ class CustomerService:
         self, customer_id: int, data: dict, tenant_id: int = 0
     ) -> ApiResponse:
         """Update customer fields"""
+        self._require_session()
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
         row = result.mappings().one_or_none()
@@ -231,6 +231,7 @@ class CustomerService:
     # ------------------------------------------------------------------
     async def delete_customer(self, customer_id: int, tenant_id: int = 0) -> ApiResponse:
         """Delete a customer"""
+        self._require_session()
         params: dict = {"id": customer_id}
         if tenant_id:
             params["tenant_id"] = tenant_id
@@ -252,6 +253,7 @@ class CustomerService:
     # ------------------------------------------------------------------
     async def search_customers(self, keyword: str, tenant_id: int = 0) -> ApiResponse:
         """Search customers by keyword (tenant-scoped)"""
+        self._require_session()
         params: dict = {"keyword": f"%{keyword.lower()}%"}
         if tenant_id:
             params["tenant_id"] = tenant_id
@@ -271,6 +273,7 @@ class CustomerService:
     # ------------------------------------------------------------------
     async def add_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> ApiResponse:
         """Add a tag to customer"""
+        self._require_session()
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
         row = result.mappings().one_or_none()
@@ -304,6 +307,7 @@ class CustomerService:
         self, customer_id: int, tag: str, tenant_id: int = 0
     ) -> ApiResponse:
         """Remove a tag from customer"""
+        self._require_session()
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
         row = result.mappings().one_or_none()
@@ -337,6 +341,7 @@ class CustomerService:
         self, customer_id: int, status: str, tenant_id: int = 0
     ) -> ApiResponse:
         """Change customer status"""
+        self._require_session()
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
         row = result.mappings().one_or_none()
@@ -379,6 +384,7 @@ class CustomerService:
         self, customer_id: int, owner_id: int, tenant_id: int = 0
     ) -> ApiResponse:
         """Assign owner to customer"""
+        self._require_session()
         fetch_sql = text("SELECT * FROM customers WHERE id = :id")
         result = await self.session.execute(fetch_sql, {"id": customer_id})
         row = result.mappings().one_or_none()
@@ -414,6 +420,7 @@ class CustomerService:
     # ------------------------------------------------------------------
     async def bulk_import(self, customers: list, tenant_id: int = 0) -> ApiResponse:
         """Bulk import customers"""
+        self._require_session()
         if not isinstance(customers, list):
             return ApiResponse.error(message="customers 必须是数组", code=1001)
 
@@ -477,6 +484,7 @@ class CustomerService:
     # ------------------------------------------------------------------
     async def count_by_status(self, tenant_id: int) -> Dict[CustomerStatus, int]:
         """Return count of customers grouped by CustomerStatus for a given tenant."""
+        self._require_session()
         if tenant_id <= 0:
             return {}
 
