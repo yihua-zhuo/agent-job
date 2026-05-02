@@ -154,8 +154,14 @@ async def get_activity_summary(
 ):
     from datetime import datetime
     service = ActivityService(session)
-    start = datetime.fromisoformat(start_date) if start_date else None
-    end = datetime.fromisoformat(end_date) if end_date else None
+    try:
+        start = datetime.fromisoformat(start_date) if start_date else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid start_date format")
+    try:
+        end = datetime.fromisoformat(end_date) if end_date else None
+    except ValueError:
+        raise HTTPException(status_code=422, detail="Invalid end_date format")
     resp = await service.get_activity_summary(
         customer_id=customer_id,
         start_date=start,
