@@ -54,11 +54,11 @@ from services.auth_service import AuthService, is_valid_email, sanitize_string, 
 
 
 @pytest.fixture
-def auth_service(mock_get_db_session):
+def auth_service(mock_db_session):
     """Each test gets its own AuthService with fake JWT pre-installed."""
     # Re-install fake jwt so patches from other tests don't leak real jwt
     sys.modules["jwt"] = _FakeJWT
-    return AuthService(mock_get_db_session, secret_key="test-secret-key")
+    return AuthService(mock_db_session, secret_key="test-secret-key")
 
 
 @pytest.mark.asyncio
@@ -141,16 +141,16 @@ class TestAuthService:
 
     # ── authenticate_user (login) ────────────────────────────────────────────
 
-    async def test_authenticate_user_user_not_found(self, auth_service, mock_get_db_session):
+    async def test_authenticate_user_user_not_found(self, auth_service, mock_db_session):
         """User does not exist → returns None."""
         # Override: make users query return empty
-        mock_get_db_session.execute.side_effect = lambda sql, params: MagicMock(
+        mock_db_session.execute.side_effect = lambda sql, params: MagicMock(
             fetchone=MagicMock(return_value=None)
         )
         result = await auth_service.authenticate_user("ghost", "anypassword")
         assert result is None
 
-    async def test_authenticate_user_wrong_password(self, auth_service, mock_get_db_session):
+    async def test_authenticate_user_wrong_password(self, auth_service, mock_db_session):
         """User exists but password is wrong → returns None."""
         hashed = auth_service.hash_password("CorrectPassword")
 
@@ -178,11 +178,11 @@ class TestAuthService:
                 )
             return MagicMock(fetchone=MagicMock(return_value=None))
 
-        mock_get_db_session.execute = AsyncMock(side_effect=fake_execute)
+        mock_db_session.execute = AsyncMock(side_effect=fake_execute)
         result = await auth_service.authenticate_user("alice", "WrongPassword")
         assert result is None
 
-    async def test_authenticate_user_success(self, auth_service, mock_get_db_session):
+    async def test_authenticate_user_success(self, auth_service, mock_db_session):
         """Valid credentials → returns user dict."""
         password = "CorrectPassword123"
         hashed = auth_service.hash_password(password)
@@ -210,7 +210,7 @@ class TestAuthService:
                 )
             return MagicMock(fetchone=MagicMock(return_value=None))
 
-        mock_get_db_session.execute = AsyncMock(side_effect=fake_execute)
+        mock_db_session.execute = AsyncMock(side_effect=fake_execute)
         result = await auth_service.authenticate_user("alice", password)
         assert result is not None
         assert result["username"] == "alice"
@@ -218,7 +218,7 @@ class TestAuthService:
 
     # ── create_user (register) ───────────────────────────────────────────────
 
-    async def test_create_user_duplicate_email(self, auth_service, mock_get_db_session):
+    async def test_create_user_duplicate_email(self, auth_service, mock_db_session):
         """UserService.create_user returns duplicate email error → propagate."""
         from unittest.mock import AsyncMock as AMock
 
@@ -239,7 +239,7 @@ class TestAuthService:
         assert result.success is False
         assert "邮箱已被注册" in result.message
 
-    async def test_create_user_weak_password(self, auth_service, mock_get_db_session):
+    async def test_create_user_weak_password(self, auth_service, mock_db_session):
         """UserService.create_user rejects weak password → propagate."""
         from unittest.mock import AsyncMock as AMock
 
@@ -260,7 +260,7 @@ class TestAuthService:
         assert result.success is False
         assert "密码" in result.message
 
-    async def test_create_user_success(self, auth_service, mock_get_db_session):
+    async def test_create_user_success(self, auth_service, mock_db_session):
         """UserService.create_user succeeds → propagate."""
         from unittest.mock import AsyncMock as AMock
 
@@ -282,30 +282,30 @@ class TestAuthService:
 
     # ── get_current_user ────────────────────────────────────────────────────
 
-    async def test_get_current_user_invalid_token(self, auth_service, mock_get_db_session):
+    async def test_get_current_user_invalid_token(self, auth_service, mock_db_session):
         """verify_token returns None → get_current_user returns None."""
         with patch.object(auth_service, "verify_token", return_value=None):
             result = await auth_service.get_current_user("bad.token")
             assert result is None
 
-    async def test_get_current_user_no_user_id_in_payload(self, auth_service, mock_get_db_session):
+    async def test_get_current_user_no_user_id_in_payload(self, auth_service, mock_db_session):
         """verify_token returns payload without user_id → returns None."""
         with patch.object(auth_service, "verify_token", return_value={"sub": "1"}):
             result = await auth_service.get_current_user("any.token")
             assert result is None
 
-    async def test_get_current_user_not_found_in_db(self, auth_service, mock_get_db_session):
+    async def test_get_current_user_not_found_in_db(self, auth_service, mock_db_session):
         """Token valid but user not in DB → returns None."""
         async def fake_execute(sql, params=None):
             return MagicMock(fetchone=MagicMock(return_value=None))
 
-        mock_get_db_session.execute = AsyncMock(side_effect=fake_execute)
+        mock_db_session.execute = AsyncMock(side_effect=fake_execute)
 
         with patch.object(auth_service, "verify_token", return_value={"user_id": 99, "username": "ghost", "role": "user"}):
             result = await auth_service.get_current_user("valid.token")
             assert result is None
 
-    async def test_get_current_user_success(self, auth_service, mock_get_db_session):
+    async def test_get_current_user_success(self, auth_service, mock_db_session):
         """Token valid + user exists → returns user dict."""
         now = datetime.now(UTC)
 
@@ -329,7 +329,7 @@ class TestAuthService:
                 )
             )
 
-        mock_get_db_session.execute = AsyncMock(side_effect=fake_execute)
+        mock_db_session.execute = AsyncMock(side_effect=fake_execute)
 
         with patch.object(auth_service, "verify_token", return_value={"user_id": 5, "username": "charlie", "role": "admin"}):
             result = await auth_service.get_current_user("valid.token")
@@ -340,18 +340,18 @@ class TestAuthService:
 
     # ── revoke_token ─────────────────────────────────────────────────────────
 
-    async def test_revoke_token_invalid(self, auth_service, mock_get_db_session):
+    async def test_revoke_token_invalid(self, auth_service, mock_db_session):
         """verify_token returns None → revoke_token returns False."""
         with patch.object(auth_service, "verify_token", return_value=None):
             result = await auth_service.revoke_token("bad.token")
             assert result is False
 
-    async def test_revoke_token_success(self, auth_service, mock_get_db_session):
+    async def test_revoke_token_success(self, auth_service, mock_db_session):
         """Valid token → revoke_token calls DB and returns True."""
         mock_execute = AsyncMock()
         mock_commit = AsyncMock()
-        mock_get_db_session.execute = mock_execute
-        mock_get_db_session.commit = mock_commit
+        mock_db_session.execute = mock_execute
+        mock_db_session.commit = mock_commit
 
         with patch.object(auth_service, "verify_token", return_value={"jti": "abc123", "exp": 9999999999, "sub": "1"}):
             result = await auth_service.revoke_token("valid.token")
