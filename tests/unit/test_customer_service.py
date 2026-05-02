@@ -5,9 +5,8 @@ from models.customer import CustomerStatus
 
 
 @pytest.fixture
-def customer_service():
-    from tests.unit.conftest import _make_mock_session
-    return CustomerService(_make_mock_session())
+def customer_service(mock_db_session):
+    return CustomerService(mock_db_session)
 
 
 @pytest.mark.asyncio

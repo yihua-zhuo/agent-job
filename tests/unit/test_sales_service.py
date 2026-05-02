@@ -6,9 +6,8 @@ from models.opportunity import Stage
 
 
 @pytest.fixture
-def sales_service():
-    from tests.unit.conftest import _make_mock_session
-    return SalesService(_make_mock_session())
+def sales_service(mock_db_session):
+    return SalesService(mock_db_session)
 
 
 @pytest_asyncio.fixture
