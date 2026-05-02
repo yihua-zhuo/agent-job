@@ -157,6 +157,7 @@ async def list_notifications(
     svc = NotificationService(session)
     result = await svc.get_user_notifications(
         user_id=current_user.user_id,
+        tenant_id=current_user.tenant_id,
         unread_only=unread_only,
         page=page,
         page_size=page_size,
@@ -249,14 +250,21 @@ async def mark_notification_read(
         raise HTTPException(status_code=401, detail="无效的租户信息")
 
     svc = NotificationService(session)
-    result = await svc.mark_as_read(notification_id)
+    result = await svc.mark_as_read(notification_id, tenant_id=current_user.tenant_id)
 
     if result.status == ResponseStatus.NOT_FOUND:
         raise HTTPException(status_code=404, detail="通知不存在")
 
+    d = result.data
     return NotificationResponse(
         data=NotificationData(
-            id=notification_id, tenant_id=0, user_id=0, type="", title="", content="", is_read=True
+            id=d["id"],
+            tenant_id=d.get("tenant_id", 0),
+            user_id=d.get("user_id", 0),
+            type="",
+            title="",
+            content="",
+            is_read=True,
         )
     )
 
@@ -276,7 +284,7 @@ async def mark_all_notifications_read(
         raise HTTPException(status_code=401, detail="无效的租户信息")
 
     svc = NotificationService(session)
-    result = await svc.mark_all_as_read(current_user.user_id)
+    result = await svc.mark_all_as_read(current_user.user_id, tenant_id=current_user.tenant_id)
 
     return NotificationMarkAllResponse(
         data=NotificationMarkAllData(marked_count=result.data.get("marked_count", 0))
@@ -341,6 +349,7 @@ async def create_reminder(
     svc = NotificationService(session)
     result = await svc.create_reminder(
         user_id=current_user.user_id,
+        tenant_id=current_user.tenant_id,
         title=body.title,
         content=body.content,
         remind_at=body.remind_at,
@@ -383,6 +392,7 @@ async def list_reminders(
     svc = NotificationService(session)
     reminders = await svc.get_reminders(
         user_id=current_user.user_id,
+        tenant_id=current_user.tenant_id,
         upcoming_only=upcoming_only,
     )
 
@@ -401,7 +411,7 @@ async def list_reminders(
         )
         for r in reminders
     ]
-    return ReminderListResponse(data={"items": items, "total": len(items)})
+    return ReminderListResponse(data=ReminderListData(items=items, total=len(items)))
 
 
 @notifications_router.delete(
@@ -420,7 +430,7 @@ async def cancel_reminder(
         raise HTTPException(status_code=401, detail="无效的租户信息")
 
     svc = NotificationService(session)
-    result = await svc.cancel_reminder(reminder_id)
+    result = await svc.cancel_reminder(reminder_id, tenant_id=current_user.tenant_id)
 
     if result.status == ResponseStatus.NOT_FOUND:
         raise HTTPException(status_code=404, detail="提醒不存在")

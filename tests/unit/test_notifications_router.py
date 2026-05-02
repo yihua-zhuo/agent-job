@@ -107,7 +107,10 @@ class TestMarkRead:
     def test_mark_read_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.mark_as_read = AsyncMock(return_value=MagicMock(status=ResponseStatus.SUCCESS))
+            svc.mark_as_read = AsyncMock(return_value=MagicMock(
+                status=ResponseStatus.SUCCESS,
+                data={"id": 1, "tenant_id": 1, "user_id": 99, "is_read": True},
+            ))
             client = _app()
             response = client.put("/api/v1/notifications/1/read")
             assert response.status_code == 200
@@ -222,7 +225,9 @@ class TestCancelReminder:
     def test_cancel_reminder_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.cancel_reminder = AsyncMock(return_value=MagicMock(status=ResponseStatus.SUCCESS))
+            svc.cancel_reminder = AsyncMock(return_value=MagicMock(
+                status=ResponseStatus.SUCCESS, data={"id": 1},
+            ))
             client = _app()
             response = client.delete("/api/v1/reminders/1")
             assert response.status_code == 200
