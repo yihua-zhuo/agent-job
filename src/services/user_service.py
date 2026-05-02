@@ -182,26 +182,35 @@ class UserService:
 
         return ApiResponse.success(data=user, message="用户创建成功")
 
-    async def get_user_by_id(self, user_id: int) -> Optional[User]:
+    async def get_user_by_id(self, user_id: int, tenant_id: Optional[int] = None) -> Optional[User]:
         """根据ID获取用户"""
         result = await self.session.execute(
-            select(UserModel).where(UserModel.id == user_id)
+            select(UserModel).where(
+                UserModel.id == user_id,
+                *([] if tenant_id is None else [UserModel.tenant_id == tenant_id]),
+            )
         )
         row = result.scalar_one_or_none()
         return _row_to_user(row) if row is not None else None
 
-    async def get_user_by_username(self, username: str) -> Optional[User]:
+    async def get_user_by_username(self, username: str, tenant_id: Optional[int] = None) -> Optional[User]:
         """根据用户名获取用户"""
         result = await self.session.execute(
-            select(UserModel).where(UserModel.username == username)
+            select(UserModel).where(
+                UserModel.username == username,
+                *([] if tenant_id is None else [UserModel.tenant_id == tenant_id]),
+            )
         )
         row = result.scalar_one_or_none()
         return _row_to_user(row) if row is not None else None
 
-    async def get_user_by_email(self, email: str) -> Optional[User]:
+    async def get_user_by_email(self, email: str, tenant_id: Optional[int] = None) -> Optional[User]:
         """根据邮箱获取用户"""
         result = await self.session.execute(
-            select(UserModel).where(UserModel.email == email)
+            select(UserModel).where(
+                UserModel.email == email,
+                *([] if tenant_id is None else [UserModel.tenant_id == tenant_id]),
+            )
         )
         row = result.scalar_one_or_none()
         return _row_to_user(row) if row is not None else None
@@ -212,10 +221,15 @@ class UserService:
         page_size: int = 20,
         role: Optional[UserRole] = None,
         status: Optional[UserStatus] = None,
+        tenant_id: Optional[int] = None,
     ) -> ApiResponse[PaginatedData[User]]:
         """获取用户列表"""
         base_query = select(UserModel)
+        if tenant_id is not None:
+            base_query = base_query.where(UserModel.tenant_id == tenant_id)
         count_query = select(func.count()).select_from(UserModel)
+        if tenant_id is not None:
+            count_query = count_query.where(UserModel.tenant_id == tenant_id)
 
         if role is not None:
             base_query = base_query.where(UserModel.role == role.value)
@@ -243,11 +257,14 @@ class UserService:
             message="查询成功",
         )
 
-    async def update_user(self, user_id: int, **kwargs) -> ApiResponse[User]:
+    async def update_user(self, user_id: int, tenant_id: Optional[int] = None, **kwargs) -> ApiResponse[User]:
         """更新用户"""
         # Fetch existing record
         result = await self.session.execute(
-            select(UserModel).where(UserModel.id == user_id)
+            select(UserModel).where(
+                UserModel.id == user_id,
+                *([] if tenant_id is None else [UserModel.tenant_id == tenant_id]),
+            )
         )
         row = result.scalar_one_or_none()
         if row is None:
@@ -292,7 +309,10 @@ class UserService:
         values["updated_at"] = datetime.now(UTC)
 
         await self.session.execute(
-            update(UserModel).where(UserModel.id == user_id).values(**values)
+            update(UserModel).where(
+                UserModel.id == user_id,
+                *([] if tenant_id is None else [UserModel.tenant_id == tenant_id]),
+            ).values(**values)
         )
         await self.session.flush()
 
@@ -305,16 +325,22 @@ class UserService:
 
         return ApiResponse.success(data=user, message="用户更新成功")
 
-    async def delete_user(self, user_id: int) -> ApiResponse:
+    async def delete_user(self, user_id: int, tenant_id: Optional[int] = None) -> ApiResponse:
         """删除用户"""
         result = await self.session.execute(
-            select(UserModel).where(UserModel.id == user_id)
+            select(UserModel).where(
+                UserModel.id == user_id,
+                *([] if tenant_id is None else [UserModel.tenant_id == tenant_id]),
+            )
         )
         if result.scalar_one_or_none() is None:
             return ApiResponse.error(message="用户不存在", code=2001)
 
         await self.session.execute(
-            delete(UserModel).where(UserModel.id == user_id)
+            delete(UserModel).where(
+                UserModel.id == user_id,
+                *([] if tenant_id is None else [UserModel.tenant_id == tenant_id]),
+            )
         )
 
         return ApiResponse.success(message="用户删除成功")
@@ -360,27 +386,32 @@ class UserService:
         return ApiResponse.success(message="密码修改成功")
 
     async def search_users(
-        self, keyword: str, page: int = 1, page_size: int = 20
+        self, keyword: str, page: int = 1, page_size: int = 20, tenant_id: Optional[int] = None
     ) -> ApiResponse[PaginatedData[User]]:
         """搜索用户"""
         pattern = f"%{keyword}%"
 
-        from sqlalchemy import or_
+        from sqlalchemy import or_, and_
 
-        where_clause = or_(
-            UserModel.username.ilike(pattern),
-            UserModel.email.ilike(pattern),
-            UserModel.bio.ilike(pattern),
+        conditions = []
+        if tenant_id is not None:
+            conditions.append(UserModel.tenant_id == tenant_id)
+        conditions.append(
+            or_(
+                UserModel.username.ilike(pattern),
+                UserModel.email.ilike(pattern),
+                UserModel.bio.ilike(pattern),
+            )
         )
 
         count_result = await self.session.execute(
-            select(func.count()).select_from(UserModel).where(where_clause)
+            select(func.count()).select_from(UserModel).where(*conditions)
         )
         total = count_result.scalar_one()
 
         offset = (page - 1) * page_size
         rows_result = await self.session.execute(
-            select(UserModel).where(where_clause).offset(offset).limit(page_size)
+            select(UserModel).where(*conditions).offset(offset).limit(page_size)
         )
         items = [_row_to_user(r) for r in rows_result.scalars().all()]
 
