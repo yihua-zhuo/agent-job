@@ -13,6 +13,7 @@ class SLAService:
 
     def __init__(self, session: AsyncSession = None, ticket_service=None):
         self.session = session
+        self._require_session()
         self._ticket_service = ticket_service
 
     def _require_session(self):
@@ -26,7 +27,7 @@ class SLAService:
         self, ticket: Ticket
     ) -> Literal["normal", "warning", "breached"]:
         """检查SLA状态"""
-        self._require_session()
+
         # 返回：正常、临近超时、已超时
         if ticket.resolved_at:
             return "normal"

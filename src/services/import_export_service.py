@@ -63,19 +63,19 @@ class ImportExportService:
 
     def _is_valid_email(self, email: str) -> bool:
         """验证邮箱格式"""
-        self._require_session()
+
         pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         return bool(re.match(pattern, str(email)))
 
     def _is_valid_phone(self, phone: str) -> bool:
         """验证手机号格式"""
-        self._require_session()
+
         pattern = r"^1[3-9]\d{9}$"
         return bool(re.match(pattern, str(phone)))
 
     def _is_valid_number(self, value: Any) -> bool:
         """验证数值格式"""
-        self._require_session()
+
         try:
             float(value)
             return True
@@ -88,6 +88,7 @@ class ImportExportService:
 
     def __init__(self, session: AsyncSession = None):
         self.session = session
+        self._require_session()
 
     def _require_session(self):
         if self.session is None:
@@ -106,7 +107,7 @@ class ImportExportService:
         """导入客户数据
         返回: {success_count, error_count, errors[]}
         """
-        self._require_session()
+
         try:
             # 根据格式读取数据
             if file_format == self.FORMAT_CSV:
@@ -179,7 +180,7 @@ class ImportExportService:
         owner_id: int = 0,
     ) -> Dict:
         """导入商机数据"""
-        self._require_session()
+
         try:
             if file_format == self.FORMAT_CSV:
                 data = self.file_helper.read_csv(file_data)
@@ -257,7 +258,7 @@ class ImportExportService:
         owner_id: int = 0,
     ) -> Dict:
         """导入线索数据"""
-        self._require_session()
+
         try:
             if file_format == self.FORMAT_CSV:
                 data = self.file_helper.read_csv(file_data)
@@ -326,7 +327,7 @@ class ImportExportService:
         tenant_id: int = 0,
     ) -> bytes:
         """导出客户数据"""
-        self._require_session()
+
         async with self.session:
             stmt = select(_customers_t).where(
                 and_(
@@ -370,7 +371,7 @@ class ImportExportService:
         tenant_id: int = 0,
     ) -> bytes:
         """导出商机数据"""
-        self._require_session()
+
         async with self.session:
             stmt = select(_opportunities_t).where(
                 _opportunities_t.c.tenant_id == tenant_id
@@ -411,7 +412,7 @@ class ImportExportService:
         file_format: str,
     ) -> bytes:
         """导出报表"""
-        self._require_session()
+
         sample_report = {
             "report_type": report_type,
             "date_range": date_range,
@@ -445,7 +446,7 @@ class ImportExportService:
 
     async def generate_pdf_report(self, report_data: Dict, title: str) -> bytes:
         """生成PDF报表"""
-        self._require_session()
+
         try:
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.styles import getSampleStyleSheet
@@ -499,7 +500,7 @@ class ImportExportService:
 
     def _generate_simple_pdf(self, report_data: Dict, title: str) -> bytes:
         """生成简单的文本PDF（不依赖reportlab）"""
-        self._require_session()
+
         content = f"{title}\n"
         content += "=" * 50 + "\n\n"
 
@@ -527,7 +528,7 @@ class ImportExportService:
         """验证导入数据
         检查: 必填字段、格式、重复
         """
-        self._require_session()
+
         errors = []
         required = self.required_fields.get(entity_type, [])
 
@@ -562,7 +563,7 @@ class ImportExportService:
 
     def _export_data(self, data: List[Dict], filters: Dict, file_format: str) -> bytes:
         """内部方法：导出数据"""
-        self._require_session()
+
         # Apply filters
         if filters:
             filtered_data = []

@@ -26,6 +26,7 @@ class AnalyticsService:
     # ------------------------------------------------------------------
     def __init__(self, session: AsyncSession = None):
         self.session = session
+        self._require_session()
 
     def _require_session(self):
         if self.session is None:
@@ -38,7 +39,7 @@ class AnalyticsService:
         self, name: str, owner_id: int, tenant_id: int = 0, description: Optional[str] = None
     ) -> ApiResponse[Dict]:
         """创建仪表板"""
-        self._require_session()
+
         now = datetime.now(UTC)
         async with self.session:
             stmt = text(
@@ -74,7 +75,7 @@ class AnalyticsService:
 
     async def get_dashboard(self, dashboard_id: int, tenant_id: int = 0) -> ApiResponse[Dict]:
         """获取仪表板"""
-        self._require_session()
+
         async with self.session:
             stmt = text(
                 """
@@ -97,7 +98,7 @@ class AnalyticsService:
 
     async def update_dashboard(self, dashboard_id: int, tenant_id: int = 0, **kwargs) -> ApiResponse[Dict]:
         """更新仪表板"""
-        self._require_session()
+
         allowed = ["name", "description", "widgets", "is_default"]
         updates = []
         params: Dict[str, object] = {"id": dashboard_id}
@@ -142,7 +143,7 @@ class AnalyticsService:
         self, owner_id: Optional[int] = None, tenant_id: int = 0
     ) -> ApiResponse[PaginatedData[Dict]]:
         """仪表板列表"""
-        self._require_session()
+
         async with self.session:
             conditions = []
             params: Dict[str, object] = {}
@@ -181,7 +182,7 @@ class AnalyticsService:
         self, dashboard_id: int, widget_config: Dict, tenant_id: int = 0
     ) -> ApiResponse[Dict]:
         """添加组件"""
-        self._require_session()
+
         async with self.session:
             # Fetch current widgets
             stmt = text("SELECT widgets FROM dashboards WHERE id = :id")
@@ -205,7 +206,7 @@ class AnalyticsService:
         self, dashboard_id: int, widget_id: int, tenant_id: int = 0
     ) -> ApiResponse[Dict]:
         """移除组件"""
-        self._require_session()
+
         async with self.session:
             stmt = text("SELECT widgets FROM dashboards WHERE id = :id")
             result = await self.session.execute(stmt, {"id": dashboard_id})
@@ -235,7 +236,7 @@ class AnalyticsService:
         tenant_id: int = 0,
     ) -> ApiResponse[Dict]:
         """创建报表"""
-        self._require_session()
+
         now = datetime.now(UTC)
         async with self.session:
             stmt = text(
@@ -275,7 +276,7 @@ class AnalyticsService:
         self, report_id: int, date_range: Dict, tenant_id: int = 0
     ) -> ApiResponse[Dict]:
         """运行报表"""
-        self._require_session()
+
         async with self.session:
             stmt = text("SELECT type, config FROM reports WHERE id = :id")
             result = await self.session.execute(stmt, {"id": report_id})
@@ -311,7 +312,7 @@ class AnalyticsService:
 
     async def _get_sales_revenue(self, start_date, end_date, group_by: str = "day") -> Dict:
         """销售营收报表 — aggregates from opportunities table."""
-        self._require_session()
+
         async with self.session:
             if start_date and end_date:
                 start = datetime.fromisoformat(start_date) if isinstance(start_date, str) else start_date
@@ -359,7 +360,7 @@ class AnalyticsService:
 
     async def _get_sales_conversion(self, start_date, end_date, tenant_id: int) -> Dict:
         """销售转化报表."""
-        self._require_session()
+
         return {
             "labels": ["Leads", "Qualified", "Proposal", "Negotiation", "Closed Won"],
             "datasets": [{"label": "Conversion Rate", "data": [100, 65, 40, 25, 15], "color": "#10B981"}],
@@ -368,7 +369,7 @@ class AnalyticsService:
 
     async def _get_customer_growth(self, start_date, end_date, tenant_id: int) -> Dict:
         """客户增长报表."""
-        self._require_session()
+
         return {
             "labels": ["New Customers", "Churned", "Net Growth"],
             "datasets": [{"label": "Customer Growth", "data": [120, 30, 90], "color": "#F59E0B"}],
@@ -377,7 +378,7 @@ class AnalyticsService:
 
     async def _get_pipeline_forecast(self, pipeline_id, tenant_id: int) -> Dict:
         """管道预测."""
-        self._require_session()
+
         return {
             "pipeline_id": pipeline_id or "default",
             "labels": ["Stage 1", "Stage 2", "Stage 3", "Closed"],
@@ -387,7 +388,7 @@ class AnalyticsService:
 
     async def _get_team_performance(self, start_date, end_date, tenant_id: int) -> Dict:
         """团队绩效."""
-        self._require_session()
+
         return {
             "labels": ["Alice", "Bob", "Charlie", "Diana"],
             "datasets": [
@@ -399,7 +400,7 @@ class AnalyticsService:
 
     async def get_sales_revenue_report(self, start_date, end_date, group_by: str = "day") -> Dict:
         """Get sales revenue report."""
-        self._require_session()
+
         return await self._get_sales_revenue(start_date, end_date, group_by)
 
     def get_sales_conversion_report(self, start_date, end_date) -> Dict:

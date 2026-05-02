@@ -12,6 +12,7 @@ class TaskService:
 
     def __init__(self, session: AsyncSession = None):
         self.session = session
+        self._require_session()
 
     def _require_session(self):
         if self.session is None:
@@ -29,7 +30,7 @@ class TaskService:
         **kwargs,
     ) -> Dict:
         """创建任务"""
-        self._require_session()
+
         async with self.session:
             tenant_id = kwargs.get("tenant_id", 0)
             created_by = kwargs.get("created_by") or assigned_to
@@ -66,7 +67,7 @@ class TaskService:
 
     async def get_task(self, task_id: int) -> Dict:
         """获取任务详情"""
-        self._require_session()
+
         async with self.session:
             result = await self.session.execute(
                 text(
@@ -86,7 +87,7 @@ class TaskService:
 
     async def update_task(self, task_id: int, **kwargs) -> Dict:
         """更新任务"""
-        self._require_session()
+
         async with self.session:
             # Build dynamic SET clause
             set_clauses = []
@@ -131,7 +132,7 @@ class TaskService:
 
     async def complete_task(self, task_id: int):
         """完成任务"""
-        self._require_session()
+
         async with self.session:
             now = datetime.now(UTC)
             result = await self.session.execute(
@@ -154,7 +155,7 @@ class TaskService:
 
     async def delete_task(self, task_id: int):
         """删除任务"""
-        self._require_session()
+
         async with self.session:
             result = await self.session.execute(
                 text("DELETE FROM tasks WHERE id = :task_id RETURNING id"),
@@ -175,7 +176,7 @@ class TaskService:
         page_size: int = 20,
     ) -> Dict:
         """任务列表"""
-        self._require_session()
+
         async with self.session:
             # Count
             count_params: Dict = {}
@@ -220,7 +221,7 @@ class TaskService:
 
     async def get_my_tasks(self, user_id: int, status: str = None) -> List[Dict]:
         """获取我的任务"""
-        self._require_session()
+
         async with self.session:
             params: Dict = {"user_id": user_id}
             where_clauses = ["assigned_to = :user_id"]
@@ -243,7 +244,7 @@ class TaskService:
 
     def _row_to_dict(self, row) -> Dict:
         """Map a tasks row to a dict matching the original shape."""
-        self._require_session()
+
         return {
             "id": row[0],
             "tenant_id": row[1],

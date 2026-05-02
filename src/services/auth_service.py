@@ -21,6 +21,7 @@ class AuthService:
 
     def __init__(self, session: AsyncSession = None, secret_key: Optional[str] = None):
         self.session = session
+        self._require_session()
         self.secret_key: str = cast(str, secret_key) or os.environ.get("JWT_SECRET_KEY", "")
         if not self.secret_key:
             raise ValueError("JWT_SECRET_KEY must be set")
@@ -71,7 +72,7 @@ class AuthService:
         Returns:
             User dict if authentication succeeds, None otherwise.
         """
-        self._require_session()
+
         async with self.session:
             result = await self.session.execute(
                 text(
@@ -180,7 +181,7 @@ class AuthService:
         Returns:
             User dict if the token is valid, None otherwise.
         """
-        self._require_session()
+
         payload = self.verify_token(token)
         if payload is None:
             return None
@@ -255,7 +256,7 @@ class AuthService:
         Returns:
             True if the token was successfully revoked, False otherwise.
         """
-        self._require_session()
+
         payload = self.verify_token(token)
         if payload is None:
             return False

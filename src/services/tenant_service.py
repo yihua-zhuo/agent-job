@@ -15,6 +15,7 @@ class TenantService:
 
     def __init__(self, session: AsyncSession = None):
         self.session = session
+        self._require_session()
 
     def _require_session(self):
         if self.session is None:
@@ -25,7 +26,7 @@ class TenantService:
 
     async def create_tenant(self, name: str, plan: str, admin_email: str = None, **kwargs) -> ApiResponse[Dict]:
         """创建租户（公司）"""
-        self._require_session()
+
         async with self.session:
             now = datetime.now(UTC)
             settings = kwargs.get("settings", {})
@@ -52,7 +53,7 @@ class TenantService:
 
     async def get_tenant(self, tenant_id: int) -> ApiResponse[Dict]:
         """获取租户详情"""
-        self._require_session()
+
         async with self.session:
             result = await self.session.execute(
                 text(
@@ -72,7 +73,7 @@ class TenantService:
 
     async def update_tenant(self, tenant_id: int, **kwargs) -> ApiResponse[Dict]:
         """更新租户信息"""
-        self._require_session()
+
         async with self.session:
             set_clauses = []
             params: Dict = {"tenant_id": tenant_id}
@@ -112,7 +113,7 @@ class TenantService:
         status: Optional[str] = None,
     ) -> ApiResponse[PaginatedData[Dict]]:
         """租户列表"""
-        self._require_session()
+
         async with self.session:
             # Count total
             count_sql = text("SELECT COUNT(*) FROM tenants")
@@ -153,7 +154,7 @@ class TenantService:
 
     async def delete_tenant(self, tenant_id: int) -> ApiResponse[Dict]:
         """删除租户（软删除）"""
-        self._require_session()
+
         async with self.session:
             now = datetime.now(UTC)
             result = await self.session.execute(

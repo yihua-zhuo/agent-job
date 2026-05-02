@@ -19,28 +19,13 @@ class SalesService:
     DEFAULT_STAGES = ["lead", "qualified", "proposal", "negotiation", "closed_won"]
 
     def __init__(self, session: AsyncSession = None):
-        self._session_context = None
-        if session is None:
-            context = get_db_session()
-            try:
-                session = context.__enter__()
-                self._session_context = context
-            except (AttributeError, TypeError):
-                # sync __enter__ not supported — leave session=None
-                # (async context callers must pass session explicitly)
-                session = None
-                self._session_context = None
-        else:
-            self._session_context = None
         self.session = session
-        self.session = session
+        self._require_session()
 
     # -------------------------------------------------------
     # 管道 (Pipeline) 操作
     # -------------------------------------------------------
 
-    def __init__(self, session: AsyncSession = None):
-        self.session = session
 
     def _require_session(self):
         if self.session is None:
@@ -51,7 +36,6 @@ class SalesService:
 
     async def create_pipeline(self, tenant_id: int, data: dict) -> ApiResponse:
         """创建新的销售管道 / Create a new sales pipeline."""
-        self._require_session()
         if not data.get("name"):
             return ApiResponse.error(message="管道名称不能为空", code=3001)
 
@@ -119,7 +103,6 @@ class SalesService:
 
     async def list_pipelines(self, tenant_id: int) -> ApiResponse:
         """列出当前租户的所有管道 / List all pipelines for tenant."""
-        self._require_session()
         result = await self.session.execute(
             select(PipelineModel)
             .where(PipelineModel.tenant_id == tenant_id)
@@ -149,7 +132,6 @@ class SalesService:
 
     async def get_pipeline(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """根据 ID 获取管道 / Get pipeline by ID."""
-        self._require_session()
         result = await self.session.execute(
             select(PipelineModel).where(
                 PipelineModel.id == pipeline_id,
@@ -182,7 +164,6 @@ class SalesService:
 
     async def get_pipeline_stats(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """获取管道统计信息（总数/赢单/输单）/ Get pipeline statistics."""
-        self._require_session()
         pipeline_result = await self.session.execute(
             select(PipelineModel).where(
                 PipelineModel.id == pipeline_id,
@@ -228,7 +209,6 @@ class SalesService:
 
     async def get_pipeline_funnel(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """获取管道漏斗（各阶段商机数量）/ Get pipeline funnel (stage distribution)."""
-        self._require_session()
         pipeline_result = await self.session.execute(
             select(PipelineModel).where(
                 PipelineModel.id == pipeline_id,
@@ -279,7 +259,6 @@ class SalesService:
 
     async def create_opportunity(self, tenant_id: int, data: dict) -> ApiResponse:
         """创建新的商机 / Create a new opportunity."""
-        self._require_session()
         required = ["name", "customer_id", "pipeline_id", "stage", "amount", "owner_id"]
         for field in required:
             if not data.get(field):
@@ -360,7 +339,6 @@ class SalesService:
         owner_id: Optional[int] = None,
     ) -> ApiResponse:
         """列出商机，支持分页和过滤 / List opportunities with filters."""
-        self._require_session()
         if tenant_id <= 0:
             return ApiResponse.error(message="无效的租户ID", code=1404)
 
@@ -427,7 +405,6 @@ class SalesService:
 
     async def get_opportunity(self, tenant_id: int, opp_id: int) -> ApiResponse:
         """根据 ID 获取商机 / Get opportunity by ID."""
-        self._require_session()
         result = await self.session.execute(
             select(OpportunityModel).where(
                 OpportunityModel.id == opp_id,
@@ -464,7 +441,6 @@ class SalesService:
         self, tenant_id: int, opp_id: int, data: dict
     ) -> ApiResponse:
         """更新商机字段 / Update opportunity fields."""
-        self._require_session()
         # 先验证归属
         result = await self.session.execute(
             select(OpportunityModel).where(
@@ -557,7 +533,6 @@ class SalesService:
 
     async def change_stage(self, tenant_id: int, opp_id: int, stage: str) -> ApiResponse:
         """变更商机阶段 / Change opportunity stage."""
-        self._require_session()
         try:
             stage_val = OpportunityStage(stage).value
         except ValueError:
@@ -591,7 +566,6 @@ class SalesService:
 
     async def get_forecast(self, tenant_id: int, owner_id: int = None) -> ApiResponse:
         """按负责人获取销售预测 / Get sales forecast by owner."""
-        self._require_session()
         # 获取当前租户所有管道
         pipeline_result = await self.session.execute(
             select(PipelineModel).where(PipelineModel.tenant_id == tenant_id)

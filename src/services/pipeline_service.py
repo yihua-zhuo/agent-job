@@ -15,6 +15,7 @@ class PipelineService:
 
     def __init__(self, session: AsyncSession = None):
         self.session = session
+        self._require_session()
 
     def _require_session(self):
         if self.session is None:
@@ -33,7 +34,7 @@ class PipelineService:
         self, tenant_id: int, data: dict, created_by: int = 0
     ) -> ApiResponse:
         """Create a new pipeline with stages."""
-        self._require_session()
+
         if not data.get("name"):
             return ApiResponse.error(message="管道名称不能为空", code=3001)
 
@@ -94,7 +95,7 @@ class PipelineService:
 
     async def get_pipeline(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """Get a pipeline by ID (tenant-scoped)."""
-        self._require_session()
+
         result = await self.session.execute(
             select(PipelineModel).where(
                 PipelineModel.id == pipeline_id,
@@ -121,7 +122,7 @@ class PipelineService:
         self, tenant_id: int, page: int = 1, page_size: int = 20
     ) -> ApiResponse:
         """List all pipelines for a tenant with pagination."""
-        self._require_session()
+
         # Count
         count_result = await self.session.execute(
             select(func.count(PipelineModel.id)).where(
@@ -163,7 +164,7 @@ class PipelineService:
         self, tenant_id: int, pipeline_id: int, data: dict
     ) -> ApiResponse:
         """Update pipeline fields (tenant-scoped)."""
-        self._require_session()
+
         result = await self.session.execute(
             select(PipelineModel).where(
                 PipelineModel.id == pipeline_id,
@@ -216,7 +217,7 @@ class PipelineService:
 
     async def delete_pipeline(self, tenant_id: int, pipeline_id: int) -> ApiResponse:
         """Delete a pipeline and its stages (tenant-scoped)."""
-        self._require_session()
+
         result = await self.session.execute(
             select(PipelineModel).where(
                 PipelineModel.id == pipeline_id,
@@ -244,7 +245,7 @@ class PipelineService:
         self, tenant_id: int, pipeline_id: int, data: dict
     ) -> ApiResponse:
         """Add a stage to a pipeline."""
-        self._require_session()
+
         # Verify pipeline belongs to tenant
         pipeline_result = await self.session.execute(
             select(PipelineModel).where(
@@ -285,7 +286,7 @@ class PipelineService:
         self, tenant_id: int, pipeline_id: int, stage_id: int, data: dict
     ) -> ApiResponse:
         """Update a pipeline stage (tenant-scoped)."""
-        self._require_session()
+
         # Verify tenant owns the pipeline
         pipeline_result = await self.session.execute(
             select(PipelineModel).where(
@@ -333,7 +334,7 @@ class PipelineService:
         self, tenant_id: int, pipeline_id: int, stage_id: int
     ) -> ApiResponse:
         """Delete a stage from a pipeline (tenant-scoped)."""
-        self._require_session()
+
         pipeline_result = await self.session.execute(
             select(PipelineModel).where(
                 PipelineModel.id == pipeline_id,

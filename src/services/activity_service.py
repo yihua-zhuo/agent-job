@@ -14,6 +14,7 @@ class ActivityService:
 
     def __init__(self, session: AsyncSession = None):
         self.session = session
+        self._require_session()
 
     def _require_session(self):
         if self.session is None:
@@ -98,7 +99,7 @@ class ActivityService:
 
     async def get_activity(self, activity_id: int, tenant_id: int = 0) -> ApiResponse[Activity]:
         """获取活动详情"""
-        self._require_session()
+
         scope = await self._scope(tenant_id)
         sql = text(
             f"""
@@ -122,7 +123,7 @@ class ActivityService:
         self, activity_id: int, tenant_id: int = 0, **kwargs
     ) -> ApiResponse[Activity]:
         """更新活动"""
-        self._require_session()
+
         scope = await self._scope(tenant_id)
 
         # First verify the record exists
@@ -180,7 +181,7 @@ class ActivityService:
 
     async def delete_activity(self, activity_id: int, tenant_id: int = 0) -> ApiResponse[Dict]:
         """删除活动"""
-        self._require_session()
+
         scope = await self._scope(tenant_id)
         sql = text(
             f"""
@@ -209,7 +210,7 @@ class ActivityService:
         tenant_id: int = 0,
     ) -> ApiResponse[PaginatedData[Activity]]:
         """活动列表"""
-        self._require_session()
+
         scope = await self._scope(tenant_id)
         conditions = [scope]
         params: dict = {"tenant_id": tenant_id}
@@ -263,7 +264,7 @@ class ActivityService:
         self, customer_id: int, limit: int = 50, tenant_id: int = 0
     ) -> ApiResponse[List[Dict]]:
         """获取客户的所有活动"""
-        self._require_session()
+
         scope = await self._scope(tenant_id)
         sql = text(
             f"""
@@ -286,7 +287,7 @@ class ActivityService:
         self, opportunity_id: int, tenant_id: int = 0
     ) -> ApiResponse[List[Dict]]:
         """获取商机的所有活动"""
-        self._require_session()
+
         scope = await self._scope(tenant_id)
         sql = text(
             f"""
@@ -308,7 +309,7 @@ class ActivityService:
         self, keyword: str, filters: Optional[Dict] = None, tenant_id: int = 0
     ) -> ApiResponse[List[Dict]]:
         """搜索活动"""
-        self._require_session()
+
         scope = await self._scope(tenant_id)
         conditions = [scope, "LOWER(content) LIKE LOWER(:keyword)"]
         params: dict = {"keyword": f"%{keyword}%", "tenant_id": tenant_id}
@@ -352,7 +353,7 @@ class ActivityService:
         tenant_id: int = 0,
     ) -> ApiResponse[Dict]:
         """获取活动摘要"""
-        self._require_session()
+
         scope = await self._scope(tenant_id)
         conditions = [scope, "customer_id = :customer_id"]
         params: dict = {"customer_id": customer_id, "tenant_id": tenant_id}

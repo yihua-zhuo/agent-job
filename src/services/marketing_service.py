@@ -51,6 +51,7 @@ class MarketingService:
 
     def __init__(self, session: AsyncSession = None):
         self.session = session
+        self._require_session()
 
     def _require_session(self):
         if self.session is None:
@@ -69,7 +70,7 @@ class MarketingService:
         **kwargs,
     ) -> ApiResponse[Campaign]:
         """创建营销活动"""
-        self._require_session()
+
         now = datetime.now(UTC)
         async with self.session:
             stmt = text(
@@ -117,7 +118,7 @@ class MarketingService:
 
     async def get_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """获取活动详情"""
-        self._require_session()
+
         async with self.session:
             stmt = text(
                 """
@@ -137,7 +138,7 @@ class MarketingService:
         self, campaign_id: int, tenant_id: int = 0, **kwargs
     ) -> ApiResponse[Campaign]:
         """更新活动"""
-        self._require_session()
+
         updates: List[str] = []
         params: Dict[str, Any] = {"id": campaign_id}
         for key in ["name", "type", "status", "subject", "content", "target_audience", "trigger_type", "trigger_days"]:
@@ -176,17 +177,17 @@ class MarketingService:
 
     async def launch_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """启动活动"""
-        self._require_session()
+
         return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.ACTIVE)
 
     async def pause_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """暂停活动"""
-        self._require_session()
+
         return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.PAUSED)
 
     async def get_campaign_stats(self, campaign_id: int) -> ApiResponse[Dict[str, Any]]:
         """获取活动统计"""
-        self._require_session()
+
         async with self.session:
             stmt = text(
                 "SELECT sent_count, open_count, click_count FROM campaigns WHERE id = :id"
@@ -219,7 +220,7 @@ class MarketingService:
         tenant_id: int = 0,
     ) -> ApiResponse[PaginatedData[Campaign]]:
         """活动列表"""
-        self._require_session()
+
         async with self.session:
             conditions: List[str] = []
             params: Dict[str, Any] = {"offset": (page - 1) * page_size, "limit": page_size}
@@ -265,7 +266,7 @@ class MarketingService:
         tenant_id: int = 0,
     ) -> ApiResponse[CampaignEvent]:
         """记录用户事件"""
-        self._require_session()
+
         now = datetime.now(UTC)
         async with self.session:
             # Insert event
@@ -310,7 +311,7 @@ class MarketingService:
 
     async def get_user_events(self, customer_id: int, tenant_id: int = 0) -> List[CampaignEvent]:
         """获取用户的所有营销事件"""
-        self._require_session()
+
         async with self.session:
             stmt = text(
                 """
@@ -332,7 +333,7 @@ class MarketingService:
         tenant_id: int = 0,
     ) -> ApiResponse[Campaign]:
         """设置触发器"""
-        self._require_session()
+
         return await self.update_campaign(
             campaign_id, tenant_id,
             trigger_type=trigger_type,
@@ -341,7 +342,7 @@ class MarketingService:
 
     async def add_audience(self, campaign_id: int, audience_sql: str, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """添加目标受众"""
-        self._require_session()
+
         return await self.update_campaign(
             campaign_id, tenant_id, target_audience=audience_sql
         )
@@ -350,7 +351,7 @@ class MarketingService:
         self, campaign_id: int, customer_ids: List[int], tenant_id: int = 0
     ) -> Dict[str, Any]:
         """触发活动发送"""
-        self._require_session()
+
         sent = 0
         for cid in customer_ids:
             resp = await self.record_event(campaign_id, cid, "sent", tenant_id)
@@ -366,7 +367,7 @@ class MarketingService:
         self, campaign_id: int, tenant_id: int = 0
     ) -> List[CampaignEvent]:
         """获取活动事件列表"""
-        self._require_session()
+
         async with self.session:
             stmt = text(
                 """
