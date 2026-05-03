@@ -159,7 +159,7 @@ export default function TasksPage() {
               <span className={`font-semibold text-sm ${col.color}`}>{col.label}</span>
               <div className="flex items-center gap-2">
                 <span className="text-xs font-medium text-muted-foreground">{countByStatus(col.id)}</span>
-                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setCreateStatus(col.id); setShowCreate(true); }} title="Add task">
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => { setCreateStatus(col.id); setShowCreate(true); }} aria-label="Add task" title="Add task">
                   +
                 </Button>
               </div>

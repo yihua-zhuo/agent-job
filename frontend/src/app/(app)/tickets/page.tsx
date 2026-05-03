@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useTickets } from "@/lib/api/queries";
+import { useRouter } from "next/navigation";
+import { useTickets, useDeleteTicket } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -57,10 +58,14 @@ function TicketRow({
   t,
   selected,
   onToggle,
+  onDelete,
+  onView,
 }: {
   t: TicketRowData;
   selected: boolean;
   onToggle: (id: number) => void;
+  onDelete: (id: number) => Promise<void>;
+  onView: (id: number) => void;
 }) {
   return (
     <tr
@@ -126,9 +131,9 @@ function TicketRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => { window.location.href = `/tickets/${t.id}`; }}>View details</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onView(t.id)}>View details</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(`Delete ticket #${t.id}?`)) { /* TODO: wire delete mutation */ } }}>Delete</DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" onClick={() => onDelete(t.id)}>Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </td>
@@ -146,6 +151,18 @@ export default function TicketsPage() {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const deleteTicket = useDeleteTicket();
+  const router = useRouter();
+
+  async function handleDeleteTicket(id: number) {
+    if (window.confirm(`Delete ticket #${id}?`)) {
+      await deleteTicket.mutateAsync(id);
+    }
+  }
+
+  function handleViewTicket(id: number) {
+    router.push(`/tickets/${id}`);
+  }
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -374,6 +391,8 @@ export default function TicketsPage() {
                 t={t}
                 selected={selectedIds.has(t.id)}
                 onToggle={toggleSelect}
+                onDelete={handleDeleteTicket}
+                onView={handleViewTicket}
               />
             ))}
           </tbody>

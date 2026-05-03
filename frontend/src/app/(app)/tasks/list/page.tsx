@@ -43,6 +43,7 @@ export default function TaskListPage() {
 
   const complete = useCompleteTask();
   const remove = useDeleteTask();
+  const update = useUpdateTask();
 
   function filteredAndSorted() {
     let result = items;
@@ -179,7 +180,6 @@ export default function TaskListPage() {
           task={editTask}
           onClose={() => setEditTask(null)}
           onSubmit={async (data) => {
-            const update = useUpdateTask();
             await update.mutateAsync({ id: Number(editTask.id), data });
             setEditTask(null);
           }}
