@@ -1,4 +1,4 @@
-# agent-job — Claude Code Reference
+# Claude Code Reference
 
 Multi-tenant CRM system (FastAPI + SQLAlchemy 2.x async + PostgreSQL).
 
@@ -10,7 +10,7 @@ Multi-tenant CRM system (FastAPI + SQLAlchemy 2.x async + PostgreSQL).
 ## Project Structure
 
 ```
-agent-job/
+./
 ├── src/
 │   ├── api/routers/          # FastAPI route handlers
 │   ├── services/             # Business logic (one service per domain)
@@ -264,4 +264,4 @@ Code review follows this flow:
 - FastAPI: https://fastapi.tiangolo.com/
 - SQLAlchemy 2.x: https://docs.sqlalchemy.org/en/20/
 - Pytest: https://docs.pytest.org/
-- Project root: `agent-job/`
+- Project root: `./`
