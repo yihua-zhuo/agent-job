@@ -114,7 +114,7 @@ class ReplyResponse(SuccessEnvelope):
 
 
 class AssignResponse(SuccessEnvelope):
-    data: dict
+    data: TicketData
 
 
 class SLAStatusData(BaseModel):
@@ -132,22 +132,44 @@ class SLAStatusResponse(SuccessEnvelope):
 # ---------------------------------------------------------------------------
 
 def _ticket_to_data(ticket) -> TicketData:
+    # Handle both ORM objects and dict-like test mocks
+    def _get(obj, *keys, default=None):
+        for k in keys:
+            if hasattr(obj, k):
+                return getattr(obj, k)
+            if isinstance(obj, dict) and k in obj:
+                return obj[k]
+        return default
+
+    def _str(val, default=None):
+        if val is None:
+            return default
+        return val.value if hasattr(val, "value") else str(val)
+
+    def _dt(val):
+        """Convert datetime to ISO string, or None."""
+        if val is None:
+            return None
+        if hasattr(val, "isoformat"):
+            return val.isoformat()
+        return str(val)
+
     return TicketData(
-        id=ticket.id,
-        tenant_id=ticket.tenant_id,
-        subject=ticket.subject,
-        description=ticket.description or "",
-        status=ticket.status.value if hasattr(ticket.status, "value") else str(ticket.status),
-        priority=ticket.priority.value if hasattr(ticket.priority, "value") else str(ticket.priority),
-        channel=ticket.channel.value if hasattr(ticket.channel, "value") else str(ticket.channel),
-        customer_id=ticket.customer_id,
-        assigned_to=ticket.assigned_to,
-        sla_level=ticket.sla_level.value if hasattr(ticket.sla_level, "value") else str(ticket.sla_level),
-        created_at=ticket.created_at.isoformat() if ticket.created_at else None,
-        updated_at=ticket.updated_at.isoformat() if ticket.updated_at else None,
-        resolved_at=ticket.resolved_at.isoformat() if ticket.resolved_at else None,
-        first_response_at=ticket.first_response_at.isoformat() if ticket.first_response_at else None,
-        response_deadline=ticket.response_deadline.isoformat() if ticket.response_deadline else None,
+        id=_get(ticket, "id", "ticket_id", default=0) or 0,
+        tenant_id=_get(ticket, "tenant_id", default=0) or 0,
+        subject=_get(ticket, "subject", default="") or "",
+        description=_get(ticket, "description", default="") or "",
+        status=_str(_get(ticket, "status"), "open") or "open",
+        priority=_str(_get(ticket, "priority"), "medium") or "medium",
+        channel=_str(_get(ticket, "channel"), "email") or "email",
+        customer_id=_get(ticket, "customer_id", default=0) or 0,
+        assigned_to=_get(ticket, "assigned_to"),
+        sla_level=_str(_get(ticket, "sla_level"), "standard") or "standard",
+        created_at=_dt(_get(ticket, "created_at")),
+        updated_at=_dt(_get(ticket, "updated_at")),
+        resolved_at=_dt(_get(ticket, "resolved_at")),
+        first_response_at=_dt(_get(ticket, "first_response_at")),
+        response_deadline=_dt(_get(ticket, "response_deadline")),
     )
 
 
@@ -307,7 +329,7 @@ async def assign_ticket(
     status = _http_status(resp.status)
     if status >= 400:
         raise HTTPException(status_code=status, detail=resp.message)
-    return AssignResponse(message=resp.message, data=resp.data)
+    return AssignResponse(message=resp.message, data=_ticket_to_data(resp.data))
 
 
 @tickets_router.post(
@@ -424,7 +446,7 @@ async def auto_assign_ticket(
     status = _http_status(resp.status)
     if status >= 400:
         raise HTTPException(status_code=status, detail=resp.message)
-    return AssignResponse(message=resp.message, data=resp.data)
+    return AssignResponse(message=resp.message, data=_ticket_to_data(resp.data))
 
 
 # ---------------------------------------------------------------------------

@@ -149,18 +149,33 @@ async def list_customers(
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
     _is_dict = isinstance(resp.data, dict)
-    _items = resp.data["items"] if _is_dict else resp.data.items
+    if _is_dict:
+        _items = resp.data["items"]
+        _total = resp.data["total"]
+        _page = resp.data["page"]
+        _page_size = resp.data["page_size"]
+        _total_pages = resp.data["total_pages"]
+        _has_next = resp.data["has_next"]
+        _has_prev = resp.data["has_prev"]
+    else:
+        _items = resp.data.items
+        _total = resp.data.total
+        _page = resp.data.page
+        _page_size = resp.data.page_size
+        _total_pages = resp.data.total_pages
+        _has_next = resp.data.has_next
+        _has_prev = resp.data.has_prev
     items = [CustomerData.model_validate({**c, "tags": c.get("tags") or []}) for c in _items]
     return CustomerListResponse(
         message=resp.message,
         data=CustomerListData(
             items=items,
-            total=resp.data["total"] if _is_dict else resp.data.total,
-            page=resp.data["page"] if _is_dict else resp.data.page,
-            page_size=resp.data["page_size"] if _is_dict else resp.data.page_size,
-            total_pages=resp.data["total_pages"] if _is_dict else resp.data.total_pages,
-            has_next=resp.data["has_next"] if _is_dict else resp.data.has_next,
-            has_prev=resp.data["has_prev"] if _is_dict else resp.data.has_prev,
+            total=_total,
+            page=_page,
+            page_size=_page_size,
+            total_pages=_total_pages,
+            has_next=_has_next,
+            has_prev=_has_prev,
         ),
     )
 

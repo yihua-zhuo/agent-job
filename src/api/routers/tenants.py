@@ -201,17 +201,16 @@ async def delete_tenant(
 
 
 @tenants_router.get(
-    '/{tenant_id}/stats',
+    '/stats',
     response_model=TenantStatsResponse,
-    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+    responses={401: {"model": ErrorEnvelope}},
 )
 async def get_tenant_stats(
-    tenant_id: int,
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
     service = TenantService(session)
-    resp = await service.get_tenant_stats(tenant_id)
+    resp = await service.get_tenant_stats(ctx.tenant_id)
     status = _http_status(resp.status)
     if status >= 400:
         raise HTTPException(status_code=status, detail=resp.message)
@@ -219,17 +218,16 @@ async def get_tenant_stats(
 
 
 @tenants_router.get(
-    '/{tenant_id}/usage',
+    '/usage',
     response_model=TenantStatsResponse,
-    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+    responses={401: {"model": ErrorEnvelope}},
 )
 async def get_tenant_usage(
-    tenant_id: int,
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
     service = TenantService(session)
-    resp = await service.get_tenant_usage(tenant_id)
+    resp = await service.get_tenant_usage(ctx.tenant_id)
     status = _http_status(resp.status)
     if status >= 400:
         raise HTTPException(status_code=status, detail=resp.message)

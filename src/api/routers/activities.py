@@ -99,7 +99,9 @@ class ActivitySummaryResponse(SuccessEnvelope):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-def _activity_to_data(activity) -> ActivityData:
+def _activity_to_data(activity) -> Optional[ActivityData]:
+    if activity is None:
+        return None
     type_val = activity.type.value if hasattr(activity.type, "value") else str(activity.type)
     return ActivityData(
         id=activity.id,
@@ -226,7 +228,7 @@ async def delete_activity(
     status = _http_status(resp.status)
     if status >= 400:
         raise HTTPException(status_code=status, detail=resp.message)
-    return ActivityResponse(message=resp.message, data=resp.data)
+    return ActivityResponse(message=resp.message, data=_activity_to_data(resp.data))
 
 
 @activities_router.get(
