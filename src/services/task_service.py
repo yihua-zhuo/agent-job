@@ -181,7 +181,7 @@ class TaskService:
             text(f"SELECT COUNT(*) FROM tasks {where_sql}"),
             count_params,
         )
-        total = count_result.fetchone()[0]
+        total = count_result.scalar_one()
 
             # Fetch page
         offset = (page - 1) * page_size

@@ -111,7 +111,7 @@ class TenantService:
             count_sql = text("SELECT COUNT(*) FROM tenants WHERE status = :status")
             count_params = {"status": status}
         total_result = await self.session.execute(count_sql, count_params)
-        total = total_result.fetchone()[0]
+        total = total_result.scalar_one()
 
             # Fetch page
         offset = (page - 1) * page_size
@@ -180,7 +180,7 @@ class TenantService:
             text("SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id"),
             {"tenant_id": tenant_id},
         )
-        user_count = user_count_result.fetchone()[0]
+        user_count = user_count_result.scalar_one()
 
         usage = {
             "tenant_id": tenant_id,

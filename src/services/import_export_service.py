@@ -91,9 +91,6 @@ class ImportExportService:
     #  Import – customers
     # ------------------------------------------------------------------
 
-    def _require_session(self):
-        pass
-
     async def import_customers(
         self,
         file_data: bytes,
