@@ -97,11 +97,6 @@ class TestCustomerEndpoints:
         resp = await api_client.get("/api/v1/customers/999999999")
         assert resp.status_code == 404
 
-    @pytest.mark.xfail(
-        reason="Router bug: resp.data is PaginatedData (namedtuple), not dict. "
-               "Line 151 does resp.data['items'] which raises TypeError.",
-        strict=False,
-    )
     async def test_list_customers(
         self, api_client: "AsyncClient", tenant_id_web: int
     ):
@@ -222,7 +217,10 @@ class TestCustomerEndpoints:
         assert resp.status_code == 200, f"Body: {resp.text}"
 
     @pytest.mark.xfail(
-        reason="Same PaginatedData bug as list_customers",
+        reason="Cross-tenant isolation broken: GET /customers for tenant 2 returns tenant 1 "
+               "customers. Tenant filter not applied correctly in list_customers. "
+               "Test assertion `t1_id not in t2_ids` is also incorrect (should check all "
+               "tenant_1 customers, not just the single t1_id).",
         strict=False,
     )
     async def test_customer_cross_tenant_isolation(
@@ -336,11 +334,6 @@ class TestUserEndpoints:
         )
         assert resp.status_code == 401
 
-    @pytest.mark.xfail(
-        reason="No /users/me endpoint exists. GET /api/v1/users/me returns 422 "
-               "because the only GET /users/{user_id} path param is typed as int.",
-        strict=False,
-    )
     async def test_get_current_user(self, api_client: "AsyncClient"):
         resp = await api_client.get("/api/v1/users/me")
         assert resp.status_code in (200, 422)
@@ -554,11 +547,6 @@ class TestTicketEndpoints:
 class TestSalesEndpoints:
     """Pipeline and opportunity endpoints at the web layer."""
 
-    @pytest.mark.xfail(
-        reason="stages iteration bug in sales_service: DEFAULT_STAGES not applied "
-               "when stages_data is None, causing TypeError on None.items.",
-        strict=False,
-    )
     async def test_create_pipeline(self, api_client: "AsyncClient", tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         resp = await api_client.post(
@@ -593,7 +581,10 @@ class TestSalesEndpoints:
         assert resp.status_code in (200, 404, 500), f"Body: {resp.text}"
 
     @pytest.mark.xfail(
-        reason="Service error: expected_close_date must be datetime object, not string.",
+        reason="POST /sales/opportunities returns 400. Likely causes: "
+               "(1) test uses pipeline_id=1 which may not exist in tenant's DB; "
+               "(2) customer_id=1 not found; (3) owner_id=1 not found. "
+               "Test needs to create pipeline+customer first, not use hardcoded ids.",
         strict=False,
     )
     async def test_create_opportunity(self, api_client: "AsyncClient", tenant_id_web: int):
@@ -896,11 +887,6 @@ class TestAuthMiddleware:
         )
         assert resp.status_code == 401
 
-    @pytest.mark.xfail(
-        reason="PaginatedData bug — list_customers fails with 500 when called "
-               "with a valid token because the router chokes on resp.data.",
-        strict=False,
-    )
     async def test_valid_token_succeeds(self, api_client: "AsyncClient"):
         resp = await api_client.get("/api/v1/customers")
         assert resp.status_code != 401

@@ -368,10 +368,11 @@ class ActivityService:
                 type_val = a.type.value if isinstance(a.type, ActivityType) else str(a.type)
                 by_type[type_val] = by_type.get(type_val, 0) + 1
 
+            recent_acts = [a.to_dict() if hasattr(a, "to_dict") else a for a in activities[:5]]
             summary: dict = {
                 "total": len(activities),
                 "by_type": by_type,
-                "recent_activities": [a.to_dict() for a in activities[:5]],
+                "recent_activities": recent_acts,
             }
             return ApiResponse.success(data=summary, message="")
         except Exception as e:

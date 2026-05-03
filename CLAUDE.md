@@ -181,10 +181,35 @@ def _entity_to_data(self, entity) -> dict:
 ## Integration Test Fixtures
 
 | Fixture | Purpose |
-|---|---|
-| `db_schema` | Auto-creates/drops all tables per function |
-| `tenant_id` | Current tenant ID |
-| `async_session` | Function-scoped session, shared across services in one test |
+|---|---|---|
+| `db_schema`         | Auto-creates/drops all tables per function                            |
+| `tenant_id_web`     | Current tenant ID for tenant 1 (webtest / auth_headers_web)           |
+| `tenant_id_2_web`   | Current tenant ID for tenant 2 (webtest2 / auth_headers_tenant_2)      |
+| `async_session`     | Function-scoped session, shared across services in one test            |
+
+### auth_headers_web / auth_headers_tenant_2: always create DB user first, use real id in token
+
+These fixtures generate a JWT with `user_id=999` hardcoded in token payload. The token's
+`user_id` MUST match a real user's `id` in the DB — PostgreSQL auto-increment assigns the
+actual id at INSERT time, which may not be 999.
+
+```python
+async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
+    user_svc = UserService(async_session)
+    await user_svc.create_user(
+        username="webtest", email="webtest@example.com",
+        password="TestPass123!", role=UserRole.ADMIN,
+        tenant_id=tenant_id_web, full_name="Web Test User",
+    )
+    await async_session.commit()
+    # Use DB-assigned id, not hardcoded 999
+    created_user = await user_svc.get_user_by_username("webtest", tenant_id=tenant_id_web)
+    actual_user_id = created_user.id if created_user else 999
+
+    auth_svc = AuthService(async_session)
+    token = auth_svc.generate_token(user_id=actual_user_id, username="webtest", role="admin", tenant_id=tenant_id_web)
+    return {"Authorization": f"Bearer {token}"}
+```
 
 ---
 
@@ -265,3 +290,14 @@ Code review follows this flow:
 - SQLAlchemy 2.x: https://docs.sqlalchemy.org/en/20/
 - Pytest: https://docs.pytest.org/
 - Project root: `/home/node/.openclaw/workspace/dev-agent-system/`
+---
+
+## Pipeline Model Configuration
+
+The pipeline uses a custom `claw` wrapper that routes to AI Gateway. The model is controlled by `CLAW_MODEL` environment variable:
+
+- **Default**: `openai/MiniMax-M2.7` (defined in `docs/agents/_llm.py:60`)
+- **pipeline-code-review.yml override**: `CLAW_MODEL: claude-sonnet-4-6` in workflow `env:` block
+- Pipeline script `scripts/cron/pipeline.py` spawns `claw` as subprocess; `CLAW_MODEL` propagates to all `ask_agent()` calls
+
+To change model for a specific workflow, add/edit the env var in the workflow's `env:` section.
