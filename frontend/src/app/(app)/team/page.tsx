@@ -1,9 +1,8 @@
 "use client";
 import { useState } from "react";
-import { useUsers, useCreateUser } from "@/lib/api/queries";
+import { useUsers, useCreateUser, useUpdateUser, useDeleteUser } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Card, CardContent } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Pencil, Trash2, UserPlus, Search } from "lucide-react";
 
 const ROLE_COLORS: Record<string, string> = {
   admin: "bg-red-100 text-red-800",
@@ -31,38 +31,116 @@ const STATUS_COLORS: Record<string, string> = {
   inactive: "bg-gray-100 text-gray-500",
 };
 
+interface MemberForm {
+  username: string;
+  email: string;
+  password: string;
+  full_name: string;
+  role: string;
+}
+
+const blankForm: MemberForm = { username: "", email: "", password: "", full_name: "", role: "user" };
+
 export default function TeamPage() {
   const [page, setPage] = useState(1);
   const [roleFilter, setRoleFilter] = useState("all");
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ username: "", email: "", password: "", full_name: "", role: "user" });
+  const [search, setSearch] = useState("");
 
-  const { data, isLoading } = useUsers(page);
+  // Create dialog
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState<MemberForm>(blankForm);
+
+  // Edit dialog
+  const [editingUser, setEditingUser] = useState<Record<string, unknown> | null>(null);
+  const [editForm, setEditForm] = useState<Partial<MemberForm>>({});
+  const [showEdit, setShowEdit] = useState(false);
+
+  // Delete dialog
+  const [deletingUser, setDeletingUser] = useState<Record<string, unknown> | null>(null);
+  const [showDelete, setShowDelete] = useState(false);
+
+  const { data, isLoading, refetch } = useUsers(page);
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
   const create = useCreateUser();
+  const updateUser = useUpdateUser();
+  const deleteUser = useDeleteUser();
 
-  const filtered = roleFilter === "all" ? items : items.filter((u) => u.role === roleFilter);
+  const filtered = items.filter((u) => {
+    const matchRole = roleFilter === "all" || u.role === roleFilter;
+    const q = search.toLowerCase();
+    const matchSearch =
+      !q ||
+      String(u.full_name ?? u.username ?? "").toLowerCase().includes(q) ||
+      String(u.email ?? "").toLowerCase().includes(q);
+    return matchRole && matchSearch;
+  });
 
+  // Create
   async function handleCreate() {
-    if (!form.username || !form.email || !form.password) return;
+    if (!createForm.username || !createForm.email || !createForm.password) return;
     try {
-      await create.mutateAsync(form as Record<string, unknown>);
+      await create.mutateAsync(createForm as unknown as Record<string, unknown>);
       setShowCreate(false);
-      setForm({ username: "", email: "", password: "", full_name: "", role: "user" });
-    } catch {
-      // mutation error is surfaced via create.isError / create.error in the UI
-    }
+      setCreateForm(blankForm);
+    } catch { /* error surfaced via create.isError */ }
+  }
+
+  // Edit
+  function openEdit(u: Record<string, unknown>) {
+    setEditingUser(u);
+    setEditForm({
+      full_name: String(u.full_name ?? ""),
+      email: String(u.email ?? ""),
+      role: String(u.role ?? "user"),
+    });
+    setShowEdit(true);
+  }
+
+  async function handleEdit() {
+    if (!editingUser) return;
+    try {
+      await updateUser.mutateAsync({ id: Number(editingUser.id), data: editForm });
+      setShowEdit(false);
+      setEditingUser(null);
+    } catch { /* error surfaced via updateUser.isError */ }
+  }
+
+  // Delete
+  function openDelete(u: Record<string, unknown>) {
+    setDeletingUser(u);
+    setShowDelete(true);
+  }
+
+  async function handleDelete() {
+    if (!deletingUser) return;
+    try {
+      await deleteUser.mutateAsync(Number(deletingUser.id));
+      setShowDelete(false);
+      setDeletingUser(null);
+    } catch { /* error surfaced via deleteUser.isError */ }
   }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Team Directory</h1>
-        <Button size="sm" onClick={() => setShowCreate(true)}>+ Add Member</Button>
+        <h1 className="text-2xl font-bold">Team Members</h1>
+        <Button size="sm" onClick={() => setShowCreate(true)}>
+          <UserPlus className="h-4 w-4 mr-1" />
+          Add Member
+        </Button>
       </div>
 
-      <div className="flex gap-2">
+      <div className="flex gap-3 flex-wrap">
+        <div className="relative flex-1 min-w-48">
+          <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search by name or email…"
+            value={search}
+            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            className="pl-8"
+          />
+        </div>
         <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1); }}>
           <SelectTrigger className="w-36">
             <SelectValue placeholder="All Roles" />
@@ -76,34 +154,76 @@ export default function TeamPage() {
         </Select>
       </div>
 
-      <div className="grid gap-3" style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}>
-        {isLoading && Array.from({ length: 6 }).map((_, i) => (
-          <Card key={i}><CardContent className="p-4 animate-pulse space-y-2"><div className="h-4 bg-muted rounded w-3/4" /><div className="h-3 bg-muted rounded w-1/2" /></CardContent></Card>
-        ))}
-        {!isLoading && filtered.length === 0 && <div className="col-span-full py-12 text-center text-muted-foreground">No team members found</div>}
-        {filtered.map((u) => (
-          <Card key={String(u.id)} className="hover:shadow-md transition-shadow">
-            <CardContent className="p-4 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="font-medium text-sm">{String(u.full_name ?? u.username ?? "")}</div>
-                <Badge colorClass={STATUS_COLORS[String(u.status)] ?? "bg-gray-100 text-gray-600"}>{String(u.status ?? "")}</Badge>
-              </div>
-              <div className="text-xs text-muted-foreground">{String(u.email ?? "")}</div>
-              <div className="flex items-center gap-2">
-                <Badge colorClass={ROLE_COLORS[String(u.role)] ?? "bg-blue-100 text-blue-800"}>{String(u.role ?? "")}</Badge>
-                <span className="text-xs text-muted-foreground">#{String(u.id)}</span>
-              </div>
-              {Boolean(u.created_at) && (
-                <div className="text-xs text-muted-foreground">Joined {new Date(String(u.created_at)).toLocaleDateString()}</div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+      {/* Table */}
+      <div className="rounded-md border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="border-b bg-muted/50 text-xs uppercase tracking-wide text-muted-foreground">
+              <th className="px-3 py-2.5 text-left font-semibold">Name</th>
+              <th className="px-3 py-2.5 text-left font-semibold">Email</th>
+              <th className="px-3 py-2.5 text-left font-semibold">Role</th>
+              <th className="px-3 py-2.5 text-left font-semibold">Status</th>
+              <th className="px-3 py-2.5 text-left font-semibold">Joined</th>
+              <th className="px-3 py-2.5 text-right font-semibold">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading && Array.from({ length: 6 }).map((_, i) => (
+              <tr key={i} className="border-b">
+                <td className="px-3 py-2.5"><div className="h-4 bg-muted rounded w-32 animate-pulse" /></td>
+                <td className="px-3 py-2.5"><div className="h-4 bg-muted rounded w-40 animate-pulse" /></td>
+                <td className="px-3 py-2.5"><div className="h-5 bg-muted rounded w-16 animate-pulse" /></td>
+                <td className="px-3 py-2.5"><div className="h-5 bg-muted rounded w-14 animate-pulse" /></td>
+                <td className="px-3 py-2.5"><div className="h-4 bg-muted rounded w-20 animate-pulse" /></td>
+                <td className="px-3 py-2.5" />
+              </tr>
+            ))}
+            {!isLoading && filtered.length === 0 && (
+              <tr>
+                <td colSpan={6} className="px-3 py-10 text-center text-muted-foreground">
+                  No team members found
+                </td>
+              </tr>
+            )}
+            {filtered.map((u) => (
+              <tr key={String(u.id)} className="border-b hover:bg-muted/40 transition-colors">
+                <td className="px-3 py-2.5">
+                  <div className="font-medium">{String(u.full_name ?? u.username ?? "")}</div>
+                  <div className="text-xs text-muted-foreground">#{String(u.id)}</div>
+                </td>
+                <td className="px-3 py-2.5 text-muted-foreground">{String(u.email ?? "—")}</td>
+                <td className="px-3 py-2.5">
+                  <Badge colorClass={ROLE_COLORS[String(u.role)] ?? "bg-blue-100 text-blue-800"}>
+                    {String(u.role ?? "")}
+                  </Badge>
+                </td>
+                <td className="px-3 py-2.5">
+                  <Badge colorClass={STATUS_COLORS[String(u.status)] ?? "bg-gray-100 text-gray-600"}>
+                    {String(u.status ?? "")}
+                  </Badge>
+                </td>
+                <td className="px-3 py-2.5 text-muted-foreground text-xs">
+                  {u.created_at ? new Date(String(u.created_at)).toLocaleDateString() : "—"}
+                </td>
+                <td className="px-3 py-2.5 text-right">
+                  <div className="flex items-center justify-end gap-1">
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(u)} title="Edit">
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => openDelete(u)} title="Delete">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
 
       {info && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Showing {info.total === 0 ? 0 : ((page - 1) * 20) + 1}–{Math.min(page * 20, info.total)} of {info.total}</span>
+          <span>Showing {info.total === 0 ? 0 : ((page - 1) * info.page_size) + 1}–{Math.min(page * info.page_size, info.total)} of {info.total}</span>
           <div className="flex gap-1">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</Button>
             <Button variant="outline" size="sm" disabled={!info.has_next} onClick={() => setPage(page + 1)}>Next →</Button>
@@ -111,29 +231,30 @@ export default function TeamPage() {
         </div>
       )}
 
+      {/* Create Dialog */}
       <Dialog open={showCreate} onOpenChange={(o) => !o && setShowCreate(false)}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Add Team Member</DialogTitle></DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Username *</label>
-              <Input value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} placeholder="username" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Email *</label>
-              <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="email@example.com" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Password *</label>
-              <Input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="Min 8 chars" />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Full Name</label>
-              <Input value={form.full_name} onChange={(e) => setForm((f) => ({ ...f, full_name: e.target.value }))} placeholder="Full Name" />
-            </div>
+            {[
+              { label: "Username *", key: "username", type: "text" },
+              { label: "Email *", key: "email", type: "email" },
+              { label: "Password *", key: "password", type: "password" },
+              { label: "Full Name", key: "full_name", type: "text" },
+            ].map(({ label, key, type }) => (
+              <div key={key} className="space-y-1">
+                <label className="text-sm font-medium">{label}</label>
+                <Input
+                  type={type}
+                  value={createForm[key as keyof MemberForm]}
+                  onChange={(e) => setCreateForm((f) => ({ ...f, [key]: e.target.value }))}
+                  placeholder={label}
+                />
+              </div>
+            ))}
             <div className="space-y-1">
               <label className="text-sm font-medium">Role</label>
-              <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v }))}>
+              <Select value={createForm.role} onValueChange={(v) => setCreateForm((f) => ({ ...f, role: v }))}>
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="user">User</SelectItem>
@@ -142,11 +263,70 @@ export default function TeamPage() {
                 </SelectContent>
               </Select>
             </div>
+            {create.isError && <p className="text-xs text-destructive">Failed to create member</p>}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowCreate(false)}>Cancel</Button>
-            <Button onClick={handleCreate} disabled={create.isPending || !form.username || !form.email || !form.password}>
+            <Button onClick={handleCreate} disabled={create.isPending || !createForm.username || !createForm.email || !createForm.password}>
               {create.isPending ? "Creating…" : "Create"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Dialog */}
+      <Dialog open={showEdit} onOpenChange={(o) => !o && setShowEdit(false)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Edit Member</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Full Name</label>
+              <Input
+                value={editForm.full_name ?? ""}
+                onChange={(e) => setEditForm((f) => ({ ...f, full_name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Email</label>
+              <Input
+                type="email"
+                value={editForm.email ?? ""}
+                onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-sm font-medium">Role</label>
+              <Select value={editForm.role ?? "user"} onValueChange={(v) => setEditForm((f) => ({ ...f, role: v }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="user">User</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="admin">Admin</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            {updateUser.isError && <p className="text-xs text-destructive">Failed to update member</p>}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowEdit(false)}>Cancel</Button>
+            <Button onClick={handleEdit} disabled={updateUser.isPending}>
+              {updateUser.isPending ? "Saving…" : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={showDelete} onOpenChange={(o) => !o && setShowDelete(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Remove Member</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to remove <strong>{String(deletingUser?.full_name ?? deletingUser?.username ?? "")}</strong>? This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDelete(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDelete} disabled={deleteUser.isPending}>
+              {deleteUser.isPending ? "Removing…" : "Remove"}
             </Button>
           </DialogFooter>
         </DialogContent>

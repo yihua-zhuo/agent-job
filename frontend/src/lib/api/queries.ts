@@ -161,6 +161,26 @@ export function useChangePassword() {
   });
 }
 
+export function useUpdateUser() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
+      apiClient.patch(`/api/v1/users/${id}`, data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
+export function useDeleteUser() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v1/users/${id}`, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
+
 export function useCreateUser() {
   const qc = useQueryClient();
   const token = useAuthStore((s) => s.token);
