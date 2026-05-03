@@ -122,14 +122,24 @@ export function useCreateOpportunity() {
 }
 
 // ── Tickets ─────────────────────────────────────────────────────────────────
-export function useTickets(page = 1, status = "") {
+export function useTickets(page = 1, pageSize = 20, status = "") {
   const token = useAuthStore((s) => s.token);
-  const params = new URLSearchParams({ page: String(page), page_size: "20" });
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   if (status) params.set("status", status);
   return useQuery({
     queryKey: qk.tickets(page, status),
     queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tickets?${params}`, token ?? undefined),
     staleTime: 30 * 1000,
+  });
+}
+
+export function useDeleteTicket() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v1/tickets/${id}`, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tickets"] }),
   });
 }
 
