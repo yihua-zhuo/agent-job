@@ -340,10 +340,27 @@ async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
     """Return a valid JWT Authorization header for the test tenant."""
     os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
     from services.auth_service import AuthService
+    from services.user_service import UserService
+    from models.user import UserRole, UserStatus
+
+    # Create the test user in the DB so /users/me resolves correctly.
+    user_svc = UserService(async_session)
+    result = await user_svc.create_user(
+        username="webtest",
+        email="webtest@example.com",
+        password="TestPass123!",
+        role=UserRole.ADMIN,
+        tenant_id=tenant_id_web,
+        full_name="Web Test User",
+    )
+    await async_session.commit()
+    # Retrieve the actual DB-assigned user id (not hardcoded 999).
+    created_user = await user_svc.get_user_by_username("webtest", tenant_id=tenant_id_web)
+    actual_user_id = created_user.id if created_user else 999
 
     auth_svc = AuthService(async_session)
     token = auth_svc.generate_token(
-        user_id=999,
+        user_id=actual_user_id,
         username="webtest",
         role="admin",
         tenant_id=tenant_id_web,

@@ -283,11 +283,6 @@ class TestUserEndpoints:
         # Auth failure → 401
         assert resp.status_code == 401
 
-    @pytest.mark.xfail(
-        reason="auth_headers_web uses user_id=999 but no corresponding user is "
-               "created in the test DB, so get_user_by_id returns 404. "
-               "The /users/me endpoint exists and works correctly."
-    )
     async def test_get_current_user(self, api_client: "AsyncClient"):
         # GET /api/v1/users/me — requires auth, returns user info
         resp = await api_client.get("/api/v1/users/me")
