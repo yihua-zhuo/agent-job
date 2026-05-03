@@ -15,7 +15,8 @@ class TenantService:
 
     def __init__(self, session: AsyncSession = None):
         self.session = session
-        self._require_session()
+        if session is not None:
+            self._require_session()
 
     def _require_session(self):
         if self.session is None:

@@ -13,7 +13,8 @@ class SLAService:
 
     def __init__(self, session: AsyncSession = None, ticket_service=None):
         self.session = session
-        self._require_session()
+        if session is not None:
+            self._require_session()
         self._ticket_service = ticket_service
 
     def _require_session(self):
