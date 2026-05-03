@@ -97,7 +97,6 @@ export default function TeamPage() {
     setEditForm({
       full_name: String(u.full_name ?? ""),
       email: String(u.email ?? ""),
-      role: String(u.role ?? "user"),
     });
     setShowEdit(true);
   }
@@ -212,10 +211,10 @@ export default function TeamPage() {
                 </td>
                 <td className="px-3 py-2.5 text-right">
                   <div className="flex items-center justify-end gap-1">
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(u)} title="Edit">
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => openEdit(u)} aria-label="Edit member" title="Edit">
                       <Pencil className="h-3.5 w-3.5" />
                     </Button>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => openDelete(u)} title="Delete">
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={() => openDelete(u)} aria-label="Delete member" title="Delete">
                       <Trash2 className="h-3.5 w-3.5" />
                     </Button>
                   </div>
@@ -298,17 +297,6 @@ export default function TeamPage() {
                 value={editForm.email ?? ""}
                 onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
               />
-            </div>
-            <div className="space-y-1">
-              <label className="text-sm font-medium">Role</label>
-              <Select value={editForm.role ?? "user"} onValueChange={(v) => setEditForm((f) => ({ ...f, role: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">User</SelectItem>
-                  <SelectItem value="manager">Manager</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
-                </SelectContent>
-              </Select>
             </div>
             {updateUser.isError && <p className="text-xs text-destructive">Failed to update member</p>}
           </div>

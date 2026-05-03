@@ -166,7 +166,7 @@ export function useUpdateUser() {
   const token = useAuthStore((s) => s.token);
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
-      apiClient.patch(`/api/v1/users/${id}`, data, token ?? undefined),
+      apiClient.put(`/api/v1/users/${id}`, data, token ?? undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
 }
