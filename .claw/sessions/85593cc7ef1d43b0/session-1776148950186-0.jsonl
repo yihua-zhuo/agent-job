@@ -1,0 +1,3 @@
+{"created_at_ms":1776148950185,"model":"MiniMax-M2.7","session_id":"session-1776148950186-0","type":"session_meta","updated_at_ms":1776148950185,"version":1,"workspace_root":"/home/node/.openclaw/workspace/dev-agent-system"}
+{"text":"do a review for this project","timestamp_ms":1776148981376,"type":"prompt_history"}
+{"message":{"blocks":[{"text":"do a review for this project","type":"text"}],"role":"user"},"type":"message"}

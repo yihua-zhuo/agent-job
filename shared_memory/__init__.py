@@ -1,454 +1,320 @@
 """
-Shared Memory — 基于 GitHub Issues 的多 Agent 共享记忆层
+Shared Memory — 基于 yihua-zhuo/agent-job-shared-memory 本地 clone
 
-核心原理：
-- yihua-zhuo/agent-job 仓库的 GitHub Issues 作为分布式 KV 数据库
-- 每条任务 = 1 个 Issue，Body = JSON 任务结构，Comments = 各 Agent 执行日志
-- Labels 实现状态机（pending → running → done）和 Agent 路由
-- 无需自建 Redis，任何能访问 GitHub 的 Agent 都可以参与
+pipeline 每次运行前会 checkout agent-job-shared-memory 到本地目录，
+所有 agent 通过读写该目录下的 JSON 文件实现状态共享。
 
-Issue 标题约定：
-  [task] <task_id>              — 任务
-  [memory] <memory_id>          — 共享记忆（追加到 task comment）
-  [context] <key>               — 全局上下文
-
-标签约定：
-  status:pending / status:running / status:done    — 任务状态
-  type:task / type:memory / type:context             — 内容类型
-  agent:supervisor / agent:test / agent:code-review   — 负责 Agent
+目录结构（clone 自 agent-job-shared-memory）：
+  orchestrator_queue.json   待处理任务队列（JSON）
+  orchestrator_state.json    当前任务状态（JSON）
+  results/                  各 agent 执行结果（JSON，一 agent 一文件）
+  reports/                  最终汇总报告（JSON）
+  tasks/                    历史任务记录（JSON）
+  logs/                     日志文件
 """
+
+from __future__ import annotations
 
 import json
 import os
+import threading
 import time
-from dataclasses import dataclass, field
+from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
-import aiohttp
+# ─── 路径配置 ──────────────────────────────────────────────────────────────────
+
+# 默认 clone 根路径（pipeline 会 checkout 到这里）
+SHARED_MEMORY_ROOT = Path(os.environ.get(
+    "AGENT_JOB_SHARED_MEMORY",
+    "/home/node/.openclaw/workspace/agent-job-shared-memory",
+))
+
+QUEUE_FILE   = SHARED_MEMORY_ROOT / "orchestrator_queue.json"
+STATE_FILE   = SHARED_MEMORY_ROOT / "orchestrator_state.json"
+RESULTS_DIR  = SHARED_MEMORY_ROOT / "results"
+REPORTS_DIR  = SHARED_MEMORY_ROOT / "reports"
+TASKS_DIR    = SHARED_MEMORY_ROOT / "tasks"
+LOCK_TIMEOUT = 300  # 秒
 
 
-# ─── 常量 ───────────────────────────────────────────────────────────────────
+# ─── 内部工具 ────────────────────────────────────────────────────────────────
 
-GITHUB_REPO = os.environ.get("GITHUB_REPO", "yihua-zhuo/agent-job")
-GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
-GITHUB_API   = "https://api.github.com"
-
-HEADERS = {
-    "Accept": "application/vnd.github.v3+json",
-    "Authorization": f"token {GITHUB_TOKEN}",
-    "User-Agent": "agent-job-shared-memory/1.0",
-}
-
-# 标签
-LABEL_TASK        = "type:task"
-LABEL_MEMORY      = "type:memory"
-LABEL_CONTEXT     = "type:context"
-LABEL_PENDING     = "status:pending"
-LABEL_RUNNING     = "status:running"
-LABEL_DONE        = "status:done"
-LABEL_SUPERVISOR  = "agent:supervisor"
-LABEL_CODE_REVIEW = "agent:code-review"
-LABEL_TEST        = "agent:test"
-LABEL_QC          = "agent:qc"
-LABEL_DEPLOY      = "agent:deploy"
-
-AGENT_LABELS = {
-    "supervisor":  LABEL_SUPERVISOR,
-    "code-review": LABEL_CODE_REVIEW,
-    "test":        LABEL_TEST,
-    "qc":          LABEL_QC,
-    "deploy":      LABEL_DEPLOY,
-}
-
-POLL_INTERVAL = 3  # 秒
+_lock = threading.Lock()
 
 
-# ─── 数据模型 ─────────────────────────────────────────────────────────────────
-
-@dataclass
-class Task:
-    task_id: str
-    description: str
-    agent: str
-    parent_id: Optional[str] = None
-    context: dict = field(default_factory=dict)
-    result: dict = field(default_factory=dict)
-    status: str = "pending"
-    created_at: float = field(default_factory=time.time)
-    issue_number: int = 0
+def _read_json(path: Path) -> dict | list | None:
+    if not path.exists():
+        return None
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
 
 
-@dataclass
-class MemoryEntry:
-    memory_id: str
-    author: str
-    parent_id: Optional[str] = None
-    content: dict = field(default_factory=dict)
-    created_at: float = field(default_factory=time.time)
+def _write_json(path: Path, data: dict | list) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = str(path) + f".{os.getpid()}.tmp"
+    with open(tmp, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+    os.replace(tmp, path)
 
 
-# ─── GitHub API ───────────────────────────────────────────────────────────────
+# ─── 队列操作 ────────────────────────────────────────────────────────────────
 
-async def gh_get(path: str, params: dict = None, session: aiohttp.ClientSession = None) -> Optional[dict | list]:
-    url = f"{GITHUB_API}/repos/{GITHUB_REPO}{path}"
-    own_session = False
-    if session is None:
-        session = aiohttp.ClientSession()
-        own_session = True
-    try:
-        async with session.get(url, headers=HEADERS, params=params or {}) as resp:
-            if resp.status == 404:
-                return None
-            if resp.status not in (200, 304):
-                raise Exception(f"GH API {resp.status} {path}: {await resp.text()[:200]}")
-            return await resp.json()
-    finally:
-        if own_session:
-            await session.close()
+def read_queue() -> dict:
+    """返回 orchestrator_queue.json 内容（字典或空 dict）"""
+    return _read_json(QUEUE_FILE) or {"tasks": []}
 
 
-async def gh_post(path: str, data: dict, session: aiohttp.ClientSession = None) -> dict | list:
-    url = f"{GITHUB_API}/repos/{GITHUB_REPO}{path}"
-    own_session = False
-    if session is None:
-        session = aiohttp.ClientSession()
-        own_session = True
-    try:
-        async with session.post(url, headers=HEADERS, json=data) as resp:
-            if resp.status not in (200, 201):
-                raise Exception(f"GH API {resp.status} {path}: {await resp.text()[:200]}")
-            return await resp.json()
-    finally:
-        if own_session:
-            await session.close()
+def write_queue(queue: dict) -> None:
+    """整体写入队列文件"""
+    with _lock:
+        _write_json(QUEUE_FILE, queue)
 
 
-async def gh_patch(path: str, data: dict, session: aiohttp.ClientSession = None) -> dict:
-    url = f"{GITHUB_API}/repos/{GITHUB_REPO}{path}"
-    own_session = False
-    if session is None:
-        session = aiohttp.ClientSession()
-        own_session = True
-    try:
-        async with session.patch(url, headers=HEADERS, json=data) as resp:
-            if resp.status not in (200, 201):
-                raise Exception(f"GH API {resp.status} {path}: {await resp.text()[:200]}")
-            return await resp.json()
-    finally:
-        if own_session:
-            await session.close()
+def enqueue_task(task_id: str, agent_id: str, name: str, description: str,
+                 created_at: str, task: str, timeout_seconds: int = 300) -> None:
+    """向队列尾部追加一个子任务"""
+    queue = read_queue()
+    if "tasks" not in queue:
+        queue = {"tasks": []}
+
+    # 避免重复
+    existing = {t["task_id"] for t in queue["tasks"]}
+    if task_id not in existing:
+        queue["tasks"].append({
+            "task_id": task_id,
+            "name": name,
+            "description": description,
+            "created_at": created_at,
+            "status": "pending",
+            "agents": [{
+                "agent_id": agent_id,
+                "name": name,
+                "task": task,
+                "timeout_seconds": timeout_seconds,
+                "status": "pending",
+                "result": None,
+                "commit_hash": None,
+            }],
+        })
+        write_queue(queue)
 
 
-async def gh_post_comment(issue_number: int, body: str, session: aiohttp.ClientSession = None) -> dict:
-    url = f"{GITHUB_API}/repos/{GITHUB_REPO}/issues/{issue_number}/comments"
-    own_session = False
-    if session is None:
-        session = aiohttp.ClientSession()
-        own_session = True
-    try:
-        async with session.post(url, headers=HEADERS, json={"body": body}) as resp:
-            if resp.status not in (200, 201):
-                raise Exception(f"GH API {resp.status} comment: {await resp.text()[:200]}")
-            return await resp.json()
-    finally:
-        if own_session:
-            await session.close()
-
-
-async def gh_relabel(issue_number: int, add: list, remove: list, session: aiohttp.ClientSession = None) -> None:
-    """批量添加/删除标签"""
-    # GitHub 单独处理 add 和 remove
-    if add:
-        await gh_post(f"/issues/{issue_number}/labels", {"labels": add}, session)
-    if remove:
-        for label in remove:
-            label_escaped = label.replace(" ", "-")
-            await gh_patch(f"/issues/{issue_number}/labels/{label_escaped}", {}, session)
-            # 直接用 DELETE
-            url = f"{GITHUB_API}/repos/{GITHUB_REPO}/issues/{issue_number}/labels/{label_escaped}"
-            own_session = False
-            if session is None:
-                session = aiohttp.ClientSession()
-                own_session = True
-            try:
-                async with session.delete(url, headers=HEADERS) as resp:
-                    pass  # 204 / 404 都算 ok
-            finally:
-                if own_session:
-                    await session.close()
-
-
-# ─── SharedMemory ─────────────────────────────────────────────────────────────
-
-class SharedMemory:
+def update_task_status(task_id: str, agent_id: str, status: str,
+                       result: str = None, commit_hash: str = None) -> None:
     """
-    基于 GitHub Issues 的无中心共享记忆。
-
-    任务流程：
-    1. submit_task()  → 创建 [task] issue，状态 pending
-    2. Agent 轮询 get_pending_tasks(agent=xxx)
-    3. Agent claim_task() → running
-    4. Agent 完成，complete_task(result=xxx) → done，评论写入结果
-    5. 其他 Agent 可通过 read_task_comments() 读取同伴结果
+    更新队列中指定 task 和 agent 的状态。
+    status: pending | running | completed | failed
     """
+    queue = read_queue()
+    for task in queue.get("tasks", []):
+        if task["task_id"] != task_id:
+            continue
+        for agent in task.get("agents", []):
+            if agent["agent_id"] == agent_id:
+                agent["status"] = status
+                if result is not None:
+                    agent["result"] = result
+                if commit_hash is not None:
+                    agent["commit_hash"] = commit_hash
+                break
+        # 如果所有 agent 都完成了，标记任务整体完成
+        if all(a["status"] in ("completed", "failed") for a in task.get("agents", [])):
+            task["status"] = "completed"
+        break
+    write_queue(queue)
 
-    def __init__(self):
-        self._session: Optional[aiohttp.ClientSession] = None
 
-    async def _session_(self) -> aiohttp.ClientSession:
-        if self._session is None or self._session.closed:
-            self._session = aiohttp.ClientSession()
-        return self._session
+# ─── State 操作 ─────────────────────────────────────────────────────────────
 
-    def _task_body(self, task: Task) -> str:
-        return json.dumps({
-            "task_id":    task.task_id,
-            "parent_id":  task.parent_id,
-            "agent":      task.agent,
-            "description": task.description,
-            "context":    task.context,
-            "result":     task.result,
-            "status":     task.status,
-            "created_at": task.created_at,
-        }, ensure_ascii=False, indent=2)
+def read_state() -> dict:
+    """返回 orchestrator_state.json 内容"""
+    return _read_json(STATE_FILE) or {}
 
-    # ── 任务 CRUD ───────────────────────────────────────────────────────────
 
-    async def submit_task(
-        self,
-        description: str,
-        agent: str,
-        parent_id: Optional[str] = None,
-        context: dict = None,
-    ) -> Task:
-        s = await self._session_()
-        task_id = f"task-{int(time.time() * 1000)}"
-        task = Task(
-            task_id=task_id,
-            description=description,
-            agent=agent,
-            parent_id=parent_id,
-            context=context or {},
-            status="pending",
-            issue_number=0,
+def write_state(state: dict) -> None:
+    """整体写入 state 文件"""
+    with _lock:
+        _write_json(STATE_FILE, state)
+
+
+def init_state(task_id: str, name: str, agents: list[dict]) -> None:
+    """初始化或覆写当前任务状态"""
+    write_state({
+        "task_id": task_id,
+        "name": name,
+        "status": "running",
+        "started_at": datetime.utcnow().isoformat() + "Z",
+        "completed_at": None,
+        "summary": None,
+        "agents": {a["agent_id"]: {
+            "name": a["name"],
+            "layer": a.get("layer", ""),
+            "status": "pending",
+            "commit_hash": None,
+            "result": None,
+        } for a in agents},
+    })
+
+
+def patch_agent_state(agent_id: str, **kwargs) -> None:
+    """只更新指定 agent 字段（不覆写其他 agent）"""
+    state = read_state()
+    if agent_id in state.get("agents", {}):
+        state["agents"][agent_id].update(kwargs)
+    else:
+        state["agents"][agent_id] = kwargs
+    write_state(state)
+
+
+def complete_state(summary: str) -> None:
+    """标记当前任务完成并写入汇总"""
+    state = read_state()
+    state["status"] = "completed"
+    state["completed_at"] = datetime.utcnow().isoformat() + "Z"
+    state["summary"] = summary
+    write_state(state)
+
+
+# ─── Results 操作 ───────────────────────────────────────────────────────────
+
+def write_result(agent_id: str, result: dict) -> None:
+    """写入单个 agent 的执行结果到 results/{agent_id}_result.json"""
+    RESULTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = RESULTS_DIR / f"{agent_id}_result.json"
+    _write_json(path, {
+        "agent_id": agent_id,
+        "updated_at": datetime.utcnow().isoformat() + "Z",
+        **result,
+    })
+
+
+def read_result(agent_id: str) -> dict | None:
+    """读取单个 agent 的结果"""
+    path = RESULTS_DIR / f"{agent_id}_result.json"
+    return _read_json(path)
+
+
+def read_all_results() -> dict[str, dict]:
+    """读取所有 agent 结果"""
+    if not RESULTS_DIR.exists():
+        return {}
+    results = {}
+    for path in RESULTS_DIR.glob("*_result.json"):
+        agent_id = path.stem.replace("_result", "")
+        data = _read_json(path)
+        if data:
+            results[agent_id] = data
+    return results
+
+
+# ─── Reports 操作 ────────────────────────────────────────────────────────────
+
+def write_report(task_id: str, report: dict) -> None:
+    """写入最终报告到 reports/{task_id}_report.json"""
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
+    path = REPORTS_DIR / f"{task_id}_report.json"
+    _write_json(path, {
+        "task_id": task_id,
+        "generated_at": datetime.utcnow().isoformat() + "Z",
+        **report,
+    })
+
+
+def read_report(task_id: str) -> dict | None:
+    """读取指定任务的报告"""
+    path = REPORTS_DIR / f"{task_id}_report.json"
+    return _read_json(path)
+
+
+# ─── Tasks 历史操作 ───────────────────────────────────────────────────────────
+
+def write_task_record(task_id: str, record: dict) -> None:
+    """写入任务记录到 tasks/{task_id}.json"""
+    TASKS_DIR.mkdir(parents=True, exist_ok=True)
+    path = TASKS_DIR / f"{task_id}.json"
+    _write_json(path, record)
+
+
+def read_task_record(task_id: str) -> dict | None:
+    """读取指定任务记录"""
+    path = TASKS_DIR / f"{task_id}.json"
+    return _read_json(path)
+
+
+# ─── Agent 轮询接口 ───────────────────────────────────────────────────────────
+
+def get_pending_agents(agent_id: str = None) -> list[dict]:
+    """
+    从 orchestrator_queue.json 找出状态为 pending 的 agent 任务。
+    如果指定了 agent_id，只返回匹配的任务。
+    """
+    queue = read_queue()
+    pending = []
+    for task in queue.get("tasks", []):
+        if task.get("status") != "pending":
+            continue
+        for agent in task.get("agents", []):
+            if agent["status"] != "pending":
+                continue
+            if agent_id and agent["agent_id"] != agent_id:
+                continue
+            pending.append({
+                "task_id": task["task_id"],
+                **agent,
+            })
+    return pending
+
+
+def get_running_tasks() -> list[dict]:
+    """获取所有 running 状态的任务"""
+    queue = read_queue()
+    return [
+        {**task, "agents": [a for a in task.get("agents", []) if a.get("status") == "running"]}
+        for task in queue.get("tasks", [])
+        if task.get("status") == "running"
+    ]
+
+
+def get_completed_tasks() -> list[dict]:
+    """获取所有已完成的任务"""
+    queue = read_queue()
+    return [task for task in queue.get("tasks", []) if task.get("status") == "completed"]
+
+
+# ─── 简易 cron 同步（每次心跳调用）────────────────────────────────────────────
+
+def sync_from_git(ref: str = "HEAD") -> None:
+    """
+    可选：运行 `git fetch && git checkout {ref}` 从远程拉最新共享记忆。
+    pipeline 完成后会自动 checkout，这里只是安全网。
+    """
+    if not SHARED_MEMORY_ROOT.exists():
+        return
+    import subprocess
+    try:
+        subprocess.run(
+            ["git", "-C", str(SHARED_MEMORY_ROOT), "fetch", "--all"],
+            capture_output=True, timeout=10,
         )
-
-        issue = await gh_post("/issues", {
-            "title": f"[task] {task_id}",
-            "body": self._task_body(task),
-            "labels": [LABEL_TASK, LABEL_PENDING, AGENT_LABELS.get(agent, LABEL_SUPERVISOR)],
-        }, s)
-
-        task.issue_number = issue["number"]
-        return task
-
-    async def get_pending_tasks(self, agent: str) -> list[Task]:
-        """
-        轮询指定 Agent 的 pending 任务。
-        使用 GitHub 搜索 API 按标签组合查询。
-        """
-        s = await self._session_()
-        agent_label = AGENT_LABELS.get(agent, LABEL_SUPERVISOR)
-        label_filter = f"is:issue repo:{GITHUB_REPO} is:open label:{LABEL_TASK} label:{LABEL_PENDING} label:{agent_label}"
-
-        # GitHub 搜索 API
-        tasks = []
-        page = 1
-        while True:
-            results = await gh_get("/search/issues", {
-                "q": label_filter,
-                "per_page": 100,
-                "page": page,
-            }, s)
-
-            if not results or results.get("total_count", 0) == 0:
-                break
-
-            for item in results.get("items", []):
-                try:
-                    data = json.loads(item["body"])
-                    tasks.append(Task(
-                        task_id=data["task_id"],
-                        description=data.get("description", ""),
-                        agent=data.get("agent", agent),
-                        parent_id=data.get("parent_id"),
-                        context=data.get("context", {}),
-                        result=data.get("result", {}),
-                        status=data.get("status", "pending"),
-                        created_at=data.get("created_at", time.time()),
-                        issue_number=item["number"],
-                    ))
-                except (json.JSONDecodeError, KeyError):
-                    pass
-
-            if len(results.get("items", [])) < 100:
-                break
-            page += 1
-
-        return tasks
-
-    async def claim_task(self, task: Task) -> bool:
-        """Agent 认领任务：pending → running"""
-        s = await self._session_()
-        task.status = "running"
-        await gh_patch(f"/issues/{task.issue_number}", {
-            "body": self._task_body(task),
-        }, s)
-        await gh_relabel(task.issue_number, add=[LABEL_RUNNING], remove=[LABEL_PENDING], session=s)
-        return True
-
-    async def complete_task(self, task: Task, result: dict) -> None:
-        """任务完成：写入结果，pending → done"""
-        s = await self._session_()
-        task.result = result
-        task.status = "done"
-        await gh_patch(f"/issues/{task.issue_number}", {
-            "body": self._task_body(task),
-        }, s)
-        await gh_relabel(task.issue_number, add=[LABEL_DONE], remove=[LABEL_RUNNING], session=s)
-
-        # 写入结果到 comment
-        await gh_post_comment(task.issue_number,
-            f"## ✅ {task.agent} completed\n\n```json\n{json.dumps(result, ensure_ascii=False, indent=2)}\n```",
-            s)
-
-    async def read_task_comments(self, issue_number: int) -> list[dict]:
-        """读取任务的所有评论（各 Agent 写入的执行结果）"""
-        s = await self._session_()
-        comments = []
-        page = 1
-        while True:
-            data = await gh_get(f"/issues/{issue_number}/comments", {
-                "per_page": 100, "page": page,
-            }, s)
-            if not data or not isinstance(data, list):
-                break
-            for c in data:
-                try:
-                    body = c["body"]
-                    # 提取 ```json ``` 块
-                    if "```json" in body:
-                        start = body.index("```json") + 7
-                        end = body.index("```", start)
-                        comments.append(json.loads(body[start:end].strip()))
-                    else:
-                        comments.append({"raw": body})
-                except (json.JSONDecodeError, KeyError, ValueError):
-                    comments.append({"raw": c.get("body", "")[:100]})
-            if len(data) < 100:
-                break
-            page += 1
-        return comments
-
-    async def get_task(self, task_id: str) -> Optional[Task]:
-        """根据 task_id 找 task（task-{timestamp} 中的 timestamp 部分即 issue number）"""
-        s = await self._session_()
-        parts = task_id.split("-")
-        if len(parts) >= 2:
-            # task-{timestamp}，取 timestamp 部分尝试作为 issue number
-            possible_num = parts[-1] if parts[-1].isdigit() else None
-            if possible_num:
-                try:
-                    issue = await gh_get(f"/issues/{possible_num}", session=s)
-                    if issue and issue.get("state") == "open" and f"[task] {task_id}" == issue["title"]:
-                        data = json.loads(issue["body"])
-                        return Task(
-                            task_id=data["task_id"],
-                            description=data.get("description", ""),
-                            agent=data.get("agent", ""),
-                            parent_id=data.get("parent_id"),
-                            context=data.get("context", {}),
-                            result=data.get("result", {}),
-                            status=data.get("status", "pending"),
-                            created_at=data.get("created_at", time.time()),
-                            issue_number=issue["number"],
-                        )
-                except Exception:
-                    pass
-
-        # Fallback: 搜索
-        results = await gh_get("/search/issues", {
-            "q": f"is:issue repo:{GITHUB_REPO} is:open [task] {task_id}",
-            "per_page": 5,
-        }, s)
-        if results and results.get("total_count", 0) > 0:
-            item = results["items"][0]
-            data = json.loads(item["body"])
-            return Task(
-                task_id=data["task_id"],
-                description=data.get("description", ""),
-                agent=data.get("agent", ""),
-                parent_id=data.get("parent_id"),
-                context=data.get("context", {}),
-                result=data.get("result", {}),
-                status=data.get("status", "pending"),
-                created_at=data.get("created_at", time.time()),
-                issue_number=item["number"],
-            )
-        return None
-
-    async def write_memory(self, author: str, parent_id: str, content: dict) -> None:
-        """
-        写入共享记忆：作为 comment 追加到父 task issue。
-        其他 Agent 通过 read_task_comments() 读取。
-        """
-        s = await self._session_()
-        memory_body = json.dumps({
-            "author": author,
-            "parent_id": parent_id,
-            "content": content,
-            "ts": time.time(),
-        }, ensure_ascii=False, indent=2)
-
-        # parent_id 可能是 task-{ts}，从中取出 issue number
-        task = await self.get_task(parent_id)
-        if task:
-            await gh_post_comment(task.issue_number, f"## 💬 {author} memory\n\n```json\n{memory_body}\n```", s)
-
-    async def write_context(self, key: str, value: dict) -> None:
-        """写入全局上下文（单独的 context issue）"""
-        s = await self._session_()
-        title = f"[context] {key}"
-        results = await gh_get("/search/issues", {
-            "q": f"is:issue repo:{GITHUB_REPO} is:open {title}",
-            "per_page": 5,
-        }, s)
-
-        body = json.dumps({"key": key, "value": value, "updated_at": time.time()}, ensure_ascii=False, indent=2)
-        if results and results.get("total_count", 0) > 0:
-            await gh_patch(f"/issues/{results['items'][0]['number']}", {"body": body}, s)
-        else:
-            await gh_post("/issues", {
-                "title": title,
-                "body": body,
-                "labels": [LABEL_CONTEXT],
-            }, s)
-
-    async def read_context(self, key: str) -> Optional[dict]:
-        """读取全局上下文"""
-        s = await self._session_()
-        results = await gh_get("/search/issues", {
-            "q": f"is:issue repo:{GITHUB_REPO} is:open [context] {key}",
-            "per_page": 5,
-        }, s)
-        if results and results.get("total_count", 0) > 0:
-            try:
-                return json.loads(results["items"][0]["body"])["value"]
-            except (json.JSONDecodeError, KeyError):
-                pass
-        return None
-
-    async def close(self) -> None:
-        if self._session and not self._session.closed:
-            await self._session.close()
+        subprocess.run(
+            ["git", "-C", str(SHARED_MEMORY_ROOT), "checkout", ref],
+            capture_output=True, timeout=10,
+        )
+    except Exception as e:
+        print(f"[shared_memory] git sync failed: {e}")
 
 
-# ─── 全局单例 ─────────────────────────────────────────────────────────────────
+# ─── 调试 / 快速 CLI ─────────────────────────────────────────────────────────
 
-_memory: Optional[SharedMemory] = None
-
-def get_shared_memory() -> SharedMemory:
-    global _memory
-    if _memory is None:
-        _memory = SharedMemory()
-    return _memory
+if __name__ == "__main__":
+    print(f"Shared memory root: {SHARED_MEMORY_ROOT}")
+    print(f"Queue exists: {QUEUE_FILE.exists()}")
+    print(f"State exists: {STATE_FILE.exists()}")
+    print()
+    print("=== Queue ===")
+    print(json.dumps(read_queue(), ensure_ascii=False, indent=2))
+    print()
+    print("=== State ===")
+    print(json.dumps(read_state(), ensure_ascii=False, indent=2))
