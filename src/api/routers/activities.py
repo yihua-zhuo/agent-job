@@ -102,6 +102,21 @@ class ActivitySummaryResponse(SuccessEnvelope):
 def _activity_to_data(activity) -> Optional[ActivityData]:
     if activity is None:
         return None
+    if isinstance(activity, dict):
+        act_type = activity.get('type', '')
+        act_created_at = activity.get('created_at')
+        if hasattr(act_created_at, 'isoformat'):
+            act_created_at = act_created_at.isoformat()
+        return ActivityData(
+            id=activity.get('id', 0),
+            tenant_id=activity.get('tenant_id', 0),
+            customer_id=activity.get('customer_id', 0),
+            opportunity_id=activity.get('opportunity_id'),
+            type=act_type if act_type else '',
+            content=activity.get('content', ''),
+            created_by=activity.get('created_by', 0),
+            created_at=act_created_at,
+        )
     type_val = activity.type.value if hasattr(activity.type, "value") else str(activity.type)
     return ActivityData(
         id=activity.id,
@@ -285,7 +300,7 @@ async def get_customer_activities(
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
-    items = [a.to_dict() if hasattr(a, "to_dict") else a for a in resp.data]
+    items = [a.to_dict() if hasattr(a, "to_dict") else a for a in resp.data.items]
     # Convert dicts to ActivityData
     activity_items = []
     for item in items:

@@ -217,10 +217,10 @@ async def create_ticket(
         sla_level=SLALevel(body.sla_level) if body.sla_level else SLALevel.STANDARD,
         tenant_id=ctx.tenant_id or 0,
     )
-    status = _http_status(resp.status)
+    status = _http_status(resp["status"])
     if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return TicketResponse(message=resp.message, data=_ticket_to_data(resp.data))
+        raise HTTPException(status_code=status, detail=resp["message"])
+    return TicketResponse(message=resp["message"], data=_ticket_to_data(resp["data"]))
 
 
 @tickets_router.get(
@@ -251,21 +251,22 @@ async def list_tickets(
         status=status_enum, priority=priority_enum,
         assigned_to=assignee_id, tenant_id=ctx.tenant_id or 0,
     )
-    status_code = _http_status(resp.status)
+    status_code = _http_status(resp["status"])
     if status_code != 200:
-        raise HTTPException(status_code=status_code, detail=resp.message)
-    items = [_ticket_to_data(t) for t in resp.data.items]
-    total_pages = (resp.data.total + resp.data.page_size - 1) // resp.data.page_size if resp.data.page_size > 0 else 0
+        raise HTTPException(status_code=status_code, detail=resp["message"])
+    _pd = resp["data"]
+    items = [_ticket_to_data(t) for t in _pd["items"]]
+    total_pages = (_pd["total"] + _pd["page_size"] - 1) // _pd["page_size"] if _pd["page_size"] > 0 else 0
     return TicketListResponse(
-        message=resp.message,
+        message=resp["message"],
         data=TicketListData(
             items=items,
-            total=resp.data.total,
-            page=resp.data.page,
-            page_size=resp.data.page_size,
+            total=_pd["total"],
+            page=_pd["page"],
+            page_size=_pd["page_size"],
             total_pages=total_pages,
-            has_next=resp.data.page < total_pages,
-            has_prev=resp.data.page > 1,
+            has_next=_pd["page"] < total_pages,
+            has_prev=_pd["page"] > 1,
         ),
     )
 
@@ -282,10 +283,10 @@ async def get_ticket(
 ):
     service = TicketService(session)
     resp = await service.get_ticket(ticket_id, tenant_id=ctx.tenant_id or 0)
-    status = _http_status(resp.status)
+    status = _http_status(resp["status"])
     if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return TicketResponse(message=resp.message, data=_ticket_to_data(resp.data))
+        raise HTTPException(status_code=status, detail=resp["message"])
+    return TicketResponse(message=resp["message"], data=_ticket_to_data(resp["data"]))
 
 
 @tickets_router.put(
@@ -307,10 +308,10 @@ async def update_ticket(
     if "channel" in update_data:
         update_data["channel"] = TicketChannel(update_data["channel"])
     resp = await service.update_ticket(ticket_id, tenant_id=ctx.tenant_id or 0, **update_data)
-    status = _http_status(resp.status)
+    status = _http_status(resp["status"])
     if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return TicketResponse(message=resp.message, data=_ticket_to_data(resp.data))
+        raise HTTPException(status_code=status, detail=resp["message"])
+    return TicketResponse(message=resp["message"], data=_ticket_to_data(resp["data"]))
 
 
 @tickets_router.put(
@@ -326,10 +327,10 @@ async def assign_ticket(
 ):
     service = TicketService(session)
     resp = await service.assign_ticket(ticket_id, body.assignee_id, tenant_id=ctx.tenant_id or 0)
-    status = _http_status(resp.status)
+    status = _http_status(resp["status"])
     if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return AssignResponse(message=resp.message, data=_ticket_to_data(resp.data))
+        raise HTTPException(status_code=status, detail=resp["message"])
+    return AssignResponse(message=resp["message"], data=_ticket_to_data(resp["data"]))
 
 
 @tickets_router.post(
@@ -352,10 +353,10 @@ async def add_reply(
         is_internal=body.is_internal,
         tenant_id=ctx.tenant_id or 0,
     )
-    status = _http_status(resp.status)
+    status = _http_status(resp["status"])
     if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return ReplyResponse(message=resp.message, data=_reply_to_data(resp.data))
+        raise HTTPException(status_code=status, detail=resp["message"])
+    return ReplyResponse(message=resp["message"], data=_reply_to_data(resp["data"]))
 
 
 @tickets_router.put(
@@ -372,10 +373,10 @@ async def change_ticket_status(
     service = TicketService(session)
     new_status = _status_str_to_enum(body.new_status)
     resp = await service.change_status(ticket_id, new_status, tenant_id=ctx.tenant_id or 0)
-    status = _http_status(resp.status)
+    status = _http_status(resp["status"])
     if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return TicketResponse(message=resp.message, data=_ticket_to_data(resp.data))
+        raise HTTPException(status_code=status, detail=resp["message"])
+    return TicketResponse(message=resp["message"], data=_ticket_to_data(resp["data"]))
 
 
 @tickets_router.get(
@@ -389,7 +390,8 @@ async def get_customer_tickets(
     session=Depends(get_db),
 ):
     service = TicketService(session)
-    tickets = await service.get_customer_tickets(customer_id, tenant_id=ctx.tenant_id or 0)
+    resp = await service.get_customer_tickets(customer_id, tenant_id=ctx.tenant_id or 0)
+    tickets = resp["data"] if isinstance(resp, dict) else resp
     items = [_ticket_to_data(t) for t in tickets]
     return TicketListResponse(
         message="查询成功",
@@ -443,10 +445,10 @@ async def auto_assign_ticket(
 ):
     service = TicketService(session)
     resp = await service.auto_assign(ticket_id, tenant_id=ctx.tenant_id or 0)
-    status = _http_status(resp.status)
+    status = _http_status(resp["status"])
     if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return AssignResponse(message=resp.message, data=_ticket_to_data(resp.data))
+        raise HTTPException(status_code=status, detail=resp["message"])
+    return AssignResponse(message=resp["message"], data=_ticket_to_data(resp["data"]))
 
 
 # ---------------------------------------------------------------------------
@@ -465,10 +467,10 @@ async def check_sla_status(
 ):
     ticket_svc = TicketService(session)
     resp = await ticket_svc.get_ticket(ticket_id, tenant_id=ctx.tenant_id or 0)
-    status = _http_status(resp.status)
+    status = _http_status(resp["status"])
     if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    ticket = resp.data
+        raise HTTPException(status_code=status, detail=resp["message"])
+    ticket = resp["data"]
     sla_svc = SLAService(session)
     sla_status = await sla_svc.check_sla_status(ticket)
     remaining = await sla_svc.calculate_remaining_time(ticket)

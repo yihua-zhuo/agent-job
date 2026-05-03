@@ -81,13 +81,15 @@ async def async_session_web(db_schema_web) -> AsyncGenerator[AsyncSession, None]
 @pytest.fixture
 def tenant_id_web() -> int:
     """Primary tenant ID for web integration tests."""
-    return raw_tenant_id()
+    from tests.integration.conftest import tenant_id_web as main_tenant_id_web
+    return main_tenant_id_web
 
 
 @pytest.fixture
 def tenant_id_2_web() -> int:
     """Secondary tenant ID for cross-tenant isolation tests."""
-    return raw_tenant_id_2()
+    from tests.integration.conftest import tenant_id_2_web as main_tenant_id_2_web
+    return main_tenant_id_2_web
 
 
 # ── Auth fixtures ─────────────────────────────────────────────────────────────────
@@ -97,10 +99,11 @@ async def auth_headers_web(async_session_web, tenant_id_web) -> dict[str, str]:
     """Return a valid JWT Authorization header for the test tenant."""
     from services.auth_service import AuthService
 
-    # Ensure JWT_SECRET_KEY is set
-    os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
+    # Set env var directly (do NOT use setdefault — conftest.py already loaded .env
+    # which cached the real secret before this fixture runs; we must override it).
+    os.environ["JWT_SECRET_KEY"] = "integration-test-jwt-secret-key"
 
-    auth_svc = AuthService(async_session_web)
+    auth_svc = AuthService(async_session_web, secret_key="integration-test-jwt-secret-key")
     token = auth_svc.generate_token(
         user_id=999,
         username="webtest",
@@ -113,10 +116,11 @@ async def auth_headers_web(async_session_web, tenant_id_web) -> dict[str, str]:
 @pytest_asyncio.fixture(scope="function")
 async def auth_headers_tenant_2(async_session_web, tenant_id_2_web) -> dict[str, str]:
     """Return a valid JWT Authorization header for tenant 2."""
-    os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
+    # Set env var directly — see note in auth_headers_web.
+    os.environ["JWT_SECRET_KEY"] = "integration-test-jwt-secret-key"
     from services.auth_service import AuthService
 
-    auth_svc = AuthService(async_session_web)
+    auth_svc = AuthService(async_session_web, secret_key="integration-test-jwt-secret-key")
     token = auth_svc.generate_token(
         user_id=999,
         username="webtest2",

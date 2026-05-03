@@ -64,6 +64,7 @@ class Ticket:
 class TicketReply:
     id: Optional[int] = None
     ticket_id: int = 0
+    tenant_id: int = 0
     content: str = ""
     is_internal: bool = False
     created_by: int = 0

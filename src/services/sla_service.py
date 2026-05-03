@@ -7,7 +7,8 @@ from models.ticket import Ticket, SLALevel, SLA_CONFIGS
 class SLAService:
     """SLA管理"""
 
-    def __init__(self, ticket_service=None):
+    def __init__(self, session, ticket_service=None):
+        self._session = session
         self._ticket_service = ticket_service
 
     def check_sla_status(

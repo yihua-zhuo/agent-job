@@ -15,7 +15,15 @@ from pkg.response.schemas import ErrorEnvelope, SuccessEnvelope
 users_router = APIRouter(prefix='/api/v1', tags=['users'])
 
 
-def _http_status(status: ResponseStatus) -> int:
+def _http_status(status) -> int:
+    # Handle both ResponseStatus enum and string values
+    if isinstance(status, str):
+        m = {
+            "success": 200, "error": 400, "warning": 200,
+            "unauthorized": 401, "forbidden": 403,
+            "not_found": 404, "validation_error": 400, "server_error": 500,
+        }
+        return m.get(status, 400)
     m = {
         ResponseStatus.SUCCESS: 200,
         ResponseStatus.NOT_FOUND: 404,
@@ -132,20 +140,23 @@ async def create_user(
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
     user_data = resp.data
+    if user_data is None:
+        return UserResponse(message=resp.message, data=None)
+    # user_data is a dict (from real DB)
     return UserResponse(
         message=resp.message,
         data=UserData(
-            id=user_data.id,
-            tenant_id=user_data.tenant_id,
-            username=user_data.username,
-            email=user_data.email,
-            role=user_data.role.value if hasattr(user_data.role, "value") else str(user_data.role),
-            status=user_data.status.value if hasattr(user_data.status, "value") else str(user_data.status),
-            full_name=user_data.full_name,
-            bio=user_data.bio,
-            created_at=user_data.created_at.isoformat() if hasattr(user_data, "created_at") and user_data.created_at else None,
-            updated_at=user_data.updated_at.isoformat() if hasattr(user_data, "updated_at") and user_data.updated_at else None,
-        ) if user_data else None,
+            id=user_data["id"],
+            tenant_id=user_data["tenant_id"],
+            username=user_data["username"],
+            email=user_data["email"],
+            role=str(user_data["role"]),
+            status=str(user_data["status"]),
+            full_name=user_data.get("full_name"),
+            bio=user_data.get("bio"),
+            created_at=str(user_data.get("created_at")) if user_data.get("created_at") else None,
+            updated_at=str(user_data.get("updated_at")) if user_data.get("updated_at") else None,
+        ),
     )
 
 
@@ -173,30 +184,31 @@ async def list_users(
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
+    _pd = resp.data
     items = []
-    for u in resp.data.items:
+    for u in _pd.items:
         items.append(UserData(
-            id=u.id,
-            tenant_id=u.tenant_id,
-            username=u.username,
-            email=u.email,
-            role=u.role.value if hasattr(u.role, "value") else str(u.role),
-            status=u.status.value if hasattr(u.status, "value") else str(u.status),
-            full_name=u.full_name,
-            bio=u.bio,
-            created_at=u.created_at.isoformat() if u.created_at else None,
-            updated_at=u.updated_at.isoformat() if u.updated_at else None,
+            id=u["id"],
+            tenant_id=u["tenant_id"],
+            username=u["username"],
+            email=u["email"],
+            role=u["role"].value if hasattr(u["role"], "value") else str(u["role"]),
+            status=u["status"].value if hasattr(u["status"], "value") else str(u["status"]),
+            full_name=u.get("full_name"),
+            bio=u.get("bio"),
+            created_at=u["created_at"].isoformat() if u.get("created_at") else None,
+            updated_at=u["updated_at"].isoformat() if u.get("updated_at") else None,
         ))
     return UserListResponse(
         message=resp.message,
         data=UserListData(
             items=items,
-            total=resp.data.total,
-            page=resp.data.page,
-            page_size=resp.data.page_size,
-            total_pages=resp.data.total_pages,
-            has_next=resp.data.has_next,
-            has_prev=resp.data.has_prev,
+            total=_pd.total,
+            page=_pd.page,
+            page_size=_pd.page_size,
+            total_pages=_pd.total_pages,
+            has_next=_pd.has_next,
+            has_prev=_pd.has_prev,
         ),
     )
 
@@ -220,19 +232,20 @@ async def get_current_active_user(
     user = await service.get_user_by_id(current_user.user_id, tenant_id=current_user.tenant_id)
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
+    # user is a dict (from real DB)
     return UserResponse(
         message="查询成功",
         data=UserData(
-            id=user.id,
-            tenant_id=user.tenant_id,
-            username=user.username,
-            email=user.email,
-            role=user.role.value if hasattr(user.role, "value") else str(user.role),
-            status=user.status.value if hasattr(user.status, "value") else str(user.status),
-            full_name=user.full_name,
-            bio=user.bio,
-            created_at=user.created_at.isoformat() if user.created_at else None,
-            updated_at=user.updated_at.isoformat() if user.updated_at else None,
+            id=user["id"],
+            tenant_id=user["tenant_id"],
+            username=user["username"],
+            email=user["email"],
+            role=str(user["role"]),
+            status=str(user["status"]),
+            full_name=user.get("full_name"),
+            bio=user.get("bio"),
+            created_at=str(user.get("created_at")) if user.get("created_at") else None,
+            updated_at=str(user.get("updated_at")) if user.get("updated_at") else None,
         ),
     )
 
@@ -251,19 +264,20 @@ async def get_user(
     user = await service.get_user_by_id(user_id, tenant_id=ctx.tenant_id or 0)
     if user is None:
         raise HTTPException(status_code=404, detail="用户不存在")
+    # user is a dict (from real DB)
     return UserResponse(
         message="查询成功",
         data=UserData(
-            id=user.id,
-            tenant_id=user.tenant_id,
-            username=user.username,
-            email=user.email,
-            role=user.role.value if hasattr(user.role, "value") else str(user.role),
-            status=user.status.value if hasattr(user.status, "value") else str(user.status),
-            full_name=user.full_name,
-            bio=user.bio,
-            created_at=user.created_at.isoformat() if user.created_at else None,
-            updated_at=user.updated_at.isoformat() if user.updated_at else None,
+            id=user["id"],
+            tenant_id=user["tenant_id"],
+            username=user["username"],
+            email=user["email"],
+            role=str(user["role"]),
+            status=str(user["status"]),
+            full_name=user.get("full_name"),
+            bio=user.get("bio"),
+            created_at=str(user.get("created_at")) if user.get("created_at") else None,
+            updated_at=str(user.get("updated_at")) if user.get("updated_at") else None,
         ),
     )
 
@@ -286,19 +300,21 @@ async def update_user(
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
     user_data = resp.data
+    if user_data is None:
+        return UserResponse(message=resp.message, data=None)
     return UserResponse(
         message=resp.message,
         data=UserData(
-            id=user_data.id,
-            tenant_id=user_data.tenant_id,
-            username=user_data.username,
-            email=user_data.email,
-            role=user_data.role.value if hasattr(user_data.role, "value") else str(user_data.role),
-            status=user_data.status.value if hasattr(user_data.status, "value") else str(user_data.status),
-            full_name=user_data.full_name,
-            bio=user_data.bio,
-            created_at=user_data.created_at.isoformat() if user_data.created_at else None,
-            updated_at=user_data.updated_at.isoformat() if user_data.updated_at else None,
+            id=user_data["id"],
+            tenant_id=user_data["tenant_id"],
+            username=user_data["username"],
+            email=user_data["email"],
+            role=str(user_data["role"]),
+            status=str(user_data["status"]),
+            full_name=user_data.get("full_name"),
+            bio=user_data.get("bio"),
+            created_at=str(user_data.get("created_at")) if user_data.get("created_at") else None,
+            updated_at=str(user_data.get("updated_at")) if user_data.get("updated_at") else None,
         ),
     )
 
@@ -336,30 +352,31 @@ async def search_users(
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
+    _pd = resp.data
     items = []
-    for u in resp.data.items:
+    for u in _pd.items:
         items.append(UserData(
-            id=u.id,
-            tenant_id=u.tenant_id,
-            username=u.username,
-            email=u.email,
-            role=u.role.value if hasattr(u.role, "value") else str(u.role),
-            status=u.status.value if hasattr(u.status, "value") else str(u.status),
-            full_name=u.full_name,
-            bio=u.bio,
-            created_at=u.created_at.isoformat() if u.created_at else None,
-            updated_at=u.updated_at.isoformat() if u.updated_at else None,
+            id=u["id"],
+            tenant_id=u["tenant_id"],
+            username=u["username"],
+            email=u["email"],
+            role=u["role"].value if hasattr(u["role"], "value") else str(u["role"]),
+            status=u["status"].value if hasattr(u["status"], "value") else str(u["status"]),
+            full_name=u.get("full_name"),
+            bio=u.get("bio"),
+            created_at=u["created_at"].isoformat() if u.get("created_at") else None,
+            updated_at=u["updated_at"].isoformat() if u.get("updated_at") else None,
         ))
     return UserListResponse(
         message=resp.message,
         data=UserListData(
             items=items,
-            total=resp.data.total,
-            page=resp.data.page,
-            page_size=resp.data.page_size,
-            total_pages=resp.data.total_pages,
-            has_next=resp.data.has_next,
-            has_prev=resp.data.has_prev,
+            total=_pd.total,
+            page=_pd.page,
+            page_size=_pd.page_size,
+            total_pages=_pd.total_pages,
+            has_next=_pd.has_next,
+            has_prev=_pd.has_prev,
         ),
     )
 
@@ -420,19 +437,21 @@ async def update_my_profile(
     if status >= 400:
         raise HTTPException(status_code=status, detail=resp.message)
     user_data = resp.data
+    if user_data is None:
+        return UserResponse(message=resp.message, data=None)
     return UserResponse(
         message=resp.message,
         data=UserData(
-            id=user_data.id,
-            tenant_id=user_data.tenant_id,
-            username=user_data.username,
-            email=user_data.email,
-            role=user_data.role.value if hasattr(user_data.role, "value") else str(user_data.role),
-            status=user_data.status.value if hasattr(user_data.status, "value") else str(user_data.status),
-            full_name=user_data.full_name,
-            bio=user_data.bio,
-            created_at=user_data.created_at.isoformat() if user_data.created_at else None,
-            updated_at=user_data.updated_at.isoformat() if user_data.updated_at else None,
+            id=user_data["id"],
+            tenant_id=user_data["tenant_id"],
+            username=user_data["username"],
+            email=user_data["email"],
+            role=str(user_data["role"]),
+            status=str(user_data["status"]),
+            full_name=user_data.get("full_name"),
+            bio=user_data.get("bio"),
+            created_at=str(user_data.get("created_at")) if user_data.get("created_at") else None,
+            updated_at=str(user_data.get("updated_at")) if user_data.get("updated_at") else None,
         ),
     )
 
@@ -492,19 +511,20 @@ async def register(
     user_data = resp.data if hasattr(resp, "data") and resp.data else None
     if user_data is None:
         return UserResponse(message=resp.message if hasattr(resp, "message") else "注册成功", data=None)
+    # user_data is a dict (ApiResponse.data was a dict from real DB)
     return UserResponse(
         message=resp.message if hasattr(resp, "message") else "注册成功",
         data=UserData(
-            id=user_data.id,
-            tenant_id=user_data.tenant_id,
-            username=user_data.username,
-            email=user_data.email,
-            role=user_data.role.value if hasattr(user_data.role, "value") else str(user_data.role),
-            status=user_data.status.value if hasattr(user_data.status, "value") else str(user_data.status),
-            full_name=user_data.full_name,
-            bio=user_data.bio,
-            created_at=user_data.created_at.isoformat() if hasattr(user_data, "created_at") and user_data.created_at else None,
-            updated_at=user_data.updated_at.isoformat() if hasattr(user_data, "updated_at") and user_data.updated_at else None,
+            id=user_data["id"],
+            tenant_id=user_data["tenant_id"],
+            username=user_data["username"],
+            email=user_data["email"],
+            role=str(user_data["role"]),
+            status=str(user_data["status"]),
+            full_name=user_data.get("full_name"),
+            bio=user_data.get("bio"),
+            created_at=user_data["created_at"].isoformat() if hasattr(user_data["created_at"], "isoformat") else str(user_data.get("created_at")) if user_data.get("created_at") else None,
+            updated_at=user_data["updated_at"].isoformat() if hasattr(user_data["updated_at"], "isoformat") else str(user_data.get("updated_at")) if user_data.get("updated_at") else None,
         ),
     )
 

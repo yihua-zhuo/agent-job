@@ -180,18 +180,18 @@ async def list_tenants(
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
-    items = [TenantData(**t) for t in resp.data.items]
-    total_pages = (resp.data.total + resp.data.page_size - 1) // resp.data.page_size if resp.data.page_size > 0 else 0
+    items = [TenantData(**t) for t in resp.data["items"]]
+    total_pages = (resp.data["total"] + resp.data["page_size"] - 1) // resp.data["page_size"] if resp.data["page_size"] > 0 else 0
     return TenantListResponse(
         message=resp.message,
         data=TenantListData(
             items=items,
-            total=resp.data.total,
-            page=resp.data.page,
-            page_size=resp.data.page_size,
+            total=resp.data["total"],
+            page=resp.data["page"],
+            page_size=resp.data["page_size"],
             total_pages=total_pages,
-            has_next=resp.data.page < total_pages,
-            has_prev=resp.data.page > 1,
+            has_next=resp.data["page"] < total_pages,
+            has_prev=resp.data["page"] > 1,
         ),
     )
 

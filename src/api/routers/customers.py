@@ -242,7 +242,9 @@ async def update_customer(
     status = _http_status(resp.status)
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
-    return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
+    if resp.data:
+        return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
+    return CustomerResponse(message=resp.message, data=None)
 
 
 @customers_router.delete(
@@ -279,7 +281,10 @@ async def add_tag(
     status = _http_status(resp.status)
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
-    return TagResponse(message=resp.message, data=resp.data)
+    return TagResponse(
+        message=resp.message,
+        data={"id": customer_id, "tag": body.tag},
+    )
 
 
 @customers_router.delete(
@@ -298,7 +303,10 @@ async def remove_tag(
     status = _http_status(resp.status)
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
-    return TagResponse(message=resp.message, data=resp.data)
+    return TagResponse(
+        message=resp.message,
+        data={"id": customer_id, "tag": tag},
+    )
 
 
 @customers_router.put(

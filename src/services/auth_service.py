@@ -40,11 +40,11 @@ class AuthService:
 
     TOKEN_EXPIRY_HOURS = 24
 
-    def __init__(self, session=None, secret_key: str = "dev-secret"):
+    def __init__(self, session, secret_key: str = "dev-secret"):
         """Initialize AuthService.
 
         Args:
-            session: Optional DB session.
+            session: DB session.
             secret_key: Secret key for JWT encoding.
         """
         self.secret_key = secret_key
@@ -125,7 +125,7 @@ class AuthService:
         user = row.fetchone()
         if not user:
             return None
-        user_dict = dict(user)
+        user_dict = {c: getattr(user, c) for c in user._fields}
         if not self.verify_password(password, user_dict["password_hash"]):
             return None
         return {
@@ -138,16 +138,18 @@ class AuthService:
             "full_name": user_dict["full_name"],
         }
 
-    async def create_user(self, username: str, email: str, password: str) -> ApiResponse:
+    async def create_user(self, username: str, email: str, password: str, role: str = "user", tenant_id: int = 0, full_name: str = None) -> ApiResponse:
         """Register a new user via UserService."""
         from services.user_service import UserService
         svc = UserService(self.session)
-        result = await svc.create_user({
-            "username": username,
-            "email": email,
-            "password": password,
-            "role": "user",
-        }, tenant_id=0)
+        result = await svc.create_user(
+            username=username,
+            email=email,
+            password=password,
+            tenant_id=tenant_id,
+            role=role,
+            full_name=full_name,
+        )
         return result
 
     async def get_current_user(self, token: str) -> Optional[dict]:
@@ -165,7 +167,7 @@ class AuthService:
         user = row.fetchone()
         if not user:
             return None
-        user_dict = dict(user)
+        user_dict = {c: getattr(user, c) for c in user._fields}
         return {
             "id": user_dict["id"],
             "tenant_id": user_dict["tenant_id"],

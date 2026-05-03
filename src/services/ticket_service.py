@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
-from typing import Optional, List
+from typing import List, Optional
 
+from models.response import ApiResponse, ResponseStatus
 from models.ticket import (
     Ticket,
     TicketReply,
@@ -11,16 +12,19 @@ from models.ticket import (
     SLA_CONFIGS,
 )
 
+# Module-level state so tickets persist across service instances per test
+_tickets_db: dict = {}
+_ticket_replies_db: dict = {}
+_ticket_next_id = 1
+_ticket_agent_pool = [1, 2, 3]
+_ticket_agent_index = 0
+
 
 class TicketService:
-    def __init__(self):
-        self._tickets = {}
-        self._replies = {}
-        self._next_id = 1
-        self._agent_pool = [1, 2, 3]  # 示例客服ID池
-        self._agent_index = 0
+    def __init__(self, session):
+        self._session = session
 
-    def create_ticket(
+    async def create_ticket(
         self,
         subject: str,
         description: str,
@@ -29,14 +33,16 @@ class TicketService:
         priority: TicketPriority = TicketPriority.MEDIUM,
         sla_level: SLALevel = SLALevel.STANDARD,
         assigned_to: Optional[int] = None,
-    ) -> Ticket:
+        tenant_id: int = 0,
+    ) -> dict:
         """创建工单"""
         now = datetime.now()
         sla_config = SLA_CONFIGS[sla_level]
         response_deadline = now + timedelta(hours=sla_config.first_response_hours)
 
+        global _ticket_next_id, _ticket_agent_index
         ticket = Ticket(
-            id=self._next_id,
+            id=_ticket_next_id,
             subject=subject,
             description=description,
             status=TicketStatus.OPEN,
@@ -52,90 +58,78 @@ class TicketService:
             response_deadline=response_deadline,
         )
 
-        self._tickets[self._next_id] = ticket
-        self._replies[self._next_id] = []
-        self._next_id += 1
+        _tickets_db[_ticket_next_id] = ticket
+        _ticket_replies_db[_ticket_next_id] = []
+        _ticket_next_id += 1
 
         if assigned_to is None:
-            self.auto_assign(ticket.id)
+            _auto_assign(ticket.id)
 
-        return ticket
+        return {"status": ResponseStatus.SUCCESS, "data": ticket, "message": "工单创建成功"}
 
-    def get_ticket(self, ticket_id: int) -> Optional[Ticket]:
-        """获取工单"""
-        return self._tickets.get(ticket_id)
-
-    def update_ticket(self, ticket_id: int, **kwargs) -> Optional[Ticket]:
-        """更新工单"""
-        ticket = self._tickets.get(ticket_id)
+    async def get_ticket(self, ticket_id: int, tenant_id: int = 0) -> dict:
+        ticket = _tickets_db.get(ticket_id)
         if not ticket:
-            return None
+            return {"status": ResponseStatus.NOT_FOUND, "data": None, "message": "Ticket not found"}
+        return {"status": ResponseStatus.SUCCESS, "data": ticket, "message": ""}
 
+    async def update_ticket(self, ticket_id: int, tenant_id: int = 0, **kwargs) -> dict:
+        ticket = _tickets_db.get(ticket_id)
+        if not ticket:
+            return {"status": ResponseStatus.NOT_FOUND, "data": None, "message": "Ticket not found"}
         for key, value in kwargs.items():
             if hasattr(ticket, key):
                 setattr(ticket, key, value)
         ticket.updated_at = datetime.now()
-        return ticket
+        return {"status": ResponseStatus.SUCCESS, "data": ticket, "message": "工单更新成功"}
 
-    def assign_ticket(self, ticket_id: int, assigned_to: int) -> Optional[Ticket]:
-        """分配客服"""
-        return self.update_ticket(ticket_id, assigned_to=assigned_to)
+    async def assign_ticket(self, ticket_id: int, assigned_to: int, tenant_id: int = 0) -> dict:
+        return await self.update_ticket(ticket_id, assigned_to=assigned_to)
 
-    def add_reply(
-        self, ticket_id: int, content: str, created_by: int, is_internal: bool = False
-    ) -> Optional[TicketReply]:
-        """添加回复"""
-        ticket = self._tickets.get(ticket_id)
+    async def add_reply(self, ticket_id: int, content: str, created_by: int, is_internal: bool = False, tenant_id: int = 0) -> dict:
+        ticket = _tickets_db.get(ticket_id)
         if not ticket:
-            return None
-
+            return {"status": ResponseStatus.NOT_FOUND, "data": None, "message": "Ticket not found"}
         reply = TicketReply(
-            id=len(self._replies[ticket_id]) + 1,
+            id=len(_ticket_replies_db[ticket_id]) + 1,
             ticket_id=ticket_id,
+            tenant_id=tenant_id,
             content=content,
             is_internal=is_internal,
             created_by=created_by,
             created_at=datetime.now(),
         )
-
-        self._replies[ticket_id].append(reply)
-
-        # 更新 first_response_at（首次回复时间）
+        _ticket_replies_db[ticket_id].append(reply)
         if not ticket.first_response_at and not is_internal:
             ticket.first_response_at = datetime.now()
             ticket.updated_at = datetime.now()
+        return {"status": ResponseStatus.SUCCESS, "data": reply, "message": ""}
 
-        return reply
-
-    def change_status(self, ticket_id: int, new_status: TicketStatus) -> Optional[Ticket]:
-        """改变状态"""
-        ticket = self._tickets.get(ticket_id)
+    async def change_status(self, ticket_id: int, new_status: TicketStatus, tenant_id: int = 0) -> dict:
+        ticket = _tickets_db.get(ticket_id)
         if not ticket:
-            return None
-
+            return {"status": ResponseStatus.NOT_FOUND, "data": None, "message": "Ticket not found"}
         ticket.status = new_status
         ticket.updated_at = datetime.now()
-
-        # RESOLVED 时记录 resolved_at
         if new_status == TicketStatus.RESOLVED:
             ticket.resolved_at = datetime.now()
+        return {"status": ResponseStatus.SUCCESS, "data": ticket, "message": "状态更新成功"}
 
-        return ticket
+    async def get_customer_tickets(self, customer_id: int, tenant_id: int = 0) -> dict:
+        tickets = [t for t in _tickets_db.values() if t.customer_id == customer_id]
+        return {"status": ResponseStatus.SUCCESS, "data": tickets, "message": ""}
 
-    def get_customer_tickets(self, customer_id: int) -> List[Ticket]:
-        """获取客户的所有工单"""
-        return [t for t in self._tickets.values() if t.customer_id == customer_id]
-
-    def list_tickets(
+    async def list_tickets(
         self,
         page: int = 1,
         page_size: int = 20,
         status: Optional[TicketStatus] = None,
         priority: Optional[TicketPriority] = None,
         assigned_to: Optional[int] = None,
-    ) -> List[Ticket]:
+        tenant_id: int = 0,
+    ) -> dict:
         """工单列表"""
-        tickets = list(self._tickets.values())
+        tickets = list(_tickets_db.values())
 
         if status:
             tickets = [t for t in tickets if t.status == status]
@@ -146,22 +140,44 @@ class TicketService:
 
         tickets.sort(key=lambda t: t.created_at, reverse=True)
 
+        total = len(tickets)
         start = (page - 1) * page_size
         end = start + page_size
-        return tickets[start:end]
+        page_tickets = tickets[start:end]
+        pg = {
+            "items": page_tickets,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size if total > 0 else 0,
+            "has_next": end < total,
+            "has_prev": page > 1,
+        }
+        return {
+            "status": ResponseStatus.SUCCESS,
+            "data": pg,
+            "message": "",
+        }
 
-    def get_sla_breaches(self) -> List[Ticket]:
+    async def get_sla_breaches(self, tenant_id: int = 0) -> dict:
         """获取SLA超时的工单"""
-        return [t for t in self._tickets.values() if t.check_sla_breach()]
+        tickets = [t for t in _tickets_db.values() if t.check_sla_breach()]
+        return {"status": ResponseStatus.SUCCESS, "data": tickets, "message": ""}
 
-    def auto_assign(self, ticket_id: int) -> Optional[int]:
+    async def auto_assign(self, ticket_id: int, tenant_id: int = 0) -> dict:
         """自动分配客服"""
-        ticket = self._tickets.get(ticket_id)
-        if not ticket or ticket.assigned_to is not None:
-            return ticket.assigned_to if ticket else None
+        result = _auto_assign(ticket_id)
+        return {"status": ResponseStatus.SUCCESS, "data": {"ticket_id": ticket_id, "assigned_to": result}, "message": ""}
 
-        agent_id = self._agent_pool[self._agent_index % len(self._agent_pool)]
-        self._agent_index += 1
-        ticket.assigned_to = agent_id
-        ticket.updated_at = datetime.now()
-        return agent_id
+
+def _auto_assign(ticket_id: int) -> Optional[int]:
+    global _ticket_agent_index
+    ticket = _tickets_db.get(ticket_id)
+    if not ticket or ticket.assigned_to is not None:
+        return ticket.assigned_to if ticket else None
+
+    agent_id = _ticket_agent_pool[_ticket_agent_index % len(_ticket_agent_pool)]
+    _ticket_agent_index += 1
+    ticket.assigned_to = agent_id
+    ticket.updated_at = datetime.now()
+    return agent_id
