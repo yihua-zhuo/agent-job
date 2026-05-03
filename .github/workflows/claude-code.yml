@@ -59,6 +59,12 @@ jobs:
     name: Claude · Auto PR review
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      checks: write
+      actions: read
 
     steps:
       - uses: actions/checkout@v4
