@@ -1,6 +1,5 @@
 """Activity service for CRM system — async SQLAlchemy implementation."""
 from datetime import datetime, UTC
-from db.connection import get_db_session
 from typing import List, Dict, Optional
 
 from models.activity import Activity, ActivityType
@@ -14,22 +13,16 @@ class ActivityService:
     """活动记录服务"""
 
     def __init__(self, session: AsyncSession = None):
-        self._session_context = None
-        if session is None:
-            context = get_db_session()
-            try:
-                # Store the async context manager itself — 'async with self.session'
-                # will call __aenter__() correctly rather than the sync version.
-                self._session_context = context
-                self.session = context
-            except (AttributeError, TypeError):
-                # get_db_session returned something weird — leave session=None
-                # (async context callers must pass session explicitly)
-                self._session_context = None
-                self.session = None
-        else:
-            self._session_context = None
-            self.session = session
+        self.session = session
+        if session is not None:
+            self._require_session()
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     async def _scope(self, tenant_id: int) -> str:
         """Return a SQL WHERE clause snippet scoped to tenant_id."""
@@ -96,17 +89,16 @@ class ActivityService:
         }
 
         try:
-            async with self.session:
-                result = await self.session.execute(sql, params)
-                row = result.fetchone()
-                await self.session.commit()
-                activity = self._row_to_activity(row)
-                return ApiResponse.success(data=activity, message="活动记录创建成功")
+            result = await self.session.execute(sql, params)
+            row = result.fetchone()
+            activity = self._row_to_activity(row)
+            return ApiResponse.success(data=activity, message="活动记录创建成功")
         except Exception as e:
             return ApiResponse.error(message=f"创建活动记录失败: {str(e)}", code=1001)
 
     async def get_activity(self, activity_id: int, tenant_id: int = 0) -> ApiResponse[Activity]:
         """获取活动详情"""
+
         scope = await self._scope(tenant_id)
         sql = text(
             f"""
@@ -116,13 +108,12 @@ class ActivityService:
             """
         )
         try:
-            async with self.session:
-                result = await self.session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
-                row = result.fetchone()
-                if not row:
-                    return ApiResponse.error(message="活动记录不存在", code=1404)
-                activity = self._row_to_activity(row)
-                return ApiResponse.success(data=activity, message="")
+            result = await self.session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
+            row = result.fetchone()
+            if not row:
+                return ApiResponse.error(message="活动记录不存在", code=1404)
+            activity = self._row_to_activity(row)
+            return ApiResponse.success(data=activity, message="")
         except Exception as e:
             return ApiResponse.error(message=f"获取活动记录失败: {str(e)}", code=1001)
 
@@ -130,6 +121,7 @@ class ActivityService:
         self, activity_id: int, tenant_id: int = 0, **kwargs
     ) -> ApiResponse[Activity]:
         """更新活动"""
+
         scope = await self._scope(tenant_id)
 
         # First verify the record exists
@@ -141,52 +133,51 @@ class ActivityService:
             """
         )
         try:
-            async with self.session:
-                result = await self.session.execute(check_sql, {"activity_id": activity_id, "tenant_id": tenant_id})
-                row = result.fetchone()
-                if not row:
-                    return ApiResponse.error(message="活动记录不存在", code=1404)
+            result = await self.session.execute(check_sql, {"activity_id": activity_id, "tenant_id": tenant_id})
+            row = result.fetchone()
+            if not row:
+                return ApiResponse.error(message="活动记录不存在", code=1404)
 
                 # Build dynamic UPDATE
-                sets: List[str] = []
-                params: dict = {"activity_id": activity_id}
+            sets: List[str] = []
+            params: dict = {"activity_id": activity_id}
 
-                if "content" in kwargs:
-                    sets.append("content = :content")
-                    params["content"] = kwargs["content"]
-                if "activity_type" in kwargs:
-                    try:
-                        ActivityType(kwargs["activity_type"])
-                    except (ValueError, TypeError) as e:
-                        return ApiResponse.error(message=f"更新活动记录失败: {str(e)}", code=1001)
-                    sets.append("type = :activity_type")
-                    params["activity_type"] = kwargs["activity_type"]
-                if "opportunity_id" in kwargs:
-                    sets.append("opportunity_id = :opportunity_id")
-                    params["opportunity_id"] = kwargs["opportunity_id"]
+            if "content" in kwargs:
+                sets.append("content = :content")
+                params["content"] = kwargs["content"]
+            if "activity_type" in kwargs:
+                try:
+                    ActivityType(kwargs["activity_type"])
+                except (ValueError, TypeError) as e:
+                    return ApiResponse.error(message=f"更新活动记录失败: {str(e)}", code=1001)
+                sets.append("type = :activity_type")
+                params["activity_type"] = kwargs["activity_type"]
+            if "opportunity_id" in kwargs:
+                sets.append("opportunity_id = :opportunity_id")
+                params["opportunity_id"] = kwargs["opportunity_id"]
 
-                if not sets:
-                    activity = self._row_to_activity(row)
-                    return ApiResponse.success(data=activity, message="活动记录更新成功")
-
-                update_sql = text(
-                    f"""
-                    UPDATE activities
-                    SET {', '.join(sets)}
-                    WHERE id = :activity_id
-                    RETURNING id, tenant_id, customer_id, opportunity_id, type, content, created_by, created_at
-                    """
-                )
-                result = await self.session.execute(update_sql, params)
-                updated_row = result.fetchone()
-                await self.session.commit()
-                activity = self._row_to_activity(updated_row)
+            if not sets:
+                activity = self._row_to_activity(row)
                 return ApiResponse.success(data=activity, message="活动记录更新成功")
+
+            update_sql = text(
+                f"""
+                UPDATE activities
+                SET {', '.join(sets)}
+                WHERE id = :activity_id
+                RETURNING id, tenant_id, customer_id, opportunity_id, type, content, created_by, created_at
+                """
+            )
+            result = await self.session.execute(update_sql, params)
+            updated_row = result.fetchone()
+            activity = self._row_to_activity(updated_row)
+            return ApiResponse.success(data=activity, message="活动记录更新成功")
         except Exception as e:
             return ApiResponse.error(message=f"更新活动记录失败: {str(e)}", code=1001)
 
     async def delete_activity(self, activity_id: int, tenant_id: int = 0) -> ApiResponse[Dict]:
         """删除活动"""
+
         scope = await self._scope(tenant_id)
         sql = text(
             f"""
@@ -196,13 +187,11 @@ class ActivityService:
             """
         )
         try:
-            async with self.session:
-                result = await self.session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
-                row = result.fetchone()
-                if not row:
-                    return ApiResponse.error(message="活动记录不存在", code=1404)
-                await self.session.commit()
-                return ApiResponse.success(data={"id": activity_id}, message="活动记录删除成功")
+            result = await self.session.execute(sql, {"activity_id": activity_id, "tenant_id": tenant_id})
+            row = result.fetchone()
+            if not row:
+                return ApiResponse.error(message="活动记录不存在", code=1404)
+            return ApiResponse.success(data={"id": activity_id}, message="活动记录删除成功")
         except Exception as e:
             return ApiResponse.error(message=f"删除活动记录失败: {str(e)}", code=1001)
 
@@ -215,6 +204,7 @@ class ActivityService:
         tenant_id: int = 0,
     ) -> ApiResponse[PaginatedData[Activity]]:
         """活动列表"""
+
         scope = await self._scope(tenant_id)
         conditions = [scope]
         params: dict = {"tenant_id": tenant_id}
@@ -232,35 +222,34 @@ class ActivityService:
         offset_val = (page - 1) * page_size
 
         try:
-            async with self.session:
                 # Total count
-                count_result = await self.session.execute(count_sql, params)
-                count_row = count_result.fetchone()
-                total = int(count_row[0]) if count_row else 0
+            count_result = await self.session.execute(count_sql, params)
+            count_row = count_result.fetchone()
+            total = int(count_row[0]) if count_row else 0
 
                 # Paginated rows
-                list_sql = text(
-                    f"""
-                    SELECT id, tenant_id, customer_id, opportunity_id, type, content, created_by, created_at
-                    FROM activities
-                    WHERE {where_clause}
-                    ORDER BY created_at DESC
-                    LIMIT :page_size OFFSET :offset
-                    """
-                )
-                params["page_size"] = page_size
-                params["offset"] = offset_val
-                rows_result = await self.session.execute(list_sql, params)
-                rows = rows_result.fetchall()
+            list_sql = text(
+                f"""
+                SELECT id, tenant_id, customer_id, opportunity_id, type, content, created_by, created_at
+                FROM activities
+                WHERE {where_clause}
+                ORDER BY created_at DESC
+                LIMIT :page_size OFFSET :offset
+                """
+            )
+            params["page_size"] = page_size
+            params["offset"] = offset_val
+            rows_result = await self.session.execute(list_sql, params)
+            rows = rows_result.fetchall()
 
-                items = [self._row_to_activity(row) for row in rows]
-                return ApiResponse.paginated(
-                    items=items,
-                    total=total,
-                    page=page,
-                    page_size=page_size,
-                    message="",
-                )
+            items = [self._row_to_activity(row) for row in rows]
+            return ApiResponse.paginated(
+                items=items,
+                total=total,
+                page=page,
+                page_size=page_size,
+                message="",
+            )
         except Exception as e:
             return ApiResponse.error(message=f"查询活动列表失败: {str(e)}", code=1001)
 
@@ -268,6 +257,7 @@ class ActivityService:
         self, customer_id: int, limit: int = 50, tenant_id: int = 0
     ) -> ApiResponse[List[Dict]]:
         """获取客户的所有活动"""
+
         scope = await self._scope(tenant_id)
         sql = text(
             f"""
@@ -279,10 +269,9 @@ class ActivityService:
             """
         )
         try:
-            async with self.session:
-                result = await self.session.execute(sql, {"customer_id": customer_id, "limit": limit, "tenant_id": tenant_id})
-                rows = result.fetchall()
-                return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
+            result = await self.session.execute(sql, {"customer_id": customer_id, "limit": limit, "tenant_id": tenant_id})
+            rows = result.fetchall()
+            return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
         except Exception as e:
             return ApiResponse.error(message=f"获取客户活动失败: {str(e)}", code=1001)
 
@@ -290,6 +279,7 @@ class ActivityService:
         self, opportunity_id: int, tenant_id: int = 0
     ) -> ApiResponse[List[Dict]]:
         """获取商机的所有活动"""
+
         scope = await self._scope(tenant_id)
         sql = text(
             f"""
@@ -300,10 +290,9 @@ class ActivityService:
             """
         )
         try:
-            async with self.session:
-                result = await self.session.execute(sql, {"opportunity_id": opportunity_id, "tenant_id": tenant_id})
-                rows = result.fetchall()
-                return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
+            result = await self.session.execute(sql, {"opportunity_id": opportunity_id, "tenant_id": tenant_id})
+            rows = result.fetchall()
+            return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
         except Exception as e:
             return ApiResponse.error(message=f"获取商机活动失败: {str(e)}", code=1001)
 
@@ -311,6 +300,7 @@ class ActivityService:
         self, keyword: str, filters: Optional[Dict] = None, tenant_id: int = 0
     ) -> ApiResponse[List[Dict]]:
         """搜索活动"""
+
         scope = await self._scope(tenant_id)
         conditions = [scope, "LOWER(content) LIKE LOWER(:keyword)"]
         params: dict = {"keyword": f"%{keyword}%", "tenant_id": tenant_id}
@@ -339,10 +329,9 @@ class ActivityService:
             """
         )
         try:
-            async with self.session:
-                result = await self.session.execute(sql, params)
-                rows = result.fetchall()
-                return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
+            result = await self.session.execute(sql, params)
+            rows = result.fetchall()
+            return ApiResponse.success(data=[self._row_to_activity(row).to_dict() for row in rows], message="")
         except Exception as e:
             return ApiResponse.error(message=f"搜索活动失败: {str(e)}", code=1001)
 
@@ -354,6 +343,7 @@ class ActivityService:
         tenant_id: int = 0,
     ) -> ApiResponse[Dict]:
         """获取活动摘要"""
+
         scope = await self._scope(tenant_id)
         conditions = [scope, "customer_id = :customer_id"]
         params: dict = {"customer_id": customer_id, "tenant_id": tenant_id}
@@ -375,21 +365,20 @@ class ActivityService:
             """
         )
         try:
-            async with self.session:
-                result = await self.session.execute(sql, params)
-                rows = result.fetchall()
+            result = await self.session.execute(sql, params)
+            rows = result.fetchall()
 
-                activities = [self._row_to_activity(row) for row in rows]
-                by_type: Dict[str, int] = {}
-                for a in activities:
-                    type_val = a.type.value if isinstance(a.type, ActivityType) else str(a.type)
-                    by_type[type_val] = by_type.get(type_val, 0) + 1
+            activities = [self._row_to_activity(row) for row in rows]
+            by_type: Dict[str, int] = {}
+            for a in activities:
+                type_val = a.type.value if isinstance(a.type, ActivityType) else str(a.type)
+                by_type[type_val] = by_type.get(type_val, 0) + 1
 
-                summary: dict = {
-                    "total": len(activities),
-                    "by_type": by_type,
-                    "recent_activities": [a.to_dict() for a in activities[:5]],
-                }
-                return ApiResponse.success(data=summary, message="")
+            summary: dict = {
+                "total": len(activities),
+                "by_type": by_type,
+                "recent_activities": [a.to_dict() for a in activities[:5]],
+            }
+            return ApiResponse.success(data=summary, message="")
         except Exception as e:
             return ApiResponse.error(message=f"获取活动摘要失败: {str(e)}", code=1001)

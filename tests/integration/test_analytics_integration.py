@@ -40,7 +40,7 @@ class TestDashboardIntegration:
 
     async def test_create_and_get_dashboard(self, db_schema, tenant_id, async_session):
         """Create a dashboard and verify it can be retrieved."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
         result = await svc.create_dashboard(
@@ -63,7 +63,7 @@ class TestDashboardIntegration:
 
     async def test_update_dashboard(self, db_schema, tenant_id, async_session):
         """Update dashboard name, description, and widgets."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
         created = await svc.create_dashboard(
@@ -85,15 +85,15 @@ class TestDashboardIntegration:
         assert updated.data["description"] == "New description"
         assert len(updated.data["widgets"]) == 1
 
-    async def test_get_dashboard_not_found(self, db_schema, tenant_id):
+    async def test_get_dashboard_not_found(self, db_schema, tenant_id, async_session):
         """Non-existent dashboard returns NOT_FOUND."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         result = await svc.get_dashboard(dashboard_id=999_999_999, tenant_id=tenant_id)
         assert result.status == ResponseStatus.NOT_FOUND
 
     async def test_list_dashboards(self, db_schema, tenant_id, async_session):
         """List returns all dashboards for the tenant."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
 
@@ -112,7 +112,7 @@ class TestDashboardIntegration:
 
     async def test_list_dashboards_by_owner(self, db_schema, tenant_id, async_session):
         """List dashboards filtered by owner_id."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         uid1 = await self._seed_user(tenant_id, async_session)
         uid2 = await self._seed_user(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
@@ -129,7 +129,7 @@ class TestDashboardIntegration:
         self, db_schema, tenant_id, tenant_id_2, async_session
     ):
         """Dashboards are not visible across tenants."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         uid1 = await self._seed_user(tenant_id, async_session)
         uid2 = await self._seed_user(tenant_id, async_session)
 
@@ -155,7 +155,7 @@ class TestDashboardIntegration:
 
     async def test_add_widget_to_dashboard(self, db_schema, tenant_id, async_session):
         """Add a widget to an existing dashboard."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
         created = await svc.create_dashboard(
@@ -175,7 +175,7 @@ class TestDashboardIntegration:
 
     async def test_remove_widget_from_dashboard(self, db_schema, tenant_id, async_session):
         """Remove a widget from a dashboard."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
         created = await svc.create_dashboard(
@@ -204,7 +204,7 @@ class TestDashboardIntegration:
 
     async def test_dashboard_is_default_flag(self, db_schema, tenant_id, async_session):
         """Update and verify is_default flag on dashboard."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
         created = await svc.create_dashboard(
@@ -241,7 +241,7 @@ class TestReportIntegration:
 
     async def test_create_and_get_report(self, db_schema, tenant_id, async_session):
         """Create a report and verify it can be retrieved via run_report."""
-        analytics_svc = AnalyticsService()
+        analytics_svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
         result = await analytics_svc.create_report(
@@ -260,7 +260,7 @@ class TestReportIntegration:
 
     async def test_create_report_different_types(self, db_schema, tenant_id, async_session):
         """Create reports of different types (sales_revenue, sales_conversion, etc.)."""
-        analytics_svc = AnalyticsService()
+        analytics_svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
         for rtype in ["sales_revenue", "sales_conversion", "customer_growth", "pipeline_forecast"]:
@@ -324,7 +324,7 @@ class TestReportIntegration:
         assert filename in result["filename"]
         assert "filepath" in result
 
-    async def test_export_to_csv_empty_data(self, db_schema, tenant_id):
+    async def test_export_to_csv_empty_data(self, db_schema, tenant_id, async_session):
         """Export with no data returns error status."""
         svc = ReportService()
         result = await svc.export_to_csv(data=[], filename="empty.csv")
@@ -333,7 +333,7 @@ class TestReportIntegration:
 
     async def test_schedule_report(self, db_schema, tenant_id, async_session):
         """Schedule a report and verify scheduling returns success."""
-        analytics_svc = AnalyticsService()
+        analytics_svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
         created = await analytics_svc.create_report(
@@ -359,7 +359,7 @@ class TestReportIntegration:
 
     async def test_schedule_report_multiple(self, db_schema, tenant_id, async_session):
         """Scheduling the same report twice updates the schedule (idempotent key)."""
-        analytics_svc = AnalyticsService()
+        analytics_svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
         created = await analytics_svc.create_report(
@@ -404,7 +404,7 @@ class TestChartHelpersIntegration:
 
     async def test_get_sales_revenue_report(self, db_schema, tenant_id, async_session):
         """get_sales_revenue_report returns chart data structure."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         await self._seed_user(tenant_id, async_session)
 
         result = await svc.get_sales_revenue_report(
@@ -416,7 +416,7 @@ class TestChartHelpersIntegration:
 
     async def test_get_sales_conversion_report(self, db_schema, tenant_id, async_session):
         """get_sales_conversion_report returns funnel chart data."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         await self._seed_user(tenant_id, async_session)
 
         result = svc.get_sales_conversion_report(
@@ -428,7 +428,7 @@ class TestChartHelpersIntegration:
 
     async def test_get_customer_growth_report(self, db_schema, tenant_id, async_session):
         """get_customer_growth_report returns bar chart data."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         await self._seed_user(tenant_id, async_session)
 
         result = svc.get_customer_growth_report(
@@ -440,7 +440,7 @@ class TestChartHelpersIntegration:
 
     async def test_get_pipeline_forecast(self, db_schema, tenant_id, async_session):
         """get_pipeline_forecast returns pipeline forecast data."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         await self._seed_user(tenant_id, async_session)
 
         result = svc.get_pipeline_forecast(pipeline_id=1)
@@ -450,7 +450,7 @@ class TestChartHelpersIntegration:
 
     async def test_get_team_performance(self, db_schema, tenant_id, async_session):
         """get_team_performance returns team绩效 chart data."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         await self._seed_user(tenant_id, async_session)
 
         result = svc.get_team_performance(
@@ -463,7 +463,7 @@ class TestChartHelpersIntegration:
 
     async def test_get_chart_data(self, db_schema, tenant_id, async_session):
         """get_chart_data helper constructs a chart dict from raw data."""
-        svc = AnalyticsService()
+        svc = AnalyticsService(async_session)
         await self._seed_user(tenant_id, async_session)
 
         result = svc.get_chart_data(

@@ -10,7 +10,6 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-from db.connection import get_db_session
 
 
 class AuthService:
@@ -21,18 +20,19 @@ class AuthService:
     TOKEN_AUDIENCE = "crm-api"
 
     def __init__(self, session: AsyncSession = None, secret_key: Optional[str] = None):
-        self._session_context = None
-        if session is None:
-            try:
-                context = get_db_session()
-                # async generator — only use in async context; otherwise leave session=None
-                session = None
-            except Exception:
-                session = None
         self.session = session
-        self.secret_key: str = cast(str, secret_key) or os.environ["JWT_SECRET_KEY"]
+        if session is not None:
+            self._require_session()
+        self.secret_key: str = cast(str, secret_key) or os.environ.get("JWT_SECRET_KEY", "")
         if not self.secret_key:
             raise ValueError("JWT_SECRET_KEY must be set")
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     def generate_token(
         self, user_id: int, username: str, role: str, tenant_id: int = None
@@ -73,22 +73,22 @@ class AuthService:
         Returns:
             User dict if authentication succeeds, None otherwise.
         """
-        async with self.session:
-            result = await self.session.execute(
-                text(
-                    """
-                    SELECT id, tenant_id, username, email, password_hash, role,
-                           status, full_name, bio, created_at, updated_at
-                    FROM users
-                    WHERE username = :username
-                    LIMIT 1
-                    """
-                ),
-                {"username": username},
-            )
-            row = result.fetchone()
-            if row is None:
-                return None
+
+        result = await self.session.execute(
+            text(
+                """
+                SELECT id, tenant_id, username, email, password_hash, role,
+                       status, full_name, bio, created_at, updated_at
+                FROM users
+                WHERE username = :username
+                LIMIT 1
+                """
+            ),
+            {"username": username},
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
         if not self.verify_password(password, row[4]):
             return None
 
@@ -181,6 +181,7 @@ class AuthService:
         Returns:
             User dict if the token is valid, None otherwise.
         """
+
         payload = self.verify_token(token)
         if payload is None:
             return None
@@ -189,34 +190,33 @@ class AuthService:
         if not user_id:
             return None
 
-        async with self.session:
-            result = await self.session.execute(
-                text(
-                    """
-                    SELECT id, tenant_id, username, email, role, status,
-                           full_name, bio, created_at, updated_at
-                    FROM users
-                    WHERE id = :user_id
-                    LIMIT 1
-                    """
-                ),
-                {"user_id": user_id},
-            )
-            row = result.fetchone()
-            if row is None:
-                return None
-            return {
-                "id": row[0],
-                "tenant_id": row[1],
-                "username": row[2],
-                "email": row[3],
-                "role": row[4],
-                "status": row[5],
-                "full_name": row[6],
-                "bio": row[7],
-                "created_at": row[8].isoformat() if row[8] else None,
-                "updated_at": row[9].isoformat() if row[9] else None,
-            }
+        result = await self.session.execute(
+            text(
+                """
+                SELECT id, tenant_id, username, email, role, status,
+                       full_name, bio, created_at, updated_at
+                FROM users
+                WHERE id = :user_id
+                LIMIT 1
+                """
+            ),
+            {"user_id": user_id},
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row[0],
+            "tenant_id": row[1],
+            "username": row[2],
+            "email": row[3],
+            "role": row[4],
+            "status": row[5],
+            "full_name": row[6],
+            "bio": row[7],
+            "created_at": row[8].isoformat() if row[8] else None,
+            "updated_at": row[9].isoformat() if row[9] else None,
+        }
 
     async def refresh_token(self, old_token: str) -> Optional[str]:
         """Refresh an existing token with a new expiry time.
@@ -255,28 +255,28 @@ class AuthService:
         Returns:
             True if the token was successfully revoked, False otherwise.
         """
+
         payload = self.verify_token(token)
         if payload is None:
             return False
 
         jti = payload.get("jti") or payload.get("sub")
         exp = payload.get("exp")
-        async with self.session:
-            await self.session.execute(
-                text(
-                    """
-                    INSERT INTO revoked_tokens (jti, revoked_at, expires_at)
-                    VALUES (:jti, :revoked_at, :exp)
-                    ON CONFLICT (jti) DO NOTHING
-                    """
-                ),
-                {
-                    "jti": str(jti),
-                    "revoked_at": datetime.now(UTC),
-                    "exp": datetime.utcfromtimestamp(exp) if exp else None,
-                },
-            )
-            await self.session.commit()
+        await self.session.execute(
+            text(
+                """
+                INSERT INTO revoked_tokens (jti, revoked_at, expires_at)
+                VALUES (:jti, :revoked_at, :exp)
+                ON CONFLICT (jti) DO NOTHING
+                """
+            ),
+            {
+                "jti": str(jti),
+                "revoked_at": datetime.now(UTC),
+                "exp": datetime.utcfromtimestamp(exp) if exp else None,
+            },
+        )
+        await self.session.commit()
         return True
 
     @staticmethod
