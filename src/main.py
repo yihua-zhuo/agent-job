@@ -20,6 +20,7 @@ from api import (
     automation_router,
     reports_router,
     rbac_router,
+    sla_router,
 )
 
 
@@ -105,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(automation_router)
     app.include_router(reports_router)
     app.include_router(rbac_router)
+    app.include_router(sla_router)
 
     @app.get("/")
     async def health():

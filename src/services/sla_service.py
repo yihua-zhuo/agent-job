@@ -1,56 +1,81 @@
-from datetime import datetime, timedelta
-from typing import List, Literal
+"""SLA service layer — SLA summary counts per tenant."""
+from datetime import datetime, timedelta, UTC
+from typing import Dict, Optional, TYPE_CHECKING
 
-from models.ticket import Ticket, SLALevel, SLA_CONFIGS
+from models.response import ApiResponse
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SLAService:
-    """SLA管理"""
+    """SLA summary counts backed by PostgreSQL via SQLAlchemy async."""
 
-    def __init__(self, ticket_service=None):
-        self._ticket_service = ticket_service
+    def __init__(self, session: "AsyncSession"):
+        self.session = session
 
-    def check_sla_status(
-        self, ticket: Ticket
-    ) -> Literal["normal", "warning", "breached"]:
-        """检查SLA状态"""
-        # 返回：正常、临近超时、已超时
-        if ticket.resolved_at:
-            return "normal"
+    async def get_summary(self, tenant_id: int = 0) -> ApiResponse:
+        """Compute SLA breach/at_risk/on_track counts for all tickets in tenant.
 
-        if ticket.check_sla_breach():
-            return "breached"
+        - breached: response_deadline < now  AND ticket not resolved/closed
+        - at_risk:   open ticket, response_deadline within 4 hours from now
+        - on_track:  open ticket, response_deadline > 4 hours from now
+          (resolved/closed tickets count as on_track)
+        """
+        if tenant_id == 0:
+            return ApiResponse.error(message="无效的租户", code=1401)
 
-        # 临近超时：剩余时间少于 SLA 时间的 25%
-        if not ticket.response_deadline:
-            return "normal"
+        now = datetime.now(UTC)
+        at_risk_threshold = now + timedelta(hours=4)
 
-        sla_config = SLA_CONFIGS.get(ticket.sla_level)
-        if not sla_config:
-            return "normal"
+        # breached: open tickets past deadline
+        breached_sql = """
+            SELECT COUNT(*) FROM tickets
+            WHERE tenant_id = :tenant_id
+              AND resolved_at IS NULL
+              AND closed_at IS NULL
+              AND response_deadline < :now
+        """
+        # at_risk: open tickets with deadline within 4 hours
+        at_risk_sql = """
+            SELECT COUNT(*) FROM tickets
+            WHERE tenant_id = :tenant_id
+              AND resolved_at IS NULL
+              AND closed_at IS NULL
+              AND response_deadline >= :now
+              AND response_deadline <= :at_risk_threshold
+        """
+        # on_track: open tickets with deadline > 4 hours
+        on_track_sql = """
+            SELECT COUNT(*) FROM tickets
+            WHERE tenant_id = :tenant_id
+              AND (
+                resolved_at IS NOT NULL
+                OR closed_at IS NOT NULL
+                OR (response_deadline > :at_risk_threshold)
+              )
+        """
+        from sqlalchemy import text
 
-        total_hours = sla_config.first_response_hours
-        remaining = self.calculate_remaining_time(ticket)
-        warning_threshold = total_hours * 0.25
+        params = {"tenant_id": tenant_id, "now": now, "at_risk_threshold": at_risk_threshold}
 
-        if remaining.total_seconds() < warning_threshold * 3600:
-            return "warning"
+        breached_r = await self.session.execute(text(breached_sql), params)
+        breached = breached_r.scalar() or 0
 
-        return "normal"
+        at_risk_r = await self.session.execute(text(at_risk_sql), params)
+        at_risk = at_risk_r.scalar() or 0
 
-    def get_breach_tickets(self, tickets: List[Ticket] = None) -> List[Ticket]:
-        """获取所有超时的工单"""
-        if tickets is None and self._ticket_service:
-            tickets = self._ticket_service._tickets.values()
-        return [t for t in (tickets or []) if t.check_sla_breach()]
+        on_track_r = await self.session.execute(text(on_track_sql), params)
+        on_track = on_track_r.scalar() or 0
 
-    def calculate_remaining_time(self, ticket: Ticket) -> timedelta:
-        """计算剩余时间"""
-        if not ticket.response_deadline:
-            return timedelta(0)
+        total_tickets = breached + at_risk + on_track
 
-        if ticket.resolved_at:
-            return timedelta(0)
-
-        remaining = ticket.response_deadline - datetime.now()
-        return remaining if remaining.total_seconds() > 0 else timedelta(0)
+        return ApiResponse.success(
+            data={
+                "breached": breached,
+                "at_risk": at_risk,
+                "on_track": on_track,
+                "total_tickets": total_tickets,
+            },
+            message="",
+        )
