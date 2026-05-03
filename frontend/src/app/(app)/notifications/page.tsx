@@ -82,7 +82,7 @@ export default function NotificationsPage() {
                 <span className="text-xs text-muted-foreground">{n.created_at ? formatTime(String(n.created_at)) : ""}</span>
               </div>
               <div className="font-medium text-sm">{String(n.title ?? "")}</div>
-              {n.content && (
+              {Boolean(n.content) && (
                 <p className="text-sm text-muted-foreground mt-0.5 line-clamp-2">{String(n.content)}</p>
               )}
             </div>

@@ -91,9 +91,9 @@ export default function TeamPage() {
               <div className="text-xs text-muted-foreground">{String(u.email ?? "")}</div>
               <div className="flex items-center gap-2">
                 <Badge colorClass={ROLE_COLORS[String(u.role)] ?? "bg-blue-100 text-blue-800"}>{String(u.role ?? "")}</Badge>
-                <span className="text-xs text-muted-foreground">#{u.id}</span>
+                <span className="text-xs text-muted-foreground">#{String(u.id)}</span>
               </div>
-              {u.created_at && (
+              {Boolean(u.created_at) && (
                 <div className="text-xs text-muted-foreground">Joined {new Date(String(u.created_at)).toLocaleDateString()}</div>
               )}
             </CardContent>

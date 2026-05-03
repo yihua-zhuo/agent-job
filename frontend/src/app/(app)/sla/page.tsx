@@ -124,7 +124,7 @@ export default function SlaPage() {
             {!isLoading && tickets.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No open tickets</td></tr>}
             {tickets.map((t) => (
               <tr key={String(t.id)} className="border-b hover:bg-muted/50 transition-colors">
-                <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">#{t.id}</td>
+                <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">#{String(t.id)}</td>
                 <td className="px-3 py-2.5 font-medium text-sm">{String(t.subject ?? "")}</td>
                 <td className="px-3 py-2.5 text-sm">{String(t.sla_level ?? "standard")}</td>
                 <td className="px-3 py-2.5"><Badge colorClass={STATUS_COLORS[String(t.status)] ?? "bg-gray-100 text-gray-600"}>{String(t.status ?? "")}</Badge></td>

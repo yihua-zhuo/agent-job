@@ -89,8 +89,8 @@ export default function ActivitiesPage() {
                 </span>
               </div>
               <p className="text-sm">{String(a.content ?? "")}</p>
-              {a.customer_id && (
-                <p className="text-xs text-muted-foreground mt-1">Customer #{a.customer_id}</p>
+              {Boolean(a.customer_id) && (
+                <p className="text-xs text-muted-foreground mt-1">Customer #{String(a.customer_id)}</p>
               )}
             </div>
           </div>
