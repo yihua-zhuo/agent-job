@@ -21,6 +21,7 @@ class Activity:
     content: str
     created_by: int
     id: Optional[int] = None
+    tenant_id: int = 0
     opportunity_id: Optional[int] = None
     created_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -37,6 +38,7 @@ class Activity:
         """Convert activity to dictionary representation."""
         return {
             'id': self.id,
+            'tenant_id': self.tenant_id,
             'customer_id': self.customer_id,
             'opportunity_id': self.opportunity_id,
             'type': self.type.value if isinstance(self.type, ActivityType) else self.type,
@@ -62,6 +64,7 @@ class Activity:
 
         return cls(
             id=data.get('id'),
+            tenant_id=data.get('tenant_id', 0),
             customer_id=data['customer_id'],
             opportunity_id=data.get('opportunity_id'),
             type=activity_type,

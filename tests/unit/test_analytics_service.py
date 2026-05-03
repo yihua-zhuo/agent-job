@@ -8,16 +8,8 @@ def analytics_service(mock_db_session):
     return AnalyticsService(mock_db_session)
 
 
-@pytest.mark.asyncio
 class TestAnalyticsService:
 
-
-
-
-
-
-
-    async def test_get_dashboard_not_found(self, analytics_service):
-        result = await analytics_service.get_dashboard(9999)
-        assert bool(result) is False
-
+    def test_get_dashboard_not_found(self, analytics_service):
+        result = analytics_service.get_dashboard(9999)
+        assert result is None

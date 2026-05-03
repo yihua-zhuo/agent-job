@@ -3,7 +3,8 @@ from typing import Optional, List, Dict
 
 
 class AnalyticsService:
-    def __init__(self):
+    def __init__(self, session=None):
+        self._session = session
         self._dashboards = {}
         self._reports = {}
         self._next_id = 1

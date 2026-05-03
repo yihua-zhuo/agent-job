@@ -13,6 +13,7 @@ class Pipeline:
     name: str
     stages: List[Stage]
     id: Optional[int] = None
+    tenant_id: int = 0
     is_default: bool = False
 
     def __post_init__(self) -> None:
@@ -28,6 +29,7 @@ class Pipeline:
         """Convert pipeline to dictionary representation."""
         return {
             'id': self.id,
+            'tenant_id': self.tenant_id,
             'name': self.name,
             'stages': [s.value if isinstance(s, Stage) else s for s in self.stages],
             'is_default': self.is_default,

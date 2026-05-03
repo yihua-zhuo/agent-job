@@ -436,6 +436,38 @@ def _make_mock_session():
             })])
 
         if "from users" in sql_text:
+            if "where username" in sql_text:
+                username = params.get("username")
+                if username == "alice":
+                    now = datetime.utcnow()
+                    # fetchone is called once for the query
+                    row = MagicMock(
+                        __getitem__=lambda s, k: {
+                            "id": 1, "tenant_id": 1, "username": "alice",
+                            "email": "alice@test.com", "password_hash": None,
+                            "role": "user", "status": "active",
+                            "full_name": "Alice", "bio": "bio",
+                            "created_at": now, "updated_at": now,
+                        }.get(k) or MagicMock()
+                    )
+                    return MagicMock(fetchone=MagicMock(return_value=row))
+                return MagicMock(fetchone=MagicMock(return_value=None))
+            if "where id" in sql_text:
+                user_id = params.get("id")
+                if user_id == 5:
+                    now = datetime.utcnow()
+                    return MockResult([MockRow({
+                        "id": 5, "tenant_id": 1,
+                        "username": "charlie",
+                        "email": "charlie@test.com",
+                        "role": "admin",
+                        "status": "active",
+                        "full_name": "Charlie",
+                        "bio": "dev",
+                        "created_at": now,
+                        "updated_at": now,
+                    })])
+                return MockResult([])
             return MockResult([MockRow({
                 "id": 1, "tenant_id": 1,
                 "username": "testuser",
