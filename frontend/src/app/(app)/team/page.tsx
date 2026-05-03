@@ -76,6 +76,11 @@ export default function TeamPage() {
     return matchRole && matchSearch;
   });
 
+  const hasFilter = roleFilter !== "all" || search !== "";
+  const totalShown = hasFilter ? filtered.length : (info?.total ?? 0);
+  const startShown = hasFilter ? (filtered.length === 0 ? 0 : 1) : (info?.total === 0 ? 0 : ((page - 1) * (info?.page_size ?? 20)) + 1);
+  const endShown = hasFilter ? filtered.length : Math.min(page * (info?.page_size ?? 20), info?.total ?? 0);
+
   // Create
   async function handleCreate() {
     if (!createForm.username || !createForm.email || !createForm.password) return;
@@ -223,7 +228,7 @@ export default function TeamPage() {
 
       {info && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Showing {info.total === 0 ? 0 : ((page - 1) * info.page_size) + 1}–{Math.min(page * info.page_size, info.total)} of {info.total}</span>
+          <span>Showing {startShown}–{endShown} of {totalShown}</span>
           <div className="flex gap-1">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</Button>
             <Button variant="outline" size="sm" disabled={!info.has_next} onClick={() => setPage(page + 1)}>Next →</Button>
