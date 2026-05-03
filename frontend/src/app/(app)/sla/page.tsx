@@ -138,7 +138,7 @@ export default function SlaPage() {
 
       {info && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Showing {info.total === 0 ? 0 : ((page - 1) * 20) + 1}–{Math.min(page * 20, info.total)} of {info.total}</span>
+          <span>Showing {info.total === 0 ? 0 : ((page - 1) * info.page_size) + 1}–{Math.min(page * info.page_size, info.total)} of {info.total}</span>
           <div className="flex gap-1">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</Button>
             <Button variant="outline" size="sm" disabled={!info.has_next} onClick={() => setPage(page + 1)}>Next →</Button>

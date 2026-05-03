@@ -29,11 +29,20 @@ export default function SettingsPage() {
     }
   }, [me]);
   const [saved, setSaved] = useState(false);
+  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   function handleSave() {
+    if (savedTimer.current) clearTimeout(savedTimer.current);
     setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    savedTimer.current = setTimeout(() => {
+      savedTimer.current = null;
+      setSaved(false);
+    }, 2000);
   }
+
+  useEffect(() => {
+    return () => { if (savedTimer.current) clearTimeout(savedTimer.current); };
+  }, []);
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -128,9 +137,14 @@ export default function SettingsPage() {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Member Since</span>
-            <span className="font-mono">
-              {me?.created_at ? new Date(String(me.created_at)).toLocaleDateString() : "—"}
-            </span>
+            {(() => {
+              const createdAtRaw = me?.created_at ?? user?.created_at ?? null;
+              const createdAt = createdAtRaw ? new Date(String(createdAtRaw)) : null;
+              const createdAtStr = createdAt && !Number.isNaN(createdAt.getTime())
+                ? createdAt.toLocaleDateString()
+                : "—";
+              return <span className="font-mono">{createdAtStr}</span>;
+            })()}
           </div>
         </CardContent>
       </Card>
