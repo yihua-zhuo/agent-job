@@ -284,9 +284,9 @@ class TestUserEndpoints:
         assert resp.status_code == 401
 
     @pytest.mark.xfail(
-        reason="No /users/me endpoint exists in the users router. "
-               "GET /api/v1/users/me returns 422 because the only GET /users/{user_id} "
-               "path param is typed as int and 'me' is not parseable as int."
+        reason="auth_headers_web uses user_id=999 but no corresponding user is "
+               "created in the test DB, so get_user_by_id returns 404. "
+               "The /users/me endpoint exists and works correctly."
     )
     async def test_get_current_user(self, api_client: "AsyncClient"):
         # GET /api/v1/users/me — requires auth, returns user info
