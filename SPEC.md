@@ -169,6 +169,31 @@ dev-agent-system/
 └── SPEC.md
 ```
 
+### GitHub Project V2 看板
+
+除了 GitHub Issues 作为任务存储，还可以用 yihua-zhuo/agent-job 的 **Project V2** 看板来可视化每个 Agent 的实时状态。
+
+实现文件：`shared_memory/project_board.py`
+
+**看板布局：**
+- Column "Todo"        → 有 pending 任务的 Agent（作为 draft issue）
+- Column "In Progress" → 有 running 任务的 Agent（不在 board 上留 item，任务在 Issue 上可见）
+- Column "Done"        → 空闲 / 已完成当日任务的 Agent
+
+**同步逻辑：**
+- `sync_all_agents_to_board()` 从 GitHub Issues 统计各 Agent 的 pending/running/done 数量
+- 根据状态将对应 draft issue 移动到正确列
+- 每个 Agent 在 Todo 列最多 1 个 item
+- `setProjectV2ItemFieldValue` mutation 更新 Status 字段
+
+**调用方式（每次心跳或 cron）：**
+```python
+import asyncio, subprocess, os
+os.environ["GITHUB_TOKEN"] = subprocess.check_output(["gh", "auth", "token"]).decode().strip()
+from shared_memory.project_board import sync_all_agents_to_board
+asyncio.run(sync_all_agents_to_board())
+```
+
 ## 9. 为什么从 Redis 改为 GitHub Issues？
 
 | | Redis | GitHub Issues |
