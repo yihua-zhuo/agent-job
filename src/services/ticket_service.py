@@ -67,13 +67,12 @@ def _row_to_reply(row: TicketReplyModel) -> TicketReply:
 class TicketService:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
-
-    def _require_session(self):
-
-        # Agent pool – kept as instance state (not persisted to DB) to preserve
-        # the original round-robin auto_assign behaviour.
+        # Agent pool – instance state to preserve round-robin auto_assign behavior
         self._agent_pool: List[int] = [1, 2, 3]
         self._agent_index: int = 0
+
+    def _require_session(self):
+        pass
 
     # ------------------------------------------------------------------
     # Internal helpers
