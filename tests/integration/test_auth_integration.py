@@ -56,10 +56,10 @@ class TestJWTTokens:
     """Test JWT token generation and verification."""
 
     @pytest.fixture
-    def auth_service(self):
+    def auth_service(self, async_session):
         """Create AuthService with a test secret."""
         os.environ["JWT_SECRET_KEY"] = "test-secret-key-for-testing-12345"
-        return AuthService(secret_key="test-secret-key-for-testing-12345")
+        return AuthService(session=async_session, secret_key="test-secret-key-for-testing-12345")
 
     def test_generate_token_returns_jwt_string(self, auth_service):
         token = auth_service.generate_token(
@@ -175,16 +175,16 @@ class TestValidationHelpers:
 class TestAuthServiceInstantiation:
     """Test AuthService __init__ behavior."""
 
-    def test_init_requires_secret_key(self):
+    def test_init_requires_secret_key(self, async_session):
         os.environ["JWT_SECRET_KEY"] = ""
         with pytest.raises(ValueError, match="JWT_SECRET_KEY must be set"):
-            AuthService()
+            AuthService(session=async_session)
 
-    def test_init_with_explicit_secret(self):
-        svc = AuthService(secret_key="my-secret-123")
+    def test_init_with_explicit_secret(self, async_session):
+        svc = AuthService(session=async_session, secret_key="my-secret-123")
         assert svc.secret_key == "my-secret-123"
 
-    def test_init_reads_from_env(self):
+    def test_init_reads_from_env(self, async_session):
         os.environ["JWT_SECRET_KEY"] = "env-secret-456"
-        svc = AuthService()
+        svc = AuthService(session=async_session)
         assert svc.secret_key == "env-secret-456"
