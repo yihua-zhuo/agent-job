@@ -12,6 +12,10 @@ export const qk = {
   tasks: (page = 1, status = "") => ["tasks", page, status] as const,
   task: (id: number) => ["task", id] as const,
   users: (page = 1) => ["users", page] as const,
+  notifications: (page = 1, unreadOnly = false) => ["notifications", page, unreadOnly] as const,
+  reminders: (upcomingOnly = false) => ["reminders", upcomingOnly] as const,
+  activities: (page = 1, type = "") => ["activities", page, type] as const,
+  slaBreaches: () => ["sla", "breaches"] as const,
 } as const;
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
@@ -124,6 +128,16 @@ export function useUsers(page = 1) {
     staleTime: 60 * 1000,
   });
 }
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      apiClient.post("/api/v1/users", data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
+  });
+}
 // ── Tasks ───────────────────────────────────────────────────────────────────
 
 export function useTasks(page = 1, status = "") {
@@ -183,5 +197,96 @@ export function useDeleteTask() {
     mutationFn: (id: number) =>
       apiClient.delete(`/api/v1/tasks/${id}`, token ?? undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+// ── Activities ───────────────────────────────────────────────────────────
+export function useActivities(page = 1, type = "") {
+  const token = useAuthStore((s) => s.token);
+  const params = new URLSearchParams({ page: String(page), page_size: "20" });
+  if (type) params.set("activity_type", type);
+  return useQuery({
+    queryKey: qk.activities(page, type),
+    queryFn: () => apiClient.get(`/api/v1/activities?${params}`, token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useActivity(id: number) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["activity", id] as const,
+    queryFn: () => apiClient.get(`/api/v1/activities/${id}`, token ?? undefined),
+    enabled: id > 0,
+  });
+}
+
+export function useSlaBreaches() {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.slaBreaches(),
+    queryFn: () => apiClient.get("/api/v1/sla/breaches", token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────
+export function useNotifications(page = 1, unreadOnly = false) {
+  const token = useAuthStore((s) => s.token);
+  const params = new URLSearchParams({ page: String(page), page_size: "20" });
+  if (unreadOnly) params.set("unread_only", "true");
+  return useQuery({
+    queryKey: qk.notifications(page, unreadOnly),
+    queryFn: () => apiClient.get(`/api/v1/notifications?${params}`, token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: () => apiClient.post("/api/v1/notifications/mark-all-read", {}, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+export function useMarkNotificationRead() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.put(`/api/v1/notifications/${id}/read`, {}, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+// ── Reminders ─────────────────────────────────────────────────────────────
+export function useReminders(upcomingOnly = false) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.reminders(upcomingOnly),
+    queryFn: () => apiClient.get(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useCreateReminder() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      apiClient.post("/api/v1/reminders", data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["reminders"] }),
+  });
+}
+
+export function useDeleteReminder() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v1/reminders/${id}`, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["reminders"] }),
   });
 }
