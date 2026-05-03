@@ -1,40 +1,23 @@
 [build-system]
-requires = ["setuptools>=68", "wheel"]
+requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "dev-agent-system"
 version = "0.1.0"
-description = "Multi-Agent Development Pipeline System (Test → Code Review → QC → Deploy)"
+description = "Multi-Agent Development System with CI, Testing, and Code Review"
 requires-python = ">=3.11"
-dependencies = [
-    "fastapi>=0.100,<1.0",
-    "uvicorn[standard]>=0.23,<1.0",
-    # Database
-    "sqlalchemy>=2.0,<3.0",
-    "asyncpg>=0.29",
-    "psycopg2-binary>=2.9,<3.0",
-    "alembic>=1.13,<2.0",
-    # Utils
-    "bcrypt>=4.1",
-    "python-dotenv>=1.0,<2.0",
-    "PyJWT>=2.8",
-    "pymysql>=1.1,<2.0",
-    "pydantic>=2.0,<3.0",
-    "pydantic-settings>=2.0,<3.0",
-    "python-multipart>=0.0.17",
-]
+dependencies = ["pytest>=7.0", "requests>=2.28"]
 
-[project.optional-dependencies]
-dev = [
-    "httpx>=0.28",
-    "pytest>=7.0",
-    "pytest-asyncio>=0.23",
-    "pytest-cov>=4.0",
-    "pylint>=3.0",
-    "mypy>=1.0",
-    "openpyxl>=3.1",
-]
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.pylint]
+max-line-length = 120
+disable = ["C0111", "R0903"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true

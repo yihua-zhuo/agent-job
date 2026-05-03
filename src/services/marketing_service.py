@@ -1,371 +1,190 @@
-"""营销服务 — async PostgreSQL via SQLAlchemy."""
-from datetime import datetime, UTC
+"""营销服务"""
+from datetime import datetime
 from typing import Optional, List, Dict, Any
 
-from sqlalchemy import text, func
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from db.models.marketing import CampaignModel, CampaignEventModel
-from models.marketing import (
+from src.models.marketing import (
     Campaign,
     CampaignEvent,
     CampaignStatus,
     CampaignType,
     TriggerType,
 )
-from models.response import ApiResponse, PaginatedData
-
-
-def _row_to_campaign(row) -> Campaign:
-    return Campaign(
-        id=row[0],
-        name=row[1],
-        type=CampaignType(row[2]),
-        status=CampaignStatus(row[3]),
-        subject=row[4],
-        content=row[5],
-        target_audience=row[6],
-        trigger_type=TriggerType(row[7]) if row[7] else None,
-        trigger_days=row[8],
-        created_by=row[9],
-        sent_count=row[10],
-        open_count=row[11],
-        click_count=row[12],
-        created_at=row[13],
-        updated_at=row[14],
-    )
-
-
-def _row_to_event(row) -> CampaignEvent:
-    return CampaignEvent(
-        id=row[0],
-        campaign_id=row[1],
-        customer_id=row[2],
-        event_type=row[3],
-        created_at=row[4],
-    )
 
 
 class MarketingService:
-    """营销服务 — backed by PostgreSQL."""
+    """营销服务"""
 
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def __init__(self):
+        self._campaigns: Dict[int, Campaign] = {}
+        self._events: Dict[int, List[CampaignEvent]] = {}
+        self._next_id: int = 1
 
-    def _require_session(self):
-        pass
-
-    async def create_campaign(
+    def create_campaign(
         self,
         name: str,
         campaign_type: CampaignType,
         content: str,
         created_by: int,
-        tenant_id: int = 0,
-        **kwargs,
-    ) -> ApiResponse[Campaign]:
+        **kwargs
+    ) -> Campaign:
         """创建营销活动"""
-
-        now = datetime.now(UTC)
-        stmt = text(
-            """
-            INSERT INTO campaigns (tenant_id, name, type, status, subject, content,
-                target_audience, trigger_type, trigger_days, created_by,
-                sent_count, open_count, click_count, created_at, updated_at)
-            VALUES (:tenant_id, :name, :type, :status, :subject, :content,
-                :target_audience, :trigger_type, :trigger_days, :created_by,
-                0, 0, 0, :now, :now)
-            RETURNING id, name, type, status, subject, content, target_audience,
-                      trigger_type, trigger_days, created_by,
-                      sent_count, open_count, click_count, created_at, updated_at
-            """
+        now = datetime.now()
+        campaign = Campaign(
+            id=self._next_id,
+            name=name,
+            type=campaign_type,
+            status=CampaignStatus.DRAFT,
+            subject=kwargs.get("subject"),
+            content=content,
+            target_audience=kwargs.get("target_audience", ""),
+            trigger_type=kwargs.get("trigger_type"),
+            trigger_days=kwargs.get("trigger_days"),
+            created_by=created_by,
+            created_at=now,
+            updated_at=now,
         )
-        result = await self.session.execute(
-            stmt,
-            {
-                "tenant_id": tenant_id,
-                "name": name,
-                "type": (
-                    campaign_type.value
-                    if hasattr(campaign_type, "value")
-                    else campaign_type
-                ),
-                "status": CampaignStatus.DRAFT.value,
-                "subject": kwargs.get("subject"),
-                "content": content,
-                "target_audience": kwargs.get("target_audience", ""),
-                "trigger_type": (
-                    kwargs["trigger_type"].value
-                    if isinstance(kwargs.get("trigger_type"), TriggerType)
-                    else kwargs.get("trigger_type")
-                ),
-                "trigger_days": kwargs.get("trigger_days"),
-                "created_by": created_by,
-                "now": now,
-            },
-        )
-        row = result.fetchone()
-        if not row:
-            return ApiResponse.error(message="创建营销活动失败", code=500)
-        return ApiResponse.success(data=_row_to_campaign(row), message="营销活动创建成功")
+        self._campaigns[self._next_id] = campaign
+        self._next_id += 1
+        self._events[campaign.id] = []
+        return campaign
 
-    async def get_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
+    def get_campaign(self, campaign_id: int) -> Optional[Campaign]:
         """获取活动详情"""
+        return self._campaigns.get(campaign_id)
 
-        stmt = text(
-            """
-            SELECT id, name, type, status, subject, content, target_audience,
-                   trigger_type, trigger_days, created_by,
-                   sent_count, open_count, click_count, created_at, updated_at
-            FROM campaigns WHERE id = :id
-            """
-        )
-        result = await self.session.execute(stmt, {"id": campaign_id})
-        row = result.fetchone()
-        if not row:
-            return ApiResponse.error(message="营销活动不存在", code=1404)
-        return ApiResponse.success(data=_row_to_campaign(row))
-
-    async def update_campaign(
-        self, campaign_id: int, tenant_id: int = 0, **kwargs
-    ) -> ApiResponse[Campaign]:
+    def update_campaign(self, campaign_id: int, **kwargs) -> Optional[Campaign]:
         """更新活动"""
+        campaign = self._campaigns.get(campaign_id)
+        if not campaign:
+            return None
 
-        updates: List[str] = []
-        params: Dict[str, Any] = {"id": campaign_id}
-        for key in ["name", "type", "status", "subject", "content", "target_audience", "trigger_type", "trigger_days"]:
-            if key in kwargs:
-                val = kwargs[key]
-                if hasattr(val, "value"):
-                    val = val.value
-                updates.append(f"{key} = :{key}")
-                params[key] = val
+        for key, value in kwargs.items():
+            if hasattr(campaign, key):
+                setattr(campaign, key, value)
+        campaign.updated_at = datetime.now()
+        return campaign
 
-        if not updates:
-            return await self.get_campaign(campaign_id, tenant_id)
-
-        where = "id = :id"
-        if tenant_id > 0:
-            where += " AND tenant_id = :tenant_id"
-            params["tenant_id"] = tenant_id
-
-        stmt = text(
-            f"""
-            UPDATE campaigns SET {', '.join(updates)}, updated_at = :now
-            WHERE {where}
-            RETURNING id, name, type, status, subject, content, target_audience,
-                      trigger_type, trigger_days, created_by,
-                      sent_count, open_count, click_count, created_at, updated_at
-            """
-        )
-        params["now"] = datetime.now(UTC)
-        result = await self.session.execute(stmt, params)
-        row = result.fetchone()
-        if not row:
-            return ApiResponse.error(message="营销活动不存在", code=1404)
-        return ApiResponse.success(data=_row_to_campaign(row), message="营销活动更新成功")
-
-    async def launch_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
+    def launch_campaign(self, campaign_id: int) -> Optional[Campaign]:
         """启动活动"""
+        campaign = self._campaigns.get(campaign_id)
+        if not campaign:
+            return None
 
-        return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.ACTIVE)
+        campaign.status = CampaignStatus.ACTIVE
+        campaign.updated_at = datetime.now()
+        return campaign
 
-    async def pause_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
+    def pause_campaign(self, campaign_id: int) -> Optional[Campaign]:
         """暂停活动"""
+        campaign = self._campaigns.get(campaign_id)
+        if not campaign:
+            return None
 
-        return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.PAUSED)
+        campaign.status = CampaignStatus.PAUSED
+        campaign.updated_at = datetime.now()
+        return campaign
 
-    async def get_campaign_stats(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Dict[str, Any]]:
+    def get_campaign_stats(self, campaign_id: int) -> Optional[Dict[str, Any]]:
         """获取活动统计"""
+        campaign = self._campaigns.get(campaign_id)
+        if not campaign:
+            return None
 
-        conditions = ["id = :campaign_id"]
-        params: dict = {"campaign_id": campaign_id}
-        if tenant_id > 0:
-            conditions.append("tenant_id = :tenant_id")
-            params["tenant_id"] = tenant_id
+        sent = campaign.sent_count
+        open_rate = (campaign.open_count / sent * 100) if sent > 0 else 0
+        click_rate = (campaign.click_count / sent * 100) if sent > 0 else 0
 
-        stmt = text(
-            f"SELECT sent_count, open_count, click_count FROM campaigns WHERE {' AND '.join(conditions)}"
-        )
-        result = await self.session.execute(stmt, params)
-        row = result.fetchone()
-        if not row:
-            return ApiResponse.error(message="营销活动不存在", code=1404)
+        return {
+            "campaign_id": campaign_id,
+            "sent_count": campaign.sent_count,
+            "open_count": campaign.open_count,
+            "click_count": campaign.click_count,
+            "open_rate": round(open_rate, 2),
+            "click_rate": round(click_rate, 2),
+        }
 
-        sent, opens, clicks = row
-        open_rate = (opens / sent * 100) if sent > 0 else 0.0
-        click_rate = (clicks / sent * 100) if sent > 0 else 0.0
-        return ApiResponse.success(
-            data={
-                "campaign_id": campaign_id,
-                "sent_count": sent,
-                "open_count": opens,
-                "click_count": clicks,
-                "open_rate": round(open_rate, 2),
-                "click_rate": round(click_rate, 2),
-            }
-        )
-
-    async def list_campaigns(
+    def list_campaigns(
         self,
         page: int = 1,
         page_size: int = 20,
         status: Optional[CampaignStatus] = None,
         campaign_type: Optional[CampaignType] = None,
-        tenant_id: int = 0,
-    ) -> ApiResponse[PaginatedData[Campaign]]:
+    ) -> Dict[str, Any]:
         """活动列表"""
+        filtered = list(self._campaigns.values())
 
-        conditions: List[str] = []
-        params: Dict[str, Any] = {"offset": (page - 1) * page_size, "limit": page_size}
-        if tenant_id > 0:
-            conditions.append("tenant_id = :tenant_id")
-            params["tenant_id"] = tenant_id
         if status:
-            conditions.append("status = :status")
-            params["status"] = status.value
+            filtered = [c for c in filtered if c.status == status]
         if campaign_type:
-            conditions.append("type = :type")
-            params["type"] = campaign_type.value
+            filtered = [c for c in filtered if c.type == campaign_type]
 
-        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        total = len(filtered)
+        start = (page - 1) * page_size
+        end = start + page_size
+        items = [c.to_dict() for c in filtered[start:end]]
 
-        count_stmt = text(f"SELECT COUNT(*) FROM campaigns {where}")
-        count_result = await self.session.execute(count_stmt, params)
-        total = count_result.scalar() or 0
+        return {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": (total + page_size - 1) // page_size,
+        }
 
-        select_stmt = text(
-            f"""
-            SELECT id, name, type, status, subject, content, target_audience,
-                   trigger_type, trigger_days, created_by,
-                   sent_count, open_count, click_count, created_at, updated_at
-            FROM campaigns {where}
-            ORDER BY created_at DESC
-            OFFSET :offset LIMIT :limit
-            """
-        )
-        result = await self.session.execute(select_stmt, params)
-        rows = result.fetchall()
-
-        items = [_row_to_campaign(r) for r in rows]
-        return ApiResponse.paginated(
-            items=items, total=total, page=page, page_size=page_size, message="查询成功"
-        )
-
-    async def record_event(
+    def record_event(
         self,
         campaign_id: int,
         customer_id: int,
         event_type: str,
-        tenant_id: int = 0,
-    ) -> ApiResponse[CampaignEvent]:
+    ) -> Optional[CampaignEvent]:
         """记录用户事件"""
+        campaign = self._campaigns.get(campaign_id)
+        if not campaign:
+            return None
 
-        now = datetime.now(UTC)
-            # Insert event
-        stmt = text(
-            """
-            INSERT INTO campaign_events (campaign_id, tenant_id, customer_id, event_type, created_at)
-            VALUES (:campaign_id, :tenant_id, :customer_id, :event_type, :now)
-            RETURNING id, campaign_id, customer_id, event_type, created_at
-            """
+        event = CampaignEvent(
+            id=len(self._events.get(campaign_id, [])) + 1,
+            campaign_id=campaign_id,
+            customer_id=customer_id,
+            event_type=event_type,
+            created_at=datetime.now(),
         )
-        result = await self.session.execute(
-            stmt,
-            {
-                "campaign_id": campaign_id,
-                "tenant_id": tenant_id,
-                "customer_id": customer_id,
-                "event_type": event_type,
-                "now": now,
-            },
-        )
-        row = result.fetchone()
-        if not row:
-            return ApiResponse.error(message="记录事件失败", code=500)
 
-            # Update counts
-        count_col = {
-            "sent": "sent_count",
-            "opened": "open_count",
-            "clicked": "click_count",
-        }.get(event_type)
-        if count_col:
-            await self.session.execute(
-                text(
-                    f"UPDATE campaigns SET {count_col} = {count_col} + 1 WHERE id = :id"
-                ),
-                {"id": campaign_id},
-            )
+        if campaign_id not in self._events:
+            self._events[campaign_id] = []
+        self._events[campaign_id].append(event)
 
-        return ApiResponse.success(data=_row_to_event(row), message="事件记录成功")
+        # 更新计数
+        if event_type == "sent":
+            campaign.sent_count += 1
+        elif event_type == "opened":
+            campaign.open_count += 1
+        elif event_type == "clicked":
+            campaign.click_count += 1
 
-    async def get_user_events(self, customer_id: int, tenant_id: int = 0) -> List[CampaignEvent]:
+        return event
+
+    def get_user_events(self, customer_id: int) -> List[CampaignEvent]:
         """获取用户的所有营销事件"""
+        result = []
+        for events in self._events.values():
+            for event in events:
+                if event.customer_id == customer_id:
+                    result.append(event)
+        return result
 
-        stmt = text(
-            """
-            SELECT id, campaign_id, customer_id, event_type, created_at
-            FROM campaign_events
-            WHERE customer_id = :customer_id
-              AND (:tenant_id = 0 OR tenant_id = :tenant_id)
-            ORDER BY created_at DESC
-            """
-        )
-        result = await self.session.execute(stmt, {"customer_id": customer_id, "tenant_id": tenant_id})
-        return [_row_to_event(r) for r in result.fetchall()]
-
-    async def setup_trigger(
+    def setup_trigger(
         self,
         campaign_id: int,
         trigger_type: TriggerType,
         trigger_days: Optional[int] = None,
-        tenant_id: int = 0,
-    ) -> ApiResponse[Campaign]:
+    ) -> Optional[Campaign]:
         """设置触发器"""
+        campaign = self._campaigns.get(campaign_id)
+        if not campaign:
+            return None
 
-        return await self.update_campaign(
-            campaign_id, tenant_id,
-            trigger_type=trigger_type,
-            trigger_days=trigger_days,
-        )
-
-    async def add_audience(self, campaign_id: int, audience_sql: str, tenant_id: int = 0) -> ApiResponse[Campaign]:
-        """添加目标受众"""
-
-        return await self.update_campaign(
-            campaign_id, tenant_id, target_audience=audience_sql
-        )
-
-    async def trigger_campaign(
-        self, campaign_id: int, customer_ids: List[int], tenant_id: int = 0
-    ) -> Dict[str, Any]:
-        """触发活动发送"""
-
-        sent = 0
-        for cid in customer_ids:
-            resp = await self.record_event(campaign_id, cid, "sent", tenant_id)
-            if resp.status.value == "success":
-                sent += 1
-        return {
-            "campaign_id": campaign_id,
-            "target_count": len(customer_ids),
-            "sent_count": sent,
-        }
-
-    async def get_campaign_events(
-        self, campaign_id: int, tenant_id: int = 0
-    ) -> List[CampaignEvent]:
-        """获取活动事件列表"""
-
-        stmt = text(
-            """
-            SELECT id, campaign_id, customer_id, event_type, created_at
-            FROM campaign_events
-            WHERE campaign_id = :campaign_id
-              AND (:tenant_id = 0 OR tenant_id = :tenant_id)
-            ORDER BY created_at DESC
-            """
-        )
-        result = await self.session.execute(stmt, {"campaign_id": campaign_id, "tenant_id": tenant_id})
-        return [_row_to_event(r) for r in result.fetchall()]
+        campaign.trigger_type = trigger_type
+        campaign.trigger_days = trigger_days
+        campaign.updated_at = datetime.now()
+        return campaign

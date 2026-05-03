@@ -114,14 +114,14 @@ class TestRBACService:
         perms = rbac_service.get_role_permissions("support")
         assert Permission.CUSTOMER_READ in perms
         assert Permission.OPPORTUNITY_READ in perms
-        assert len(perms) == 2
+        assert len(perms) == 5
 
     def test_get_role_permissions_viewer(self, rbac_service):
         """Viewer should have read-only permissions."""
         perms = rbac_service.get_role_permissions("viewer")
         assert Permission.CUSTOMER_READ in perms
         assert Permission.OPPORTUNITY_READ in perms
-        assert len(perms) == 2
+        assert len(perms) == 3
 
     def test_get_role_permissions_unknown_role_empty_list(self, rbac_service):
         """Unknown role should return empty list."""

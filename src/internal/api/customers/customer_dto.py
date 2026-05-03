@@ -9,7 +9,7 @@ class CreateCustomerDTO:
     name: str
     email: str
     phone: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: List[str] = None
 
     def __post_init__(self):
         if self.tags is None:
@@ -34,13 +34,9 @@ class CustomerResponseDTO:
     email: str
     status: str
     phone: Optional[str] = None
-    tags: Optional[List[str]] = None
+    tags: List[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
-
-    def __post_init__(self):
-        if self.tags is None:
-            self.tags = []
 
     def to_dict(self):
         return {

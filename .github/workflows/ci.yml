@@ -2,9 +2,9 @@ name: Dev Agent CI
 
 on:
   push:
-    branches: ['*']
+    branches: [main, develop, 'feature/**']
   pull_request:
-    branches: [master, develop]
+    branches: [main, develop]
 
 env:
   MODEL: MiniMax-M2.7
@@ -23,29 +23,13 @@ jobs:
     name: Unit Tests
     runs-on: ubuntu-latest
     needs: coordinator
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testdb
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/testdb
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install -q ".[dev]"
-      - run: PYTHONPATH=src pytest tests/unit/ -v --cov=src --cov-report=xml
+      - run: pip install -q pytest pytest-cov
+      - run: pytest tests/unit/ -v --cov=src --cov-report=xml
       - uses: codecov/codecov-action@v4
         if: always()
 
@@ -53,32 +37,22 @@ jobs:
     name: Integration Tests
     runs-on: ubuntu-latest
     needs: unit-test
-    env:
-      # docker-compose.test.yml brings up its own postgres:15 (test-db);
-      # match the credentials it sets so engine.py can connect.
-      DATABASE_URL: postgresql+psycopg2://test_user:test_pass@localhost:5432/test_db
-      # Same DB, async driver — the integration conftest opens an
-      # asyncpg engine and TRUNCATEs all tables between tests, so we
-      # must point it at the local test container, NEVER at production.
-      TEST_DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install -q ".[dev]" requests
-      - run: docker compose -f configs/docker-compose.test.yml up -d --wait
-      - run: PYTHONPATH=src pytest tests/integration/ -v
-      - if: always()
-        run: docker compose -f configs/docker-compose.test.yml down
+      - run: pip install -q pytest pytest-cov requests
+      - run: pytest tests/integration/ -v
+      - name: Start Mock Services
+        run: docker-compose -f configs/docker-compose.test.yml up -d
+      - run: sleep 5 && pytest tests/integration/ -v
+      - run: docker-compose -f configs/docker-compose.test.yml down
 
-  # DEPRECATED: code-review is now handled by pipeline-code-review.yml
-  # Keeping job definition but always skipping to avoid conflicts with new pipeline
   code-review:
     name: Code Review
     runs-on: ubuntu-latest
     needs: [coordinator, unit-test]
-    if: false  # disabled — use pipeline-code-review.yml instead
     steps:
       - uses: actions/checkout@v4
         with:
@@ -86,25 +60,24 @@ jobs:
       - name: Run Code Review Agent
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python3 docs/agents/code_review/review_agent.py
+        run: python3 agents/code_review/review_agent.py
 
   quality-check:
     name: Quality Control
     runs-on: ubuntu-latest
     needs: code-review
-    continue-on-error: false
     steps:
       - uses: actions/checkout@v4
       - run: pip install -q pylint flake8 mypy
       - run: |
-          pylint src/
-          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics || true
-          mypy src/ --ignore-missing-imports || true
+          pylint src/ --output-format=text
+          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          mypy src/ --ignore-missing-imports
 
   build:
     name: Build & Package
     runs-on: ubuntu-latest
-    needs: [unit-test, quality-check]
+    needs: [integration-test, quality-check]
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m py_compile src/**/*.py
@@ -115,7 +88,6 @@ jobs:
     name: Deploy
     runs-on: ubuntu-latest
     needs: build
-    if: github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main'
     steps:
-      - uses: actions/checkout@v4
       - run: echo "Deploy triggered" && python3 scripts/deploy.py

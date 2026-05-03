@@ -1,209 +1,92 @@
-"""租户管理服务 - async PostgreSQL via SQLAlchemy."""
+"""租户管理服务"""
 from typing import Dict, List, Optional, Any
-from datetime import datetime, UTC
-import json
-
-from sqlalchemy import text, func
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from models.response import ApiResponse, PaginatedData
-
+from datetime import datetime
 
 
 class TenantService:
     """租户管理服务"""
 
-    def __init__(self, session: AsyncSession):
-        self.session = session
+    def __init__(self):
+        # 模拟数据存储
+        self._tenants: Dict[int, Dict[str, Any]] = {}
+        self._counter = 0
 
-    def _require_session(self):
-        pass
-
-    async def create_tenant(self, name: str, plan: str, admin_email: str = None, **kwargs) -> ApiResponse[Dict]:
+    def create_tenant(self, name: str, plan: str, admin_email: str) -> Dict:
         """创建租户（公司）"""
-
-        now = datetime.now(UTC)
-        settings = kwargs.get("settings", {})
-        settings_json = json.dumps(settings) if isinstance(settings, dict) else settings
-        result = await self.session.execute(
-            text(
-                """
-                INSERT INTO tenants (name, plan, status, settings, created_at, updated_at)
-                VALUES (:name, :plan, 'active', :settings, :now, :now)
-                RETURNING id, name, plan, status, settings, created_at, updated_at
-                """
-            ),
-            {
-                "name": name,
-                "plan": plan,
-                "settings": settings_json,
-                "now": now,
-            },
-        )
-        row = result.fetchone()
-        tenant = self._row_to_dict(row)
-        return ApiResponse.success(data=tenant, message="租户创建成功")
-
-    async def get_tenant(self, tenant_id: int) -> ApiResponse[Dict]:
-        """获取租户详情"""
-
-        result = await self.session.execute(
-            text(
-                """
-                SELECT id, name, plan, status, settings, created_at, updated_at
-                FROM tenants
-                WHERE id = :tenant_id
-                LIMIT 1
-                """
-            ),
-            {"tenant_id": tenant_id},
-        )
-        row = result.fetchone()
-        if row is None:
-            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
-        return ApiResponse.success(data=self._row_to_dict(row))
-
-    async def update_tenant(self, tenant_id: int, **kwargs) -> ApiResponse[Dict]:
-        """更新租户信息"""
-
-        set_clauses = []
-        params: Dict = {"tenant_id": tenant_id}
-        allowed_fields = {"name", "plan", "status"}
-        for key, value in kwargs.items():
-            if key in allowed_fields:
-                set_clauses.append(f"{key} = :{key}")
-                params[key] = value
-        if "settings" in kwargs:
-            settings_val = kwargs["settings"]
-            settings_json = json.dumps(settings_val) if isinstance(settings_val, dict) else settings_val
-            set_clauses.append("settings = :settings")
-            params["settings"] = settings_json
-
-        if not set_clauses:
-            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
-
-        set_clauses.append("updated_at = :now")
-        params["now"] = datetime.now(UTC)
-
-        sql = text(
-            f"UPDATE tenants SET {', '.join(set_clauses)} "
-            f"WHERE id = :tenant_id "
-            f"RETURNING id, name, plan, status, settings, created_at, updated_at"
-        )
-        result = await self.session.execute(sql, params)
-        row = result.fetchone()
-        if row is None:
-            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
-        return ApiResponse.success(data=self._row_to_dict(row), message="租户信息更新成功")
-
-    async def list_tenants(
-        self,
-        page: int = 1,
-        page_size: int = 20,
-        status: Optional[str] = None,
-    ) -> ApiResponse[PaginatedData[Dict]]:
-        """租户列表"""
-
-            # Count total
-        count_sql = text("SELECT COUNT(*) FROM tenants")
-        count_params: Dict = {}
-        if status:
-            count_sql = text("SELECT COUNT(*) FROM tenants WHERE status = :status")
-            count_params = {"status": status}
-        total_result = await self.session.execute(count_sql, count_params)
-        total = total_result.scalar_one()
-
-            # Fetch page
-        offset = (page - 1) * page_size
-        fetch_sql = text(
-            """
-            SELECT id, name, plan, status, settings, created_at, updated_at
-            FROM tenants
-            """
-            + ("WHERE status = :status" if status else "")
-            + """
-            ORDER BY created_at DESC
-            LIMIT :limit OFFSET :offset
-            """
-        )
-        fetch_params: Dict = {}
-        if status:
-            fetch_params["status"] = status
-        fetch_params["limit"] = page_size
-        fetch_params["offset"] = offset
-        rows = await self.session.execute(fetch_sql, fetch_params)
-        items = [self._row_to_dict(r) for r in rows.fetchall()]
-        return ApiResponse.paginated(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
-            message="查询成功",
-        )
-
-    async def delete_tenant(self, tenant_id: int) -> ApiResponse[Dict]:
-        """删除租户（软删除）"""
-
-        now = datetime.now(UTC)
-        result = await self.session.execute(
-            text(
-                """
-                UPDATE tenants
-                SET status = 'deleted', updated_at = :now
-                WHERE id = :tenant_id AND status != 'deleted'
-                RETURNING id, name, plan, status, settings, created_at, updated_at
-                """
-            ),
-            {"tenant_id": tenant_id, "now": now},
-        )
-        row = result.fetchone()
-        if row is None:
-            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
-        return ApiResponse.success(data={"id": row[0], "name": row[1], "plan": row[2], "status": row[3], "settings": row[4], "created_at": row[5].isoformat() if row[5] else None, "updated_at": row[6].isoformat() if row[6] else None}, message="租户已删除")
-
-    async def get_tenant_stats(self, tenant_id: int) -> ApiResponse[Dict]:
-        """获取租户统计信息"""
-        return await self.get_tenant_usage(tenant_id)
-
-    async def get_tenant_usage(self, tenant_id: int) -> ApiResponse[Dict]:
-        """获取租户使用量统计（用户数、存储量、API调用量）"""
-            # Check tenant exists
-        tenant_result = await self.session.execute(
-            text("SELECT id FROM tenants WHERE id = :tenant_id LIMIT 1"),
-            {"tenant_id": tenant_id},
-        )
-        if tenant_result.fetchone() is None:
-            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
-
-            # Count users under this tenant
-        user_count_result = await self.session.execute(
-            text("SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id"),
-            {"tenant_id": tenant_id},
-        )
-        user_count = user_count_result.scalar_one()
-
-        usage = {
-            "tenant_id": tenant_id,
-            "user_count": user_count,
+        self._counter += 1
+        tenant_id = self._counter
+        now = datetime.utcnow().isoformat()
+        tenant = {
+            "id": tenant_id,
+            "name": name,
+            "plan": plan,
+            "admin_email": admin_email,
+            "status": "active",
+            "created_at": now,
+            "updated_at": now,
+            "deleted_at": None,
+            "user_count": 0,
             "storage_used": 0,
             "api_calls": 0,
         }
-        return ApiResponse.success(data=usage)
+        self._tenants[tenant_id] = tenant
+        return tenant
 
-    def _row_to_dict(self, row) -> Dict:
-        """Map a tenants row to a dict."""
-        settings_val = row[4]
-        if isinstance(settings_val, str):
-            try:
-                settings_val = json.loads(settings_val)
-            except (json.JSONDecodeError, TypeError):
-                settings_val = {}
+    def get_tenant(self, tenant_id: int) -> Dict:
+        """获取租户详情"""
+        tenant = self._tenants.get(tenant_id)
+        if not tenant:
+            raise ValueError(f"Tenant {tenant_id} not found")
+        if tenant.get("deleted_at"):
+            raise ValueError(f"Tenant {tenant_id} has been deleted")
+        return tenant
+
+    def update_tenant(self, tenant_id: int, **kwargs) -> Dict:
+        """更新租户信息"""
+        tenant = self.get_tenant(tenant_id)
+        allowed_fields = {"name", "plan", "admin_email", "status"}
+        for key, value in kwargs.items():
+            if key in allowed_fields:
+                tenant[key] = value
+        tenant["updated_at"] = datetime.utcnow().isoformat()
+        return tenant
+
+    def suspend_tenant(self, tenant_id: int):
+        """暂停租户"""
+        tenant = self.get_tenant(tenant_id)
+        tenant["status"] = "suspended"
+        tenant["updated_at"] = datetime.utcnow().isoformat()
+
+    def delete_tenant(self, tenant_id: int):
+        """删除租户（软删除）"""
+        tenant = self.get_tenant(tenant_id)
+        tenant["status"] = "deleted"
+        tenant["deleted_at"] = datetime.utcnow().isoformat()
+        tenant["updated_at"] = tenant["deleted_at"]
+
+    def list_tenants(self, page: int = 1, page_size: int = 20, status: Optional[str] = None) -> Dict:
+        """租户列表"""
+        tenants = [t for t in self._tenants.values() if t["status"] != "deleted"]
+        if status:
+            tenants = [t for t in tenants if t["status"] == status]
+        total = len(tenants)
+        start = (page - 1) * page_size
+        end = start + page_size
         return {
-            "id": row[0],
-            "name": row[1],
-            "plan": row[2],
-            "status": row[3],
-            "settings": settings_val or {},
-            "created_at": row[5].isoformat() if row[5] else None,
-            "updated_at": row[6].isoformat() if row[6] else None,
+            "items": tenants[start:end],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+        }
+
+    def get_tenant_usage(self, tenant_id: int) -> Dict:
+        """获取租户使用量
+        用户数、存储量、API调用量
+        """
+        tenant = self.get_tenant(tenant_id)
+        return {
+            "tenant_id": tenant_id,
+            "user_count": tenant.get("user_count", 0),
+            "storage_used": tenant.get("storage_used", 0),
+            "api_calls": tenant.get("api_calls", 0),
         }

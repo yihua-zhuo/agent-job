@@ -15,6 +15,7 @@ from db.models.ticket import TicketModel
 from db.models.ticket_reply import TicketReplyModel
 from db.models.user import UserModel
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
+from db.models.rbac import RoleModel, PermissionModel, RolePermissionModel, UserRoleModel
 
 __all__ = [
     "ActivityModel",

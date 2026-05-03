@@ -17,6 +17,9 @@ from api import (
     tickets_router,
     activities_router,
     notifications_router,
+    automation_router,
+    reports_router,
+    rbac_router,
 )
 
 
@@ -99,6 +102,9 @@ def create_app() -> FastAPI:
     app.include_router(tickets_router)
     app.include_router(activities_router)
     app.include_router(notifications_router)
+    app.include_router(automation_router)
+    app.include_router(reports_router)
+    app.include_router(rbac_router)
 
     @app.get("/")
     async def health():

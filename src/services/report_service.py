@@ -1,7 +1,6 @@
-"""报表生成服务"""
 import csv
 import json
-from datetime import datetime, UTC
+from datetime import datetime
 from typing import Dict, List, Optional
 
 
@@ -11,7 +10,7 @@ class ReportService:
     def __init__(self):
         self._scheduled_reports = {}
 
-    async def generate_pdf_report(self, report_data: Dict, title: str) -> Dict:
+    def generate_pdf_report(self, report_data: Dict, title: str) -> Dict:
         """生成PDF报表"""
         # Placeholder for PDF generation logic
         # In production, use libraries like reportlab, weasyprint, or pdfkit
@@ -19,7 +18,7 @@ class ReportService:
             "status": "generated",
             "title": title,
             "format": "pdf",
-            "generated_at": datetime.now(UTC).isoformat(),
+            "generated_at": datetime.utcnow().isoformat(),
             "data_summary": {
                 "labels_count": len(report_data.get("labels", [])),
                 "datasets_count": len(report_data.get("datasets", [])),
@@ -27,7 +26,7 @@ class ReportService:
         }
         return result
 
-    async def generate_excel_report(self, report_data: Dict, title: str) -> Dict:
+    def generate_excel_report(self, report_data: Dict, title: str) -> Dict:
         """生成Excel报表"""
         # Placeholder for Excel generation logic
         # In production, use openpyxl or xlsxwriter
@@ -35,7 +34,7 @@ class ReportService:
             "status": "generated",
             "title": title,
             "format": "excel",
-            "generated_at": datetime.now(UTC).isoformat(),
+            "generated_at": datetime.utcnow().isoformat(),
             "data_summary": {
                 "labels_count": len(report_data.get("labels", [])),
                 "datasets_count": len(report_data.get("datasets", [])),
@@ -43,7 +42,7 @@ class ReportService:
         }
         return result
 
-    async def export_to_csv(self, data: List[Dict], filename: str) -> Dict:
+    def export_to_csv(self, data: List[Dict], filename: str) -> Dict:
         """导出CSV"""
         if not data:
             return {"status": "error", "message": "No data to export"}
@@ -58,11 +57,7 @@ class ReportService:
                 rows.append([str(v) for v in row])
 
         # Write CSV file
-        import os as _os
-        import tempfile as _tmp
-        _base = _os.environ.get("EXPORT_DIR") or _os.path.join(_tmp.gettempdir(), "exports")
-        _os.makedirs(_base, exist_ok=True)
-        filepath = _os.path.join(_base, filename)
+        filepath = f"/home/node/.openclaw/workspace/dev-agent-system/shared-memory/results/{filename}"
         with open(filepath, "w", newline="", encoding="utf-8") as f:
             writer = csv.writer(f)
             if headers:
@@ -74,10 +69,10 @@ class ReportService:
             "filename": filename,
             "filepath": filepath,
             "rows_exported": len(rows),
-            "generated_at": datetime.now(UTC).isoformat(),
+            "generated_at": datetime.utcnow().isoformat(),
         }
 
-    async def schedule_report(
+    def schedule_report(
         self,
         report_id: int,
         schedule: Dict,
@@ -87,7 +82,7 @@ class ReportService:
         schedule_entry = {
             "report_id": report_id,
             "schedule": schedule,
-            "created_at": datetime.now(UTC).isoformat(),
+            "created_at": datetime.utcnow().isoformat(),
             "active": True,
         }
         self._scheduled_reports[report_id] = schedule_entry

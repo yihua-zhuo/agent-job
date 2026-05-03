@@ -11,7 +11,7 @@ class WorkflowStatus(Enum):
     COMPLETED = "completed"
 
 
-class WorkflowTriggerType(Enum):
+class TriggerType(Enum):
     MANUAL = "manual"
     SCHEDULED = "scheduled"
     EVENT = "event"  # 事件触发
@@ -22,7 +22,7 @@ class Workflow:
     id: Optional[int]
     name: str
     description: Optional[str]
-    trigger_type: WorkflowTriggerType
+    trigger_type: TriggerType
     trigger_config: Dict  # 触发器配置
     actions: List[Dict]  # 执行动作列表
     conditions: List[Dict]  # 条件列表
