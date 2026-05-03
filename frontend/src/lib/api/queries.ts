@@ -124,8 +124,8 @@ export function useUsers(page = 1) {
     staleTime: 60 * 1000,
   });
 }
+// ── Tasks ───────────────────────────────────────────────────────────────────
 
-// ── Tasks ────────────────────────────────────────────────────────────────────
 export function useTasks(page = 1, status = "") {
   const token = useAuthStore((s) => s.token);
   const params = new URLSearchParams({ page: String(page), page_size: "20" });

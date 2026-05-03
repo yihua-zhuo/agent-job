@@ -53,7 +53,7 @@ export default function CustomersPage() {
   }, []);
 
   const { data, isLoading, isError } = useCustomersData(
-    keyword ? 1 : page,
+    debouncedKeyword ? 1 : page,
     debouncedKeyword
   );
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
