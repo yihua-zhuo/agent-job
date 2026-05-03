@@ -1,7 +1,7 @@
 """Customer router — all /api/v1/customers endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List, Any
+from typing import Optional, List
 import re
 
 from db.connection import get_db

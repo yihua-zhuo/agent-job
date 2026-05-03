@@ -1,5 +1,5 @@
 """Activities router — /api/v1/activities endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
