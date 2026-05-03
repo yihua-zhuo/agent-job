@@ -2,13 +2,15 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/lib/store/auth-store";
-import { Users, TrendingUp, Ticket, BarChart3, Sparkles, LogOut } from "lucide-react";
+import { Users, TrendingUp, Ticket, BarChart3, Sparkles, LogOut, CheckSquare } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 const navItems = [
   { href: "/customers", label: "Customers", icon: Users },
   { href: "/sales", label: "Opportunities", icon: TrendingUp },
   { href: "/tickets", label: "Tickets", icon: Ticket },
+  { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/ai", label: "AI", icon: Sparkles },
 ];
@@ -40,17 +42,16 @@ export function AppSidebar() {
         ))}
       </nav>
       <div className="border-t p-3">
+        {user && (
         <div className="mb-2 text-xs">
-          <div className="font-medium">{user?.full_name ?? user?.username ?? "—"}</div>
-          <div className="text-muted-foreground">{user?.role ?? "—"}</div>
+          <div className="font-medium">{user.full_name ?? user.username}</div>
+          <div className="text-muted-foreground">{user.role}</div>
         </div>
-        <button
-          onClick={() => { clearAuth(); window.location.href = "/login"; }}
-          className="flex w-full items-center gap-2 text-xs text-muted-foreground hover:text-foreground"
-        >
+        )}
+        <Button variant="ghost" size="sm" onClick={() => { clearAuth(); window.location.href = "/login"; }}>
           <LogOut className="h-3.5 w-3.5" />
           Sign Out
-        </button>
+        </Button>
       </div>
     </aside>
   );

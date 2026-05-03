@@ -1,7 +1,8 @@
 "use client";
 import { useState } from "react";
-import { useOpportunities, useCreateOpportunity } from "@/lib/api/queries";
-import { useMutation } from "@tanstack/react-query";
+import { useOpportunities } from "@/lib/api/queries";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const STAGE_COLORS: Record<string, string> = {
   lead: "bg-blue-100 text-blue-800",
@@ -11,14 +12,6 @@ const STAGE_COLORS: Record<string, string> = {
   closed_won: "bg-green-100 text-green-800",
   closed_lost: "bg-red-100 text-red-800",
 };
-
-function StageBadge({ stage }: { stage: string }) {
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${STAGE_COLORS[stage] ?? "bg-gray-100 text-gray-600"}`}>
-      {stage ?? "—"}
-    </span>
-  );
-}
 
 function fmtAmt(v: unknown) {
   if (!v && v !== 0) return "—";
@@ -56,7 +49,7 @@ export default function SalesPage() {
             {items.map((o) => (
               <tr key={String(o.id)} className="border-b hover:bg-muted/50 transition-colors">
                 <td className="px-3 py-2.5 font-medium">{String(o.name ?? "")}</td>
-                <td className="px-3 py-2.5"><StageBadge stage={String(o.stage ?? "")} /></td>
+                <td className="px-3 py-2.5"><Badge colorClass={STAGE_COLORS[String(o.stage)] ?? "bg-gray-100 text-gray-600"}>{String(o.stage ?? "—")}</Badge></td>
                 <td className="px-3 py-2.5 text-right font-semibold text-green-700">{fmtAmt(o.amount)}</td>
                 <td className="px-3 py-2.5 text-muted-foreground">{o.probability != null ? `${o.probability}%` : "—"}</td>
                 <td className="px-3 py-2.5 font-mono text-muted-foreground text-xs">{o.customer_id ?? "—"}</td>
@@ -69,10 +62,10 @@ export default function SalesPage() {
 
       {info && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Showing {((page - 1) * 20) + 1}–{Math.min(page * 20, info.total as number)} of {info.total as number}</span>
+          <span>Showing {info.total === 0 ? 0 : ((page - 1) * 20) + 1}–{Math.min(page * 20, info.total as number)} of {info.total as number}</span>
           <div className="flex gap-1">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded border px-2 py-1 hover:bg-muted disabled:opacity-40">← Prev</button>
-            <button disabled={!info.has_next} onClick={() => setPage(page + 1)} className="rounded border px-2 py-1 hover:bg-muted disabled:opacity-40">Next →</button>
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</Button>
+            <Button variant="outline" size="sm" disabled={!info.has_next} onClick={() => setPage(page + 1)}>Next →</Button>
           </div>
         </div>
       )}
