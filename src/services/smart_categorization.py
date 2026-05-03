@@ -5,7 +5,6 @@
 
 from typing import List, Dict, Optional
 from dataclasses import dataclass
-import hashlib
 import random
 
 
@@ -25,7 +24,7 @@ class SmartCategorizationService:
         "hot_lead",       # 高质量线索
         "warm_lead",      # 中等质量线索
         "cold_lead",      # 低质量线索
-        "disqualified",  # 不合格线索
+        " disqualified",  # 不合格线索
     ]
 
     # RFM 分群标签
@@ -42,7 +41,7 @@ class SmartCategorizationService:
         返回: {category, score, reasoning}
         """
         score = self.score_lead(lead_data)
-
+        
         # 决策树规则
         if score >= 75:
             category = "hot_lead"
@@ -56,7 +55,7 @@ class SmartCategorizationService:
         else:
             category = "disqualified"
             reasoning = "线索不合格或不符合目标客户画像"
-
+        
         return {
             "category": category,
             "score": score,
@@ -70,7 +69,7 @@ class SmartCategorizationService:
         """
         total_score = 0.0
         max_score = 100.0
-
+        
         # 1. 来源评分 (最高 25 分)
         source_scores = {
             "referral": 25,
@@ -82,7 +81,7 @@ class SmartCategorizationService:
         }
         source = lead_data.get("source", "unknown")
         source_score = source_scores.get(source, 5)
-
+        
         # 2. 公司规模评分 (最高 25 分)
         company_size = lead_data.get("company_size", 0)
         if company_size >= 1000:
@@ -97,7 +96,7 @@ class SmartCategorizationService:
             company_score = 10
         else:
             company_score = 5
-
+        
         # 3. 职位评分 (最高 25 分)
         title = lead_data.get("title", "").lower()
         if any(kw in title for kw in ["ceo", "cto", "cfo", "founder", "owner", "partner"]):
@@ -110,11 +109,11 @@ class SmartCategorizationService:
             title_score = 12
         else:
             title_score = 5
-
+        
         # 4. 行为评分 (最高 25 分)
         engagement_score = 0
         engaged_actions = lead_data.get("engaged_actions", [])
-
+        
         if "downloaded_trial" in engaged_actions:
             engagement_score += 10
         if "attended_webinar" in engaged_actions:
@@ -127,9 +126,9 @@ class SmartCategorizationService:
             engagement_score += 8
         if "booked_demo" in engaged_actions:
             engagement_score += 12
-
+        
         total_score = source_score + company_score + title_score + engagement_score
-
+        
         return min(total_score, max_score)
 
     def auto_tag_customer(self, customer_id: int) -> List[str]:
@@ -137,10 +136,11 @@ class SmartCategorizationService:
         自动标签客户
         基于：行为数据、交易数据
         """
+        import hashlib
         seed = int(hashlib.md5(str(customer_id).encode()).hexdigest()[:8], 16)
-
+        
         tags = []
-
+        
         # 基于活跃度
         if seed % 3 == 0:
             tags.append("active_user")
@@ -148,7 +148,7 @@ class SmartCategorizationService:
             tags.append("occasional_user")
         else:
             tags.append("dormant_user")
-
+        
         # 基于价值
         if seed % 5 == 0:
             tags.append("high_value")
@@ -156,7 +156,7 @@ class SmartCategorizationService:
             tags.append("medium_value")
         else:
             tags.append("low_value")
-
+        
         # 基于产品使用
         if seed % 7 == 0:
             tags.append("enterprise_tier")
@@ -166,7 +166,7 @@ class SmartCategorizationService:
             tags.append("standard_tier")
         else:
             tags.append("basic_tier")
-
+        
         # 基于行为特征
         if seed % 11 < 3:
             tags.append("early_adopter")
@@ -174,7 +174,7 @@ class SmartCategorizationService:
             tags.append("feature_lover")
         else:
             tags.append("casual_user")
-
+        
         return tags
 
     def segment_customers(self) -> List[Dict]:
@@ -184,16 +184,16 @@ class SmartCategorizationService:
         """
         # 模拟生成客户分群数据
         segments = []
-
+        
         # 生成模拟 RFM 分数
         random.seed(42)
         for i in range(1, 501):
             r_score = random.randint(1, 5)
             f_score = random.randint(1, 5)
             m_score = random.randint(1, 5)
-
+            
             rfm_total = r_score + f_score + m_score
-
+            
             # 确定分群
             if rfm_total >= 12:
                 segment = "VIP"
@@ -203,7 +203,7 @@ class SmartCategorizationService:
                 segment = "Dormant"
             else:
                 segment = "AtRisk"
-
+            
             segments.append({
                 "customer_id": i,
                 "recency_score": r_score,
@@ -213,7 +213,7 @@ class SmartCategorizationService:
                 "segment": segment,
                 "description": self.RFM_SEGMENTS[segment]["description"],
             })
-
-        random.seed(None)
-
+        
+        random.seed()
+        
         return segments

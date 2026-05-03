@@ -1,10 +1,10 @@
-from typing import List, Dict, Any
+from typing import List, Dict
 
 
 class AutomationRules:
     """预设自动化规则"""
 
-    RULES: Dict[str, Any] = {
+    RULES = {
         "new_customer_welcome": {
             "name": "新客户欢迎",
             "trigger": "event.customer.created",

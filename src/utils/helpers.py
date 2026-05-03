@@ -94,7 +94,7 @@ def is_valid_ip(ip: str) -> bool:
 
 def deep_get(dictionary: Dict, *keys, default=None) -> Any:
     """安全获取嵌套字典值"""
-    result: Any = dictionary
+    result = dictionary
     for key in keys:
         if isinstance(result, dict):
             result = result.get(key)
@@ -109,7 +109,7 @@ def deep_get(dictionary: Dict, *keys, default=None) -> Any:
 
 def flatten_dict(d: Dict, parent_key: str = '', sep: str = '.') -> Dict:
     """扁平化嵌套字典"""
-    items: list[tuple] = []
+    items = []
     for k, v in d.items():
         new_key = f"{parent_key}{sep}{k}" if parent_key else k
         if isinstance(v, dict):
@@ -122,7 +122,7 @@ def flatten_dict(d: Dict, parent_key: str = '', sep: str = '.') -> Dict:
                     items.append((f"{new_key}[{i}]", item))
         else:
             items.append((new_key, v))
-    return dict(items)  # type: ignore[assignment]
+    return dict(items)
 
 
 def chunk_list(lst: List, chunk_size: int) -> List[List]:

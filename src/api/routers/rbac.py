@@ -141,7 +141,7 @@ async def list_role_permissions(
 ):
     async with get_db() as session:
         svc = RBACService(session)
-        result = await svc.list_role_permissions(role_id=role_id)
+        result = await svc.list_role_permissions(role_id=role_id, tenant_id=ctx.tenant_id)
         return result.to_dict(status_code=_status(result.status))
 
 
@@ -202,7 +202,7 @@ async def get_user_roles(
 ):
     async with get_db() as session:
         svc = RBACService(session)
-        result = await svc.get_user_roles(user_id=user_id)
+        result = await svc.get_user_roles(user_id=user_id, tenant_id=ctx.tenant_id)
         return result.to_dict()
 
 
@@ -213,7 +213,7 @@ async def get_user_permissions(
 ):
     async with get_db() as session:
         svc = RBACService(session)
-        result = await svc.get_user_permissions(user_id=user_id)
+        result = await svc.get_user_permissions(user_id=user_id, tenant_id=ctx.tenant_id)
         return result.to_dict()
 
 

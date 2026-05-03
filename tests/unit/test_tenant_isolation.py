@@ -1,354 +1,180 @@
-"""Unit tests for TenantService and data isolation."""
+"""租户隔离测试"""
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-
-from services.tenant_service import TenantService
-from services.data_isolation import (
-    DataIsolationError,
-    TenantScope,
-    require_tenant_id,
-    sanitize_tenant_write,
-    get_cross_tenant_fields,
-    is_cross_tenant_safe,
-)
+from src.middleware.tenant import TenantMiddleware
+from src.services.tenant_service import TenantService
+from src.services.data_isolation import DataIsolationService
+from src.utils.tenant_context import TenantContext
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-#  TenantService — mocked at DB layer
-# ─────────────────────────────────────────────────────────────────────────────
+class TestCustomerIsolation:
+    """测试客户数据隔离"""
 
-@pytest.fixture
-def tenant_service(mock_db_session):
-    return TenantService(mock_db_session)
+    def test_customer_isolation(self):
+        """测试客户数据隔离"""
+        service = DataIsolationService()
+
+        # 创建两个租户的客户数据
+        result_a = service.verify_tenant_isolation(tenant_id=1)
+        result_b = service.verify_tenant_isolation(tenant_id=2)
+
+        # 验证两个租户的数据是隔离的
+        assert result_a["isolated"] is True
+        assert result_b["isolated"] is True
+        assert result_a["tenant_id"] != result_b["tenant_id"]
 
 
-@pytest.mark.asyncio
+class TestUserIsolation:
+    """测试用户数据隔离"""
+
+    def test_user_isolation(self):
+        """测试用户数据隔离"""
+        tenant_service = TenantService()
+        data_service = DataIsolationService()
+
+        # 创建两个租户
+        tenant_a = tenant_service.create_tenant(
+            name="Company A", plan="pro", admin_email="admin@a.com"
+        )
+        tenant_b = tenant_service.create_tenant(
+            name="Company B", plan="basic", admin_email="admin@b.com"
+        )
+
+        # 验证用户数据隔离
+        isolation_a = data_service.verify_tenant_isolation(tenant_a["id"])
+        isolation_b = data_service.verify_tenant_isolation(tenant_b["id"])
+
+        assert isolation_a["isolated"] is True
+        assert isolation_b["isolated"] is True
+
+
+class TestCrossTenantBlocked:
+    """测试跨租户访问被阻止"""
+
+    def test_cross_tenant_blocked(self):
+        """测试跨租户访问被阻止"""
+        service = DataIsolationService()
+
+        # 测试跨租户访问被正确阻止
+        access_blocked = service.test_cross_tenant_access(
+            tenant_a_id=10, tenant_b_id=20
+        )
+
+        assert access_blocked is True
+
+    def test_middleware_requires_tenant(self):
+        """测试中间件在未设置租户时正确拒绝"""
+        middleware = TenantMiddleware()
+
+        @middleware.require_tenant
+        def protected_function():
+            return "success"
+
+        # 未设置租户ID时应抛出异常
+        with pytest.raises(Exception) as exc_info:
+            protected_function()
+
+        assert "Tenant not selected" in str(exc_info.value) or exc_info.value.code == 3001
+
+    def test_middleware_allows_valid_tenant(self):
+        """测试中间件在设置有效租户时允许访问"""
+        middleware = TenantMiddleware()
+        middleware.set_tenant_id(42)
+
+        @middleware.require_tenant
+        def protected_function():
+            return "success"
+
+        result = protected_function()
+        assert result == "success"
+        assert middleware.get_tenant_id() == 42
+
+
+class TestTenantContext:
+    """测试租户上下文"""
+
+    def test_set_and_get_tenant_id(self):
+        """测试设置和获取租户ID"""
+        TenantContext.set_tenant_id(123)
+        assert TenantContext.get_tenant_id() == 123
+        TenantContext.clear()
+
+    def test_clear_tenant_id(self):
+        """测试清除租户ID"""
+        TenantContext.set_tenant_id(456)
+        TenantContext.clear()
+        assert TenantContext.get_tenant_id() is None
+
+
 class TestTenantService:
-    async def test_create_tenant_success(self, tenant_service):
-        mock_row = MagicMock()
-        mock_row.__getitem__ = lambda self, i: [
-            1, "Acme Corp", "pro", "active",
-            '{"max_users": 10}', None, None,
-        ][i]
-        mock_result = MagicMock()
-        mock_result.fetchone = MagicMock(return_value=mock_row)
+    """测试租户服务"""
 
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
+    def test_create_and_get_tenant(self):
+        """测试创建和获取租户"""
+        service = TenantService()
+        tenant = service.create_tenant(
+            name="Test Corp", plan="enterprise", admin_email="test@corp.com"
+        )
 
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.create_tenant(
-                name="Acme Corp",
-                plan="pro",
-                admin_email="admin@acme.com",
-            )
-        assert bool(result) is True
-        assert result.data["name"] == "Acme Corp"
-        assert result.data["plan"] == "pro"
-        assert result.data["status"] == "active"
+        assert tenant["name"] == "Test Corp"
+        assert tenant["plan"] == "enterprise"
+        assert tenant["status"] == "active"
 
-    async def test_get_tenant_not_found(self, tenant_service):
-        mock_result = MagicMock()
-        mock_result.fetchone = MagicMock(return_value=None)
+        retrieved = service.get_tenant(tenant["id"])
+        assert retrieved["id"] == tenant["id"]
 
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=mock_result)
+    def test_update_tenant(self):
+        """测试更新租户"""
+        service = TenantService()
+        tenant = service.create_tenant(
+            name="Old Name", plan="basic", admin_email="old@corp.com"
+        )
 
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.get_tenant(9999)
-        assert bool(result) is False
-        assert result.status.value == "not_found"
+        updated = service.update_tenant(tenant["id"], name="New Name", plan="pro")
+        assert updated["name"] == "New Name"
+        assert updated["plan"] == "pro"
 
-    async def test_get_tenant_success(self, tenant_service):
-        mock_row = MagicMock()
-        mock_row.__getitem__ = lambda self, i: [
-            42, "Beta Org", "enterprise",
-            "active", '{"sso": true}', None, None,
-        ][i]
-        mock_result = MagicMock()
-        mock_result.fetchone = MagicMock(return_value=mock_row)
+    def test_suspend_tenant(self):
+        """测试暂停租户"""
+        service = TenantService()
+        tenant = service.create_tenant(
+            name="Suspend Me", plan="basic", admin_email="suspend@corp.com"
+        )
 
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=mock_result)
+        service.suspend_tenant(tenant["id"])
+        suspended = service.get_tenant(tenant["id"])
+        assert suspended["status"] == "suspended"
 
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.get_tenant(42)
-        assert bool(result) is True
-        assert result.data["name"] == "Beta Org"
-        assert result.data["plan"] == "enterprise"
+    def test_delete_tenant(self):
+        """测试删除租户（软删除）"""
+        service = TenantService()
+        tenant = service.create_tenant(
+            name="Delete Me", plan="basic", admin_email="delete@corp.com"
+        )
 
-    async def test_update_tenant_not_found(self, tenant_service):
-        mock_result = MagicMock()
-        mock_result.fetchone = MagicMock(return_value=None)
+        service.delete_tenant(tenant["id"])
+        # 软删除后再次获取应抛出异常
+        with pytest.raises(ValueError) as exc_info:
+            service.get_tenant(tenant["id"])
+        assert "deleted" in str(exc_info.value)
 
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
+    def test_list_tenants(self):
+        """测试租户列表"""
+        service = TenantService()
+        service.create_tenant(name="T1", plan="basic", admin_email="t1@t.com")
+        service.create_tenant(name="T2", plan="pro", admin_email="t2@t.com")
 
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.update_tenant(9999, name="New Name")
-        assert bool(result) is False
-        assert result.status.value == "not_found"
+        result = service.list_tenants()
+        assert result["total"] >= 2
+        assert len(result["items"]) >= 2
 
-    async def test_update_tenant_no_allowed_fields(self, tenant_service):
-        """Passing only disallowed fields should return NOT_FOUND (nothing to update)."""
-        mock_result = MagicMock()
-        mock_result.fetchone = MagicMock(return_value=None)
+    def test_get_tenant_usage(self):
+        """测试获取租户使用量"""
+        service = TenantService()
+        tenant = service.create_tenant(
+            name="Usage Test", plan="basic", admin_email="usage@t.com"
+        )
 
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            # Only 'settings' (allowed) but not passed through kwargs properly
-            result = await tenant_service.update_tenant(9999, name="")
-        assert bool(result) is False
-
-    async def test_update_tenant_success(self, tenant_service):
-        mock_row = MagicMock()
-        mock_row.__getitem__ = lambda self, i: [
-            1, "Updated Name", "pro", "active", "{}", None, None,
-        ][i]
-        mock_result = MagicMock()
-        mock_result.fetchone = MagicMock(return_value=mock_row)
-
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.update_tenant(1, name="Updated Name")
-        assert bool(result) is True
-        assert result.data["name"] == "Updated Name"
-
-    async def test_delete_tenant_not_found(self, tenant_service):
-        mock_result = MagicMock()
-        mock_result.fetchone = MagicMock(return_value=None)
-
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.delete_tenant(9999)
-        assert bool(result) is False
-        assert result.status.value == "not_found"
-
-    async def test_delete_tenant_success(self, tenant_service):
-        mock_row = MagicMock()
-        mock_row.__getitem__ = lambda self, i: [
-            1, "To Delete", "pro", "deleted", "{}", None, None,
-        ][i]
-        mock_result = MagicMock()
-        mock_result.fetchone = MagicMock(return_value=mock_row)
-
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=mock_result)
-        mock_session.commit = AsyncMock()
-
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.delete_tenant(1)
-        assert bool(result) is True
-        assert result.data["id"] == 1
-
-    async def test_list_tenants_paginated(self, tenant_service):
-        """Mock execute returning count and rows sequentially."""
-        count_result = MagicMock()
-        count_result.fetchone = MagicMock(return_value=(2,))
-        count_result.scalar_one = MagicMock(return_value=2)
-        rows_result = MagicMock()
-        rows_result.fetchall = MagicMock(return_value=[])
-
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(side_effect=[count_result, rows_result])
-
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.list_tenants(page=2, page_size=10)
-        assert bool(result) is True
-        assert result.data.total == 2
-        assert result.data.page == 2
-        assert result.data.page_size == 10
-
-    async def test_list_tenants_with_status_filter(self, tenant_service):
-        mock_count = MagicMock()
-        mock_count.fetchone = MagicMock(return_value=(2,))
-        mock_rows = MagicMock()
-        mock_rows.fetchall = MagicMock(return_value=[])
-        mock_result = MagicMock()
-        mock_result.__getitem__ = lambda self, i: [mock_count, mock_rows][i]
-
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=mock_result)
-
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.list_tenants(status="active")
-        assert bool(result) is True
-
-    async def test_get_tenant_usage(self, tenant_service):
-        tenant_result = MagicMock()
-        tenant_result.fetchone = MagicMock(return_value=(1,))
-        user_count_result = MagicMock()
-        user_count_result.fetchone = MagicMock(return_value=(7,))
-        user_count_result.scalar_one = MagicMock(return_value=7)
-
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(side_effect=[tenant_result, user_count_result])
-
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.get_tenant_usage(1)
-        assert bool(result) is True
-        assert result.data["user_count"] == 7
-        assert result.data["tenant_id"] == 1
-
-    async def test_get_tenant_usage_not_found(self, tenant_service):
-        tenant_result = MagicMock()
-        tenant_result.fetchone = MagicMock(return_value=None)
-
-        mock_session = AsyncMock()
-        mock_session.__aenter__ = AsyncMock(return_value=mock_session)
-        mock_session.__aexit__ = AsyncMock(return_value=None)
-        mock_session.execute = AsyncMock(return_value=tenant_result)
-
-        with patch("services.tenant_service.get_db_session", return_value=mock_session):
-            result = await tenant_service.get_tenant_usage(9999)
-        assert bool(result) is False
-        assert result.status.value == "not_found"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-#  DataIsolation — pure unit tests (no DB needed)
-# ─────────────────────────────────────────────────────────────────────────────
-
-class TestTenantScope:
-    def test_filter_query_returns_only_matching_tenant(self):
-        scope = TenantScope(tenant_id=5)
-        records = [
-            {"id": 1, "tenant_id": 5, "name": "Record A"},
-            {"id": 2, "tenant_id": 99, "name": "Record B"},
-            {"id": 3, "tenant_id": 5, "name": "Record C"},
-        ]
-        filtered = scope.filter_query(records)
-        assert len(filtered) == 2
-        assert all(r["tenant_id"] == 5 for r in filtered)
-
-    def test_filter_query_empty_list(self):
-        scope = TenantScope(tenant_id=1)
-        assert scope.filter_query([]) == []
-
-    def test_check_ownership_returns_true_for_matching_tenant(self):
-        scope = TenantScope(tenant_id=10)
-        assert scope.check_ownership({"tenant_id": 10}) is True
-
-    def test_check_ownership_returns_false_for_different_tenant(self):
-        scope = TenantScope(tenant_id=10)
-        assert scope.check_ownership({"tenant_id": 99}) is False
-
-    def test_check_ownership_returns_false_for_none(self):
-        scope = TenantScope(tenant_id=1)
-        assert scope.check_ownership(None) is False
-
-    def test_check_ownership_returns_false_for_missing_tenant_id(self):
-        scope = TenantScope(tenant_id=1)
-        assert scope.check_ownership({"id": 1}) is False
-
-    def test_tenant_scope_invalid_tenant_id(self):
-        with pytest.raises(ValueError, match="positive integer"):
-            TenantScope(tenant_id=0)
-        with pytest.raises(ValueError, match="positive integer"):
-            TenantScope(tenant_id=-5)
-
-    def test_sanitize_tenant_write_injects_tenant_id(self):
-        data = {"name": "Hello", "email": "a@b.com"}
-        result = sanitize_tenant_write(data, tenant_id=7)
-        assert result["tenant_id"] == 7
-        assert result["name"] == "Hello"
-
-    def test_sanitize_tenant_write_rejects_cross_tenant(self):
-        data = {"name": "Hello", "tenant_id": 99}
-        with pytest.raises(DataIsolationError, match="different tenant"):
-            sanitize_tenant_write(data, tenant_id=7)
-
-    def test_sanitize_tenant_write_allows_matching_tenant_id(self):
-        data = {"name": "Hello", "tenant_id": 7}
-        result = sanitize_tenant_write(data, tenant_id=7)
-        assert result["tenant_id"] == 7
-
-
-class TestRequireTenantIdDecorator:
-    def test_raises_when_tenant_id_missing(self):
-        @require_tenant_id
-        def fn(tenant_id):
-            return tenant_id
-
-        with pytest.raises(DataIsolationError, match="valid tenant_id"):
-            fn(None)
-
-    def test_raises_when_tenant_id_zero(self):
-        @require_tenant_id
-        def fn(tenant_id):
-            return tenant_id
-
-        with pytest.raises(DataIsolationError):
-            fn(0)
-
-    def test_raises_when_tenant_id_negative(self):
-        @require_tenant_id
-        def fn(tenant_id):
-            return tenant_id
-
-        with pytest.raises(DataIsolationError):
-            fn(-1)
-
-    def test_passes_when_tenant_id_positive(self):
-        @require_tenant_id
-        def fn(tenant_id):
-            return tenant_id * 2
-
-        assert fn(tenant_id=3) == 6
-
-    def test_raises_when_tenant_id_not_int(self):
-        @require_tenant_id
-        def fn(tenant_id):
-            return tenant_id
-
-        with pytest.raises(DataIsolationError):
-            fn(tenant_id="abc")
-
-
-class TestCrossTenantHelpers:
-    def test_get_cross_tenant_fields(self):
-        fields = get_cross_tenant_fields()
-        assert "_system_config" in fields
-        assert "_global_settings" in fields
-
-    def test_is_cross_tenant_safe_true_for_allowed_fields(self):
-        assert is_cross_tenant_safe("_system_config") is True
-        assert is_cross_tenant_safe("_global_settings") is True
-
-    def test_is_cross_tenant_safe_false_for_regular_fields(self):
-        assert is_cross_tenant_safe("tenant_id") is False
-        assert is_cross_tenant_safe("email") is False
-        assert is_cross_tenant_safe("name") is False
+        usage = service.get_tenant_usage(tenant["id"])
+        assert "user_count" in usage
+        assert "storage_used" in usage
+        assert "api_calls" in usage

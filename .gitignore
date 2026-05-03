@@ -12,17 +12,3 @@ dist/
 build/
 *.egg
 .DS_Store
-railway-binary/
-railway-cli-4.36.1.tgz
-railway-cli-bin/
-shared-memory/
-.worktrees/
-.idea
-
-# Claw / agent tooling
-.claw/
-.clawd-todos.json
-.sandbox-home/
-coverage.json
-cat_all.py
-all-code.txt

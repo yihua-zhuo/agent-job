@@ -75,21 +75,10 @@ class PaginatedData(Generic[T]):
     @property
     def has_next(self) -> bool:
         return self.page < self.total_pages
-
+    
     @property
     def has_prev(self) -> bool:
         return self.page > 1
-
-    def to_dict(self) -> dict:
-        return {
-            "items": self.items,
-            "total": self.total,
-            "page": self.page,
-            "page_size": self.page_size,
-            "total_pages": self.total_pages,
-            "has_next": self.has_next,
-            "has_prev": self.has_prev,
-        }
 
 
 @dataclass
@@ -122,17 +111,12 @@ class ApiResponse(Generic[T]):
             1404: ResponseStatus.NOT_FOUND,
             1001: ResponseStatus.VALIDATION_ERROR,
             1500: ResponseStatus.SERVER_ERROR,
-            2001: ResponseStatus.NOT_FOUND,   # USER_NOT_FOUND
-            3001: ResponseStatus.NOT_FOUND,   # RESOURCE_NOT_FOUND
         }
-        _extra = {k: v for k, v in kwargs.items() if k not in ["status", "message", "data", "errors", "timestamp", "request_id"]}
-        if code != 1000:
-            _extra["code"] = code
         return cls(
             status=status_map.get(code, ResponseStatus.ERROR),
             message=message,
             errors=errors or [],
-            meta=_extra,
+            **{k: v for k, v in kwargs.items() if k not in ["status", "message", "data", "errors", "meta", "timestamp", "request_id"]}
         )
     
     @classmethod
@@ -146,16 +130,16 @@ class ApiResponse(Generic[T]):
             page_size=page_size,
             total_pages=total_pages
         )
-        return cls(  # type: ignore[return-value]
+        return cls(
             status=ResponseStatus.SUCCESS,
             message=message,
-            data=paginated_data,  # type: ignore[arg-type]
+            data=paginated_data,
             meta={"total": total, "page": page, "page_size": page_size}
         )
     
     def to_dict(self) -> dict:
         """转换为字典"""
-        result: dict[str, Any] = {
+        result = {
             "status": self.status.value,
             "message": self.message,
             "timestamp": self.timestamp

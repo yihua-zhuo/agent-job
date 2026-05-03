@@ -1,6 +1,6 @@
 """Opportunity model for CRM system."""
 from dataclasses import dataclass, field
-from datetime import datetime, UTC
+from datetime import datetime
 from decimal import Decimal
 from enum import Enum
 from typing import Optional
@@ -26,11 +26,9 @@ class Opportunity:
     probability: int
     expected_close_date: datetime
     owner_id: int
-    pipeline_id: Optional[int] = None
     id: Optional[int] = None
-    tenant_id: int = 0
-    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
 
     def __post_init__(self) -> None:
         """Initialize default values after dataclass initialization."""
@@ -46,15 +44,14 @@ class Opportunity:
         elif self.probability > 100:
             self.probability = 100
         if self.created_at is None:
-            self.created_at = datetime.now(UTC)
+            self.created_at = datetime.utcnow()
         if self.updated_at is None:
-            self.updated_at = datetime.now(UTC)
+            self.updated_at = datetime.utcnow()
 
     def to_dict(self) -> dict:
         """Convert opportunity to dictionary representation."""
         return {
             'id': self.id,
-            'tenant_id': self.tenant_id,
             'customer_id': self.customer_id,
             'name': self.name,
             'stage': self.stage.value if isinstance(self.stage, Stage) else self.stage,
@@ -62,7 +59,6 @@ class Opportunity:
             'probability': self.probability,
             'expected_close_date': self.expected_close_date.isoformat() if isinstance(self.expected_close_date, datetime) else self.expected_close_date,
             'owner_id': self.owner_id,
-            'pipeline_id': self.pipeline_id,
             'created_at': self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
             'updated_at': self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at,
         }
@@ -88,23 +84,22 @@ class Opportunity:
         if isinstance(expected_close_date, str):
             expected_close_date = datetime.fromisoformat(expected_close_date)
         elif expected_close_date is None:
-            expected_close_date = datetime.now(UTC)
+            expected_close_date = datetime.utcnow()
 
         created_at = data.get('created_at')
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.now(UTC)
+            created_at = datetime.utcnow()
 
         updated_at = data.get('updated_at')
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at)
         elif updated_at is None:
-            updated_at = datetime.now(UTC)
+            updated_at = datetime.utcnow()
 
         return cls(
             id=data.get('id'),
-            tenant_id=data.get('tenant_id', 0),
             customer_id=data['customer_id'],
             name=data['name'],
             stage=stage,
@@ -112,7 +107,6 @@ class Opportunity:
             probability=data.get('probability', 0),
             expected_close_date=expected_close_date,
             owner_id=data['owner_id'],
-            pipeline_id=data.get('pipeline_id', 0),
             created_at=created_at,
             updated_at=updated_at,
         )

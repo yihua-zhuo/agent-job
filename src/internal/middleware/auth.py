@@ -1,15 +1,13 @@
 """认证中间件"""
-from flask import g, request
-from functools import wraps
-import jwt
 import os
+import jwt
+from functools import wraps
+from flask import request, g
 from typing import Optional, List
-
+from ..pkg.errors import AppError, ErrorCode
 
 # 配置（建议从 config.yaml 加载）
-JWT_SECRET = os.environ.get('JWT_SECRET_KEY') or os.environ.get('JWT_SECRET') or 'dev-jwt-secret'
-if os.environ.get('FLASK_ENV') == 'production' and not (os.environ.get('JWT_SECRET_KEY') or os.environ.get('JWT_SECRET')):
-    raise ValueError("JWT_SECRET_KEY environment variable is required in production")
+JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
 JWT_ALGORITHM = "HS256"
 
 
@@ -27,9 +25,9 @@ def decode_token(token: str) -> dict:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
         return payload
     except jwt.ExpiredSignatureError:
-        raise Exception("Token 已过期")
+        raise AppError(ErrorCode.UNAUTHORIZED, "Token 已过期", 401)
     except jwt.InvalidTokenError:
-        raise Exception("无效的 Token")
+        raise AppError(ErrorCode.UNAUTHORIZED, "无效的 Token", 401)
 
 
 def require_auth(f):
@@ -38,16 +36,11 @@ def require_auth(f):
     def decorated(*args, **kwargs):
         token = extract_token_from_header()
         if not token:
-            raise Exception("缺少认证 Token")
+            raise AppError(ErrorCode.UNAUTHORIZED, "缺少认证 Token", 401)
 
         payload = decode_token(token)
         g.user_id = payload.get("user_id")
-        # Ensure tenant_id is stored as an integer
-        raw_tenant_id = payload.get("tenant_id")
-        if raw_tenant_id is not None:
-            g.tenant_id = int(raw_tenant_id)
-        else:
-            g.tenant_id = None
+        g.tenant_id = payload.get("tenant_id")
         g.roles = payload.get("roles", [])
 
         return f(*args, **kwargs)
@@ -60,21 +53,12 @@ def require_permission(permission: str):
         @wraps(f)
         def decorated(*args, **kwargs):
             if permission not in g.roles:
-                raise Exception("权限不足")
+                raise AppError(ErrorCode.FORBIDDEN, "权限不足", 403)
             return f(*args, **kwargs)
         return decorated
     return decorator
 
 
-def get_current_tenant_id() -> Optional[int]:
+def get_current_tenant_id() -> str:
     """获取当前租户 ID"""
-    val = getattr(g, "tenant_id", None)
-    if val is None:
-        return None
-    if isinstance(val, int):
-        return val
-    # Attempt coercion for non-None types (e.g. float from JSON)
-    try:
-        return int(val)
-    except (TypeError, ValueError):
-        return None
+    return getattr(g, "tenant_id", None)

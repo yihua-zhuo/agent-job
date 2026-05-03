@@ -1,6 +1,6 @@
 """Pipeline model for CRM system."""
 from dataclasses import dataclass, field
-
+from enum import Enum
 from typing import Optional, List
 
 # Import Stage from opportunity module to avoid duplication
@@ -13,7 +13,6 @@ class Pipeline:
     name: str
     stages: List[Stage]
     id: Optional[int] = None
-    tenant_id: int = 0
     is_default: bool = False
 
     def __post_init__(self) -> None:
@@ -29,7 +28,6 @@ class Pipeline:
         """Convert pipeline to dictionary representation."""
         return {
             'id': self.id,
-            'tenant_id': self.tenant_id,
             'name': self.name,
             'stages': [s.value if isinstance(s, Stage) else s for s in self.stages],
             'is_default': self.is_default,
@@ -48,7 +46,6 @@ class Pipeline:
 
         return cls(
             id=data.get('id'),
-            tenant_id=data.get('tenant_id', 0),
             name=data['name'],
             stages=stages,
             is_default=data.get('is_default', False),

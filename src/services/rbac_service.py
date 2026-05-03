@@ -160,13 +160,21 @@ class RBACService:
     """DB-backed RBAC service — roles, permissions, user assignments, permission checks."""
 
     def __init__(self, session: "AsyncSession" = None):
-        from db.connection import get_db_session
-        self.session = session or get_db_session()
+        self.session = session
+        if session is not None:
+            self._require_session()
 
     def _require_db(self):
         """Ensure a real session is available before DB operations."""
         if self.session is None:
-            raise RuntimeError("RBACService requires a session. Use RBACService(get_db_session()) or provide one explicitly.")
+            raise RuntimeError(
+                "RBACService requires a session. "
+                "Use RBACService(get_db_session()) or provide one explicitly."
+            )
+
+    def _require_session(self):
+        """Alias for _require_db for backward compat."""
+        self._require_db()
 
     # -------------------------------------------------------------------------
     # Role CRUD
@@ -290,8 +298,19 @@ class RBACService:
         items = [p.to_dict() for p in perms]
         return ApiResponse.paginated(items=items, total=len(items), page=1, page_size=len(items))
 
-    async def list_role_permissions(self, role_id: int) -> ApiResponse[List[Dict]]:
+    async def list_role_permissions(self, role_id: int, tenant_id: int) -> ApiResponse[List[Dict]]:
         """List all permissions assigned to a role."""
+        # Tenant-ownership check: role must belong to this tenant or be shared (tenant_id=0)
+        role_check = await self.session.execute(
+            select(RoleModel).where(
+                and_(
+                    RoleModel.id == role_id,
+                    or_(RoleModel.tenant_id == tenant_id, RoleModel.tenant_id == 0),
+                )
+            )
+        )
+        if role_check.scalar_one_or_none() is None:
+            return ApiResponse.error(message="角色不存在", code=404)
         result = await self.session.execute(
             select(PermissionModel)
             .join(RolePermissionModel, RolePermissionModel.permission_id == PermissionModel.id)
@@ -303,33 +322,32 @@ class RBACService:
 
     async def set_role_permissions(self, role_id: int, permission_names: List[str], tenant_id: int) -> ApiResponse[Dict]:
         """Replace all permissions for a role with the given list."""
-        # Verify role exists
+        # Only allow editing tenant-owned roles (strict: not system/shared roles from other tenants)
         role_result = await self.session.execute(
             select(RoleModel).where(
-                and_(
-                    RoleModel.id == role_id,
-                    or_(RoleModel.tenant_id == tenant_id, RoleModel.tenant_id == 0),
-                )
+                and_(RoleModel.id == role_id, RoleModel.tenant_id == tenant_id)
             )
         )
         role = role_result.scalar_one_or_none()
         if role is None:
-            return ApiResponse.error(message="角色不存在", code=404)
+            return ApiResponse.error(message="角色不存在或不可修改", code=404)
 
-        # Delete existing mappings
-        await self.session.execute(
-            delete(RolePermissionModel).where(RolePermissionModel.role_id == role_id)
-        )
-
-        # Resolve permission names to IDs
+        # Validate all permission names exist before touching any mappings
         perm_result = await self.session.execute(
             select(PermissionModel).where(PermissionModel.name.in_(permission_names))
         )
         perms = perm_result.scalars().all()
+        found_names = {p.name for p in perms}
+        missing = set(permission_names) - found_names
+        if missing:
+            return ApiResponse.error(message=f"不存在的权限: {', '.join(sorted(missing))}", code=400)
 
+        # Delete existing mappings only after all validation passes
+        await self.session.execute(
+            delete(RolePermissionModel).where(RolePermissionModel.role_id == role_id)
+        )
         for perm in perms:
             self.session.add(RolePermissionModel(role_id=role_id, permission_id=perm.id))
-
         await self.session.flush()
         return ApiResponse.success(
             data={"role_id": role_id, "permissions": [p.name for p in perms]},
@@ -367,6 +385,19 @@ class RBACService:
         if role_result.scalar_one_or_none() is None:
             return ApiResponse.error(message="角色不存在", code=404)
 
+        # Check for existing assignment — no-op if already present
+        existing = await self.session.execute(
+            select(UserRoleModel).where(
+                and_(
+                    UserRoleModel.user_id == user_id,
+                    UserRoleModel.role_id == role_id,
+                    UserRoleModel.tenant_id == tenant_id,
+                )
+            )
+        )
+        if existing.scalar_one_or_none() is not None:
+            return ApiResponse.success(data={"user_id": user_id, "role_id": role_id}, message="角色已分配")
+
         # Upsert assignment
         assignment = UserRoleModel(
             user_id=user_id,
@@ -394,24 +425,34 @@ class RBACService:
             return ApiResponse.error(message="该用户没有此角色", code=404)
         return ApiResponse.success(data={"user_id": user_id, "role_id": role_id}, message="角色撤销成功")
 
-    async def get_user_roles(self, user_id: int) -> ApiResponse[List[Dict]]:
-        """Get all roles assigned to a user."""
+    async def get_user_roles(self, user_id: int, tenant_id: int) -> ApiResponse[List[Dict]]:
+        """Get all roles assigned to a user in a given tenant."""
         result = await self.session.execute(
             select(RoleModel)
             .join(UserRoleModel, UserRoleModel.role_id == RoleModel.id)
-            .where(UserRoleModel.user_id == user_id)
+            .where(
+                and_(
+                    UserRoleModel.user_id == user_id,
+                    UserRoleModel.tenant_id == tenant_id,
+                )
+            )
             .order_by(RoleModel.priority.desc())
         )
         roles = result.scalars().all()
         return ApiResponse.success(data=[r.to_dict() for r in roles])
 
-    async def get_user_permissions(self, user_id: int) -> ApiResponse[List[str]]:
-        """Get all permission strings for a user (union of all assigned roles)."""
+    async def get_user_permissions(self, user_id: int, tenant_id: int) -> ApiResponse[List[str]]:
+        """Get all permission strings for a user (union of all assigned roles in this tenant)."""
         result = await self.session.execute(
             select(PermissionModel.name)
             .join(RolePermissionModel, RolePermissionModel.permission_id == PermissionModel.id)
             .join(UserRoleModel, UserRoleModel.role_id == RolePermissionModel.role_id)
-            .where(UserRoleModel.user_id == user_id)
+            .where(
+                and_(
+                    UserRoleModel.user_id == user_id,
+                    UserRoleModel.tenant_id == tenant_id,
+                )
+            )
             .distinct()
         )
         return ApiResponse.success(data=[r[0] for r in result.fetchall()])
@@ -422,22 +463,16 @@ class RBACService:
         perm_value = permission.value if isinstance(permission, Permission) else permission
         return perm_value in DEFAULT_ROLE_PERMISSIONS.get(role, [])
 
-    def get_role_permissions(self, role: str) -> List[Permission]:
-        """Get all Permission instances for a given role (from static map)."""
-        perm_names = DEFAULT_ROLE_PERMISSIONS.get(role, [])
-        result: List[Permission] = []
-        for name in perm_names:
-            inst = Permission._registry_.get(name)
-            if inst:
-                result.append(inst)
-        return result
+    def get_role_permissions(self, role: str) -> List[str]:
+        """Get all permission value strings for a given role (from static map)."""
+        return list(DEFAULT_ROLE_PERMISSIONS.get(role, []))
 
     def check_permission_by_value(self, role: str, permission_value: str) -> bool:
         """Sync check by string value."""
         return permission_value in DEFAULT_ROLE_PERMISSIONS.get(role, [])
 
-    async def _has_permission_db(self, user_id: int, permission: str) -> bool:
-        """Check if a user has a specific permission (DB-backed, requires session + user_id)."""
+    async def _has_permission_db(self, user_id: int, permission: str, tenant_id: int) -> bool:
+        """Check if a user has a specific permission in a given tenant."""
         result = await self.session.execute(
             select(PermissionModel.id)
             .join(RolePermissionModel, RolePermissionModel.permission_id == PermissionModel.id)
@@ -445,6 +480,7 @@ class RBACService:
             .where(
                 and_(
                     UserRoleModel.user_id == user_id,
+                    UserRoleModel.tenant_id == tenant_id,
                     PermissionModel.name == permission,
                 )
             )
@@ -452,9 +488,9 @@ class RBACService:
         )
         return result.scalar_one_or_none() is not None
 
-    async def require_permission(self, user_id: int, permission: str) -> ApiResponse[Dict]:
+    async def require_permission(self, user_id: int, permission: str, tenant_id: int) -> ApiResponse[Dict]:
         """Check permission and return error if denied."""
-        if not await self._has_permission_db(user_id, permission):
+        if not await self._has_permission_db(user_id, permission, tenant_id):
             return ApiResponse.error(message=f"权限不足: {permission}", code=403)
         return ApiResponse.success(data={"user_id": user_id, "permission": permission})
 
@@ -472,6 +508,21 @@ class RBACService:
         )
         if user_result.scalar_one_or_none() is None:
             return ApiResponse.error(message="用户不存在", code=404)
+
+        # Validate all role_ids exist and belong to this tenant (or are system roles)
+        role_result = await self.session.execute(
+            select(RoleModel).where(
+                and_(
+                    RoleModel.id.in_(role_ids),
+                    or_(RoleModel.tenant_id == tenant_id, RoleModel.tenant_id == 0),
+                )
+            )
+        )
+        roles = role_result.scalars().all()
+        if len(roles) != len(role_ids):
+            found_ids = {r.id for r in roles}
+            invalid = [rid for rid in role_ids if rid not in found_ids]
+            return ApiResponse.error(message=f"不存在的角色ID: {invalid}", code=400)
 
         # Delete existing assignments
         await self.session.execute(

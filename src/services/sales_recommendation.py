@@ -6,7 +6,6 @@
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 import random
-import hashlib
 
 
 @dataclass
@@ -117,7 +116,7 @@ class SalesRecommendationService:
         recommendations = []
         
         # 1. 基于浏览历史的推荐
-        browsing_scores: dict[str, float] = {}
+        browsing_scores = {}
         for product in data["browsing_history"]:
             browsing_scores[product] = browsing_scores.get(product, 0) + 0.3
         
@@ -185,7 +184,7 @@ class SalesRecommendationService:
                 "product_name": next_product["name"],
                 "score": round(min(score, 1.0), 2),
                 "reason": f"使用率 {int(usage_rate * 100)}%，推荐升级到{next_product['name']}",
-                "price_increase": int(next_product["price"]) - int(self.PRODUCTS[current_tier]["price"])  # type: ignore[call-overload]
+                "price_increase": next_product["price"] - self.PRODUCTS[current_tier]["price"]
             })
         
         return recommendations
