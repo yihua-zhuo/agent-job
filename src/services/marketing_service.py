@@ -181,13 +181,19 @@ class MarketingService:
 
         return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.PAUSED)
 
-    async def get_campaign_stats(self, campaign_id: int) -> ApiResponse[Dict[str, Any]]:
+    async def get_campaign_stats(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Dict[str, Any]]:
         """获取活动统计"""
 
+        conditions = ["id = :campaign_id"]
+        params: dict = {"campaign_id": campaign_id}
+        if tenant_id > 0:
+            conditions.append("tenant_id = :tenant_id")
+            params["tenant_id"] = tenant_id
+
         stmt = text(
-            "SELECT sent_count, open_count, click_count FROM campaigns WHERE id = :id"
+            f"SELECT sent_count, open_count, click_count FROM campaigns WHERE {' AND '.join(conditions)}"
         )
-        result = await self.session.execute(stmt, {"id": campaign_id})
+        result = await self.session.execute(stmt, params)
         row = result.fetchone()
         if not row:
             return ApiResponse.error(message="营销活动不存在", code=1404)
