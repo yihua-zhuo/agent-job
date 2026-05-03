@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
 import { useRouter } from "next/navigation";
+import { useNotifications } from "@/lib/api/queries";
 
 const crmItems = [
   { href: "/customers", label: "Customers", icon: Users },
@@ -24,7 +25,7 @@ const crmItems = [
   { href: "/tickets", label: "Tickets", icon: Ticket },
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/activities", label: "Activities", icon: Activity },
-  { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/notifications", label: "Notifications", icon: Bell, badge: true },
   { href: "/team", label: "Team", icon: UsersRound },
   { href: "/sla", label: "SLA", icon: Shield },
 ];
@@ -36,11 +37,12 @@ const systemItems = [
   { href: "/import-export", label: "Import/Export", icon: Upload },
 ];
 
-function NavGroup({ items }: { items: typeof crmItems }) {
+function NavGroup({ items, unreadCount }: { items: typeof crmItems; unreadCount: number }) {
   const pathname = usePathname();
+
   return (
     <>
-      {items.map(({ href, label, icon: Icon }) => (
+      {items.map(({ href, label, icon: Icon, badge }) => (
         <Link
           key={href}
           href={href}
@@ -50,8 +52,16 @@ function NavGroup({ items }: { items: typeof crmItems }) {
               ? "bg-primary text-primary-foreground shadow-sm"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
+          aria-label={label}
         >
-          <Icon className="h-4 w-4 flex-shrink-0" />
+          <span className="relative flex h-4 w-4 flex-shrink-0">
+            <Icon className="h-4 w-4" />
+            {badge && unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-red-500 text-[9px] font-bold text-white leading-none">
+                {unreadCount > 9 ? "9+" : unreadCount}
+              </span>
+            )}
+          </span>
           <span>{label}</span>
         </Link>
       ))}
@@ -62,6 +72,8 @@ function NavGroup({ items }: { items: typeof crmItems }) {
 export function AppSidebar() {
   const { user, clearAuth } = useAuthStore();
   const router = useRouter();
+  const { data: notifData } = useNotifications(1, true);
+  const unreadCount = (notifData?.data?.total as number) ?? 0;
 
   const initials = user
     ? (user.full_name ?? user.username ?? "?").slice(0, 2).toUpperCase()
@@ -85,12 +97,12 @@ export function AppSidebar() {
 
       {/* Primary CRM navigation */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto p-2">
-        <NavGroup items={crmItems} />
+        <NavGroup items={crmItems} unreadCount={unreadCount} />
 
         <Separator className="my-2" />
 
         {/* System settings */}
-        <NavGroup items={systemItems} />
+        <NavGroup items={systemItems} unreadCount={0} />
       </nav>
 
       {/* User profile footer */}

@@ -1,10 +1,11 @@
 "use client";
-import { useState, useRef, useCallback, useEffect } from "react";
-import { useCustomers, useSearchCustomers, useCreateCustomer, useDeleteCustomer } from "@/lib/api/queries";
+import { useState, useRef, useCallback, useEffect, Suspense } from "react";
+import { useSearchParams } from "next/navigation";
+import { useCustomers, useCreateCustomer, useDeleteCustomer } from "@/lib/api/queries";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Search, X, ChevronUp, ChevronDown, MoreHorizontal, UserPlus } from "lucide-react";
+import { Search, X, ChevronUp, ChevronDown, MoreHorizontal, UserPlus, RefreshCw, Trash2, Download, Save, LayoutList } from "lucide-react";
 import { toast } from "sonner";
 import {
   Select,
@@ -27,7 +28,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Settings2 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
   lead: "bg-blue-100 text-blue-800",
@@ -40,6 +48,56 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 type SortKey = "name" | "email" | "phone" | "status" | "company" | "created_at";
+
+interface SavedView {
+  id: string;
+  name: string;
+  keyword: string;
+  sortKey: SortKey | null;
+  sortDir: "asc" | "desc";
+  hiddenCols: string[];
+}
+
+const VIEWS_KEY = "crm_customers_views";
+
+function loadViews(): SavedView[] {
+  try { return JSON.parse(localStorage.getItem(VIEWS_KEY) ?? "[]"); }
+  catch { return []; }
+}
+
+function saveViews(views: SavedView[]) {
+  localStorage.setItem(VIEWS_KEY, JSON.stringify(views));
+}
+
+function useColumnResize(initialWidths: Record<string, number>) {
+  const [widths, setWidths] = useState<Record<string, number>>(initialWidths);
+  const [dragging, setDragging] = useState<string | null>(null);
+  const startXRef = useRef<number>(0);
+  const startWRef = useRef<number>(0);
+
+  function onMouseDown(col: string, e: React.MouseEvent) {
+    e.preventDefault();
+    setDragging(col);
+    startXRef.current = e.clientX;
+    startWRef.current = widths[col] ?? 150;
+  }
+
+  useEffect(() => {
+    if (!dragging) return;
+    function onMove(e: MouseEvent) {
+      setWidths((w) => ({ ...w, [dragging as string]: Math.max(60, startWRef.current + (e.clientX - startXRef.current)) }));
+    }
+    function onUp() { setDragging(null); }
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+    return () => {
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+  }, [dragging]);
+
+  return { widths, onMouseDown, dragging };
+}
 type SortDir = "asc" | "desc";
 
 interface CustomerRowData {
@@ -58,18 +116,51 @@ function formatDate(dateStr: string): string {
   return d.toLocaleDateString("en-US", { month: "numeric", day: "numeric", year: "numeric" });
 }
 
+function CopyCell({ value, type, style }: { value: string; type: "email" | "phone"; style?: React.CSSProperties }) {
+  return (
+    <div
+      className="group/copy relative"
+      title={`Double-click to copy ${type}`}
+      onDoubleClick={() => {
+        navigator.clipboard.writeText(value).then(() => toast.success(`${type} copied!`));
+      }}
+    >
+      {value ? (
+        <a
+          href={type === "email" ? `mailto:${value}` : `tel:${value}`}
+          className="text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline truncate block"
+          title={value}
+          onClick={(e) => e.stopPropagation()}
+          style={style}
+        >
+          {value}
+        </a>
+      ) : (
+        <span className="text-sm text-muted-foreground">—</span>
+      )}
+      <span className="absolute -top-4 left-0 text-[10px] text-muted-foreground opacity-0 group-hover/copy:opacity-100 transition-opacity pointer-events-none">
+        Click to copy
+      </span>
+    </div>
+  );
+}
+
 function CustomerRow({
   c,
   onNavigate,
   selected,
   onToggle,
   onDelete,
+  widths,
+  hiddenCols,
 }: {
   c: CustomerRowData;
   onNavigate: (id: number) => void;
   selected: boolean;
   onToggle: (id: number) => void;
   onDelete: (c: CustomerRowData) => void;
+  widths: Record<string, number>;
+  hiddenCols: Set<string>;
 }) {
   return (
     <tr
@@ -87,56 +178,47 @@ function CustomerRow({
           onClick={(e) => e.stopPropagation()}
         />
       </td>
-      <td scope="row" className="px-3 py-2.5">
-        <span className="font-medium truncate block max-w-[160px]" title={c.name || "—"}>
-          {c.name || "—"}
-        </span>
-      </td>
-      <td scope="row" className="px-3 py-2.5">
-        {c.email ? (
-          <a
-            href={`mailto:${c.email}`}
-            className="text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline truncate block max-w-[180px]"
-            title={c.email}
-            onClick={(e) => e.stopPropagation()}
+      {!hiddenCols.has("name") && (
+        <td scope="row" className="px-3 py-2.5" style={{ width: widths.name, minWidth: widths.name }}>
+          <span className="font-medium truncate block" title={c.name || "—"}>
+            {c.name || "—"}
+          </span>
+        </td>
+      )}
+      {!hiddenCols.has("email") && (
+        <td scope="row" className="px-3 py-2.5" style={{ width: widths.email, minWidth: widths.email }}>
+          <CopyCell value={c.email} type="email" />
+        </td>
+      )}
+      {!hiddenCols.has("phone") && (
+        <td scope="row" className="px-3 py-2.5" style={{ width: widths.phone, minWidth: widths.phone }}>
+          <CopyCell value={c.phone} type="phone" />
+        </td>
+      )}
+      {!hiddenCols.has("status") && (
+        <td scope="row" className="px-3 py-2.5" style={{ width: widths.status, minWidth: widths.status }}>
+          <span
+            className={cn(
+              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
+              STATUS_COLORS[c.status] ?? "bg-gray-100 text-gray-600"
+            )}
           >
-            {c.email}
-          </a>
-        ) : (
-          <span className="text-sm text-muted-foreground">—</span>
-        )}
-      </td>
-      <td scope="row" className="px-3 py-2.5">
-        {c.phone ? (
-          <a
-            href={`tel:${c.phone}`}
-            className="text-sm font-mono text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {c.phone}
-          </a>
-        ) : (
-          <span className="text-sm text-muted-foreground">—</span>
-        )}
-      </td>
-      <td scope="row" className="px-3 py-2.5">
-        <span
-          className={cn(
-            "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
-            STATUS_COLORS[c.status] ?? "bg-gray-100 text-gray-600"
-          )}
-        >
-          {c.status || "—"}
-        </span>
-      </td>
-      <td scope="row" className="px-3 py-2.5">
-        <span className="text-sm text-muted-foreground truncate block max-w-[140px]" title={c.company}>
-          {c.company || "—"}
-        </span>
-      </td>
-      <td scope="row" className="px-3 py-2.5">
-        <span className="text-sm text-muted-foreground">{formatDate(c.created_at)}</span>
-      </td>
+            {c.status || "—"}
+          </span>
+        </td>
+      )}
+      {!hiddenCols.has("company") && (
+        <td scope="row" className="px-3 py-2.5" style={{ width: widths.company, minWidth: widths.company }}>
+          <span className="text-sm text-muted-foreground truncate block" title={c.company}>
+            {c.company || "—"}
+          </span>
+        </td>
+      )}
+      {!hiddenCols.has("created_at") && (
+        <td scope="row" className="px-3 py-2.5" style={{ width: widths.created_at, minWidth: widths.created_at }}>
+          <span className="text-sm text-muted-foreground">{formatDate(c.created_at)}</span>
+        </td>
+      )}
       <td scope="row" className="px-3 py-2.5 w-10" onClick={(e) => e.stopPropagation()}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -160,12 +242,6 @@ function CustomerRow({
   );
 }
 
-function useCustomersData(page: number, pageSize: number, keyword: string) {
-  const search = useSearchCustomers(keyword);
-  const list = useCustomers(page, pageSize);
-  return keyword ? search : list;
-}
-
 interface CreateForm {
   name: string;
   email: string;
@@ -176,16 +252,37 @@ interface CreateForm {
 
 const blankCreateForm: CreateForm = { name: "", email: "", phone: "", company: "", status: "lead" };
 
-export default function CustomersPage() {
-  const [page, setPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
-  const [keyword, setKeyword] = useState("");
-  const [debouncedKeyword, setDebouncedKeyword] = useState("");
+const SortIcon = ({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey | null; sortDir: SortDir }) => {
+  if (sortKey !== col) {
+    return <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity inline ml-1" />;
+  }
+  return sortDir === "asc"
+    ? <ChevronUp className="h-3 w-3 opacity-100 inline ml-1 text-primary" />
+    : <ChevronDown className="h-3 w-3 opacity-100 inline ml-1 text-primary" />;
+};
+
+function CustomersPageInner() {
+  const searchParams = useSearchParams();
+
+  const initPage = Number(searchParams.get("page") ?? 1);
+  const initPageSize = Number(searchParams.get("pageSize") ?? 20);
+  const initKeyword = searchParams.get("q") ?? "";
+
+  const [page, setPage] = useState(initPage);
+  const [pageSize, setPageSize] = useState(initPageSize);
+  const [keyword, setKeyword] = useState(initKeyword);
+  const [debouncedKeyword, setDebouncedKeyword] = useState(initKeyword);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pageRef = useRef(page);
+  pageRef.current = page;
+  const debouncedKeywordRef = useRef(debouncedKeyword);
+  debouncedKeywordRef.current = debouncedKeyword;
 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
+  const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set());
 
   // Create dialog
   const [showCreate, setShowCreate] = useState(false);
@@ -197,6 +294,21 @@ export default function CustomersPage() {
   const [showDelete, setShowDelete] = useState(false);
   const deleteCustomer = useDeleteCustomer();
 
+  // Bulk / column state
+  const [showBulk, setShowBulk] = useState(false);
+
+  function pushParams(overrides: Record<string, string | null>) {
+    const params = new URLSearchParams();
+    if (pageRef.current > 1) params.set("page", String(pageRef.current));
+    if (pageSize !== 20) params.set("pageSize", String(pageSize));
+    if (debouncedKeywordRef.current) params.set("q", debouncedKeywordRef.current);
+    for (const [k, v] of Object.entries(overrides)) {
+      if (v !== null) params.set(k, v);
+    }
+    const qs = params.toString();
+    window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
+  }
+
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
     setKeyword(val);
@@ -207,11 +319,19 @@ export default function CustomersPage() {
     }, 300);
   }, []);
 
+  useEffect(() => {
+    pushParams({ q: debouncedKeyword || null, page: page > 1 ? String(page) : null });
+  }, [page, debouncedKeyword]);
+
   const clearSearch = useCallback(() => {
     setKeyword("");
     setDebouncedKeyword("");
     setPage(1);
   }, []);
+
+  useEffect(() => {
+    pushParams({ q: debouncedKeyword || null, page: page > 1 ? String(page) : null });
+  }, [page, debouncedKeyword]);
 
   // Escape key clears search when search input is focused
   useEffect(() => {
@@ -229,11 +349,61 @@ export default function CustomersPage() {
     return () => { if (timerRef.current) clearTimeout(timerRef.current); };
   }, []);
 
-  const { data, isLoading, isError } = useCustomersData(
+  const { data, isLoading, isError, refetch, isFetching } = useCustomers(
     debouncedKeyword ? 1 : page,
-    pageSize,
-    debouncedKeyword
+    pageSize
   );
+
+
+  // Auto-refresh every 30s
+  useEffect(() => {
+    if (!refetch) return;
+    const interval = setInterval(() => { refetch(); }, 30_000);
+    return () => clearInterval(interval);
+
+  }, [refetch]);
+  const { widths, onMouseDown, dragging } = useColumnResize({
+    name: 160, email: 200, phone: 140, status: 120, company: 160, created_at: 120,
+  });
+
+  // Saved views
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
+
+  useEffect(() => { setSavedViews(loadViews()); }, []);
+
+  function applyView(view: SavedView) {
+    setKeyword(view.keyword);
+    setDebouncedKeyword(view.keyword);
+    setSortKey(view.sortKey);
+    setSortDir(view.sortDir);
+    setHiddenCols(new Set(view.hiddenCols));
+    setPage(1);
+  }
+
+  function deleteView(id: string) {
+    const next = savedViews.filter((v) => v.id !== id);
+    setSavedViews(next);
+    saveViews(next);
+  }
+
+  function handleSaveView() {
+    const v: SavedView = {
+      id: crypto.randomUUID(),
+      name: newViewName.trim() || "Untitled View",
+      keyword: debouncedKeyword,
+      sortKey,
+      sortDir,
+      hiddenCols: Array.from(hiddenCols),
+    };
+    const next = [...savedViews, v];
+    setSavedViews(next);
+    saveViews(next);
+    setShowSaveDialog(false);
+    setNewViewName("");
+    toast.success(`View "${v.name}" saved`);
+  }
 
   const rawItems = data?.data?.items ?? [];
   const info = data?.data;
@@ -250,8 +420,12 @@ export default function CustomersPage() {
 
   const sorted = [...items].sort((a, b) => {
     if (!sortKey) return 0;
-    const av = a[sortKey];
-    const bv = b[sortKey];
+    let av: string | number = a[sortKey];
+    let bv: string | number = b[sortKey];
+    if (sortKey === "created_at") {
+      av = new Date(av as string).getTime();
+      bv = new Date(bv as string).getTime();
+    }
     const cmp = av < bv ? -1 : av > bv ? 1 : 0;
     return sortDir === "asc" ? cmp : -cmp;
   });
@@ -263,15 +437,6 @@ export default function CustomersPage() {
       setSortKey(key);
       setSortDir("asc");
     }
-  }
-
-  function SortIcon({ col }: { col: SortKey }) {
-    if (sortKey !== col) {
-      return <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity inline ml-1" />;
-    }
-    return sortDir === "asc"
-      ? <ChevronUp className="h-3 w-3 opacity-100 inline ml-1 text-primary" />
-      : <ChevronDown className="h-3 w-3 opacity-100 inline ml-1 text-primary" />;
   }
 
   function toggleSelect(id: number) {
@@ -319,6 +484,7 @@ export default function CustomersPage() {
   function handlePageSizeChange(v: string) {
     setPageSize(Number(v));
     setPage(1);
+    pushParams({ pageSize: String(Number(v)), page: null });
   }
 
   const totalShown = info?.total ?? 0;
@@ -327,14 +493,78 @@ export default function CustomersPage() {
 
   return (
     <div className="space-y-0">
+      {/* Saved views bar */}
+      {savedViews.length > 0 && (
+        <div className="flex items-center gap-2 mt-4 overflow-x-auto">
+          <span className="text-xs text-muted-foreground flex-shrink-0">Views:</span>
+          {savedViews.map((v) => (
+            <div key={v.id} className="flex items-center flex-shrink-0 rounded-md border bg-muted px-2 py-1 text-xs group/view gap-1.5">
+              <button type="button" onClick={() => applyView(v)} className="cursor-pointer hover:text-foreground">
+                {v.name}
+              </button>
+              <button
+                type="button"
+                onClick={() => deleteView(v.id)}
+                className="text-muted-foreground hover:text-destructive cursor-pointer"
+                aria-label={`Delete view ${v.name}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <Button variant="ghost" size="sm" className="flex-shrink-0 cursor-pointer text-xs" onClick={() => setShowSaveDialog(true)}>
+            <Save className="h-3 w-3 mr-1" />
+            Save current
+          </Button>
+        </div>
+      )}
+
       {/* Sticky header */}
       <div className="sticky top-0 z-10 bg-background pb-4 border-b border-border mb-0">
         <div className="flex items-baseline justify-between gap-4 mb-3">
           <h1 className="text-2xl font-bold">Customers</h1>
-          <Button size="sm" onClick={() => setShowCreate(true)}>
-            <UserPlus className="h-4 w-4 mr-1" />
-            Add Customer
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => refetch?.()}
+              className="cursor-pointer"
+              title="Refresh"
+              disabled={isFetching}
+            >
+              <RefreshCw className={`h-4 w-4 ${isFetching ? "animate-spin" : ""}`} />
+            </Button>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="cursor-pointer" title="Customize columns">
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-44 p-2" align="end">
+                <div className="text-xs font-semibold text-muted-foreground mb-1.5 px-1">Toggle columns</div>
+                {(["name", "email", "phone", "company"] as const).map((col) => (
+                  <label key={col} className="flex items-center gap-2 px-1 py-1 cursor-pointer hover:bg-muted rounded text-sm">
+                    <input
+                      type="checkbox"
+                      checked={!hiddenCols.has(col)}
+                      onChange={() => setHiddenCols((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(col)) next.delete(col);
+                        else next.add(col);
+                        return next;
+                      })}
+                      className="accent-primary h-3.5 w-3.5 cursor-pointer"
+                    />
+                    {col.charAt(0).toUpperCase() + col.slice(1)}
+                  </label>
+                ))}
+              </PopoverContent>
+            </Popover>
+            <Button size="sm" onClick={() => setShowCreate(true)}>
+              <UserPlus className="h-4 w-4 mr-1" />
+              Add Customer
+            </Button>
+          </div>
         </div>
         <div className="relative w-full max-w-sm">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
@@ -359,6 +589,50 @@ export default function CustomersPage() {
         </div>
       </div>
 
+      {/* Bulk actions toolbar */}
+      {selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 rounded-md border bg-muted px-4 py-2 text-sm mt-4">
+          <span className="font-medium">{selectedIds.size} selected</span>
+          <Button
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => setSelectedIds(new Set())}
+          >
+            Deselect all
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => {
+              const rows = items.filter((c) => selectedIds.has(c.id));
+              const csv = [
+                ["name", "email", "phone", "company", "status"].join(","),
+                ...rows.map((r) => [r.name, r.email, r.phone, r.company, r.status].map((v) => `"${v}"`).join(","))
+              ].join("\n");
+              const blob = new Blob([csv], { type: "text/csv" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a"); a.href = url; a.download = "customers.csv"; a.click();
+              URL.revokeObjectURL(url);
+              toast.success(`Exported ${rows.length} customers`);
+            }}
+          >
+            <Download className="h-3.5 w-3.5 mr-1" />
+            Export CSV
+          </Button>
+          <Button
+            variant="destructive"
+            size="sm"
+            className="cursor-pointer"
+            onClick={() => setBulkDeleteOpen(true)}
+          >
+            <Trash2 className="h-3.5 w-3.5 mr-1" />
+            Delete
+          </Button>
+        </div>
+      )}
+
       {/* Table */}
       <div className="rounded-md border mt-4 overflow-auto">
         <table className="w-full text-sm min-w-[640px]">
@@ -376,24 +650,72 @@ export default function CustomersPage() {
                   checked={items.length > 0 && selectedIds.size === items.length}
                 />
               </th>
-              <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none" onClick={() => handleSort("name")}>
-                Name<SortIcon col="name" />
-              </th>
-              <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none" onClick={() => handleSort("email")}>
-                Email<SortIcon col="email" />
-              </th>
-              <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none" onClick={() => handleSort("phone")}>
-                Phone<SortIcon col="phone" />
-              </th>
-              <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none" onClick={() => handleSort("status")}>
-                Status<SortIcon col="status" />
-              </th>
-              <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none" onClick={() => handleSort("company")}>
-                Company<SortIcon col="company" />
-              </th>
-              <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none" onClick={() => handleSort("created_at")}>
-                Created<SortIcon col="created_at" />
-              </th>
+              {!hiddenCols.has("name") && (
+                <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.name, minWidth: widths.name }}>
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("name")}>
+                    Name<SortIcon col="name" sortKey={sortKey} sortDir={sortDir} />
+                  </div>
+                  <div
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
+                    onMouseDown={(e) => onMouseDown("name", e)}
+                  />
+                </th>
+              )}
+              {!hiddenCols.has("email") && (
+                <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.email, minWidth: widths.email }}>
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("email")}>
+                    Email<SortIcon col="email" sortKey={sortKey} sortDir={sortDir} />
+                  </div>
+                  <div
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
+                    onMouseDown={(e) => onMouseDown("email", e)}
+                  />
+                </th>
+              )}
+              {!hiddenCols.has("phone") && (
+                <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.phone, minWidth: widths.phone }}>
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("phone")}>
+                    Phone<SortIcon col="phone" sortKey={sortKey} sortDir={sortDir} />
+                  </div>
+                  <div
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
+                    onMouseDown={(e) => onMouseDown("phone", e)}
+                  />
+                </th>
+              )}
+              {!hiddenCols.has("status") && (
+                <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.status, minWidth: widths.status }}>
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("status")}>
+                    Status<SortIcon col="status" sortKey={sortKey} sortDir={sortDir} />
+                  </div>
+                  <div
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
+                    onMouseDown={(e) => onMouseDown("status", e)}
+                  />
+                </th>
+              )}
+              {!hiddenCols.has("company") && (
+                <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.company, minWidth: widths.company }}>
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("company")}>
+                    Company<SortIcon col="company" sortKey={sortKey} sortDir={sortDir} />
+                  </div>
+                  <div
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
+                    onMouseDown={(e) => onMouseDown("company", e)}
+                  />
+                </th>
+              )}
+              {!hiddenCols.has("created_at") && (
+                <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.created_at, minWidth: widths.created_at }}>
+                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("created_at")}>
+                    Created<SortIcon col="created_at" sortKey={sortKey} sortDir={sortDir} />
+                  </div>
+                  <div
+                    className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
+                    onMouseDown={(e) => onMouseDown("created_at", e)}
+                  />
+                </th>
+              )}
               <th scope="col" className="px-3 py-2.5 w-10" />
             </tr>
           </thead>
@@ -401,18 +723,18 @@ export default function CustomersPage() {
             {isLoading && Array.from({ length: 6 }).map((_, i) => (
               <tr key={i} className="border-b">
                 <td scope="row" className="px-3 py-2.5"><div className="h-4 w-4 bg-muted rounded animate-pulse" /></td>
-                <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded w-32 animate-pulse" /></td>
-                <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded w-40 animate-pulse" /></td>
-                <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded w-28 animate-pulse" /></td>
-                <td scope="row" className="px-3 py-2.5"><div className="h-5 bg-muted rounded w-16 animate-pulse" /></td>
-                <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded w-24 animate-pulse" /></td>
-                <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded w-20 animate-pulse" /></td>
+                {!hiddenCols.has("name") && <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded animate-pulse" style={{ width: widths.name - 24 }} /></td>}
+                {!hiddenCols.has("email") && <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded animate-pulse" style={{ width: widths.email - 24 }} /></td>}
+                {!hiddenCols.has("phone") && <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded animate-pulse" style={{ width: widths.phone - 24 }} /></td>}
+                {!hiddenCols.has("status") && <td scope="row" className="px-3 py-2.5"><div className="h-5 bg-muted rounded animate-pulse" style={{ width: 60 }} /></td>}
+                {!hiddenCols.has("company") && <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded animate-pulse" style={{ width: widths.company - 24 }} /></td>}
+                {!hiddenCols.has("created_at") && <td scope="row" className="px-3 py-2.5"><div className="h-4 bg-muted rounded animate-pulse" style={{ width: widths.created_at - 24 }} /></td>}
                 <td scope="row" className="px-3 py-2.5" />
               </tr>
             ))}
             {isError && (
               <tr>
-                <td colSpan={8} className="px-3 py-10 text-center text-destructive">Failed to load customers</td>
+                <td colSpan={hiddenCols.size === 0 ? 8 : 8} className="px-3 py-10 text-center text-destructive">Failed to load customers</td>
               </tr>
             )}
             {!isLoading && !isError && sorted.length === 0 && (
@@ -438,6 +760,8 @@ export default function CustomersPage() {
                   selected={selectedIds.has(c.id)}
                   onToggle={toggleSelect}
                   onDelete={openDelete}
+                  widths={widths}
+                  hiddenCols={hiddenCols}
                 />
               </tr>
             ))}
@@ -544,6 +868,67 @@ export default function CustomersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Bulk Delete Confirmation Dialog */}
+      <Dialog open={bulkDeleteOpen} onOpenChange={(o) => !o && setBulkDeleteOpen(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete {selectedIds.size} Customers</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Are you sure you want to delete {selectedIds.size} selected customer{selectedIds.size > 1 ? "s" : ""}? This action cannot be undone.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setBulkDeleteOpen(false)}>Cancel</Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                const ids = Array.from(selectedIds);
+                await Promise.allSettled(ids.map((id) => deleteCustomer.mutateAsync(id)));
+                toast.success(`${ids.length} customers deleted`);
+                setSelectedIds(new Set());
+                setBulkDeleteOpen(false);
+              }}
+            >
+              Delete {selectedIds.size} Customers
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Save View Dialog */}
+      <Dialog open={showSaveDialog} onOpenChange={(o) => !o && setShowSaveDialog(false)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Save View</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <label className="text-sm font-medium">View name</label>
+              <Input
+                value={newViewName}
+                onChange={(e) => setNewViewName(e.target.value)}
+                placeholder="e.g. My leads"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Saves current search, sort, and column visibility settings.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowSaveDialog(false)}>Cancel</Button>
+            <Button onClick={handleSaveView}>Save View</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
+  );
+}
+
+export default function CustomersPage() {
+  return (
+    <Suspense>
+      <CustomersPageInner />
+    </Suspense>
   );
 }

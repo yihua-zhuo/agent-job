@@ -1,6 +1,9 @@
 "use client";
 import { useState } from "react";
 import { AuthGuard } from "@/lib/components/auth-guard";
+import { SessionTimeoutGuard } from "@/lib/components/session-timeout-guard";
+import { OfflineBanner } from "@/lib/components/offline-banner";
+import { AIPanel } from "@/lib/components/ai-panel";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Menu, X } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -28,6 +31,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <AppSidebar />
       </div>
 
+      <OfflineBanner />
+
       {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Mobile header with hamburger */}
@@ -44,6 +49,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         <main className="flex-1 overflow-y-auto">
           <div className="p-6">{children}</div>
         </main>
+
+        <AIPanel />
+
+        <SessionTimeoutGuard />
       </div>
     </AuthGuard>
   );

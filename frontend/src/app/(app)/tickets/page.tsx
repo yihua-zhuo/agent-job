@@ -169,6 +169,7 @@ export default function TicketsPage() {
 
   const { data, isLoading, isError } = useTickets(
     page,
+    20,
     statusFilter === "all" ? "" : statusFilter
   );
 
