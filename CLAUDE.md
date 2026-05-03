@@ -1,8 +1,8 @@
-# dev-agent-system — Claude Code Reference
+# agent-job — Claude Code Reference
 
 Multi-tenant CRM system (FastAPI + SQLAlchemy 2.x async + PostgreSQL).
 
-**Branch:** `backend-issue-39-notification-service` → `master`
+**Branch:** `master`
 **CI:** GitHub Actions (Unit Tests + Integration Tests + Flake8/Lint)
 
 ---
@@ -10,7 +10,7 @@ Multi-tenant CRM system (FastAPI + SQLAlchemy 2.x async + PostgreSQL).
 ## Project Structure
 
 ```
-dev-agent-system/
+agent-job/
 ├── src/
 │   ├── api/routers/          # FastAPI route handlers
 │   ├── services/             # Business logic (one service per domain)
@@ -264,4 +264,4 @@ Code review follows this flow:
 - FastAPI: https://fastapi.tiangolo.com/
 - SQLAlchemy 2.x: https://docs.sqlalchemy.org/en/20/
 - Pytest: https://docs.pytest.org/
-- Project root: `/home/node/.openclaw/workspace/dev-agent-system/`
+- Project root: `agent-job/`
