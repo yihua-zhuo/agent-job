@@ -461,7 +461,7 @@ class TestNotificationIntegration:
         return reg.data.id
 
     async def test_send_and_get_notification(self, db_schema, tenant_id, async_session):
-        svc = NotificationService()
+        svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.send_notification(
             user_id=uid,
@@ -473,39 +473,40 @@ class TestNotificationIntegration:
         assert result.status == ResponseStatus.SUCCESS
         nid = result.data["id"]
 
-        fetched = await svc.get_user_notifications(user_id=uid)
+        fetched = await svc.get_user_notifications(user_id=uid, tenant_id=tenant_id)
         assert fetched.status == ResponseStatus.SUCCESS
         ids = [n["id"] for n in fetched.data.items]
         assert nid in ids
 
     async def test_mark_notification_as_read(self, db_schema, tenant_id, async_session):
-        svc = NotificationService()
+        svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         sent = await svc.send_notification(
             user_id=uid, notification_type="info", title="Test", content="Body", tenant_id=tenant_id
         )
         nid = sent.data["id"]
 
-        marked = await svc.mark_as_read(nid)
+        marked = await svc.mark_as_read(nid, tenant_id=tenant_id)
         assert marked.status == ResponseStatus.SUCCESS
 
-        unread = await svc.get_unread_count(user_id=uid)
+        unread = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert unread == 0
 
     async def test_unread_count(self, db_schema, tenant_id, async_session):
-        svc = NotificationService()
+        svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         await svc.send_notification(user_id=uid, notification_type="info", title="N1", content="m", tenant_id=tenant_id)
         await svc.send_notification(user_id=uid, notification_type="info", title="N2", content="m", tenant_id=tenant_id)
 
-        count = await svc.get_unread_count(user_id=uid)
+        count = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert count >= 2
 
     async def test_create_and_cancel_reminder(self, db_schema, tenant_id, async_session):
-        svc = NotificationService()
+        svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.create_reminder(
             user_id=uid,
+            tenant_id=tenant_id,
             title="Team standup",
             content="Daily standup meeting",
             remind_at="2026-12-31T10:00:00",
@@ -513,7 +514,7 @@ class TestNotificationIntegration:
         assert result.status == ResponseStatus.SUCCESS
         rid = result.data["id"]
 
-        cancelled = await svc.cancel_reminder(rid)
+        cancelled = await svc.cancel_reminder(rid, tenant_id=tenant_id)
         assert cancelled.status == ResponseStatus.SUCCESS
 
 

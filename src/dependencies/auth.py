@@ -18,8 +18,8 @@ from internal.middleware.fastapi_auth import AuthContext
 
 security = HTTPBearer(auto_error=False)
 
-JWT_SECRET = os.environ.get('JWT_SECRET') or os.environ.get('JWT_SECRET_KEY') or 'dev-secret'
-if os.environ.get('FLASK_ENV') == 'production' and not os.environ.get('JWT_SECRET'):
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET") or "dev-jwt-secret"
+if os.environ.get('FLASK_ENV') == 'production' and not (os.environ.get('JWT_SECRET') or os.environ.get('JWT_SECRET_KEY')):
     raise ValueError("JWT_SECRET environment variable is required in production")
 JWT_ALGORITHM = "HS256"
 

@@ -260,6 +260,28 @@ def tenant_id_2() -> int:
     return random.randint(10_000_000, 99_999_999)
 
 
+# ── Per-file cleanup rule (mandatory) ───────────────────────────────────────────
+# Every integration test file must clean up all created data after its tests
+# complete. This fixture runs once per module (i.e. per test file) as the
+# FINAL cleanup step, on top of the per-test db_schema truncation above.
+#
+# NOTE: This does NOT replace db_schema — db_schema resets tables between
+# individual tests. This module-scope fixture is the "last line of defense"
+# to guarantee no test data leaks between files.
+
+@pytest.fixture(scope="module", autouse=True)
+def _cleanup_after_module() -> Generator[None, None, None]:
+    """Truncate all tables once after every test file completes."""
+    yield
+    sync_engine = _get_test_sync_engine()
+    with sync_engine.begin() as conn:
+        for table in _TABLES:
+            try:
+                conn.execute(text(f"TRUNCATE {table} CASCADE RESTART IDENTITY"))
+            except Exception:  # pragma: no cover — best-effort, never fails a clean run
+                pass
+
+
 # ── Event loop policy ──────────────────────────────────────────────────────────
 @pytest.fixture(scope="session")
 def event_loop_policy():

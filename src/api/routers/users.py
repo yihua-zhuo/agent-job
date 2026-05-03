@@ -1,10 +1,12 @@
 """Users router — /api/v1/users and /api/v1/auth endpoints."""
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import require_auth, AuthContext
+from dependencies.auth import get_current_user
 from services.user_service import UserService
 from services.auth_service import AuthService
 from models.response import ResponseStatus
@@ -54,6 +56,17 @@ class PasswordChange(BaseModel):
 class LoginRequest(BaseModel):
     username: str
     password: str
+
+
+class Token(BaseModel):
+    """Standard OAuth2 token response for Swagger UI Authorize button."""
+    access_token: str
+    token_type: str = "bearer"
+
+
+# OAuth2 scheme — tokenUrl MUST match the login endpoint path.
+# This is what powers Swagger UI's "Authorize" button.
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 
 
 class UserData(BaseModel):
@@ -176,6 +189,42 @@ async def list_users(
             total_pages=resp.data.total_pages,
             has_next=resp.data.has_next,
             has_prev=resp.data.has_prev,
+        ),
+    )
+
+
+@users_router.get(
+    '/users/me',
+    response_model=UserResponse,
+    responses={401: {"model": ErrorEnvelope}, 404: {"model": ErrorEnvelope}},
+    summary="Get current authenticated user",
+)
+async def get_current_active_user(
+    current_user: AuthContext = Depends(get_current_user),
+    session=Depends(get_db),
+):
+    """Return the user profile for the currently authenticated user.
+    Powered by the JWT token obtained via the /auth/login endpoint.
+    """
+    if current_user.tenant_id is None or current_user.tenant_id == 0:
+        raise HTTPException(status_code=401, detail="无效的租户信息")
+    service = UserService(session)
+    user = await service.get_user_by_id(current_user.user_id, tenant_id=current_user.tenant_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return UserResponse(
+        message="查询成功",
+        data=UserData(
+            id=user.id,
+            tenant_id=user.tenant_id,
+            username=user.username,
+            email=user.email,
+            role=user.role.value if hasattr(user.role, "value") else str(user.role),
+            status=user.status.value if hasattr(user.status, "value") else str(user.status),
+            full_name=user.full_name,
+            bio=user.bio,
+            created_at=user.created_at.isoformat() if user.created_at else None,
+            updated_at=user.updated_at.isoformat() if user.updated_at else None,
         ),
     )
 
@@ -375,16 +424,19 @@ async def register(
 
 @users_router.post(
     '/auth/login',
-    response_model=LoginResponse,
+    response_model=Token,
     responses={401: {"model": ErrorEnvelope}},
 )
 async def login(
-    body: LoginRequest,
+    form_data: OAuth2PasswordRequestForm = Depends(),
     session=Depends(get_db),
 ):
+    """Standard OAuth2 password flow — accepts form data (username + password).
+    Swagger UI 'Authorize' button sends credentials here as form-encoded.
+    """
     from configs.settings import settings
     auth_svc = AuthService(session, secret_key=settings.jwt_secret)
-    user_dict = await auth_svc.authenticate_user(body.username, body.password)
+    user_dict = await auth_svc.authenticate_user(form_data.username, form_data.password)
     if user_dict is None:
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     token = auth_svc.generate_token(
@@ -393,12 +445,6 @@ async def login(
         role=user_dict["role"],
         tenant_id=user_dict.get("tenant_id"),
     )
-    return LoginResponse(
-        message="登录成功",
-        data={
-            "token": token,
-            "username": user_dict["username"],
-            "tenant_id": user_dict.get("tenant_id"),
-            "role": user_dict["role"],
-        },
-    )
+    return Token(access_token=token, token_type="bearer")
+
+

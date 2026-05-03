@@ -1,6 +1,4 @@
 """FastAPI application entry point — async-first, structured logging, centralized errors."""
-import os
-import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, HTTPException
@@ -18,6 +16,7 @@ from api import (
     tenants_router,
     tickets_router,
     activities_router,
+    notifications_router,
 )
 
 
@@ -99,6 +98,7 @@ def create_app() -> FastAPI:
     app.include_router(tenants_router)
     app.include_router(tickets_router)
     app.include_router(activities_router)
+    app.include_router(notifications_router)
 
     @app.get("/")
     async def health():

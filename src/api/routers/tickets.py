@@ -136,7 +136,7 @@ def _ticket_to_data(ticket) -> TicketData:
         id=ticket.id,
         tenant_id=ticket.tenant_id,
         subject=ticket.subject,
-        description=ticket.description,
+        description=ticket.description or "",
         status=ticket.status.value if hasattr(ticket.status, "value") else str(ticket.status),
         priority=ticket.priority.value if hasattr(ticket.priority, "value") else str(ticket.priority),
         channel=ticket.channel.value if hasattr(ticket.channel, "value") else str(ticket.channel),

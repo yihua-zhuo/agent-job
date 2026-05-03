@@ -442,18 +442,18 @@ class TestLoginEndpoint:
         svc.generate_token = MagicMock(return_value="fake-jwt-token")
         resp = client.post(
             "/api/v1/auth/login",
-            json={"username": "alice", "password": "password123"},
+            data={"username": "alice", "password": "password123"},
         )
         assert resp.status_code == 200
         body = resp.json()
-        assert body["success"] is True
-        assert "token" in body["data"]
+        assert "access_token" in body
+        assert body["token_type"] == "bearer"
 
     def test_invalid_credentials_returns_401(self, client_with_service):
         client, svc = client_with_service
         svc.authenticate_user = AsyncMock(return_value=None)
         resp = client.post(
             "/api/v1/auth/login",
-            json={"username": "alice", "password": "wrong"},
+            data={"username": "alice", "password": "wrong"},
         )
         assert resp.status_code == 401
