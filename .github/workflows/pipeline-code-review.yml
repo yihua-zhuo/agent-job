@@ -11,6 +11,7 @@ env:
   PYTHON_VERSION: '3.11'
   SHARED_MEMORY_REPO: yihua-zhuo/agent-job-shared-memory
   SHARED_MEMORY_BRANCH: main
+  CLAW_MODEL: claude-sonnet-4-6
 
 jobs:
   code-review:
