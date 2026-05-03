@@ -38,6 +38,18 @@ input[type="radio"] {
   transition: opacity 150ms ease-out, transform 150ms ease-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .page-enter {
+    opacity: 1;
+    transform: none;
+  }
+  .page-enter-active {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

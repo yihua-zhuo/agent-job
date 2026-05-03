@@ -126,9 +126,9 @@ function TicketRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem>View details</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => { window.location.href = `/tickets/${t.id}`; }}>View details</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">Delete</DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(`Delete ticket #${t.id}?`)) { /* TODO: wire delete mutation */ } }}>Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </td>
@@ -158,6 +158,7 @@ export default function TicketsPage() {
   }, []);
 
   const clearSearch = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
     setKeyword("");
     setDebouncedKeyword("");
     setPage(1);
@@ -287,10 +288,10 @@ export default function TicketsPage() {
                   type="checkbox"
                   className="accent-primary h-4 w-4 cursor-pointer"
                   onChange={(e) => {
-                    if (e.target.checked) setSelectedIds(new Set(items.map((t) => t.id)));
+                    if (e.target.checked) setSelectedIds(new Set(sorted.map((t) => t.id)));
                     else setSelectedIds(new Set());
                   }}
-                  checked={items.length > 0 && selectedIds.size === items.length}
+                  checked={sorted.length > 0 && sorted.every((t) => selectedIds.has(t.id))}
                 />
               </th>
               <th

@@ -1,15 +1,22 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { AuthGuard } from "@/lib/components/auth-guard";
 import { SessionTimeoutGuard } from "@/lib/components/session-timeout-guard";
 import { OfflineBanner } from "@/lib/components/offline-banner";
 import { AIPanel } from "@/lib/components/ai-panel";
 import { AppSidebar } from "@/components/layout/app-sidebar";
-import { Menu, X } from "lucide-react";
+import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Close sidebar on navigation
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
 
   return (
     <AuthGuard>
@@ -41,6 +48,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             type="button"
             onClick={() => setSidebarOpen(true)}
             className="flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+            aria-label="Open navigation menu"
           >
             <Menu className="h-5 w-5" />
           </button>

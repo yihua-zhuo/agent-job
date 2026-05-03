@@ -143,10 +143,11 @@ export default function TeamPage() {
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="pl-8"
+            aria-label="Search team members"
           />
         </div>
         <Select value={roleFilter} onValueChange={(v) => { setRoleFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-36">
+          <SelectTrigger className="w-36" aria-label="Filter by role">
             <SelectValue placeholder="All Roles" />
           </SelectTrigger>
           <SelectContent>
@@ -284,15 +285,17 @@ export default function TeamPage() {
           <DialogHeader><DialogTitle>Edit Member</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1">
-              <label className="text-sm font-medium">Full Name</label>
+              <label htmlFor="edit-full-name" className="text-sm font-medium">Full Name</label>
               <Input
+                id="edit-full-name"
                 value={editForm.full_name ?? ""}
                 onChange={(e) => setEditForm((f) => ({ ...f, full_name: e.target.value }))}
               />
             </div>
             <div className="space-y-1">
-              <label className="text-sm font-medium">Email</label>
+              <label htmlFor="edit-email" className="text-sm font-medium">Email</label>
               <Input
+                id="edit-email"
                 type="email"
                 value={editForm.email ?? ""}
                 onChange={(e) => setEditForm((f) => ({ ...f, email: e.target.value }))}
@@ -316,11 +319,14 @@ export default function TeamPage() {
           <p className="text-sm text-muted-foreground">
             Are you sure you want to remove <strong>{String(deletingUser?.full_name ?? deletingUser?.username ?? "")}</strong>? This action cannot be undone.
           </p>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDelete(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDelete} disabled={deleteUser.isPending}>
-              {deleteUser.isPending ? "Removing…" : "Remove"}
-            </Button>
+          <DialogFooter className="flex-col gap-2 sm:flex-col">
+            {deleteUser.isError && <p className="text-xs text-destructive text-center">Failed to remove member</p>}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowDelete(false)}>Cancel</Button>
+              <Button variant="destructive" onClick={handleDelete} disabled={deleteUser.isPending}>
+                {deleteUser.isPending ? "Removing…" : "Remove"}
+              </Button>
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

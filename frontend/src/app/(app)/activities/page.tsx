@@ -76,6 +76,7 @@ export default function ActivitiesPage() {
   }, []);
 
   const clearSearch = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
     setKeyword("");
     setDebouncedKeyword("");
     setPage(1);

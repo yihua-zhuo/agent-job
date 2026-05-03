@@ -40,6 +40,10 @@ const systemItems = [
 function NavGroup({ items, unreadCount }: { items: typeof crmItems; unreadCount: number }) {
   const pathname = usePathname();
 
+  function isActive(href: string) {
+    return pathname === href || pathname.startsWith(href + "/");
+  }
+
   return (
     <>
       {items.map(({ href, label, icon: Icon, badge }) => (
@@ -48,7 +52,7 @@ function NavGroup({ items, unreadCount }: { items: typeof crmItems; unreadCount:
           href={href}
           className={cn(
             "flex cursor-pointer items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-all duration-150",
-            pathname?.startsWith(href)
+            isActive(href)
               ? "bg-primary text-primary-foreground shadow-sm"
               : "text-muted-foreground hover:bg-muted hover:text-foreground"
           )}
