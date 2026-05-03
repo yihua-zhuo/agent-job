@@ -20,6 +20,7 @@ on:
 
 # ─── Permissions ─────────────────────────────────────────────────────────────
 permissions:
+  id-token: write     # OIDC token for cloud auth (if needed)
   contents: write        # Read code, push fix commits
   pull-requests: write   # Submit reviews, add review comments, approve/request changes
   issues: write          # Create issues, add labels, post comments
