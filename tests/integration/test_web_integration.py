@@ -248,18 +248,18 @@ class TestUserEndpoints:
             },
         )
 
-        # Login at /api/v1/auth/login
+        # Login at /api/v1/auth/login (OAuth2PasswordRequestForm = form-encoded)
         resp = await api_client.post(
             "/api/v1/auth/login",
-            json={
+            data={
                 "username": f"loginuser_{suffix}",
                 "password": "Test@Pass1234",
             },
         )
         assert resp.status_code == 200, f"Body: {resp.text}"
         data = resp.json()
-        assert data["success"] is True
-        assert "token" in data["data"]
+        assert data["access_token"] is not None
+        assert data["token_type"] == "bearer"
 
     async def test_login_wrong_password(self, api_client: "AsyncClient", tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
@@ -275,7 +275,7 @@ class TestUserEndpoints:
 
         resp = await api_client.post(
             "/api/v1/auth/login",
-            json={
+            data={
                 "username": f"wronguser_{suffix}",
                 "password": "WrongPassword!",
             },
