@@ -1,282 +1,184 @@
 """
 Supervisor Agent — 主编排器
-负责任务分解、子 Agent 分发、结果聚合、通过 Telegram 向用户报告
+
+职责：
+1. 接收用户任务（通过 Telegram 或直接调用）
+2. 将任务分解为多个子任务，提交到 SharedMemory（GitHub Issues）
+3. 轮询所有子任务的完成状态
+4. 汇总结果，报告给用户
 """
 
 import asyncio
-import json
-import re
+import os
 import time
-import uuid
-from datetime import datetime, timezone
-from typing import Optional
+import json
+import sys
 
-import httpx
-import redis.asyncio as redis
-
-from shared_memory import MemoryStore, RedisClient, TTL_SECONDS
-
-TELEGRAM_BOT_TOKEN = "BOT_TOKEN"
-TELEGRAM_CHAT_ID = "1680424782"
-GITHUB_REPO = "yihua-zhuo/agent-job"
-AGENT_NAMES = ["code-review", "test", "qc", "deploy"]
-POLL_INTERVAL = 5  # seconds
+from shared_memory import get_shared_memory, SharedMemory, Task
 
 
-def utc_now() -> str:
-    return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+# ─── Supervisor 专属 Agent 名 ─────────────────────────────────────────────────
+
+SUPERVISOR_NAME = "supervisor"
+SUB_AGENTS = ["code-review", "test", "qc", "deploy"]
 
 
-def send_telegram(message: str):
-    """发送消息到 Telegram"""
-    import urllib.request
-    import urllib.parse
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    data = urllib.parse.urlencode({
-        "chat_id": TELEGRAM_CHAT_ID,
-        "text": message,
-        "parse_mode": "HTML",
-    }).encode()
-    req = urllib.request.Request(url, data=data)
-    urllib.request.urlopen(req, timeout=10)
-
-
-async def update_heartbeat(agent: str):
-    await MemoryStore.set_agent_context(agent, {"status": "running", "last_update": utc_now()})
-
-
-async def report_to_user(text: str):
-    """通过 Telegram 实时通知用户"""
-    loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: send_telegram(text))
-
-
-async def parse_task_from_message(message: str) -> dict:
-    """将用户消息解析为结构化任务"""
-    return {
-        "task_id": str(uuid.uuid4())[:8],
-        "description": message.strip(),
-        "status": "pending",
-        "created_at": utc_now(),
-    }
-
-
-async def decompose_task(task: dict) -> list[dict]:
-    """将大任务分解为子任务，分配给不同 Agent"""
-    task_id = task["task_id"]
-    description = task["description"]
-
-    sub_tasks = []
-
-    # 根据任务关键词决定走哪些 Agent
-    review_keywords = ["review", "review code", "code review", "review pr", "review patch"]
-    test_keywords = ["test", "测试", "unit test", "integration test"]
-    qc_keywords = ["qc", "quality", "check", "lint", "style", "type check"]
-    deploy_keywords = ["deploy", "部署", "release"]
-
-    needs_review = any(k in description.lower() for k in review_keywords)
-    needs_test = any(k in description.lower() for k in test_keywords)
-    needs_qc = any(k in description.lower() for k in qc_keywords)
-    needs_deploy = any(k in description.lower() for k in deploy_keywords)
-
-    # 默认所有 Agent 都跑一轮（全面检查）
-    if not any([needs_review, needs_test, needs_qc, needs_deploy]):
-        needs_review = needs_test = needs_qc = True
-
-    if needs_review:
-        sub_tasks.append({
-            "sub_task_id": f"{task_id}-review",
-            "parent_id": task_id,
+async def decompose_task(task_description: str) -> list[dict]:
+    """
+    将大任务分解为子任务。
+    固定流程：code-review → test → qc → deploy
+    """
+    sub_tasks = [
+        {
+            "description": f"[Code Review] {task_description}",
             "agent": "code-review",
-            "description": f"Code review: {description}",
-            "status": "pending",
-            "created_at": utc_now(),
-        })
-
-    if needs_test:
-        sub_tasks.append({
-            "sub_task_id": f"{task_id}-test",
-            "parent_id": task_id,
+        },
+        {
+            "description": f"[Test] {task_description}",
             "agent": "test",
-            "description": f"Run tests: {description}",
-            "status": "pending",
-            "created_at": utc_now(),
-        })
-
-    if needs_qc:
-        sub_tasks.append({
-            "sub_task_id": f"{task_id}-qc",
-            "parent_id": task_id,
+        },
+        {
+            "description": f"[QC] {task_description}",
             "agent": "qc",
-            "description": f"QC check: {description}",
-            "status": "pending",
-            "created_at": utc_now(),
-        })
-
-    if needs_deploy:
-        sub_tasks.append({
-            "sub_task_id": f"{task_id}-deploy",
-            "parent_id": task_id,
+        },
+        {
+            "description": f"[Deploy] {task_description}",
             "agent": "deploy",
-            "description": f"Deploy: {description}",
-            "status": "pending",
-            "created_at": utc_now(),
-        })
-
+        },
+    ]
     return sub_tasks
 
 
-async def dispatch_sub_task(sub_task: dict) -> Optional[str]:
-    """分发子任务到指定 Agent（写入 Agent 队列）"""
-    client = await RedisClient.get_client()
-    agent_queue = f"agent-system:queue:{sub_task['agent']}"
-    await client.lpush(agent_queue, json.dumps(sub_task, ensure_ascii=False))
-    return sub_task["agent"]
-
-
-async def collect_results(parent_id: str, expected_count: int, timeout: int = 300) -> list[dict]:
-    """收集所有子任务结果"""
-    results = []
+async def wait_for_subtasks(sm: SharedMemory, parent_id: str, timeout: int = 300) -> dict:
+    """
+    轮询等待所有子任务完成。
+    超时返回已完成的 + 超时未完成的。
+    """
     start = time.time()
+    completed = {}
+    pending = set()
 
-    while len(results) < expected_count and (time.time() - start) < timeout:
-        # 检查已完成任务
-        all_completed_raw = await client.hget("agent-system:tasks:completed", parent_id)
-        # 同时检查各子任务结果
-        for agent in AGENT_NAMES:
-            result = await MemoryStore.get_result(f"{parent_id}-{agent}")
-            if result and result not in results:
-                results.append(result)
-        await asyncio.sleep(2)
+    while time.time() - start < timeout:
+        # 读取父任务的 comments 获取各 Agent 结果
+        # 找 parent task issue
+        parent_task = await sm.get_task(parent_id)
+        if not parent_task:
+            await asyncio.sleep(3)
+            continue
 
-    return results
+        comments = await sm.read_task_comments(parent_task.issue_number)
 
+        # 从 comments 提取已完成的任务
+        for c in comments:
+            if isinstance(c, dict) and "author" in c:
+                agent = c.get("author")
+                if agent in SUB_AGENTS and agent not in completed:
+                    status = c.get("content", {}).get("status", "unknown")
+                    completed[agent] = status
+                    pending.discard(agent)
 
-async def aggregate_report(task: dict, sub_tasks: list, all_results: list) -> str:
-    """聚合子 Agent 结果，生成用户报告"""
-    lines = [f"📊 <b>任务完成</b>: {task['description']}", ""]
+        # 检查是否全部完成
+        still_pending = [a for a in SUB_AGENTS if a not in completed]
+        if not still_pending:
+            break
 
-    agent_results = {}
-    for r in all_results:
-        agent_results[r.get("agent", "unknown")] = r
+        await asyncio.sleep(3)
 
-    for st in sub_tasks:
-        agent = st["agent"]
-        result = agent_results.get(agent, {})
-        status = result.get("status", "no result")
-        details = result.get("details", "")
-
-        emoji = "✅" if status == "pass" else "❌" if status == "fail" else "⏳"
-        lines.append(f"{emoji} <b>{agent}</b>: {status}")
-        if details:
-            lines.append(f"   └ {details}")
-
-    lines.append("")
-    lines.append(f"🕐 {utc_now()}")
-    return "\n".join(lines)
+    # 最终状态
+    final = {}
+    for agent in SUB_AGENTS:
+        final[agent] = completed.get(agent, "timeout/not_started")
+    return final
 
 
-async def supervisor_loop():
-    """Supervisor 主循环"""
-    print("[Supervisor] Starting...")
+async def report_to_telegram(chat_id: str, text: str) -> None:
+    """通过 Telegram Bot 发送消息"""
+    import aiohttp
+    token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+    if not token:
+        print(f"[Telegram] No token, skipping: {text[:80]}")
+        return
 
-    client = await RedisClient.get_client()
-
-    # 注册自己
-    await update_heartbeat("supervisor")
-
-    # 清理旧的任务状态
-    await client.delete("agent-system:tasks:pending")
-    await client.delete("agent-system:tasks:running")
-    await client.delete("agent-system:tasks:completed")
-
-    print("[Supervisor] Loop started, polling for tasks...")
-
-    while True:
-        try:
-            # 1. 检查是否有新任务
-            raw = await client.brpop("agent-system:tasks:pending", timeout=POLL_INTERVAL)
-            if raw:
-                _, payload = raw
-                task = json.loads(payload)
-                task_id = task["task_id"]
-
-                print(f"[Supervisor] Got task: {task_id}")
-                await report_to_user(f"🧠 <b>收到任务</b>: {task['description'][:100]}")
-
-                # 2. 分解任务
-                sub_tasks = await decompose_task(task)
-                print(f"[Supervisor] Decomposed into {len(sub_tasks)} sub-tasks")
-
-                # 3. 写入全局上下文（供各 Agent 读取）
-                await MemoryStore.set_global_context(f"task:{task_id}", {
-                    "task": task,
-                    "sub_tasks": sub_tasks,
-                    "status": "decomposed",
-                    "updated_at": utc_now(),
-                })
-
-                # 4. 分发子任务到各 Agent 队列
-                dispatch_info = []
-                for st in sub_tasks:
-                    await dispatch_sub_task(st)
-                    dispatch_info.append(st["agent"])
-
-                await report_to_user(
-                    f"📦 分解为 {len(sub_tasks)} 个子任务，"
-                    f"分发给: {', '.join(dispatch_info)}"
-                )
-
-                # 5. 等待子任务结果
-                expected = len(sub_tasks)
-                await asyncio.sleep(3)  # 等待 Agent 启动
-
-                # 6. 监听子任务完成事件（简单轮询）
-                collected = []
-                start_wait = time.time()
-                while len(collected) < expected and (time.time() - start_wait) < 600:
-                    for st in sub_tasks:
-                        result_key = f"agent-system:result:{st['sub_task_id']}"
-                        raw_result = await client.get(result_key)
-                        if raw_result and st["sub_task_id"] not in [c["sub_task_id"] for c in collected]:
-                            result = json.loads(raw_result)
-                            collected.append({**st, **result})
-                            status_emoji = "✅" if result.get("status") == "pass" else "❌"
-                            await report_to_user(
-                                f"{status_emoji} <b>{st['agent']}</b> 完成: "
-                                f"{result.get('summary', result.get('status', 'unknown'))}"
-                            )
-                    await asyncio.sleep(2)
-
-                # 7. 聚合报告
-                if collected:
-                    report_lines = [f"📊 <b>任务完成</b>: {task['description']}", ""]
-                    for c in collected:
-                        emoji = "✅" if c.get("status") == "pass" else "❌"
-                        report_lines.append(
-                            f"{emoji} <b>{c['agent']}</b>: {c.get('summary', c.get('status', 'unknown'))}"
-                        )
-                    report_lines.append("")
-                    report_lines.append(f"🕐 {utc_now()}")
-                    await report_to_user("\n".join(report_lines))
-                else:
-                    await report_to_user("⚠️ 子任务结果收集超时")
-
-            else:
-                # 无任务，更新心跳
-                await update_heartbeat("supervisor")
-
-        except Exception as e:
-            print(f"[Supervisor] Error: {e}")
-            await asyncio.sleep(5)
+    url = f"https://api.telegram.org/bot{token}/sendMessage"
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "HTML"}
+    try:
+        async with aiohttp.ClientSession() as sess:
+            async with sess.post(url, json=payload, timeout=aiohttp.ClientTimeout(total=10)) as resp:
+                pass  # ignore result
+    except Exception as e:
+        print(f"[Telegram] Send failed: {e}")
 
 
 async def main():
-    print("[Supervisor] Initializing Redis connection...")
-    client = await RedisClient.get_client()
-    await client.ping()
-    print("[Supervisor] Redis connected.")
-    await supervisor_loop()
+    """Supervisor 主入口：接收任务 → 分解 → 分发 → 等待 → 报告"""
+    sm = get_shared_memory()
+    print("[Supervisor] Ready. Waiting for tasks...")
+
+    # 加载 Telegram chat_id
+    ADMIN_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID", "1680424782")
+
+    while True:
+        try:
+            # 轮询 supervisor 自己被分配的任务
+            tasks = await sm.get_pending_tasks(agent=SUPERVISOR_NAME)
+
+            if not tasks:
+                await asyncio.sleep(3)
+                continue
+
+            task = tasks[0]
+            print(f"[Supervisor] Got task: {task.description[:80]}")
+            await sm.claim_task(task)
+
+            # 写入全局上下文，供子 Agent 使用
+            await sm.write_context("current_task", {
+                "task_id": task.task_id,
+                "description": task.description,
+                "submitted_at": task.created_at,
+            })
+
+            # 分解任务
+            sub_tasks = await decompose_task(task.description)
+
+            # 提交子任务到 SharedMemory
+            sub_task_ids = []
+            for st in sub_tasks:
+                sub = await sm.submit_task(
+                    description=st["description"],
+                    agent=st["agent"],
+                    parent_id=task.task_id,
+                    context={"parent_issue": task.issue_number},
+                )
+                sub_task_ids.append((st["agent"], sub.task_id))
+                print(f"[Supervisor] Subtask submitted: {st['agent']} → {sub.task_id}")
+
+            # 等待所有子任务完成
+            await report_to_telegram(ADMIN_CHAT_ID,
+                f"🔄 开始处理：{task.description[:60]}...\n"
+                f"已分发 {len(sub_tasks)} 个子任务，等待完成..."
+            )
+
+            results = await wait_for_subtasks(sm, task.task_id, timeout=600)
+
+            # 汇总报告
+            lines = [f"✅ 任务完成：<b>{task.description[:80]}</b>\n"]
+            for agent, status in results.items():
+                icon = "✅" if status == "pass" else "❌" if status == "fail" else "⏳"
+                lines.append(f"{icon} <b>{agent}</b>: {status}")
+
+            report = "\n".join(lines)
+            print(f"[Supervisor] Report:\n{report}")
+            await report_to_telegram(ADMIN_CHAT_ID, report)
+
+            # 标记完成
+            await sm.complete_task(task, {"subtask_results": results})
+            await report_to_telegram(ADMIN_CHAT_ID, f"🏁 全部完成，任务 {task.task_id} 已归档。")
+
+        except Exception as e:
+            print(f"[Supervisor] Error: {e}")
+            import traceback
+            traceback.print_exc()
+            await asyncio.sleep(5)
 
 
 if __name__ == "__main__":
