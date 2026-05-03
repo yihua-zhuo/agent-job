@@ -2,14 +2,18 @@
 import { useState, useEffect, useRef } from "react";
 import { useCurrentUser, useUpdateProfile, useChangePassword } from "@/lib/api/queries";
 import { useAuthStore } from "@/lib/store/auth-store";
+import { useThemeStore } from "@/lib/store/theme-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Moon, Sun, Monitor } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function SettingsPage() {
   const { user } = useAuthStore();
   const { data } = useCurrentUser();
   const me = data?.data;
+  const { theme, setTheme } = useThemeStore();
   const updateProfile = useUpdateProfile();
   const changePassword = useChangePassword();
 
@@ -122,6 +126,38 @@ export default function SettingsPage() {
           {updateProfile.isError && (
             <p className="text-xs text-destructive">Failed to save profile</p>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Appearance</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">Choose how the dashboard looks.</p>
+          <div className="flex gap-2">
+            {([
+              { value: "light", label: "Light", icon: Sun },
+              { value: "dark", label: "Dark", icon: Moon },
+              { value: "system", label: "System", icon: Monitor },
+            ] as const).map(({ value, label, icon: Icon }) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setTheme(value)}
+                aria-pressed={theme === value}
+                className={cn(
+                  "flex flex-1 flex-col items-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors cursor-pointer",
+                  theme === value
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border hover:border-muted-foreground/30"
+                )}
+              >
+                <Icon className="h-5 w-5" />
+                {label}
+              </button>
+            ))}
+          </div>
         </CardContent>
       </Card>
 

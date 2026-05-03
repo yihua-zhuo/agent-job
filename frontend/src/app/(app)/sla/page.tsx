@@ -58,6 +58,7 @@ function useAllOpenTickets() {
   const [done, setDone] = useState(false);
   const { data, isLoading } = useTickets(page, 20, "open");
 
+  /* eslint-disable react-hooks/set-state-in-effect -- cascade pagination is intentional */
   useEffect(() => {
     if (!data?.data) return;
     setAllItems((prev) => [...prev, ...(data.data.items ?? [])]);
@@ -68,13 +69,14 @@ function useAllOpenTickets() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [data]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   return { items: allItems, isLoading: isLoading && !done, done };
 }
 
 export default function SlaPage() {
   const { data: breachData, isLoading: breachLoading } = useSlaBreaches();
-  const { items: allTickets, isLoading } = useAllOpenTickets();
+  const { items: allTickets } = useAllOpenTickets();
   const [page, setPage] = useState(1);
   const { data, isLoading: isTableLoading, isError: isTableError } = useTickets(page, 20, "open");
   const info = data?.data;

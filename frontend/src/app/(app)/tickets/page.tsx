@@ -1,6 +1,7 @@
 "use client";
 import { useState, useRef, useCallback, useEffect } from "react";
-import { useTickets } from "@/lib/api/queries";
+import { useRouter } from "next/navigation";
+import { useTickets, useDeleteTicket } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -38,6 +39,15 @@ const STATUS_COLORS: Record<string, string> = {
 type SortKey = "id" | "subject" | "status" | "priority" | "channel" | "created_at";
 type SortDir = "asc" | "desc";
 
+function SortIconStatic({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey | null; sortDir: SortDir }) {
+  if (sortKey !== col) {
+    return <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity inline ml-1" />;
+  }
+  return sortDir === "asc"
+    ? <ChevronUp className="h-3 w-3 opacity-100 inline ml-1 text-primary" />
+    : <ChevronDown className="h-3 w-3 opacity-100 inline ml-1 text-primary" />;
+}
+
 interface TicketRowData {
   id: number;
   subject: string;
@@ -57,10 +67,14 @@ function TicketRow({
   t,
   selected,
   onToggle,
+  onDelete,
+  onView,
 }: {
   t: TicketRowData;
   selected: boolean;
   onToggle: (id: number) => void;
+  onDelete: (id: number) => Promise<void>;
+  onView: (id: number) => void;
 }) {
   return (
     <tr
@@ -126,9 +140,9 @@ function TicketRow({
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => { window.location.href = `/tickets/${t.id}`; }}>View details</DropdownMenuItem>
+            <DropdownMenuItem onClick={() => onView(t.id)}>View details</DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive" onClick={() => { if (window.confirm(`Delete ticket #${t.id}?`)) { /* TODO: wire delete mutation */ } }}>Delete</DropdownMenuItem>
+            <DropdownMenuItem className="text-destructive" onClick={() => onDelete(t.id)}>Delete</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </td>
@@ -146,6 +160,18 @@ export default function TicketsPage() {
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const deleteTicket = useDeleteTicket();
+  const router = useRouter();
+
+  async function handleDeleteTicket(id: number) {
+    if (window.confirm(`Delete ticket #${id}?`)) {
+      await deleteTicket.mutateAsync(id);
+    }
+  }
+
+  function handleViewTicket(id: number) {
+    router.push(`/tickets/${id}`);
+  }
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -210,15 +236,6 @@ export default function TicketsPage() {
       setSortKey(key);
       setSortDir("asc");
     }
-  }
-
-  function SortIcon({ col }: { col: SortKey }) {
-    if (sortKey !== col) {
-      return <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity inline ml-1" />;
-    }
-    return sortDir === "asc"
-      ? <ChevronUp className="h-3 w-3 opacity-100 inline ml-1 text-primary" />
-      : <ChevronDown className="h-3 w-3 opacity-100 inline ml-1 text-primary" />;
   }
 
   function toggleSelect(id: number) {
@@ -298,37 +315,37 @@ export default function TicketsPage() {
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("id")}
               >
-                ID<SortIcon col="id" />
+                ID<SortIconStatic col="id" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("subject")}
               >
-                Subject<SortIcon col="subject" />
+                Subject<SortIconStatic col="subject" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("status")}
               >
-                Status<SortIcon col="status" />
+                Status<SortIconStatic col="status" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("priority")}
               >
-                Priority<SortIcon col="priority" />
+                Priority<SortIconStatic col="priority" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("channel")}
               >
-                Channel<SortIcon col="channel" />
+                Channel<SortIconStatic col="channel" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("created_at")}
               >
-                Created<SortIcon col="created_at" />
+                Created<SortIconStatic col="created_at" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th className="px-3 py-2.5 w-10" />
             </tr>
@@ -374,6 +391,8 @@ export default function TicketsPage() {
                 t={t}
                 selected={selectedIds.has(t.id)}
                 onToggle={toggleSelect}
+                onDelete={handleDeleteTicket}
+                onView={handleViewTicket}
               />
             ))}
           </tbody>

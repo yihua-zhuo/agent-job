@@ -33,6 +33,7 @@ export function SessionTimeoutGuard() {
     setShowWarning(false);
   }, [clearAuth, router]);
 
+  /* eslint-disable react-hooks/set-state-in-effect -- scheduleWarning re-arms timers on activity, intentional cascade */
   useEffect(() => {
     if (!isAuthenticated()) return;
     scheduleWarning();

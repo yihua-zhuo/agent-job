@@ -1,11 +1,10 @@
 "use client";
-import { useState, useRef, useCallback, useEffect, Suspense } from "react";
+import { useState, useRef, useCallback, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useCustomers, useCreateCustomer, useDeleteCustomer } from "@/lib/api/queries";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Search, X, ChevronUp, ChevronDown, MoreHorizontal, UserPlus, RefreshCw, Trash2, Download, Save, LayoutList } from "lucide-react";
+import { Search, X, ChevronUp, ChevronDown, MoreHorizontal, UserPlus, RefreshCw, Trash2, Download, Save } from "lucide-react";
 import { toast } from "sonner";
 import {
   Select,
@@ -28,7 +27,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useRouter } from "next/navigation";
 import { cn } from "@/lib/utils";
 import {
   Popover,
@@ -276,10 +274,8 @@ function CustomersPageInner() {
   const [keyword, setKeyword] = useState(initKeyword);
   const [debouncedKeyword, setDebouncedKeyword] = useState(initKeyword);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pageRef = useRef(page);
-  pageRef.current = page;
-  const debouncedKeywordRef = useRef(debouncedKeyword);
-  debouncedKeywordRef.current = debouncedKeyword;
+  const pageRef = useRef(initPage);
+  const debouncedKeywordRef = useRef(initKeyword);
 
   const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -298,7 +294,6 @@ function CustomersPageInner() {
   const deleteCustomer = useDeleteCustomer();
 
   // Bulk / column state
-  const [showBulk, setShowBulk] = useState(false);
 
   function pushParams(overrides: Record<string, string | null>) {
     const params = new URLSearchParams();
@@ -324,6 +319,7 @@ function CustomersPageInner() {
 
   useEffect(() => {
     pushParams({ q: debouncedKeyword || null, page: page > 1 ? String(page) : null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [page, debouncedKeyword]);
 
   const clearSearch = useCallback(() => {
@@ -361,16 +357,14 @@ function CustomersPageInner() {
     return () => clearInterval(interval);
 
   }, [refetch]);
-  const { widths, onMouseDown, dragging } = useColumnResize({
+  const { widths, onMouseDown } = useColumnResize({
     name: 160, email: 200, phone: 140, status: 120, company: 160, created_at: 120,
   });
 
   // Saved views
-  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadViews());
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [newViewName, setNewViewName] = useState("");
-
-  useEffect(() => { setSavedViews(loadViews()); }, []);
 
   function applyView(view: SavedView) {
     setKeyword(view.keyword);
@@ -448,7 +442,7 @@ function CustomersPageInner() {
   }
 
   function navigateToCustomer(id: number) {
-    window.location.href = `/customers/${id}`;
+    window.location.href = `/customers/${id}`; // eslint-disable-line react-hooks/immutability
   }
 
   function openDelete(c: CustomerRowData) {

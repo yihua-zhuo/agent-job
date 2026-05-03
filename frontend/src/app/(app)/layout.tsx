@@ -9,18 +9,31 @@ import { AppSidebar } from "@/components/layout/app-sidebar";
 import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+const STORAGE_KEY = "crm_sidebar_collapsed";
+
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY) === "true"; } catch { return false; }
+  });
   const pathname = usePathname();
 
-  // Close sidebar on navigation
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: synchronizing sidebar open state with pathname change */
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  function toggleSidebar() {
+    setCollapsed((c) => !c);
+  }
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch {}
+  }, [collapsed]);
 
   return (
     <AuthGuard>
-      {/* Mobile overlay */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-20 bg-black/30 lg:hidden"
@@ -28,21 +41,19 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         />
       )}
 
-      {/* Sidebar — slides in on mobile, static on lg+ */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-30 w-56 transition-transform duration-200 lg:relative lg:translate-x-0 lg:z-auto",
-          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+          "fixed inset-y-0 left-0 z-30 transition-all duration-200 lg:relative lg:translate-x-0 lg:z-auto",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full",
+          collapsed ? "w-16" : "w-56"
         )}
       >
-        <AppSidebar />
+        <AppSidebar collapsed={collapsed} onToggle={toggleSidebar} />
       </div>
 
       <OfflineBanner />
 
-      {/* Main content */}
       <div className="flex flex-1 flex-col overflow-hidden">
-        {/* Mobile header with hamburger */}
         <div className="flex h-14 items-center border-b bg-background px-4 lg:hidden">
           <button
             type="button"
@@ -59,7 +70,6 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </main>
 
         <AIPanel />
-
         <SessionTimeoutGuard />
       </div>
     </AuthGuard>

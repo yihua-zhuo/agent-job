@@ -42,17 +42,15 @@ const STAGE_DATA = [
 export default function AnalyticsPage() {
   const [activeChart, setActiveChart] = useState<"bar" | "line" | "pie">("bar");
 
-  const { data: custData, isLoading: custLoading } = useCustomers(1, 1);
-  const { data: oppData, isLoading: oppLoading } = useOpportunities(1);
-  const { data: ticketData, isLoading: ticketLoading } = useTickets(1, 1);
-  const { data: taskData, isLoading: taskLoading } = useTasks(1);
+  const { data: custData } = useCustomers(1, 1);
+  const { data: oppData } = useOpportunities(1);
+  const { data: ticketData } = useTickets(1, 1);
+  const { data: taskData } = useTasks(1);
 
   const totalCustomers = Number(custData?.data?.total ?? 0);
   const totalOpps = Number(oppData?.data?.total ?? 0);
   const totalTickets = Number(ticketData?.data?.total ?? 0);
   const totalTasks = Number(taskData?.data?.total ?? 0);
-
-  const anyLoading = custLoading || oppLoading || ticketLoading || taskLoading;
 
   function fmtVal(v: number) {
     if (Number.isNaN(v)) return "—";

@@ -59,7 +59,7 @@ export default function TeamPage() {
   const [deletingUser, setDeletingUser] = useState<Record<string, unknown> | null>(null);
   const [showDelete, setShowDelete] = useState(false);
 
-  const { data, isLoading, refetch } = useUsers(page);
+  const { data, isLoading } = useUsers(page);
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
   const create = useCreateUser();

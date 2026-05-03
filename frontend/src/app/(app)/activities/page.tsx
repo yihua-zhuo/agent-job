@@ -11,8 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, X, ChevronUp, ChevronDown, Phone, Mail, Users, FileText, Target } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { Search, X, Phone, Mail, Users, FileText, Target } from "lucide-react";
 
 const TYPE_COLORS: Record<string, string> = {
   call: "bg-blue-100 text-blue-800",
@@ -29,9 +28,6 @@ const TYPE_ICONS: Record<string, React.ReactNode> = {
   note: <FileText className="h-4 w-4 text-gray-600" />,
   demo: <Target className="h-4 w-4 text-yellow-600" />,
 };
-
-type SortKey = "type" | "content" | "created_at";
-type SortDir = "asc" | "desc";
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -61,9 +57,6 @@ export default function ActivitiesPage() {
   const [keyword, setKeyword] = useState("");
   const [debouncedKeyword, setDebouncedKeyword] = useState("");
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -101,36 +94,12 @@ export default function ActivitiesPage() {
     : rawItems;
 
   const sorted = [...filtered].sort((a, b) => {
-    if (!sortKey) {
-      const da = new Date(String(a.created_at ?? 0)).getTime();
-      const db = new Date(String(b.created_at ?? 0)).getTime();
-      return db - da;
-    }
-    const av = a[sortKey] ?? "";
-    const bv = b[sortKey] ?? "";
-    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-    return sortDir === "asc" ? cmp : -cmp;
+    const da = new Date(String(a.created_at ?? 0)).getTime();
+    const db = new Date(String(b.created_at ?? 0)).getTime();
+    return db - da;
   });
 
   const grouped = groupByDate(sorted);
-
-  function handleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
-  }
-
-  function SortIcon({ col }: { col: SortKey }) {
-    if (sortKey !== col) {
-      return <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity inline ml-1" />;
-    }
-    return sortDir === "asc"
-      ? <ChevronUp className="h-3 w-3 opacity-100 inline ml-1 text-primary" />
-      : <ChevronDown className="h-3 w-3 opacity-100 inline ml-1 text-primary" />;
-  }
 
   return (
     <div className="space-y-0">
@@ -271,7 +240,7 @@ export default function ActivitiesPage() {
 
       {info && !isError && (
         <div className="flex items-center justify-between text-xs text-muted-foreground py-3">
-          <span>Showing {info.total === 0 ? 0 : ((page - 1) * 20) + 1}–{Math.min(page * 20, info.total as number)} of {info.total as number}</span>
+          <span>Showing {info.total === 0 ? 0 : ((page - 1) * 20) + 1}–{Math.min(page * 20, Number(info.total))} of {info.total}</span>
           <div className="flex gap-1">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</Button>
             <Button variant="outline" size="sm" disabled={!info.has_next} onClick={() => setPage(page + 1)}>Next →</Button>
