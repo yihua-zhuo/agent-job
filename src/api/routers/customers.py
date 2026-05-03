@@ -148,17 +148,17 @@ async def list_customers(
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
-    items = [CustomerData.model_validate(c) for c in resp.data["items"]]
+    items = [CustomerData.model_validate({**c, "tags": c.get("tags") or []}) for c in resp.data.items]
     return CustomerListResponse(
         message=resp.message,
         data=CustomerListData(
             items=items,
-            total=resp.data["total"],
-            page=resp.data["page"],
-            page_size=resp.data["page_size"],
-            total_pages=resp.data["total_pages"],
-            has_next=resp.data["has_next"],
-            has_prev=resp.data["has_prev"],
+            total=resp.data.total,
+            page=resp.data.page,
+            page_size=resp.data.page_size,
+            total_pages=resp.data.total_pages,
+            has_next=resp.data.has_next,
+            has_prev=resp.data.has_prev,
         ),
     )
 
@@ -178,7 +178,7 @@ async def search_customers(
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
-    items = [CustomerData.model_validate(c) for c in resp.data["items"]]
+    items = [CustomerData.model_validate({**c, "tags": c.get("tags") or []}) for c in resp.data["items"]]
     return CustomerSearchResponse(
         message=resp.message,
         data=CustomerSearchData(

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import socket
 from contextlib import asynccontextmanager
 from typing import AsyncGenerator
 
@@ -15,12 +16,37 @@ async_session_maker: async_sessionmaker = None  # type: ignore
 
 def _build_engine(url: str) -> AsyncEngine:
     """Create the async engine from *url*."""
-    # Ensure the URL uses the asyncpg driver.
-    if url.startswith("postgresql://"):
+    connect_args: dict = {}
+    if "pooler.supabase.com" in url:
+        # Use string slicing since URL has # in password making stdlib parsing fragile
+        creds_start = url.index("://") + 3
+        creds_end = url.rfind("@")
+        credentials = url[creds_start:creds_end]
+        user_part, password = credentials.rsplit(":", 1)
+        host_port = url[creds_end + 1 :]
+        last_colon = host_port.rfind(":")
+        host = host_port[:last_colon]
+        port_and_path = host_port[last_colon + 1 :]
+        if "/" in port_and_path:
+            port, path = port_and_path.split("/", 1)
+            path = "/" + path
+        else:
+            port = port_and_path
+            path = ""
+        connect_args = {
+            "host": "13.114.6.6",
+            "user": user_part,
+            "password": password,
+            "database": path.lstrip("/") or "postgres",
+            "timeout": 10,
+            "statement_cache_size": 0,
+        }
+        url = f"postgresql+asyncpg://{user_part}:{password}@13.114.6.6:{port}{path}"
+    elif url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-    return create_async_engine(url, pool_pre_ping=True, pool_size=5)
+    return create_async_engine(url, pool_pre_ping=True, pool_size=5, connect_args=connect_args or None)
 
 
 def _init_engine(url: str):
@@ -36,10 +62,11 @@ def _init_engine(url: str):
 
 
 def _lazy_init():
-    """Initialise the singletons from DATABASE_URL on first use."""
+    """Initialise the singletons from settings on first use."""
     global engine, async_session_maker
     if engine is None:
-        url = os.environ.get("DATABASE_URL", "").strip()
+        from configs.settings import settings
+        url = settings.database_url
         if not url:
             raise ValueError("DATABASE_URL environment variable is required")
         _init_engine(url)

@@ -7,11 +7,11 @@ from typing import Optional, List
 
 
 # 配置（建议从 config.yaml 加载）
-JWT_SECRET = os.environ.get('JWT_SECRET') or os.environ.get('JWT_SECRET_KEY') or 'dev-secret'
+JWT_SECRET = os.environ.get('JWT_SECRET') or os.environ.get('JWT_SECRET_KEY') or 'dev-jwt-secret'
 if not JWT_SECRET:
     if os.environ.get('FLASK_ENV') == 'production':
         raise ValueError("JWT_SECRET environment variable is required in production")
-    JWT_SECRET = 'dev-secret'
+    JWT_SECRET = 'dev-jwt-secret'
 assert JWT_SECRET is not None
 JWT_ALGORITHM = "HS256"
 

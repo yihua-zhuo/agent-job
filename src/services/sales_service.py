@@ -385,7 +385,7 @@ class SalesService:
                 "tenant_id": o.tenant_id,
                 "customer_id": o.customer_id,
                 "name": o.name,
-                "stage": o.stage,
+                "stage": o.stage.value if hasattr(o.stage, "value") else str(o.stage),
                 "amount": str(o.amount),
                 "probability": o.probability,
                 "expected_close_date": (
