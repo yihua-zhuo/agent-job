@@ -1,11 +1,46 @@
+"use client";
+import { useState } from "react";
 import { AuthGuard } from "@/lib/components/auth-guard";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { Menu, X } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+
   return (
     <AuthGuard>
-      <div className="flex h-screen">
+      {/* Mobile overlay */}
+      {sidebarOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-black/30 lg:hidden"
+          onClick={() => setSidebarOpen(false)}
+        />
+      )}
+
+      {/* Sidebar — slides in on mobile, static on lg+ */}
+      <div
+        className={cn(
+          "fixed inset-y-0 left-0 z-30 w-56 transition-transform duration-200 lg:relative lg:translate-x-0 lg:z-auto",
+          sidebarOpen ? "translate-x-0" : "-translate-x-full"
+        )}
+      >
         <AppSidebar />
+      </div>
+
+      {/* Main content */}
+      <div className="flex flex-1 flex-col overflow-hidden">
+        {/* Mobile header with hamburger */}
+        <div className="flex h-14 items-center border-b bg-background px-4 lg:hidden">
+          <button
+            type="button"
+            onClick={() => setSidebarOpen(true)}
+            className="flex cursor-pointer items-center justify-center rounded-md p-1.5 text-muted-foreground hover:bg-muted"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
+        </div>
+
         <main className="flex-1 overflow-y-auto">
           <div className="p-6">{children}</div>
         </main>
