@@ -37,7 +37,6 @@ export default function TicketsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Tickets</h1>
         <div className="flex gap-2">
-          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
             <SelectTrigger className="w-36">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
@@ -72,8 +71,6 @@ export default function TicketsPage() {
               <tr key={String(t.id)} className="border-b hover:bg-muted/50 transition-colors">
                 <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{t.id}</td>
                 <td className="px-3 py-2.5 font-medium">{String(t.subject ?? "")}</td>
-                <td className="px-3 py-2.5"><Badge colorClass={STATUS_COLORS[String(t.status)] ?? "bg-gray-100 text-gray-600"}>{String(t.status ?? "")}</Badge></td>
-                <td className="px-3 py-2.5"><Badge colorClass={PRIORITY_COLORS[String(t.priority)] ?? "bg-gray-100 text-gray-600"}>{String(t.priority ?? "")}</Badge></td>
                 <td className="px-3 py-2.5 text-muted-foreground">{String(t.channel ?? "—")}</td>
                 <td className="px-3 py-2.5 text-muted-foreground">{t.created_at ? new Date(String(t.created_at)).toLocaleDateString() : "—"}</td>
               </tr>

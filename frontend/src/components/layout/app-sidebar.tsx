@@ -43,10 +43,6 @@ export function AppSidebar() {
       </nav>
       <div className="border-t p-3">
         {user && (
-          <div className="mb-2 text-xs">
-            <div className="font-medium">{user.full_name ?? user.username}</div>
-            <div className="text-muted-foreground">{user.role}</div>
-          </div>
         )}
         <Button variant="ghost" size="sm" onClick={() => { clearAuth(); window.location.href = "/login"; }}>
           <LogOut className="h-3.5 w-3.5" />
