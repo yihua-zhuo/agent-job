@@ -21,7 +21,7 @@ class ValidationError(Exception):
 class UserService:
     """用户服务"""
 
-    def __init__(self, session=None):
+    def __init__(self, session):
         self._session = session
         self._users_db: List[User] = []
         self._next_id = 1

@@ -11,9 +11,9 @@ class TestUserService:
     """用户服务测试"""
     
     @pytest.fixture
-    def service(self):
+    def service(self, mock_db_session):
         """创建服务实例"""
-        return UserService()
+        return UserService(mock_db_session)
     
     @pytest.fixture
     def existing_user(self, service):
