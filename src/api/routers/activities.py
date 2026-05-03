@@ -253,7 +253,8 @@ async def list_activities(
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
-    items = [_activity_to_data(a) for a in resp.data.items]
+    raw_items = [_activity_to_data(a) for a in resp.data.items]
+    items = [x for x in raw_items if x is not None]
     total_pages = (resp.data.total + resp.data.page_size - 1) // resp.data.page_size if resp.data.page_size > 0 else 0
     return ActivityListResponse(
         message=resp.message,
