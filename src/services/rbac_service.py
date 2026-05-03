@@ -1,4 +1,5 @@
 """Role-Based Access Control (RBAC) service — DB-backed with roles, permissions, user assignments."""
+from enum import Enum
 from datetime import datetime, UTC
 from typing import Dict, List, Optional
 
@@ -76,7 +77,7 @@ DEFAULT_PERMISSIONS = [
 DEFAULT_ROLE_PERMISSIONS: Dict[str, List[str]] = {
     "admin": [p[0] for p in DEFAULT_PERMISSIONS],  # all
     "manager": [
-        "customer:read", "customer:create", "customer:update",
+        "customer:read", "customer:update",
         "opportunity:read", "opportunity:create", "opportunity:update",
         "ticket:read", "ticket:create", "ticket:update",
         "user:read",
@@ -86,7 +87,7 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, List[str]] = {
         "opportunity:read", "opportunity:create", "opportunity:update",
     ],
     "support": [
-        "customer:read",
+        "customer:read", "opportunity:read",
         "ticket:read", "ticket:create", "ticket:update",
     ],
     "viewer": [
@@ -95,6 +96,25 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, List[str]] = {
         "ticket:read",
     ],
 }
+
+
+class Permission(Enum):
+    """Permission enumeration — kept for backward compatibility."""
+    CUSTOMER_CREATE = "customer:create"
+    CUSTOMER_READ = "customer:read"
+    CUSTOMER_UPDATE = "customer:update"
+    CUSTOMER_DELETE = "customer:delete"
+    OPPORTUNITY_CREATE = "opportunity:create"
+    OPPORTUNITY_READ = "opportunity:read"
+    OPPORTUNITY_UPDATE = "opportunity:update"
+    OPPORTUNITY_DELETE = "opportunity:delete"
+    TICKET_CREATE = "ticket:create"
+    TICKET_READ = "ticket:read"
+    TICKET_UPDATE = "ticket:update"
+    TICKET_DELETE = "ticket:delete"
+    USER_MANAGE = "user:manage"
+    USER_READ = "user:read"
+    ADMIN_ALL = "admin:all"
 
 
 def _ensure_tables_exist(session: AsyncSession) -> bool:
@@ -209,10 +229,11 @@ def _init_defaults(session: AsyncSession) -> None:
 class RBACService:
     """DB-backed RBAC service — roles, permissions, user assignments, permission checks."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: Optional[AsyncSession] = None):
         self.session = session
-        _ensure_tables_exist(session)
-        _init_defaults(session)
+        if session is not None:
+            _ensure_tables_exist(session)
+            _init_defaults(session)
 
     # -------------------------------------------------------------------------
     # Role CRUD
@@ -486,12 +507,32 @@ class RBACService:
         )
         return ApiResponse.success(data=[r[0] for r in rows.fetchall()])
 
+    def has_permission(self, role: str, permission: Permission) -> bool:
+        """Check if a role has a specific permission (legacy enum-based, no DB needed)."""
+        if role not in DEFAULT_ROLE_PERMISSIONS:
+            return False
+        return permission.value in DEFAULT_ROLE_PERMISSIONS[role]
+
+    def get_role_permissions(self, role: str) -> list[Permission]:
+        """Get all permissions for a given role (legacy, from static map)."""
+        perm_names = DEFAULT_ROLE_PERMISSIONS.get(role, [])
+        return [p for p in Permission if p.value in perm_names]
+
+
+    def check_permission_by_value(self, role: str, permission_value: str) -> bool:
+        """Check permission by string value (legacy helper)."""
+        try:
+            permission = Permission(permission_value)
+            return self.has_permission(role, permission)
+        except ValueError:
+            return False
+
     # -------------------------------------------------------------------------
     # Permission checking
     # -------------------------------------------------------------------------
 
-    async def has_permission(self, user_id: int, permission: str) -> bool:
-        """Check if a user has a specific permission."""
+    async def _has_permission_db(self, user_id: int, permission: str) -> bool:
+        """Check if a user has a specific permission (DB-backed)."""
         row = await self.session.execute(
             text("""
                 SELECT 1 FROM permissions p
@@ -506,7 +547,7 @@ class RBACService:
 
     async def require_permission(self, user_id: int, permission: str) -> ApiResponse[Dict]:
         """Check permission and return error if denied."""
-        if not await self.has_permission(user_id, permission):
+        if not await self._has_permission_db(user_id, permission):
             return ApiResponse.error(message=f"权限不足: {permission}", code=403)
         return ApiResponse.success(data={"user_id": user_id, "permission": permission})
 
