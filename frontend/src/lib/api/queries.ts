@@ -9,6 +9,8 @@ export const qk = {
   opportunities: (page = 1) => ["opportunities", page] as const,
   pipelines: () => ["pipelines"] as const,
   tickets: (page = 1, status = "") => ["tickets", page, status] as const,
+  tasks: (page = 1, status = "") => ["tasks", page, status] as const,
+  task: (id: number) => ["task", id] as const,
   users: (page = 1) => ["users", page] as const,
 } as const;
 
@@ -120,5 +122,66 @@ export function useUsers(page = 1) {
     queryKey: qk.users(page),
     queryFn: () => apiClient.get(`/api/v1/users?page=${page}&page_size=20`, token ?? undefined),
     staleTime: 60 * 1000,
+  });
+}
+
+// ── Tasks ───────────────────────────────────────────────────────────────────
+export function useTasks(page = 1, status = "") {
+  const token = useAuthStore((s) => s.token);
+  const params = new URLSearchParams({ page: String(page), page_size: "20" });
+  if (status) params.set("status", status);
+  return useQuery({
+    queryKey: qk.tasks(page, status),
+    queryFn: () => apiClient.get(`/api/v1/tasks?${params}`, token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useTask(id: number) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.task(id),
+    queryFn: () => apiClient.get(`/api/v1/tasks/${id}`, token ?? undefined),
+    enabled: id > 0,
+  });
+}
+
+export function useCreateTask() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      apiClient.post("/api/v1/tasks", data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+export function useUpdateTask() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
+      apiClient.patch(`/api/v1/tasks/${id}`, data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+export function useCompleteTask() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.post(`/api/v1/tasks/${id}/complete`, null, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+export function useDeleteTask() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v1/tasks/${id}`, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
 }

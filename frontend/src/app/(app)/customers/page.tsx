@@ -1,6 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { useCustomers, useSearchCustomers } from "@/lib/api/queries";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 const STATUS_COLORS: Record<string, string> = {
   lead: "bg-blue-100 text-blue-800",
@@ -12,21 +15,13 @@ const STATUS_COLORS: Record<string, string> = {
   blocked: "bg-red-100 text-red-800",
 };
 
-function StatusBadge({ status }: { status: string }) {
-  return (
-    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold ${STATUS_COLORS[status] ?? "bg-gray-100 text-gray-600"}`}>
-      {status ?? "—"}
-    </span>
-  );
-}
-
 function CustomerRow({ c }: { c: Record<string, unknown> }) {
   return (
     <tr className="border-b hover:bg-muted/50 cursor-pointer transition-colors">
       <td className="px-3 py-2.5 font-medium">{String(c.name ?? "")}</td>
       <td className="px-3 py-2.5 text-sm text-muted-foreground">{String(c.email ?? "—")}</td>
       <td className="px-3 py-2.5 text-sm font-mono text-muted-foreground">{String(c.phone ?? "—")}</td>
-      <td className="px-3 py-2.5"><StatusBadge status={String(c.status ?? "")} /></td>
+      <td className="px-3 py-2.5"><Badge colorClass={STATUS_COLORS[String(c.status)] ?? "bg-gray-100 text-gray-600"}>{String(c.status ?? "—")}</Badge></td>
       <td className="px-3 py-2.5 text-sm text-muted-foreground">{String(c.company ?? "—")}</td>
       <td className="px-3 py-2.5 text-sm text-muted-foreground">{c.created_at ? new Date(String(c.created_at)).toLocaleDateString() : "—"}</td>
     </tr>
@@ -43,9 +38,23 @@ function useCustomersData(page: number, keyword: string) {
 export default function CustomersPage() {
   const [page, setPage] = useState(1);
   const [keyword, setKeyword] = useState("");
+  const [debouncedKeyword, setDebouncedKeyword] = useState("");
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setKeyword(val);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setDebouncedKeyword(val), 300);
+  }, []);
+
+  useEffect(() => {
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, []);
+
   const { data, isLoading, isError } = useCustomersData(
-    keyword ? 1 : page,
-    keyword
+    debouncedKeyword ? 1 : page,
+    debouncedKeyword
   );
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
@@ -57,12 +66,12 @@ export default function CustomersPage() {
       </div>
 
       <div className="flex gap-2">
-        <input
+        <Input
           type="text"
           value={keyword}
-          onChange={(e) => setKeyword(e.target.value)}
+          onChange={handleChange}
           placeholder="Search customers…"
-          className="flex h-9 w-64 rounded-md border border-input bg-background px-3 py-1 text-sm"
+          className="w-64"
         />
       </div>
 
@@ -95,10 +104,10 @@ export default function CustomersPage() {
 
       {info && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Showing {((page - 1) * 20) + 1}–{Math.min(page * 20, info.total as number)} of {info.total as number}</span>
+          <span>Showing {info.total === 0 ? 0 : ((page - 1) * 20) + 1}–{Math.min(page * 20, info.total as number)} of {info.total as number}</span>
           <div className="flex gap-1">
-            <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded border px-2 py-1 hover:bg-muted disabled:opacity-40">← Prev</button>
-            <button disabled={!info.has_next} onClick={() => setPage(page + 1)} className="rounded border px-2 py-1 hover:bg-muted disabled:opacity-40">Next →</button>
+            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</Button>
+            <Button variant="outline" size="sm" disabled={!info.has_next} onClick={() => setPage(page + 1)}>Next →</Button>
           </div>
         </div>
       )}
