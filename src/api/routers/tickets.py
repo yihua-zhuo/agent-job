@@ -1,5 +1,5 @@
 """Tickets router — /api/v1/tickets and /api/v1/sla endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional, List
 
