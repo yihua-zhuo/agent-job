@@ -8,6 +8,7 @@ from api.routers.activities import activities_router
 from api.routers.automation import automation_router
 from api.routers.notifications import notifications_router
 from api.routers.reports import reports_router
+from api.routers.rbac import rbac_router
 
 __all__ = [
     "customers_router",
@@ -19,4 +20,5 @@ __all__ = [
     "notifications_router",
     "automation_router",
     "reports_router",
+    "rbac_router",
 ]
