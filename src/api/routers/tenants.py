@@ -112,6 +112,40 @@ async def create_tenant(
 
 
 @tenants_router.get(
+    '/stats',
+    response_model=TenantStatsResponse,
+    responses={401: {"model": ErrorEnvelope}},
+)
+async def get_tenant_stats(
+    ctx: AuthContext = Depends(require_auth),
+    session=Depends(get_db),
+):
+    service = TenantService(session)
+    resp = await service.get_tenant_stats(ctx.tenant_id)
+    status = _http_status(resp.status)
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return TenantStatsResponse(message=resp.message, data=TenantStatsData(**resp.data))
+
+
+@tenants_router.get(
+    '/usage',
+    response_model=TenantStatsResponse,
+    responses={401: {"model": ErrorEnvelope}},
+)
+async def get_tenant_usage(
+    ctx: AuthContext = Depends(require_auth),
+    session=Depends(get_db),
+):
+    service = TenantService(session)
+    resp = await service.get_tenant_usage(ctx.tenant_id)
+    status = _http_status(resp.status)
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return TenantStatsResponse(message=resp.message, data=TenantStatsData(**resp.data))
+
+
+@tenants_router.get(
     '/{tenant_id}',
     response_model=TenantResponse,
     responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
@@ -198,37 +232,3 @@ async def delete_tenant(
     if status >= 400:
         raise HTTPException(status_code=status, detail=resp.message)
     return TenantResponse(message=resp.message, data=resp.data)
-
-
-@tenants_router.get(
-    '/stats',
-    response_model=TenantStatsResponse,
-    responses={401: {"model": ErrorEnvelope}},
-)
-async def get_tenant_stats(
-    ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
-):
-    service = TenantService(session)
-    resp = await service.get_tenant_stats(ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return TenantStatsResponse(message=resp.message, data=TenantStatsData(**resp.data))
-
-
-@tenants_router.get(
-    '/usage',
-    response_model=TenantStatsResponse,
-    responses={401: {"model": ErrorEnvelope}},
-)
-async def get_tenant_usage(
-    ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
-):
-    service = TenantService(session)
-    resp = await service.get_tenant_usage(ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status >= 400:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return TenantStatsResponse(message=resp.message, data=TenantStatsData(**resp.data))

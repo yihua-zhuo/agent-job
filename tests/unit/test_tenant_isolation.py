@@ -210,7 +210,7 @@ class TestTenantService:
         tenant_result.fetchone = MagicMock(return_value=(1,))
         user_count_result = MagicMock()
         user_count_result.fetchone = MagicMock(return_value=(7,))
-        count_result.scalar_one = MagicMock(return_value=7)
+        user_count_result.scalar_one = MagicMock(return_value=7)
 
         mock_session = AsyncMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)
