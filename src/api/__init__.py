@@ -1,8 +1,26 @@
-from flask import Flask
-from src.api.customers import customer_bp
-from src.api.sales import sales_bp
+"""Central API router — aggregates all feature routers."""
+from api.routers.customers import customers_router
+from api.routers.sales import sales_router
+from api.routers.users import users_router
+from api.routers.tenants import tenants_router
+from api.routers.tickets import tickets_router
+from api.routers.activities import activities_router
+from api.routers.notifications import notifications_router
+from api.routers.automation import automation_router
+from api.routers.reports import reports_router
+from api.routers.rbac import rbac_router
+from api.routers.sla import sla_router
 
-
-def register_routes(app: Flask):
-    app.register_blueprint(customer_bp)
-    app.register_blueprint(sales_bp)
+__all__ = [
+    "customers_router",
+    "sales_router",
+    "users_router",
+    "tenants_router",
+    "tickets_router",
+    "activities_router",
+    "notifications_router",
+    "automation_router",
+    "reports_router",
+    "rbac_router",
+    "sla_router",
+]
