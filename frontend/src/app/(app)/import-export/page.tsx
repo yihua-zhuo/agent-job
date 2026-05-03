@@ -13,19 +13,52 @@ export default function ImportExportPage() {
   const create = useCreateCustomer();
 
   function parseCSV(text: string): string[][] {
-    const lines = text.trim().split("\n");
-    return lines.map((line) => {
-      const cells: string[] = [];
-      let current = "";
-      let inQuotes = false;
-      for (const ch of line) {
-        if (ch === '"') { inQuotes = !inQuotes; }
-        else if (ch === "," && !inQuotes) { cells.push(current.trim()); current = ""; }
-        else { current += ch; }
+    const rows: string[][] = [];
+    let row: string[] = [];
+    let cell = "";
+    let inQuotes = false;
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+
+      if (ch === '"') {
+        if (inQuotes && text[i + 1] === '"') {
+          cell += '"';
+          i++;
+        } else {
+          inQuotes = !inQuotes;
+        }
+        continue;
       }
-      cells.push(current.trim());
-      return cells;
-    });
+
+      if (ch === "," && !inQuotes) {
+        row.push(cell.trim());
+        cell = "";
+        continue;
+      }
+
+      if ((ch === "\n" || ch === "\r") && !inQuotes) {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(cell.trim());
+        rows.push(row);
+        row = [];
+        cell = "";
+        continue;
+      }
+
+      cell += ch;
+    }
+
+    if (cell.length > 0 || row.length > 0) {
+      row.push(cell.trim());
+      rows.push(row);
+    }
+
+    return rows;
+  }
+
+  function isSupportedFile(f: File) {
+    return /\.(csv|txt)$/i.test(f.name);
   }
 
   function handleFile(f: File) {
@@ -44,7 +77,7 @@ export default function ImportExportPage() {
     e.preventDefault();
     setIsDragging(false);
     const f = e.dataTransfer.files[0];
-    if (f && (f.name.endsWith(".csv") || f.name.endsWith(".txt"))) handleFile(f);
+    if (f && isSupportedFile(f)) handleFile(f);
   }
 
   async function handleImport() {
@@ -53,7 +86,11 @@ export default function ImportExportPage() {
     reader.onload = async (e) => {
       const text = e.target?.result as string;
       const rows = parseCSV(text);
-      const headers = rows[0].map((h) => h.toLowerCase().trim());
+      const headers = (rows[0] ?? []).map((h) => h.toLowerCase().trim());
+      if (!headers.length || (!headers.includes("name") && !headers.includes("company"))) {
+        setResult({ imported: 0, errors: ["Missing required column: name or company"] });
+        return;
+      }
       const dataRows = rows.slice(1);
 
       const errors: string[] = [];
@@ -63,9 +100,13 @@ export default function ImportExportPage() {
         const row = dataRows[i];
         const record: Record<string, string> = {};
         headers.forEach((h, idx) => { record[h] = row[idx] ?? ""; });
+        if (!record.name && !record.company) {
+          errors.push(`Row ${i + 2}: missing both name and company`);
+          continue;
+        }
         try {
           await create.mutateAsync({
-            name: record.name || record.company || "Unnamed",
+            name: record.name || record.company!,
             email: record.email || undefined,
             phone: record.phone || undefined,
             company: record.company || record.name || undefined,
@@ -111,7 +152,10 @@ export default function ImportExportPage() {
               <div className="space-y-2">
                 <div className="text-muted-foreground">Drag & drop a CSV file here, or</div>
                 <Button variant="outline" size="sm" onClick={() => fileRef.current?.click()}>Browse Files</Button>
-                <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])} />
+                <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f && isSupportedFile(f)) handleFile(f);
+                }} />
               </div>
             )}
           </div>

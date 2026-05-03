@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useCurrentUser } from "@/lib/api/queries";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,18 @@ export default function SettingsPage() {
     email: user?.email ?? "",
     bio: user?.bio ?? "",
   });
+  const didHydrateProfile = useRef(false);
+
+  useEffect(() => {
+    if (!didHydrateProfile.current && me) {
+      setProfile({
+        full_name: me.full_name ?? "",
+        email: me.email ?? "",
+        bio: me.bio ?? "",
+      });
+      didHydrateProfile.current = true;
+    }
+  }, [me]);
   const [saved, setSaved] = useState(false);
 
   function handleSave() {

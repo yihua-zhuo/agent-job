@@ -31,12 +31,16 @@ const TYPE_ICONS: Record<string, string> = {
 
 export default function ActivitiesPage() {
   const [page, setPage] = useState(1);
-  const [typeFilter, setTypeFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [keyword, setKeyword] = useState("");
 
-  const { data, isLoading } = useActivities(page, typeFilter);
+  const { data, isLoading } = useActivities(page, typeFilter === "all" ? "" : typeFilter);
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
+  const normalizedKeyword = keyword.trim().toLowerCase();
+  const visibleItems = normalizedKeyword
+    ? items.filter((a) => String(a.content ?? "").toLowerCase().includes(normalizedKeyword))
+    : items;
 
   return (
     <div className="space-y-4">
@@ -50,6 +54,7 @@ export default function ActivitiesPage() {
             <SelectValue placeholder="All Types" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
             <SelectItem value="call">Call</SelectItem>
             <SelectItem value="email">Email</SelectItem>
             <SelectItem value="meeting">Meeting</SelectItem>
@@ -68,10 +73,10 @@ export default function ActivitiesPage() {
 
       <div className="space-y-3">
         {isLoading && <div className="py-8 text-center text-muted-foreground">Loading…</div>}
-        {!isLoading && items.length === 0 && (
+        {!isLoading && visibleItems.length === 0 && (
           <div className="py-12 text-center text-muted-foreground">No activities found</div>
         )}
-        {items.map((a) => (
+        {visibleItems.map((a) => (
           <div key={String(a.id)} className="flex items-start gap-3 rounded-md border p-3">
             <span className="text-xl flex-shrink-0">{TYPE_ICONS[String(a.type)] ?? "📌"}</span>
             <div className="flex-1 min-w-0">

@@ -62,7 +62,7 @@ export default function NotificationsPage() {
       <div className="space-y-2">
         {isLoading && <div className="py-8 text-center text-muted-foreground">Loading…</div>}
         {isError && <div className="py-8 text-center text-destructive">Failed to load notifications</div>}
-        {!isLoading && items.length === 0 && (
+        {!isLoading && !isError && items.length === 0 && (
           <div className="py-12 text-center text-muted-foreground">
             <div className="text-4xl mb-2">🔔</div>
             <p>No notifications</p>

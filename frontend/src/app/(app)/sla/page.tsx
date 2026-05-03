@@ -51,6 +51,7 @@ export default function SlaPage() {
   function fmtDeadline(deadline: unknown) {
     if (!deadline) return "—";
     const d = new Date(String(deadline));
+    if (Number.isNaN(d.getTime())) return "—";
     return d.toLocaleString();
   }
 

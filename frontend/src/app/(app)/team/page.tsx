@@ -33,7 +33,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function TeamPage() {
   const [page, setPage] = useState(1);
-  const [roleFilter, setRoleFilter] = useState("");
+  const [roleFilter, setRoleFilter] = useState("all");
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ username: "", email: "", password: "", full_name: "", role: "user" });
 
@@ -42,13 +42,17 @@ export default function TeamPage() {
   const info = data?.data;
   const create = useCreateUser();
 
-  const filtered = roleFilter ? items.filter((u) => u.role === roleFilter) : items;
+  const filtered = roleFilter === "all" ? items : items.filter((u) => u.role === roleFilter);
 
   async function handleCreate() {
     if (!form.username || !form.email || !form.password) return;
-    await create.mutateAsync(form as Record<string, unknown>);
-    setShowCreate(false);
-    setForm({ username: "", email: "", password: "", full_name: "", role: "user" });
+    try {
+      await create.mutateAsync(form as Record<string, unknown>);
+      setShowCreate(false);
+      setForm({ username: "", email: "", password: "", full_name: "", role: "user" });
+    } catch {
+      // mutation error is surfaced via create.isError / create.error in the UI
+    }
   }
 
   return (
@@ -64,6 +68,7 @@ export default function TeamPage() {
             <SelectValue placeholder="All Roles" />
           </SelectTrigger>
           <SelectContent>
+            <SelectItem value="all">All Roles</SelectItem>
             <SelectItem value="admin">Admin</SelectItem>
             <SelectItem value="manager">Manager</SelectItem>
             <SelectItem value="user">User</SelectItem>
