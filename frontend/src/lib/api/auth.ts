@@ -32,7 +32,8 @@ export async function login(credentials: LoginCredentials): Promise<LoginRespons
     username: credentials.username,
     password: credentials.password,
   });
-  const response = await fetch(`${apiClient.baseUrl}/api/v1/auth/login`, {
+  const baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? window.location.origin;
+  const response = await fetch(`${baseUrl}/api/v1/auth/login`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: form.toString(),
