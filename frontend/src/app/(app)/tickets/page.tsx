@@ -6,6 +6,7 @@ const PRIORITY_COLORS: Record<string, string> = {
   high: "bg-red-100 text-red-800",
   medium: "bg-yellow-100 text-yellow-800",
   low: "bg-green-100 text-green-800",
+  urgent: "bg-purple-100 text-purple-800",
 };
 const STATUS_COLORS: Record<string, string> = {
   open: "bg-blue-100 text-blue-800",
@@ -35,6 +36,7 @@ export default function TicketsPage() {
             value={statusFilter}
             onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
             className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm"
+            aria-label="Filter by status"
           >
             <option value="">All Statuses</option>
             <option value="open">Open</option>
@@ -78,7 +80,7 @@ export default function TicketsPage() {
 
       {info && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Showing {((page - 1) * 20) + 1}–{Math.min(page * 20, info.total as number)} of {info.total as number}</span>
+          <span>Showing {info.total === 0 ? 0 : ((page - 1) * 20) + 1}–{Math.min(page * 20, info.total as number)} of {info.total as number}</span>
           <div className="flex gap-1">
             <button disabled={page <= 1} onClick={() => setPage(page - 1)} className="rounded border px-2 py-1 hover:bg-muted disabled:opacity-40">← Prev</button>
             <button disabled={!info.has_next} onClick={() => setPage(page + 1)} className="rounded border px-2 py-1 hover:bg-muted disabled:opacity-40">Next →</button>

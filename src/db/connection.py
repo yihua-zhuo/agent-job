@@ -41,7 +41,8 @@ def _build_engine(url: str) -> AsyncEngine:
             "timeout": 10,
             "statement_cache_size": 0,
         }
-        url = f"postgresql+asyncpg://{user_part}:{password}@13.114.6.6:{port}{path}"
+        # Pass credentials via connect_args only; URL carries no password
+        url = f"postgresql+asyncpg://{user_part}@13.114.6.6:{port}{path}"
     elif url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):

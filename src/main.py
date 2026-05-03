@@ -1,13 +1,9 @@
 """FastAPI application entry point — async-first, structured logging, centralized errors."""
-import os
-import secrets
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse, RedirectResponse
-from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pathlib import Path
 
 from configs.settings import settings
 from middleware.logging import LoggingMiddleware, logger
@@ -105,17 +101,6 @@ def create_app() -> FastAPI:
     @app.get("/")
     async def health():
         return {"status": "ok", "service": settings.app_name}
-
-    # Serve CRM dashboard
-    static_root = Path(__file__).parent.parent / "static"
-    if static_root.exists():
-        app.mount("/static", StaticFiles(directory=str(static_root), html=True), name="static")
-        @app.get("/dashboard")
-        async def dashboard():
-            return RedirectResponse(url="/static/dashboard/index.html")
-        @app.get("/dashboard/")
-        async def dashboard_slash():
-            return RedirectResponse(url="/static/dashboard/index.html")
 
     return app
 
