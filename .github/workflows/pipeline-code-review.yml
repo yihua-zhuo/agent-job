@@ -11,7 +11,6 @@ env:
   PYTHON_VERSION: '3.11'
   SHARED_MEMORY_REPO: yihua-zhuo/agent-job-shared-memory
   SHARED_MEMORY_BRANCH: main
-  CLAW_MODEL: claude-sonnet-4-6
 
 jobs:
   code-review:
@@ -26,12 +25,11 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
 
-      - name: Set up claw wrapper
+      - name: Set up claude
         run: |
-          mkdir -p bin
-          cp scripts/ci/claw bin/claw
-          chmod +x bin/claw
-          echo "$(pwd)/bin" >> $GITHUB_PATH
+          if ! command -v claude &>/dev/null; then
+            npm install -g @anthropic-ai/claude-code
+          fi
 
       - name: Clone shared-memory
         env:
@@ -68,16 +66,60 @@ jobs:
         if: steps.gate.outputs.TEST_GATE == 'skip' && github.event_name != 'workflow_dispatch'
         run: echo "Test gate not met — code-review deferred"
 
-      - name: Run Code Review Agent
+      - name: Fetch diff
+        if: steps.gate.outputs.TEST_GATE == 'ok' || github.event_name == 'workflow_dispatch'
+        id: diff
+        run: |
+          git fetch --quiet --no-write-fetch-head origin master develop
+          git diff origin/master..origin/develop > /tmp/pr-diff.txt
+          echo "DIFF_LINES=$(wc -l < /tmp/pr-diff.txt)" >> $GITHUB_OUTPUT
+          echo "HEAD=$(git log -1 --format=%H origin/develop)" >> $GITHUB_OUTPUT
+          echo "BASE=$(git log -1 --format=%H origin/master)" >> $GITHUB_OUTPUT
+
+      - name: Run Claude Code Review
         if: steps.gate.outputs.TEST_GATE == 'ok' || github.event_name == 'workflow_dispatch'
         env:
-          AI_GATEWAY_URL: ${{ secrets.AI_GATEWAY_URL }}
-          AI_GATEWAY_KEY: ${{ secrets.AI_GATEWAY_KEY }}
-          CLAW_BIN: ${{ github.workspace }}/bin/claw
-          COMMIT_GITHUB_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN }}
-          GITHUB_TOKEN: ${{ github.token }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          DIFF_FILE: /tmp/pr-diff.txt
+          HEAD_INFO: ${{ steps.diff.outputs.HEAD }}
+          BASE_INFO: ${{ steps.diff.outputs.BASE }}
         run: |
-          python3 scripts/cron/pipeline.py code-review 2>&1 | tee /tmp/code-review-output.txt || true
+          claude -p \
+            "You are a senior engineer. Review the following diff between origin/master and origin/develop.
+            The commit being reviewed: $HEAD_INFO (base: $BASE_INFO).
+
+            diff:
+            \$(cat $DIFF_FILE)
+
+            Respond with a JSON object:
+            {
+              \"verdict\": \"pass\" | \"fail\",
+              \"critical_issues\": [\"list of critical bugs, security issues, or regressions\"],
+              \"suggestions\": [\"minor improvements\"],
+              \"summary\": \"one sentence overall assessment\"
+            }
+
+            Only set verdict=pass if there are ZERO critical-severity issues." \
+            --model claude-sonnet-4-6 \
+            --max-turns 20 \
+            --output-format json \
+            2>&1 | tee /tmp/claude-output.txt || true
+
+          # Parse and save structured result
+          python3 -c "
+          import json, os
+          text = open('/tmp/claude-output.txt').read()
+          # Extract last JSON block
+          try:
+              idx = text.rfind('{')
+              data = json.loads(text[idx:])
+              with open('shared-memory/results/code-review-result.json', 'w') as f:
+                  json.dump(data, f, indent=2)
+          except Exception as e:
+              with open('shared-memory/results/code-review-result.json', 'w') as f:
+                  json.dump({'error': str(e), 'raw': text[-500:]}, f)
+          "
 
       - name: Push shared-memory
         if: always()
