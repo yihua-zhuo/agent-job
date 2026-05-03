@@ -19,13 +19,12 @@ class AuthService:
     TOKEN_ISSUER = "crm-agent-system"
     TOKEN_AUDIENCE = "crm-api"
 
-    def __init__(self, session: AsyncSession = None, secret_key: Optional[str] = None):
+    def __init__(self, session: AsyncSession, secret_key: Optional[str] = None):
         self.session = session
         self.secret_key: str = cast(str, secret_key) or os.environ.get("JWT_SECRET_KEY", "")
         if not self.secret_key:
             raise ValueError("JWT_SECRET_KEY must be set")
-        if session is not None:
-            self._require_session()
+        self._require_session()
 
     def _require_session(self):
         pass
