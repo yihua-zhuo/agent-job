@@ -27,6 +27,14 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     setSidebarOpen(false);
   }, [pathname]);
 
+  function toggleSidebar() {
+    setCollapsed((c) => {
+      const next = !c;
+      try { localStorage.setItem(STORAGE_KEY, String(next)); } catch {}
+      return next;
+    });
+  }
+
   return (
     <AuthGuard>
       {sidebarOpen && (
@@ -43,7 +51,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           collapsed ? "w-16" : "w-56"
         )}
       >
-        <AppSidebar />
+        <AppSidebar collapsed={collapsed} onToggle={toggleSidebar} />
       </div>
 
       <OfflineBanner />

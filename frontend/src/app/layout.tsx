@@ -16,13 +16,19 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             __html: `
               (function() {
                 try {
-                  var t = localStorage.getItem('crm_theme');
-                  if (!t) t = 'system';
-                  if (t === 'dark') {
+                  var raw = localStorage.getItem('crm_theme');
+                  var theme = 'system';
+                  if (raw) {
+                    try {
+                      var parsed = JSON.parse(raw);
+                      theme = parsed.state && parsed.state.theme ? parsed.state.theme : 'system';
+                    } catch {
+                      if (raw === 'light' || raw === 'dark') theme = raw;
+                    }
+                  }
+                  if (theme === 'dark') {
                     document.documentElement.classList.add('dark');
-                  } else if (t === 'light') {
-                    document.documentElement.classList.remove('dark');
-                  } else {
+                  } else if (theme === 'system') {
                     if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
                       document.documentElement.classList.add('dark');
                     }

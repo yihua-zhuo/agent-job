@@ -1,7 +1,6 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useEffect } from "react";
 import { useAuthStore } from "@/lib/store/auth-store";
 import {
   Users, TrendingUp, Ticket, BarChart3, Sparkles, CheckSquare, Bell,
@@ -9,7 +8,6 @@ import {
   LogOut, UserCog, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Popover,
@@ -37,12 +35,6 @@ const systemItems = [
   { href: "/ai", label: "AI", icon: Sparkles },
   { href: "/import-export", label: "Import/Export", icon: Upload },
 ];
-
-const SIDEBAR_W = "14rem";
-const SIDEBAR_COLLAPSED_W = "4rem";
-const STORAGE_KEY = "crm_sidebar_collapsed";
-
-export { SIDEBAR_W, SIDEBAR_COLLAPSED_W };
 
 function NavGroup({
   items,
@@ -90,35 +82,11 @@ function NavGroup({
   );
 }
 
-export function AppSidebar() {
+export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { user, clearAuth } = useAuthStore();
   const router = useRouter();
   const { data: notifData } = useNotifications(1, true);
   const unreadCount = (notifData?.data?.total as number) ?? 0;
-
-  const [collapsed, setCollapsed] = useState(false);
-
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored !== null) setCollapsed(stored === "true");
-    } catch {}
-  }, []);
-
-  useEffect(() => {
-    document.documentElement.style.setProperty(
-      "--sidebar-w",
-      collapsed ? SIDEBAR_COLLAPSED_W : SIDEBAR_W
-    );
-  }, [collapsed]);
-
-  function toggle() {
-    setCollapsed((c) => {
-      const next = !c;
-      try { localStorage.setItem(STORAGE_KEY, String(next)); } catch {}
-      return next;
-    });
-  }
 
   const initials = user
     ? (user.full_name ?? user.username ?? "?").slice(0, 2).toUpperCase()
@@ -147,7 +115,7 @@ export function AppSidebar() {
         )}
         <button
           type="button"
-          onClick={toggle}
+          onClick={onToggle}
           className={cn(
             "flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer",
             collapsed ? "mx-auto" : "ml-auto"

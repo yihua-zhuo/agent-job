@@ -26,15 +26,41 @@ function TaskCard({ task, onClick, onComplete }: {
 }) {
   const due = task.due_date ? new Date(String(task.due_date)) : null;
   const isOverdue = due && due < new Date() && task.status !== "completed";
+  const rawId = task.id;
+  const taskId = typeof rawId === "number" && Number.isFinite(rawId)
+    ? rawId
+    : typeof rawId === "string" && /^\d+$/.test(rawId.trim())
+    ? Number(rawId)
+    : null;
+
+  function handleComplete(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (taskId === null) return;
+    onComplete?.(taskId);
+  }
+
+  function handleKeyDown(e: React.KeyboardEvent) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onClick();
+    }
+  }
 
   return (
-    <Card className="cursor-pointer hover:shadow-md transition-shadow group" onClick={onClick}>
+    <Card
+      className="cursor-pointer hover:shadow-md transition-shadow group"
+      onClick={onClick}
+      tabIndex={0}
+      role="button"
+      onKeyDown={handleKeyDown}
+      aria-label={String(task.title ?? "Task")}
+    >
       <CardContent className="p-3 space-y-2">
         <div className="flex items-start gap-2">
           {task.status !== "completed" && onComplete && (
             <button
               type="button"
-              onClick={(e) => { e.stopPropagation(); onComplete(Number(task.id)); }}
+              onClick={handleComplete}
               className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/40 hover:border-green-500 hover:bg-green-500/10 transition-colors cursor-pointer"
               aria-label="Mark as complete"
               title="Mark complete"

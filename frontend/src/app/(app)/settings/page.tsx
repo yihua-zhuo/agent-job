@@ -145,6 +145,7 @@ export default function SettingsPage() {
                 key={value}
                 type="button"
                 onClick={() => setTheme(value)}
+                aria-pressed={theme === value}
                 className={cn(
                   "flex flex-1 flex-col items-center gap-2 rounded-lg border-2 p-3 text-sm font-medium transition-colors cursor-pointer",
                   theme === value

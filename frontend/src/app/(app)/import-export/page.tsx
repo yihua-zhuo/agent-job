@@ -1,6 +1,6 @@
 "use client";
 import { useState, useRef } from "react";
-import { useCreateCustomer, useCustomers } from "@/lib/api/queries";
+import { useCreateCustomer } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -30,9 +30,9 @@ export default function ImportExportPage() {
   const [result, setResult] = useState<{ imported: number; errors: string[] } | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [mapping, setMapping] = useState<Record<number, FieldKey>>({});
+  const [totalRows, setTotalRows] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
   const create = useCreateCustomer();
-  const { data: custData } = useCustomers(1, 1);
 
   function parseCSV(text: string): string[][] {
     const rows: string[][] = [];
@@ -106,6 +106,7 @@ export default function ImportExportPage() {
       const hdrs = rows[0];
       setHeaders(hdrs);
       setPreview(rows.slice(1, 7));
+      setTotalRows(Math.max(0, rows.length - 1));
       setMapping(autoMap(hdrs));
     };
     reader.readAsText(f);
@@ -123,6 +124,7 @@ export default function ImportExportPage() {
     setHeaders([]);
     setPreview([]);
     setMapping({});
+    setTotalRows(0);
     setResult(null);
   }
 
@@ -182,14 +184,6 @@ export default function ImportExportPage() {
       if (errors.length > 0) toast.error(`${errors.length} rows failed`);
     };
     reader.readAsText(file);
-  }
-
-  async function handleExportCustomers() {
-    const { data } = useCustomers(1, 10000);
-    // Export uses the same API — trigger via fetch
-    const total = custData?.data?.total ?? 0;
-    toast.info(`Exporting ${total} customers…`);
-    // Placeholder: wire to backend export endpoint when available
   }
 
   return (
@@ -311,22 +305,22 @@ export default function ImportExportPage() {
                 </tbody>
               </table>
             </div>
-            <div className="text-xs text-muted-foreground">Showing first {preview.length} of {(file?.size ?? 0) > 0 ? "many" : preview.length} data rows</div>
+            <div className="text-xs text-muted-foreground">Showing first {preview.length} of {totalRows} data rows</div>
             <Button onClick={handleImport} disabled={!canImport || create.isPending}>
-              {create.isPending ? "Importing…" : `Import ${preview.length > 0 ? `${preview.length} rows` : "file"}`}
+              {create.isPending ? "Importing…" : `Import all ${totalRows} rows`}
             </Button>
 
             {result && (
-              <div className={`rounded-md p-4 text-sm ${result.errors.length > 0 ? "bg-yellow-50 border border-yellow-300" : "bg-green-50 border border-green-300"}`}>
+              <div className={`rounded-md p-4 text-sm ${result.errors.length > 0 ? "bg-yellow-50 border border-yellow-300 dark:bg-yellow-950 dark:border-yellow-700" : "bg-green-50 border border-green-300 dark:bg-green-950 dark:border-green-700"}`}>
                 <div className="font-medium">{result.imported} records imported successfully</div>
                 {result.errors.length > 0 && (
                   <div className="mt-2 space-y-1">
-                    <div className="font-medium text-yellow-800">Errors ({result.errors.length}):</div>
+                    <div className="font-medium text-yellow-800 dark:text-yellow-200">Errors ({result.errors.length}):</div>
                     {result.errors.slice(0, 10).map((e, i) => (
-                      <div key={i} className="text-xs text-yellow-700">{e}</div>
+                      <div key={i} className="text-xs text-yellow-700 dark:text-yellow-300">{e}</div>
                     ))}
                     {result.errors.length > 10 && (
-                      <div className="text-xs text-yellow-700">…and {result.errors.length - 10} more</div>
+                      <div className="text-xs text-yellow-700 dark:text-yellow-300">…and {result.errors.length - 10} more</div>
                     )}
                   </div>
                 )}
@@ -352,7 +346,7 @@ export default function ImportExportPage() {
               </label>
             ))}
           </div>
-          <Button variant="outline" onClick={handleExportCustomers} disabled>
+          <Button variant="outline" disabled>
             Export CSV (coming soon)
           </Button>
         </CardContent>
