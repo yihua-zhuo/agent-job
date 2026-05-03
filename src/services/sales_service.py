@@ -1,5 +1,3 @@
-from typing import Optional
-import time
 
 from models.response import ApiResponse, ResponseStatus
 
@@ -20,7 +18,7 @@ class SalesService:
         _pipeline_next_id += 1
         return _id
 
-    async def create_pipeline(self, tenant_id: int = 0, data: Optional[dict] = None) -> ApiResponse:
+    async def create_pipeline(self, tenant_id: int = 0, data: dict | None = None) -> ApiResponse:
         name = (data or {}).get("name", "Pipeline")
         # Check for duplicate name within same tenant
         for p in _pipelines_db.values():
@@ -54,7 +52,7 @@ class SalesService:
     async def get_pipeline_funnel(self, tenant_id: int = 0, pipeline_id: int = 0) -> ApiResponse:
         return ApiResponse(status=ResponseStatus.SUCCESS, data={"id": pipeline_id, "tenant_id": tenant_id, "stages": []}, message="")
 
-    async def create_opportunity(self, tenant_id: int = 0, data: Optional[dict] = None) -> ApiResponse:
+    async def create_opportunity(self, tenant_id: int = 0, data: dict | None = None) -> ApiResponse:
         od = data or {}
         odata = {
             "id": self._make_id(),
@@ -79,7 +77,7 @@ class SalesService:
             return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message="Opportunity not found")
         return ApiResponse(status=ResponseStatus.SUCCESS, data={"id": opp_id, "tenant_id": tenant_id, "name": "Opp", "customer_id": 0, "pipeline_id": 0, "stage": "lead", "amount": "0.0", "probability": 0, "owner_id": 0}, message="")
 
-    async def update_opportunity(self, tenant_id: int = 0, opp_id: int = 0, data: Optional[dict] = None) -> ApiResponse:
+    async def update_opportunity(self, tenant_id: int = 0, opp_id: int = 0, data: dict | None = None) -> ApiResponse:
         if opp_id >= 900000000:
             return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message="Opportunity not found")
         od = data or {}

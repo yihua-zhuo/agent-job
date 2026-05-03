@@ -1,6 +1,5 @@
 """Ticket ORM model."""
-from datetime import datetime, UTC
-from typing import Optional
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -16,16 +15,16 @@ class TicketModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     subject: Mapped[str] = mapped_column(String(500), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="open", nullable=False)
     priority: Mapped[str] = mapped_column(String(50), default="medium", nullable=False)
     channel: Mapped[str] = mapped_column(String(50), default="email", nullable=False)
     customer_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    assigned_to: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    assigned_to: Mapped[int | None] = mapped_column(Integer, nullable=True)
     sla_level: Mapped[str] = mapped_column(String(50), default="standard", nullable=False)
-    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    first_response_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    response_deadline: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    first_response_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    response_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

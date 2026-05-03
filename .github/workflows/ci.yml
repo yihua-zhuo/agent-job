@@ -88,10 +88,9 @@ jobs:
     continue-on-error: false
     steps:
       - uses: actions/checkout@v4
-      - run: pip install -q pylint flake8 mypy
+      - run: pip install -q ruff mypy
       - run: |
-          pylint src/
-          flake8 src/ --count --select=E9,F63,F7,F82 --show-source --statistics
+          ruff check src/
           mypy src/ --ignore-missing-imports
 
   build:

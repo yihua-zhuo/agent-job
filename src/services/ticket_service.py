@@ -1,15 +1,14 @@
 from datetime import datetime, timedelta
-from typing import List, Optional
 
-from models.response import ApiResponse, ResponseStatus
+from models.response import ResponseStatus
 from models.ticket import (
+    SLA_CONFIGS,
+    SLALevel,
     Ticket,
+    TicketChannel,
+    TicketPriority,
     TicketReply,
     TicketStatus,
-    TicketPriority,
-    TicketChannel,
-    SLALevel,
-    SLA_CONFIGS,
 )
 
 # Module-level state so tickets persist across service instances per test
@@ -32,7 +31,7 @@ class TicketService:
         channel: TicketChannel,
         priority: TicketPriority = TicketPriority.MEDIUM,
         sla_level: SLALevel = SLALevel.STANDARD,
-        assigned_to: Optional[int] = None,
+        assigned_to: int | None = None,
         tenant_id: int = 0,
     ) -> dict:
         """创建工单"""
@@ -123,9 +122,9 @@ class TicketService:
         self,
         page: int = 1,
         page_size: int = 20,
-        status: Optional[TicketStatus] = None,
-        priority: Optional[TicketPriority] = None,
-        assigned_to: Optional[int] = None,
+        status: TicketStatus | None = None,
+        priority: TicketPriority | None = None,
+        assigned_to: int | None = None,
         tenant_id: int = 0,
     ) -> dict:
         """工单列表"""
@@ -170,7 +169,7 @@ class TicketService:
         return {"status": ResponseStatus.SUCCESS, "data": {"ticket_id": ticket_id, "assigned_to": result}, "message": ""}
 
 
-def _auto_assign(ticket_id: int) -> Optional[int]:
+def _auto_assign(ticket_id: int) -> int | None:
     global _ticket_agent_index
     ticket = _tickets_db.get(ticket_id)
     if not ticket or ticket.assigned_to is not None:

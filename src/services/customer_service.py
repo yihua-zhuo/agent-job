@@ -1,7 +1,5 @@
 """Customer service — CRUD + tagging + status management via real DB."""
 import json
-from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession

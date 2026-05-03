@@ -1,5 +1,4 @@
 """自动化触发器"""
-from typing import Dict, List, Optional
 from src.models.marketing import TriggerType
 
 
@@ -15,7 +14,7 @@ class TriggerService:
     def __init__(self, marketing_service=None):
         self._marketing_service = marketing_service
 
-    def check_triggers(self, event_type: str, customer_data: Dict) -> List[int]:
+    def check_triggers(self, event_type: str, customer_data: dict) -> list[int]:
         """检查触发的活动"""
         triggered_campaign_ids = []
 
@@ -42,7 +41,7 @@ class TriggerService:
 
         return triggered_campaign_ids
 
-    def execute_trigger(self, campaign_id: int, customer_ids: List[int]) -> Dict:
+    def execute_trigger(self, campaign_id: int, customer_ids: list[int]) -> dict:
         """执行触发"""
         if not self._marketing_service:
             return {"success": False, "message": "Marketing service not configured"}

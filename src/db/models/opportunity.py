@@ -1,7 +1,6 @@
 """Opportunity ORM model."""
 from datetime import datetime
 from decimal import Decimal
-from typing import Optional
 
 from sqlalchemy import DateTime, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -21,9 +20,9 @@ class OpportunityModel(Base):
     stage: Mapped[str] = mapped_column(String(50), default="lead", nullable=False)
     amount: Mapped[Decimal] = mapped_column(Numeric(18, 2), default=Decimal("0"), nullable=False)
     probability: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    expected_close_date: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    expected_close_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     owner_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    pipeline_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    pipeline_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

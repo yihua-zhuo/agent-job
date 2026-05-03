@@ -1,12 +1,11 @@
 """租户管理服务"""
 from datetime import datetime
-from typing import Dict, List, Optional, Any
+from typing import Any
 
 from models.response import ApiResponse, ResponseStatus
 
-
 # Module-level state for persistence across instances (since routers create fresh service per request)
-_tenants_db: Dict[int, Dict[str, Any]] = {}
+_tenants_db: dict[int, dict[str, Any]] = {}
 _tenant_counter = 0
 
 
@@ -72,7 +71,7 @@ class TenantService:
         tenant["updated_at"] = tenant["deleted_at"]
         return ApiResponse(status=ResponseStatus.SUCCESS, data={"id": tenant_id}, message="租户已删除")
 
-    async def list_tenants(self, page: int = 1, page_size: int = 20, status: Optional[str] = None, _tenant_id: int = 0) -> ApiResponse:
+    async def list_tenants(self, page: int = 1, page_size: int = 20, status: str | None = None, _tenant_id: int = 0) -> ApiResponse:
         tenants = [t for t in _tenants_db.values() if t["status"] != "deleted"]
         if status:
             tenants = [t for t in tenants if t["status"] == status]

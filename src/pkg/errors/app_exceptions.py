@@ -1,5 +1,4 @@
 """Centralized application exceptions — no raw HTTPException raises in services."""
-from fastapi import HTTPException
 
 
 class AppException(Exception):

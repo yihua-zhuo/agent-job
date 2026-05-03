@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta
-from typing import List, Literal
+from typing import Literal
 
-from models.ticket import Ticket, SLALevel, SLA_CONFIGS
+from models.ticket import SLA_CONFIGS, Ticket
 
 
 class SLAService:
@@ -39,7 +39,7 @@ class SLAService:
 
         return "normal"
 
-    def get_breach_tickets(self, tickets: List[Ticket] = None) -> List[Ticket]:
+    def get_breach_tickets(self, tickets: list[Ticket] = None) -> list[Ticket]:
         """获取所有超时的工单"""
         if tickets is None and self._ticket_service:
             tickets = self._ticket_service._tickets.values()

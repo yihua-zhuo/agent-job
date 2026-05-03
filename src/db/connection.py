@@ -1,12 +1,10 @@
 """Async SQLAlchemy session management for PostgreSQL."""
 from __future__ import annotations
 
-import os
-import socket
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
-from typing import AsyncGenerator
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine, AsyncEngine
+from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 # Lazily-initialised singletons exposed as public module-level names.
 # Use `reset_engine()` to re-initialise (e.g. in test conftest fixtures).
@@ -128,8 +126,9 @@ def reset_engine(database_url: str):
 # ---------------------------------------------------------------------------
 # FastAPI dependency — use this in route handlers via Depends(get_session)
 # ---------------------------------------------------------------------------
-from fastapi import Depends
 from typing import Annotated
+
+from fastapi import Depends
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

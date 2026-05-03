@@ -1,13 +1,11 @@
 """User service — CRUD + auth + password management via real DB."""
 import re
-import bcrypt
-from datetime import datetime
-from typing import List, Optional, Tuple
 
+import bcrypt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.response import ApiResponse, ResponseStatus
+from models.response import ApiResponse
 
 
 class ValidationError(Exception):
@@ -49,7 +47,7 @@ class UserService:
         pattern = r'^[a-zA-Z0-9_-]+$'
         return bool(re.match(pattern, username))
 
-    def _validate_password(self, password: str) -> Tuple[bool, str]:
+    def _validate_password(self, password: str) -> tuple[bool, str]:
         """验证密码强度"""
         if len(password) < 8:
             return False, "密码长度至少8位"
@@ -116,7 +114,7 @@ class UserService:
                     return ApiResponse.error(message="邮箱已被注册", code=2005, errors=[])
             return ApiResponse.error(message="用户创建失败", code=500, errors=[])
 
-    async def get_user_by_id(self, user_id: int, tenant_id: int = 0) -> Optional[dict]:
+    async def get_user_by_id(self, user_id: int, tenant_id: int = 0) -> dict | None:
         """SELECT FROM users WHERE id = :id AND tenant_id = :tid."""
         sql = text("""
             SELECT id, tenant_id, username, email, role, status, full_name, bio,
@@ -130,7 +128,7 @@ class UserService:
             return None
         return {c: getattr(result, c) for c in result._fields}
 
-    async def get_user_by_username(self, username: str) -> Optional[dict]:
+    async def get_user_by_username(self, username: str) -> dict | None:
         """SELECT FROM users WHERE username = :username."""
         sql = text("""
             SELECT id, tenant_id, username, email, password_hash, role, status,
@@ -144,7 +142,7 @@ class UserService:
             return None
         return {c: getattr(result, c) for c in result._fields}
 
-    async def get_user_by_email(self, email: str) -> Optional[dict]:
+    async def get_user_by_email(self, email: str) -> dict | None:
         """SELECT FROM users WHERE email = :email."""
         sql = text("""
             SELECT id, tenant_id, username, email, password_hash, role, status,

@@ -1,7 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List, Dict
 
 
 class ReportType(Enum):
@@ -23,10 +22,10 @@ class ChartType(Enum):
 
 @dataclass
 class Dashboard:
-    id: Optional[int]
+    id: int | None
     name: str
-    description: Optional[str]
-    widgets: List[Dict]  # [{type, config, position}]
+    description: str | None
+    widgets: list[dict]  # [{type, config, position}]
     owner_id: int
     is_default: bool
     created_at: datetime
@@ -35,19 +34,19 @@ class Dashboard:
 
 @dataclass
 class Report:
-    id: Optional[int]
+    id: int | None
     name: str
     type: ReportType
-    config: Dict  # 报表配置
-    date_range: Dict  # {start, end}
+    config: dict  # 报表配置
+    date_range: dict  # {start, end}
     created_by: int
     created_at: datetime
-    last_run_at: Optional[datetime]
+    last_run_at: datetime | None
 
 
 @dataclass
 class ChartData:
     """图表数据"""
-    labels: List[str]
-    datasets: List[Dict]  # [{label, data, color}]
+    labels: list[str]
+    datasets: list[dict]  # [{label, data, color}]
     chart_type: ChartType

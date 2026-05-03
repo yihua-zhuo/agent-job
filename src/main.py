@@ -1,26 +1,25 @@
 """FastAPI application entry point — async-first, structured logging, centralized errors."""
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, HTTPException
-from fastapi.responses import JSONResponse
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
+from api import (
+    activities_router,
+    automation_router,
+    customers_router,
+    notifications_router,
+    rbac_router,
+    reports_router,
+    sales_router,
+    tenants_router,
+    tickets_router,
+    users_router,
+)
 from configs.settings import settings
 from middleware.logging import LoggingMiddleware, logger
 from pkg.errors.app_exceptions import AppException
-
-from api import (
-    customers_router,
-    sales_router,
-    users_router,
-    tenants_router,
-    tickets_router,
-    activities_router,
-    notifications_router,
-    automation_router,
-    reports_router,
-    rbac_router,
-)
 
 
 @asynccontextmanager

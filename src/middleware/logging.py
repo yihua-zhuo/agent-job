@@ -1,8 +1,9 @@
 """Structured JSON logging middleware with per-request correlation ID."""
-import uuid
-import sys
 import json
 import logging
+import sys
+import uuid
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 

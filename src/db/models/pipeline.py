@@ -1,6 +1,5 @@
 """Pipeline ORM model."""
 from datetime import datetime
-from typing import List
 
 from sqlalchemy import Boolean, DateTime, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -26,7 +25,7 @@ class PipelineModel(Base):
     )
 
     # Reverse relationship — use back_populates in PipelineStageModel
-    stages: Mapped[List["PipelineStageModel"]] = relationship(
+    stages: Mapped[list["PipelineStageModel"]] = relationship(
         "PipelineStageModel", back_populates="pipeline",
         cascade="all, delete-orphan", lazy="raise",
     )

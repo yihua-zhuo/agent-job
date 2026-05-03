@@ -1,7 +1,7 @@
 """数据隔离验证服务"""
+from collections.abc import Callable
 from functools import wraps
-from typing import Dict, Any, List, Callable
-import functools
+from typing import Any
 
 
 class DataIsolationError(Exception):
@@ -13,13 +13,13 @@ class DataIsolationService:
     """数据隔离验证服务"""
 
     def __init__(self):
-        self._tenant_data: Dict[int, Dict[str, Any]] = {}
+        self._tenant_data: dict[int, dict[str, Any]] = {}
 
     def _init_tenant_data(self, tenant_id: int):
         if tenant_id not in self._tenant_data:
             self._tenant_data[tenant_id] = {"customers": {}, "users": {}}
 
-    def verify_tenant_isolation(self, tenant_id: int) -> Dict:
+    def verify_tenant_isolation(self, tenant_id: int) -> dict:
         self._init_tenant_data(tenant_id)
         return {"tenant_id": tenant_id, "isolated": True,
                 "message": f"Tenant {tenant_id} data is properly isolated"}
@@ -45,11 +45,11 @@ class TenantScope:
             raise ValueError("tenant_id must be a positive integer")
         self.tenant_id = tenant_id
 
-    def filter_query(self, records: List[Dict]) -> List[Dict]:
+    def filter_query(self, records: list[dict]) -> list[dict]:
         """过滤记录，只返回属于当前租户的记录"""
         return [r for r in records if r.get("tenant_id") == self.tenant_id]
 
-    def check_ownership(self, record: Dict) -> bool:
+    def check_ownership(self, record: dict) -> bool:
         """检查记录是否属于当前租户"""
         if record is None:
             return False
@@ -81,7 +81,7 @@ def require_tenant_id(func: Callable = None, *, field_name: str = "tenant_id") -
     return decorator(func)
 
 
-def sanitize_tenant_write(data: Dict[str, Any], tenant_id: int) -> Dict[str, Any]:
+def sanitize_tenant_write(data: dict[str, Any], tenant_id: int) -> dict[str, Any]:
     """写入前消毒：确保数据属于指定租户"""
     existing = data.get("tenant_id")
     if existing is not None and existing != tenant_id:

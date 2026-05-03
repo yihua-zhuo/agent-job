@@ -1,13 +1,13 @@
 """Tenants router — /api/v1/tenants endpoints."""
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from db.connection import get_db
-from internal.middleware.fastapi_auth import require_auth, AuthContext
-from services.tenant_service import TenantService
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.response import ResponseStatus
 from pkg.response.schemas import ErrorEnvelope, SuccessEnvelope
+from services.tenant_service import TenantService
 
 tenants_router = APIRouter(prefix='/api/v1/tenants', tags=['tenants'])
 
@@ -33,15 +33,15 @@ def _http_status(status: ResponseStatus) -> int:
 class TenantCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     plan: str = Field(..., min_length=1, max_length=50)
-    admin_email: Optional[str] = Field(None, max_length=255)
-    settings: Optional[dict] = None
+    admin_email: str | None = Field(None, max_length=255)
+    settings: dict | None = None
 
 
 class TenantUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=200)
-    plan: Optional[str] = Field(None, min_length=1, max_length=50)
-    status: Optional[str] = None
-    settings: Optional[dict] = None
+    name: str | None = Field(None, min_length=1, max_length=200)
+    plan: str | None = Field(None, min_length=1, max_length=50)
+    status: str | None = None
+    settings: dict | None = None
 
 
 class TenantData(BaseModel):
@@ -50,16 +50,16 @@ class TenantData(BaseModel):
     plan: str
     status: str
     settings: dict = Field(default_factory=dict)
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class TenantResponse(SuccessEnvelope):
-    data: Optional[TenantData] = None
+    data: TenantData | None = None
 
 
 class TenantListData(BaseModel):
-    items: List[TenantData]
+    items: list[TenantData]
     total: int = Field(..., ge=0)
     page: int = Field(..., ge=1)
     page_size: int = Field(..., ge=1)
@@ -171,7 +171,7 @@ async def get_tenant(
 async def list_tenants(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    search: Optional[str] = Query(None, max_length=200),
+    search: str | None = Query(None, max_length=200),
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):

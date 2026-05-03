@@ -32,10 +32,23 @@ dev = [
     "pytest>=7.0",
     "pytest-asyncio>=0.23",
     "pytest-cov>=4.0",
-    "pylint>=3.0",
+    "ruff>=0.9",
     "mypy>=1.0",
     "openpyxl>=3.1",
 ]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+exclude = [".git", "tests", "__pycache__", ".venv", "venv", ".mypy_cache"]
+
+[tool.ruff.lint]
+select = ["E", "F", "UP", "S", "I", "W"]
+ignore = ["E501"]  # line-length handled by line-length setting
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S101", "INP001"]  # assert okay in tests, explicit namespace package okay
+"src/main.py" = ["F401"]  # app may import without using all routers

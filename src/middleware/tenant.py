@@ -1,6 +1,5 @@
 """多租户隔离中间件"""
 from functools import wraps
-from typing import Any, Optional
 
 # 假设 AppError 在同级的 errors 模块中定义
 try:
@@ -17,7 +16,7 @@ class TenantMiddleware:
     """多租户隔离中间件"""
 
     def __init__(self):
-        self.current_tenant_id: Optional[int] = None
+        self.current_tenant_id: int | None = None
 
     def set_tenant_id(self, tenant_id: int):
         """设置当前租户ID"""

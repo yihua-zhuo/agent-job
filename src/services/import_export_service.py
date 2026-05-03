@@ -1,12 +1,10 @@
 """
 CRM 数据导入导出服务
 """
-import csv
 import json
-import openpyxl
-from io import BytesIO, StringIO
-from typing import List, Dict, Optional
 from datetime import datetime
+from io import BytesIO
+
 from src.utils.file_helper import FileHelper
 
 
@@ -54,7 +52,7 @@ class ImportExportService:
         except (ValueError, TypeError):
             return False
 
-    def import_customers(self, file_data: bytes, file_format: str) -> Dict:
+    def import_customers(self, file_data: bytes, file_format: str) -> dict:
         """导入客户数据
         返回: {success_count, error_count, errors[]}
         """
@@ -87,7 +85,7 @@ class ImportExportService:
             # TODO: 调用数据库服务保存客户数据
             # 这里假设所有验证通过的数据都可以成功导入
             success_count = len(data)
-            
+
             return {
                 "success_count": success_count,
                 "error_count": 0,
@@ -102,7 +100,7 @@ class ImportExportService:
                 "errors": [f"导入客户数据失败: {str(e)}"]
             }
 
-    def import_opportunities(self, file_data: bytes, file_format: str) -> Dict:
+    def import_opportunities(self, file_data: bytes, file_format: str) -> dict:
         """导入商机数据"""
         try:
             if file_format == self.FORMAT_CSV:
@@ -129,7 +127,7 @@ class ImportExportService:
                 }
 
             success_count = len(data)
-            
+
             return {
                 "success_count": success_count,
                 "error_count": 0,
@@ -144,7 +142,7 @@ class ImportExportService:
                 "errors": [f"导入商机数据失败: {str(e)}"]
             }
 
-    def import_leads(self, file_data: bytes, file_format: str) -> Dict:
+    def import_leads(self, file_data: bytes, file_format: str) -> dict:
         """导入线索数据"""
         try:
             if file_format == self.FORMAT_CSV:
@@ -171,7 +169,7 @@ class ImportExportService:
                 }
 
             success_count = len(data)
-            
+
             return {
                 "success_count": success_count,
                 "error_count": 0,
@@ -186,7 +184,7 @@ class ImportExportService:
                 "errors": [f"导入线索数据失败: {str(e)}"]
             }
 
-    def export_customers(self, filters: Dict, file_format: str) -> bytes:
+    def export_customers(self, filters: dict, file_format: str) -> bytes:
         """导出客户数据"""
         # TODO: 从数据库获取客户数据，应用filters
         # 模拟数据
@@ -194,20 +192,20 @@ class ImportExportService:
             {"id": 1, "name": "张三", "email": "zhangsan@example.com", "phone": "13800138000", "company": "公司A", "status": "活跃"},
             {"id": 2, "name": "李四", "email": "lisi@example.com", "phone": "13900139000", "company": "公司B", "status": "活跃"},
         ]
-        
+
         return self._export_data(sample_data, filters, file_format)
 
-    def export_opportunities(self, filters: Dict, file_format: str) -> bytes:
+    def export_opportunities(self, filters: dict, file_format: str) -> bytes:
         """导出商机数据"""
         # TODO: 从数据库获取商机数据
         sample_data = [
             {"id": 1, "name": "项目A", "customer_id": 1, "amount": 100000, "stage": "提案", "probability": 50},
             {"id": 2, "name": "项目B", "customer_id": 2, "amount": 200000, "stage": "谈判", "probability": 75},
         ]
-        
+
         return self._export_data(sample_data, filters, file_format)
 
-    def export_report(self, report_type: str, date_range: Dict, file_format: str) -> bytes:
+    def export_report(self, report_type: str, date_range: dict, file_format: str) -> bytes:
         """导出报表"""
         # TODO: 根据report_type和date_range生成报表数据
         sample_report = {
@@ -224,7 +222,7 @@ class ImportExportService:
                 {"month": "2024-02", "revenue": 450000, "customers": 12},
             ]
         }
-        
+
         if file_format == self.FORMAT_JSON:
             return json.dumps(sample_report, ensure_ascii=False, indent=2).encode('utf-8')
         elif file_format == self.FORMAT_PDF:
@@ -233,14 +231,14 @@ class ImportExportService:
             # CSV 或 Excel 格式
             return self._export_data(sample_report.get("details", []), {}, file_format)
 
-    def generate_pdf_report(self, report_data: Dict, title: str) -> bytes:
+    def generate_pdf_report(self, report_data: dict, title: str) -> bytes:
         """生成PDF报表"""
         try:
+            from reportlab.lib import colors
             from reportlab.lib.pagesizes import A4
             from reportlab.lib.styles import getSampleStyleSheet
-            from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
-            from reportlab.lib import colors
             from reportlab.lib.units import inch
+            from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
         except ImportError:
             # 如果没有 reportlab，返回文本格式的PDF
             return self._generate_simple_pdf(report_data, title)
@@ -249,23 +247,23 @@ class ImportExportService:
         doc = SimpleDocTemplate(buffer, pagesize=A4)
         elements = []
         styles = getSampleStyleSheet()
-        
+
         # 标题
         elements.append(Paragraph(title, styles['Title']))
         elements.append(Spacer(1, 0.3 * inch))
-        
+
         # 生成时间
         if 'generated_at' in report_data:
             elements.append(Paragraph(f"生成时间: {report_data['generated_at']}", styles['Normal']))
             elements.append(Spacer(1, 0.2 * inch))
-        
+
         # 摘要信息
         if 'summary' in report_data:
             elements.append(Paragraph("摘要", styles['Heading2']))
             for key, value in report_data['summary'].items():
                 elements.append(Paragraph(f"{key}: {value}", styles['Normal']))
             elements.append(Spacer(1, 0.3 * inch))
-        
+
         # 详细信息表格
         if 'details' in report_data and report_data['details']:
             elements.append(Paragraph("详细数据", styles['Heading2']))
@@ -273,7 +271,7 @@ class ImportExportService:
             table_data = [headers]
             for row in report_data['details']:
                 table_data.append([str(row.get(h, '')) for h in headers])
-            
+
             table = Table(table_data)
             table.setStyle(TableStyle([
                 ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
@@ -286,55 +284,55 @@ class ImportExportService:
                 ('GRID', (0, 0), (-1, -1), 1, colors.black)
             ]))
             elements.append(table)
-        
+
         doc.build(elements)
         buffer.seek(0)
         return buffer.getvalue()
 
-    def _generate_simple_pdf(self, report_data: Dict, title: str) -> bytes:
+    def _generate_simple_pdf(self, report_data: dict, title: str) -> bytes:
         """生成简单的文本PDF（不依赖reportlab）"""
         content = f"{title}\n"
         content += "=" * 50 + "\n\n"
-        
+
         if 'generated_at' in report_data:
             content += f"生成时间: {report_data['generated_at']}\n\n"
-        
+
         if 'summary' in report_data:
             content += "摘要:\n"
             for key, value in report_data['summary'].items():
                 content += f"  {key}: {value}\n"
             content += "\n"
-        
+
         if 'details' in report_data:
             content += "详细数据:\n"
             for row in report_data['details']:
                 content += f"  {row}\n"
-        
+
         # 返回一个简单的PDF格式（实际上是文本）
         # 实际生产环境应使用专业的PDF生成库
         return content.encode('utf-8')
 
-    def validate_import_data(self, data: List[Dict], entity_type: str) -> Dict:
+    def validate_import_data(self, data: list[dict], entity_type: str) -> dict:
         """验证导入数据
         检查: 必填字段、格式、重复
         """
         errors = []
         required = self.required_fields.get(entity_type, [])
-        
+
         if not data:
             return {"errors": ["数据为空"]}
-        
+
         # 检查必填字段
         for idx, row in enumerate(data):
             row_num = idx + 2  # Excel行号（1是表头）
-            
+
             for field in required:
                 if field not in row or not row[field]:
                     errors.append(f"第{row_num}行: 缺少必填字段 '{field}'")
                 elif field in self.validation_rules:
                     if not self.validation_rules[field](row[field]):
                         errors.append(f"第{row_num}行: 字段 '{field}' 格式不正确")
-        
+
         # 检查重复（基于邮箱或电话）
         seen = set()
         for idx, row in enumerate(data):
@@ -343,10 +341,10 @@ class ImportExportService:
                 if identifier in seen:
                     errors.append(f"第{idx + 2}行: 数据重复 (email/phone: {identifier})")
                 seen.add(identifier)
-        
+
         return {"errors": errors}
 
-    def _export_data(self, data: List[Dict], filters: Dict, file_format: str) -> bytes:
+    def _export_data(self, data: list[dict], filters: dict, file_format: str) -> bytes:
         """内部方法：导出数据"""
         # 应用过滤条件
         if filters:
@@ -360,7 +358,7 @@ class ImportExportService:
                 if match:
                     filtered_data.append(row)
             data = filtered_data
-        
+
         if file_format == self.FORMAT_CSV:
             if data:
                 columns = list(data[0].keys())

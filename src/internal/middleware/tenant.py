@@ -1,6 +1,8 @@
 """租户隔离中间件"""
-from flask import g, request
 from functools import wraps
+
+from flask import g
+
 from .auth import get_current_tenant_id
 
 

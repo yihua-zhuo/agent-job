@@ -1,13 +1,13 @@
 """Report service router — /api/v1/reports endpoints."""
+
 from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from db.connection import get_db
-from internal.middleware.fastapi_auth import require_auth, AuthContext
-from services.report_service import ReportService
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.response import ResponseStatus
+from services.report_service import ReportService
 
 reports_router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
 
@@ -38,10 +38,10 @@ class ReportCreate(BaseModel):
 
 
 class ReportUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=255)
-    type: Optional[str] = Field(None, max_length=50)
-    config: Optional[dict] = Field(None)
-    date_range: Optional[dict] = Field(None)
+    name: str | None = Field(None, max_length=255)
+    type: str | None = Field(None, max_length=50)
+    config: dict | None = Field(None)
+    date_range: dict | None = Field(None)
 
 
 class ReportData(BaseModel):
@@ -52,18 +52,18 @@ class ReportData(BaseModel):
     config: dict
     date_range: dict
     created_by: int
-    last_run_at: Optional[str]
-    created_at: Optional[str]
+    last_run_at: str | None
+    created_at: str | None
 
 
 class ReportResponse(BaseModel):
     success: bool
-    data: Optional[ReportData] = None
-    message: Optional[str] = None
+    data: ReportData | None = None
+    message: str | None = None
 
 
 class ReportListData(BaseModel):
-    items: List[ReportData]
+    items: list[ReportData]
     total: int
     page: int
     page_size: int
@@ -71,26 +71,26 @@ class ReportListData(BaseModel):
 
 class ReportListResponse(BaseModel):
     success: bool
-    data: Optional[ReportListData] = None
-    message: Optional[str] = None
+    data: ReportListData | None = None
+    message: str | None = None
 
 
 class GeneratePdfRequest(BaseModel):
     report_type: str = Field(..., min_length=1, max_length=50)
     config: dict = Field(default_factory=dict)
-    date_range: Optional[dict] = Field(None)
+    date_range: dict | None = Field(None)
 
 
 class GenerateExcelRequest(BaseModel):
     report_type: str = Field(..., min_length=1, max_length=50)
     config: dict = Field(default_factory=dict)
-    date_range: Optional[dict] = Field(None)
+    date_range: dict | None = Field(None)
 
 
 class ExportCsvRequest(BaseModel):
     table: str = Field(..., min_length=1, max_length=50)
     filename: str = Field(..., min_length=1, max_length=255)
-    date_range: Optional[dict] = Field(None)
+    date_range: dict | None = Field(None)
 
 
 # ---------------------------------------------------------------------------
@@ -120,7 +120,7 @@ async def create_report(
 async def list_reports(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    report_type: Optional[str] = Query(None),
+    report_type: str | None = Query(None),
     ctx: AuthContext = Depends(require_auth),
 ):
     """List saved report configurations."""

@@ -1,14 +1,14 @@
-from typing import Optional, List, Dict
 from datetime import datetime
-from src.models.workflow import Workflow, WorkflowExecution, WorkflowStatus, TriggerType
+
+from src.models.workflow import Workflow, WorkflowExecution, WorkflowStatus
 
 
 class WorkflowService:
     """工作流自动化引擎"""
 
     def __init__(self):
-        self._workflows: Dict[int, Workflow] = {}
-        self._executions: Dict[int, List[WorkflowExecution]] = {}
+        self._workflows: dict[int, Workflow] = {}
+        self._executions: dict[int, list[WorkflowExecution]] = {}
         self._next_id = 1
 
     def create_workflow(self, name, trigger_type, created_by, **kwargs) -> Workflow:
@@ -31,11 +31,11 @@ class WorkflowService:
         self._next_id += 1
         return workflow
 
-    def get_workflow(self, workflow_id: int) -> Optional[Workflow]:
+    def get_workflow(self, workflow_id: int) -> Workflow | None:
         """获取工作流详情"""
         return self._workflows.get(workflow_id)
 
-    def update_workflow(self, workflow_id: int, **kwargs) -> Optional[Workflow]:
+    def update_workflow(self, workflow_id: int, **kwargs) -> Workflow | None:
         """更新工作流"""
         workflow = self._workflows.get(workflow_id)
         if not workflow:
@@ -55,7 +55,7 @@ class WorkflowService:
         workflow.updated_at = datetime.now()
         return workflow
 
-    def activate_workflow(self, workflow_id: int) -> Optional[Workflow]:
+    def activate_workflow(self, workflow_id: int) -> Workflow | None:
         """激活工作流"""
         workflow = self._workflows.get(workflow_id)
         if not workflow:
@@ -64,7 +64,7 @@ class WorkflowService:
         workflow.updated_at = datetime.now()
         return workflow
 
-    def pause_workflow(self, workflow_id: int) -> Optional[Workflow]:
+    def pause_workflow(self, workflow_id: int) -> Workflow | None:
         """暂停工作流"""
         workflow = self._workflows.get(workflow_id)
         if not workflow:
@@ -82,7 +82,7 @@ class WorkflowService:
             return True
         return False
 
-    def list_workflows(self, page: int = 1, page_size: int = 20, status: WorkflowStatus = None) -> Dict:
+    def list_workflows(self, page: int = 1, page_size: int = 20, status: WorkflowStatus = None) -> dict:
         """工作流列表"""
         workflows = list(self._workflows.values())
         if status:
@@ -97,7 +97,7 @@ class WorkflowService:
             "items": workflows[start:end],
         }
 
-    def execute_workflow(self, workflow_id: int, context: Dict) -> WorkflowExecution:
+    def execute_workflow(self, workflow_id: int, context: dict) -> WorkflowExecution:
         """手动执行工作流"""
         workflow = self._workflows.get(workflow_id)
         if not workflow:
@@ -130,7 +130,7 @@ class WorkflowService:
         self._executions.setdefault(workflow_id, []).append(execution)
         return execution
 
-    def evaluate_conditions(self, workflow_id: int, context: Dict) -> bool:
+    def evaluate_conditions(self, workflow_id: int, context: dict) -> bool:
         """评估条件是否满足"""
         workflow = self._workflows.get(workflow_id)
         if not workflow:
@@ -166,7 +166,7 @@ class WorkflowService:
 
         return True
 
-    def execute_actions(self, workflow_id: int, context: Dict) -> Dict:
+    def execute_actions(self, workflow_id: int, context: dict) -> dict:
         """执行动作列表"""
         workflow = self._workflows.get(workflow_id)
         if not workflow:
@@ -213,6 +213,6 @@ class WorkflowService:
 
         return {"actions_executed": results}
 
-    def get_execution_history(self, workflow_id: int) -> List[WorkflowExecution]:
+    def get_execution_history(self, workflow_id: int) -> list[WorkflowExecution]:
         """获取执行历史"""
         return self._executions.get(workflow_id, [])

@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Optional, List
 
 
 class TicketStatus(Enum):
@@ -35,20 +34,20 @@ class SLALevel(Enum):
 
 @dataclass
 class Ticket:
-    id: Optional[int] = None
+    id: int | None = None
     subject: str = ""
     description: str = ""
     status: TicketStatus = TicketStatus.OPEN
     priority: TicketPriority = TicketPriority.MEDIUM
     channel: TicketChannel = TicketChannel.EMAIL
     customer_id: int = 0
-    assigned_to: Optional[int] = None
+    assigned_to: int | None = None
     sla_level: SLALevel = SLALevel.BASIC
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
-    resolved_at: Optional[datetime] = None
-    first_response_at: Optional[datetime] = None
-    response_deadline: Optional[datetime] = None
+    resolved_at: datetime | None = None
+    first_response_at: datetime | None = None
+    response_deadline: datetime | None = None
 
     def check_sla_breach(self) -> bool:
         """检查是否SLA超时"""
@@ -62,7 +61,7 @@ class Ticket:
 
 @dataclass
 class TicketReply:
-    id: Optional[int] = None
+    id: int | None = None
     ticket_id: int = 0
     tenant_id: int = 0
     content: str = ""

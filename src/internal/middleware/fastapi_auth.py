@@ -1,9 +1,9 @@
 """FastAPI authentication dependency - mirrors Flask auth middleware."""
-from fastapi import Depends, HTTPException, Request
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
 import os
-from typing import Optional
+
+import jwt
+from fastapi import Depends, HTTPException, Request
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 security = HTTPBearer(auto_error=False)
 
@@ -45,15 +45,15 @@ class AuthContext:
     """Authenticated user context, replaces Flask `g`."""
     __slots__ = ('user_id', 'tenant_id', 'roles')
 
-    def __init__(self, user_id: int, tenant_id: Optional[int], roles: list):
+    def __init__(self, user_id: int, tenant_id: int | None, roles: list):
         self.user_id = user_id
         self.tenant_id = tenant_id
         self.roles = roles
 
 
 async def get_auth_creds(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-) -> Optional[str]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> str | None:
     """Extract bearer token, returns None if absent (allows optional auth)."""
     if credentials is None:
         return None

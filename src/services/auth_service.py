@@ -1,13 +1,12 @@
 """Authentication service for JWT token generation and verification."""
 import re
+from datetime import UTC, datetime, timedelta
+
 import bcrypt
 import jwt
-from datetime import datetime, timedelta, timezone
-from typing import Optional
-
 from sqlalchemy import text
 
-from models.response import ApiResponse, ResponseStatus
+from models.response import ApiResponse
 
 
 def is_valid_email(email: str) -> bool:
@@ -18,7 +17,7 @@ def is_valid_email(email: str) -> bool:
     return bool(re.match(pattern, email))
 
 
-def sanitize_string(value: str) -> Optional[str]:
+def sanitize_string(value: str) -> str | None:
     """Remove HTML tags, control characters, and SQL comment patterns."""
     if value is None:
         return None
@@ -75,7 +74,7 @@ class AuthService:
         Returns:
             Encoded JWT token string.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         payload = {
             'user_id': user_id,
             'username': username,
@@ -87,7 +86,7 @@ class AuthService:
             payload['tenant_id'] = tenant_id
         return jwt.encode(payload, self.secret_key, algorithm='HS256')
 
-    def verify_token(self, token: str) -> Optional[dict]:
+    def verify_token(self, token: str) -> dict | None:
         """Verify and decode a JWT token.
 
         Args:
@@ -108,7 +107,7 @@ class AuthService:
         """Async alias for generate_token."""
         return self.generate_token(user_id, username, role, tenant_id=tenant_id)
 
-    async def authenticate_user(self, username: str, password: str) -> Optional[dict]:
+    async def authenticate_user(self, username: str, password: str) -> dict | None:
         """Authenticate a user by username and password.
 
         Args:
@@ -152,7 +151,7 @@ class AuthService:
         )
         return result
 
-    async def get_current_user(self, token: str) -> Optional[dict]:
+    async def get_current_user(self, token: str) -> dict | None:
         """Return user dict for a valid token, or None."""
         payload = self.verify_token(token)
         if not payload:
@@ -188,12 +187,12 @@ class AuthService:
         jti = payload.get("jti") or f"{payload.get('user_id')}-{payload.get('exp')}"
         await self.session.execute(
             text("INSERT INTO revoked_tokens (jti, expires_at) VALUES (:jti, :expires_at)"),
-            {"jti": jti, "expires_at": datetime.fromtimestamp(payload.get("exp", 0), tz=timezone.utc)},
+            {"jti": jti, "expires_at": datetime.fromtimestamp(payload.get("exp", 0), tz=UTC)},
         )
         await self.session.commit()
         return True
 
-    async def refresh_token(self, old_token: str) -> Optional[str]:
+    async def refresh_token(self, old_token: str) -> str | None:
         """Refresh an existing token with a new expiry time.
 
         Args:

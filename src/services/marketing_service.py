@@ -1,6 +1,6 @@
 """营销服务"""
 from datetime import datetime
-from typing import Optional, List, Dict, Any
+from typing import Any
 
 from src.models.marketing import (
     Campaign,
@@ -15,8 +15,8 @@ class MarketingService:
     """营销服务"""
 
     def __init__(self):
-        self._campaigns: Dict[int, Campaign] = {}
-        self._events: Dict[int, List[CampaignEvent]] = {}
+        self._campaigns: dict[int, Campaign] = {}
+        self._events: dict[int, list[CampaignEvent]] = {}
         self._next_id: int = 1
 
     def create_campaign(
@@ -48,11 +48,11 @@ class MarketingService:
         self._events[campaign.id] = []
         return campaign
 
-    def get_campaign(self, campaign_id: int) -> Optional[Campaign]:
+    def get_campaign(self, campaign_id: int) -> Campaign | None:
         """获取活动详情"""
         return self._campaigns.get(campaign_id)
 
-    def update_campaign(self, campaign_id: int, **kwargs) -> Optional[Campaign]:
+    def update_campaign(self, campaign_id: int, **kwargs) -> Campaign | None:
         """更新活动"""
         campaign = self._campaigns.get(campaign_id)
         if not campaign:
@@ -64,7 +64,7 @@ class MarketingService:
         campaign.updated_at = datetime.now()
         return campaign
 
-    def launch_campaign(self, campaign_id: int) -> Optional[Campaign]:
+    def launch_campaign(self, campaign_id: int) -> Campaign | None:
         """启动活动"""
         campaign = self._campaigns.get(campaign_id)
         if not campaign:
@@ -74,7 +74,7 @@ class MarketingService:
         campaign.updated_at = datetime.now()
         return campaign
 
-    def pause_campaign(self, campaign_id: int) -> Optional[Campaign]:
+    def pause_campaign(self, campaign_id: int) -> Campaign | None:
         """暂停活动"""
         campaign = self._campaigns.get(campaign_id)
         if not campaign:
@@ -84,7 +84,7 @@ class MarketingService:
         campaign.updated_at = datetime.now()
         return campaign
 
-    def get_campaign_stats(self, campaign_id: int) -> Optional[Dict[str, Any]]:
+    def get_campaign_stats(self, campaign_id: int) -> dict[str, Any] | None:
         """获取活动统计"""
         campaign = self._campaigns.get(campaign_id)
         if not campaign:
@@ -107,9 +107,9 @@ class MarketingService:
         self,
         page: int = 1,
         page_size: int = 20,
-        status: Optional[CampaignStatus] = None,
-        campaign_type: Optional[CampaignType] = None,
-    ) -> Dict[str, Any]:
+        status: CampaignStatus | None = None,
+        campaign_type: CampaignType | None = None,
+    ) -> dict[str, Any]:
         """活动列表"""
         filtered = list(self._campaigns.values())
 
@@ -136,7 +136,7 @@ class MarketingService:
         campaign_id: int,
         customer_id: int,
         event_type: str,
-    ) -> Optional[CampaignEvent]:
+    ) -> CampaignEvent | None:
         """记录用户事件"""
         campaign = self._campaigns.get(campaign_id)
         if not campaign:
@@ -164,7 +164,7 @@ class MarketingService:
 
         return event
 
-    def get_user_events(self, customer_id: int) -> List[CampaignEvent]:
+    def get_user_events(self, customer_id: int) -> list[CampaignEvent]:
         """获取用户的所有营销事件"""
         result = []
         for events in self._events.values():
@@ -177,8 +177,8 @@ class MarketingService:
         self,
         campaign_id: int,
         trigger_type: TriggerType,
-        trigger_days: Optional[int] = None,
-    ) -> Optional[Campaign]:
+        trigger_days: int | None = None,
+    ) -> Campaign | None:
         """设置触发器"""
         campaign = self._campaigns.get(campaign_id)
         if not campaign:

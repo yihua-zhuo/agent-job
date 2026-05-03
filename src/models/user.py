@@ -2,7 +2,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 
 class Role(Enum):
@@ -42,11 +41,11 @@ class User:
     username: str
     email: str
     role: Role = Role.USER
-    id: Optional[int] = None
+    id: int | None = None
     tenant_id: int = 0
-    full_name: Optional[str] = None
+    full_name: str | None = None
     status: UserStatus = UserStatus.PENDING
-    bio: Optional[str] = None
+    bio: str | None = None
     is_active: bool = True
     tags: list = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.utcnow)

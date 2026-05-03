@@ -1,5 +1,4 @@
 """Task service for CRM system."""
-from typing import List, Dict, Optional
 from datetime import datetime
 
 
@@ -7,10 +6,10 @@ class TaskService:
     """任务服务"""
 
     def __init__(self):
-        self._tasks_db: List[Dict] = []
+        self._tasks_db: list[dict] = []
         self._next_id = 1
 
-    def create_task(self, title: str, description: str, assigned_to: int, due_date: datetime = None, **kwargs) -> Dict:
+    def create_task(self, title: str, description: str, assigned_to: int, due_date: datetime = None, **kwargs) -> dict:
         """创建任务"""
         task = {
             'id': self._next_id,
@@ -29,14 +28,14 @@ class TaskService:
         self._next_id += 1
         return {'success': True, 'data': task, 'message': '任务创建成功'}
 
-    def get_task(self, task_id: int) -> Dict:
+    def get_task(self, task_id: int) -> dict:
         """获取任务详情"""
         for task in self._tasks_db:
             if task['id'] == task_id:
                 return {'success': True, 'data': task, 'message': ''}
         return {'success': False, 'data': None, 'message': '任务不存在'}
 
-    def update_task(self, task_id: int, **kwargs) -> Dict:
+    def update_task(self, task_id: int, **kwargs) -> dict:
         """更新任务"""
         for task in self._tasks_db:
             if task['id'] == task_id:
@@ -74,7 +73,7 @@ class TaskService:
                 return {'success': True, 'data': {'id': task_id}, 'message': '任务删除成功'}
         return {'success': False, 'data': None, 'message': '任务不存在'}
 
-    def list_tasks(self, assigned_to: int = None, status: str = None, page: int = 1, page_size: int = 20) -> Dict:
+    def list_tasks(self, assigned_to: int = None, status: str = None, page: int = 1, page_size: int = 20) -> dict:
         """任务列表"""
         filtered = self._tasks_db
         if assigned_to is not None:
@@ -91,7 +90,7 @@ class TaskService:
 
         return {'success': True, 'data': {'page': page, 'page_size': page_size, 'total': total, 'items': items}, 'message': ''}
 
-    def get_my_tasks(self, user_id: int, status: str = None) -> List[Dict]:
+    def get_my_tasks(self, user_id: int, status: str = None) -> list[dict]:
         """获取我的任务"""
         tasks = [t for t in self._tasks_db if t['assigned_to'] == user_id]
         if status:

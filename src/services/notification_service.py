@@ -1,12 +1,11 @@
 """Notification service for CRM system."""
-from typing import List, Dict, Optional
 from datetime import datetime
 
 from models.response import ApiResponse, PaginatedData, ResponseStatus
 
 # Module-level state for placeholder service (shared across instances per-process)
-_notifications_db: List[Dict] = []
-_reminders_db: List[Dict] = []
+_notifications_db: list[dict] = []
+_reminders_db: list[dict] = []
 _next_notification_id = 1
 _next_reminder_id = 1
 
@@ -117,7 +116,7 @@ class NotificationService:
                 return ApiResponse(status=ResponseStatus.SUCCESS, data={'id': reminder_id}, message='提醒已取消')
         return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message='提醒不存在')
 
-    async def get_reminders(self, user_id: int, upcoming_only: bool = True, tenant_id: int = 0) -> List[Dict]:
+    async def get_reminders(self, user_id: int, upcoming_only: bool = True, tenant_id: int = 0) -> list[dict]:
         """获取用户的提醒列表"""
         reminders = [r for r in _reminders_db if r['user_id'] == user_id]
 

@@ -1,6 +1,5 @@
 """Marketing (campaign) ORM models."""
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -18,11 +17,11 @@ class CampaignModel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     type: Mapped[str] = mapped_column(String(50), default="email", nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)
-    subject: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    target_audience: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    trigger_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    trigger_days: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    subject: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_audience: Mapped[str | None] = mapped_column(Text, nullable=True)
+    trigger_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    trigger_days: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     sent_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     open_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)

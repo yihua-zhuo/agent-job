@@ -1,12 +1,11 @@
 """Activity service for CRM system."""
-from typing import List, Dict, Optional
 from datetime import datetime
 
 from models.activity import Activity, ActivityType
 from models.response import ApiResponse, PaginatedData, ResponseStatus
 
 # Module-level state for placeholder service (shared across instances per-process)
-_activities_db: List[Activity] = []
+_activities_db: list[Activity] = []
 _next_id = 1
 
 
@@ -101,7 +100,7 @@ class ActivityService:
         activities.sort(key=lambda x: x.created_at, reverse=True)
         return ApiResponse(status=ResponseStatus.SUCCESS, data=[a.to_dict() for a in activities], message='')
 
-    async def search_activities(self, keyword: str, tenant_id: int = 0, filters: Dict = None) -> ApiResponse:
+    async def search_activities(self, keyword: str, tenant_id: int = 0, filters: dict = None) -> ApiResponse:
         """搜索活动"""
         keyword_lower = keyword.lower()
         results = [a for a in _activities_db if keyword_lower in a.content.lower()]

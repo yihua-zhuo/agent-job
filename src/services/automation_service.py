@@ -1,13 +1,11 @@
 """Automation rules service — DB-backed rule engine with execution logging."""
-from datetime import datetime, UTC
-from typing import Dict, List, Optional, Any
+from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.automation import AutomationRuleModel, AutomationLogModel
+from db.models.automation import AutomationLogModel, AutomationRuleModel
 from models.response import ApiResponse, PaginatedData
-
 
 # Supported trigger events
 TRIGGER_EVENTS = [
@@ -139,9 +137,9 @@ class AutomationService:
         tenant_id: int,
         name: str,
         trigger_event: str,
-        actions: List[dict],
-        description: Optional[str] = None,
-        conditions: Optional[List[dict]] = None,
+        actions: list[dict],
+        description: str | None = None,
+        conditions: list[dict] | None = None,
         enabled: bool = True,
         created_by: int = 0,
     ) -> ApiResponse[AutomationRuleModel]:
@@ -169,9 +167,9 @@ class AutomationService:
         tenant_id: int,
         page: int = 1,
         page_size: int = 20,
-        trigger_event: Optional[str] = None,
-        enabled: Optional[bool] = None,
-    ) -> ApiResponse[PaginatedData[Dict]]:
+        trigger_event: str | None = None,
+        enabled: bool | None = None,
+    ) -> ApiResponse[PaginatedData[dict]]:
         """List automation rules with pagination and filters."""
         base_stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id
@@ -207,7 +205,7 @@ class AutomationService:
             page_size=page_size,
         )
 
-    async def get_rule(self, rule_id: int, tenant_id: int) -> ApiResponse[Dict]:
+    async def get_rule(self, rule_id: int, tenant_id: int) -> ApiResponse[dict]:
         """Get a single automation rule."""
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.id == rule_id,
@@ -224,7 +222,7 @@ class AutomationService:
         rule_id: int,
         tenant_id: int,
         **kwargs,
-    ) -> ApiResponse[Dict]:
+    ) -> ApiResponse[dict]:
         """Update an automation rule."""
         kwargs["updated_at"] = datetime.now(UTC)
         stmt = (
@@ -242,7 +240,7 @@ class AutomationService:
             return ApiResponse.error(message="规则不存在", code=404)
         return ApiResponse.success(data=row.to_dict(), message="规则更新成功")
 
-    async def delete_rule(self, rule_id: int, tenant_id: int) -> ApiResponse[Dict]:
+    async def delete_rule(self, rule_id: int, tenant_id: int) -> ApiResponse[dict]:
         """Delete an automation rule and its logs."""
         stmt = delete(AutomationRuleModel).where(
             AutomationRuleModel.id == rule_id,
@@ -253,7 +251,7 @@ class AutomationService:
             return ApiResponse.error(message="规则不存在", code=404)
         return ApiResponse.success(data={"id": rule_id}, message="规则删除成功")
 
-    async def toggle_rule(self, rule_id: int, tenant_id: int) -> ApiResponse[Dict]:
+    async def toggle_rule(self, rule_id: int, tenant_id: int) -> ApiResponse[dict]:
         """Toggle enabled status of a rule."""
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.id == rule_id,
@@ -288,7 +286,7 @@ class AutomationService:
         trigger_event: str,
         context: dict,
         executed_by: int = 0,
-    ) -> List[dict]:
+    ) -> list[dict]:
         """Find and execute all matching enabled rules for a trigger event.
         
         Returns list of execution results for each matched rule.
@@ -357,9 +355,9 @@ class AutomationService:
         tenant_id: int,
         page: int = 1,
         page_size: int = 20,
-        rule_id: Optional[int] = None,
-        status: Optional[str] = None,
-    ) -> ApiResponse[PaginatedData[Dict]]:
+        rule_id: int | None = None,
+        status: str | None = None,
+    ) -> ApiResponse[PaginatedData[dict]]:
         """List automation execution logs."""
         base_stmt = select(AutomationLogModel).where(
             AutomationLogModel.tenant_id == tenant_id

@@ -2,7 +2,6 @@
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
 
 
 class CampaignStatus(Enum):
@@ -29,15 +28,15 @@ class TriggerType(Enum):
 
 @dataclass
 class Campaign:
-    id: Optional[int]
+    id: int | None
     name: str
     type: CampaignType
     status: CampaignStatus
-    subject: Optional[str]  # Email subject
+    subject: str | None  # Email subject
     content: str
     target_audience: str  # SQL or tag based
-    trigger_type: Optional[TriggerType]
-    trigger_days: Optional[int]  # e.g., 7 days inactive
+    trigger_type: TriggerType | None
+    trigger_days: int | None  # e.g., 7 days inactive
     created_by: int
     created_at: datetime
     updated_at: datetime
@@ -88,7 +87,7 @@ class Campaign:
 @dataclass
 class CampaignEvent:
     """用户行为事件"""
-    id: Optional[int]
+    id: int | None
     campaign_id: int
     customer_id: int
     event_type: str  # sent, opened, clicked, bounced

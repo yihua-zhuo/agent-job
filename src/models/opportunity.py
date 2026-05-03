@@ -3,7 +3,6 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from decimal import Decimal
 from enum import Enum
-from typing import Optional
 
 
 class Stage(Enum):
@@ -26,7 +25,7 @@ class Opportunity:
     probability: int
     expected_close_date: datetime
     owner_id: int
-    id: Optional[int] = None
+    id: int | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 

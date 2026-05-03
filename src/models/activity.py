@@ -2,7 +2,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional
 
 
 class ActivityType(Enum):
@@ -20,9 +19,9 @@ class Activity:
     type: ActivityType
     content: str
     created_by: int
-    id: Optional[int] = None
+    id: int | None = None
     tenant_id: int = 0
-    opportunity_id: Optional[int] = None
+    opportunity_id: int | None = None
     created_at: datetime = field(default_factory=datetime.utcnow)
 
     def __post_init__(self) -> None:

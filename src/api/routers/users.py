@@ -1,16 +1,16 @@
 """Users router — /api/v1/users and /api/v1/auth endpoints."""
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from db.connection import get_db
-from internal.middleware.fastapi_auth import require_auth, AuthContext
 from dependencies.auth import get_current_user
-from services.user_service import UserService
-from services.auth_service import AuthService
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.response import ResponseStatus
 from pkg.response.schemas import ErrorEnvelope, SuccessEnvelope
+from services.auth_service import AuthService
+from services.user_service import UserService
 
 users_router = APIRouter(prefix='/api/v1', tags=['users'])
 
@@ -45,15 +45,15 @@ class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=32)
     email: str = Field(..., max_length=255)
     password: str = Field(..., min_length=8)
-    full_name: Optional[str] = Field(None, max_length=200)
-    role: Optional[str] = Field(default="user")
+    full_name: str | None = Field(None, max_length=200)
+    role: str | None = Field(default="user")
 
 
 class UserUpdate(BaseModel):
-    email: Optional[str] = Field(None, max_length=255)
-    full_name: Optional[str] = Field(None, max_length=200)
-    status: Optional[str] = None
-    bio: Optional[str] = Field(None, max_length=1000)
+    email: str | None = Field(None, max_length=255)
+    full_name: str | None = Field(None, max_length=200)
+    status: str | None = None
+    bio: str | None = Field(None, max_length=1000)
 
 
 class PasswordChange(BaseModel):
@@ -84,18 +84,18 @@ class UserData(BaseModel):
     email: str
     role: str
     status: str
-    full_name: Optional[str] = None
-    bio: Optional[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    full_name: str | None = None
+    bio: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
 
 class UserResponse(SuccessEnvelope):
-    data: Optional[UserData] = None
+    data: UserData | None = None
 
 
 class UserListData(BaseModel):
-    items: List[UserData]
+    items: list[UserData]
     total: int = Field(..., ge=0)
     page: int = Field(..., ge=1)
     page_size: int = Field(..., ge=1)
@@ -168,8 +168,8 @@ async def create_user(
 async def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    q: Optional[str] = Query(None, max_length=100),
-    role: Optional[str] = Query(None, max_length=50),
+    q: str | None = Query(None, max_length=100),
+    role: str | None = Query(None, max_length=50),
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
@@ -401,9 +401,9 @@ async def change_password(
 
 
 class ProfileUpdate(BaseModel):
-    full_name: Optional[str] = Field(None, max_length=200)
-    email: Optional[str] = Field(None, max_length=255)
-    bio: Optional[str] = Field(None, max_length=1000)
+    full_name: str | None = Field(None, max_length=200)
+    email: str | None = Field(None, max_length=255)
+    bio: str | None = Field(None, max_length=1000)
 
 
 class PasswordChangeRequest(BaseModel):
