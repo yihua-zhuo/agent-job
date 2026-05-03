@@ -135,20 +135,33 @@ class UserService:
                 return user
         return None
     
-    def list_users(self, page: int = 1, page_size: int = 20, role: UserRole = None, status: UserStatus = None) -> ApiResponse[PaginatedData[User]]:
-        """获取用户列表"""
+    def list_users(self, page: int = 1, page_size: int = 20, role: str = None, status: str = None, q: str = None, tenant_id: int = None) -> ApiResponse[PaginatedData[User]]:
+        """获取用户列表，支持 q 搜索和 role/status 过滤。"""
         filtered_users = self._users_db
-        
+
+        if tenant_id:
+            filtered_users = [u for u in filtered_users if u.tenant_id == tenant_id]
+
         if role:
-            filtered_users = [u for u in filtered_users if u.role == role]
+            filtered_users = [u for u in filtered_users if u.role.value == role]
+
         if status:
-            filtered_users = [u for u in filtered_users if u.status == status]
-        
+            filtered_users = [u for u in filtered_users if u.status.value == status]
+
+        if q:
+            q_lower = q.lower()
+            filtered_users = [
+                u for u in filtered_users
+                if q_lower in u.username.lower()
+                or q_lower in u.email.lower()
+                or (u.full_name and q_lower in u.full_name.lower())
+            ]
+
         total = len(filtered_users)
         start = (page - 1) * page_size
         end = start + page_size
         items = filtered_users[start:end]
-        
+
         return ApiResponse.paginated(
             items=items,
             total=total,
@@ -183,7 +196,7 @@ class UserService:
                 )
         
         # 更新字段
-        allowed_fields = ["email", "bio", "avatar_url", "status"]
+        allowed_fields = ["email", "bio", "avatar_url", "status", "full_name"]
         for field in allowed_fields:
             if field in kwargs:
                 setattr(user, field, kwargs[field])

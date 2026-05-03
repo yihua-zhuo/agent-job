@@ -157,11 +157,19 @@ async def create_user(
 async def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    q: Optional[str] = Query(None, max_length=100),
+    role: Optional[str] = Query(None, max_length=50),
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
     service = UserService(session)
-    resp = await service.list_users(page=page, page_size=page_size, tenant_id=ctx.tenant_id or 0)
+    resp = await service.list_users(
+        page=page,
+        page_size=page_size,
+        q=q,
+        role=role,
+        tenant_id=ctx.tenant_id or 0,
+    )
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
@@ -371,6 +379,85 @@ async def change_password(
     resp = await service.change_password(user_id, body.old_password, body.new_password)
     status = _http_status(resp.status)
     if status != 200:
+        raise HTTPException(status_code=status, detail=resp.message)
+    return UserResponse(message=resp.message, data=None)
+
+
+class ProfileUpdate(BaseModel):
+    full_name: Optional[str] = Field(None, max_length=200)
+    email: Optional[str] = Field(None, max_length=255)
+    bio: Optional[str] = Field(None, max_length=1000)
+
+
+class PasswordChangeRequest(BaseModel):
+    old_password: str
+    new_password: str = Field(..., min_length=8)
+
+
+# ---------------------------------------------------------------------------
+# PATCH /users/me — update current user's profile
+# ---------------------------------------------------------------------------
+
+@users_router.patch(
+    '/users/me',
+    response_model=UserResponse,
+    responses={401: {"model": ErrorEnvelope}, 404: {"model": ErrorEnvelope}},
+)
+async def update_my_profile(
+    body: ProfileUpdate,
+    current_user: AuthContext = Depends(get_current_user),
+    session=Depends(get_db),
+):
+    """Update the authenticated user's own profile (full_name, email, bio)."""
+    if current_user.tenant_id is None or current_user.tenant_id == 0:
+        raise HTTPException(status_code=401, detail="无效的租户信息")
+    service = UserService(session)
+    update_data = body.model_dump(exclude_none=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="没有需要更新的字段")
+    resp = await service.update_user(current_user.user_id, tenant_id=current_user.tenant_id, **update_data)
+    status = _http_status(resp.status)
+    if status >= 400:
+        raise HTTPException(status_code=status, detail=resp.message)
+    user_data = resp.data
+    return UserResponse(
+        message=resp.message,
+        data=UserData(
+            id=user_data.id,
+            tenant_id=user_data.tenant_id,
+            username=user_data.username,
+            email=user_data.email,
+            role=user_data.role.value if hasattr(user_data.role, "value") else str(user_data.role),
+            status=user_data.status.value if hasattr(user_data.status, "value") else str(user_data.status),
+            full_name=user_data.full_name,
+            bio=user_data.bio,
+            created_at=user_data.created_at.isoformat() if user_data.created_at else None,
+            updated_at=user_data.updated_at.isoformat() if user_data.updated_at else None,
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# POST /auth/change-password — change own password
+# ---------------------------------------------------------------------------
+
+@users_router.post(
+    '/auth/change-password',
+    response_model=UserResponse,
+    responses={400: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
+)
+async def change_my_password(
+    body: PasswordChangeRequest,
+    current_user: AuthContext = Depends(get_current_user),
+    session=Depends(get_db),
+):
+    """Change the authenticated user's own password."""
+    if current_user.tenant_id is None or current_user.tenant_id == 0:
+        raise HTTPException(status_code=401, detail="无效的租户信息")
+    service = UserService(session)
+    resp = await service.change_password(current_user.user_id, body.old_password, body.new_password)
+    status = _http_status(resp.status)
+    if status >= 400:
         raise HTTPException(status_code=status, detail=resp.message)
     return UserResponse(message=resp.message, data=None)
 

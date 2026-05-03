@@ -39,7 +39,10 @@ class User:
     email: str
     role: Role
     id: Optional[int] = None
+    tenant_id: int = 0
     full_name: Optional[str] = None
+    status: UserStatus = UserStatus.ACTIVE
+    bio: Optional[str] = None
     is_active: bool = True
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
@@ -59,12 +62,17 @@ class User:
 
     def to_dict(self) -> dict:
         """Convert user to dictionary representation."""
+        role_val = self.role.value if isinstance(self.role, Role) else self.role
+        status_val = self.status.value if isinstance(self.status, UserStatus) else self.status
         return {
             'id': self.id,
             'username': self.username,
             'email': self.email,
-            'role': self.role.value if isinstance(self.role, Role) else self.role,
+            'role': role_val,
+            'tenant_id': self.tenant_id,
             'full_name': self.full_name,
+            'status': status_val,
+            'bio': self.bio,
             'is_active': self.is_active,
             'created_at': self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
             'updated_at': self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at,
