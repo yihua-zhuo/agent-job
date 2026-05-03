@@ -7,6 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import { login, getMe } from "@/lib/api/auth";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Providers } from "@/lib/components/providers";
+import { Input } from "@/components/ui/input";
 
 const loginSchema = z.object({
   username: z.string().min(1, "Username is required"),
@@ -51,6 +52,7 @@ function LoginForm() {
         </div>
         <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
           <div className="space-y-1.5">
+            <Input
               {...form.register("username")}
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               placeholder="username"
@@ -60,6 +62,7 @@ function LoginForm() {
             )}
           </div>
           <div className="space-y-1.5">
+            <Input
               {...form.register("password")}
               type="password"
               className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"

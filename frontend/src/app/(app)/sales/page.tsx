@@ -52,7 +52,7 @@ export default function SalesPage() {
                 <td className="px-3 py-2.5"><Badge colorClass={STAGE_COLORS[String(o.stage)] ?? "bg-gray-100 text-gray-600"}>{String(o.stage ?? "—")}</Badge></td>
                 <td className="px-3 py-2.5 text-right font-semibold text-green-700">{fmtAmt(o.amount)}</td>
                 <td className="px-3 py-2.5 text-muted-foreground">{o.probability != null ? `${o.probability}%` : "—"}</td>
-                <td className="px-3 py-2.5 font-mono text-muted-foreground text-xs">{o.customer_id ?? "—"}</td>
+                <td className="px-3 py-2.5 font-mono text-muted-foreground text-xs">{String(o.customer_id ?? "—")}</td>
                 <td className="px-3 py-2.5 text-muted-foreground">{o.expected_close_date ? new Date(String(o.expected_close_date)).toLocaleDateString() : "—"}</td>
               </tr>
             ))}

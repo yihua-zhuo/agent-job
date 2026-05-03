@@ -26,7 +26,7 @@ function TaskCard({ task, onClick }: { task: Record<string, unknown>; onClick: (
     <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={onClick}>
       <CardContent className="p-3 space-y-2">
         <div className="font-medium text-sm leading-snug">{String(task.title ?? "")}</div>
-        {task.description && (
+        {Boolean(task.description) && (
           <p className="text-xs text-muted-foreground line-clamp-2">{String(task.description)}</p>
         )}
         <div className="flex items-center justify-between">

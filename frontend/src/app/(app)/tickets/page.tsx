@@ -10,6 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Input } from "@/components/ui/input";
 
 const PRIORITY_COLORS: Record<string, string> = {
   high: "bg-red-100 text-red-800",
@@ -28,7 +29,7 @@ const STATUS_COLORS: Record<string, string> = {
 export default function TicketsPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
-  const { data, isLoading, isError } = useTickets(page, statusFilter);
+  const { data, isLoading, isError } = useTickets(page, statusFilter === "all" ? "" : statusFilter);
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
 
@@ -37,10 +38,12 @@ export default function TicketsPage() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Tickets</h1>
         <div className="flex gap-2">
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setPage(1); }}>
             <SelectTrigger className="w-36">
               <SelectValue placeholder="All Statuses" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
               <SelectItem value="open">Open</SelectItem>
               <SelectItem value="in_progress">In Progress</SelectItem>
               <SelectItem value="pending">Pending</SelectItem>
@@ -69,7 +72,7 @@ export default function TicketsPage() {
             {!isLoading && items.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No tickets found</td></tr>}
             {items.map((t) => (
               <tr key={String(t.id)} className="border-b hover:bg-muted/50 transition-colors">
-                <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{t.id}</td>
+                <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">{String(t.id)}</td>
                 <td className="px-3 py-2.5 font-medium">{String(t.subject ?? "")}</td>
                 <td className="px-3 py-2.5 text-muted-foreground">{String(t.channel ?? "—")}</td>
                 <td className="px-3 py-2.5 text-muted-foreground">{t.created_at ? new Date(String(t.created_at)).toLocaleDateString() : "—"}</td>

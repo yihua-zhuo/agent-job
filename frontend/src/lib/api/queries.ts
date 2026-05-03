@@ -12,7 +12,25 @@ export const qk = {
   tasks: (page = 1, status = "") => ["tasks", page, status] as const,
   task: (id: number) => ["task", id] as const,
   users: (page = 1) => ["users", page] as const,
+  notifications: (page = 1, unreadOnly = false) => ["notifications", page, unreadOnly] as const,
+  reminders: (upcomingOnly = false) => ["reminders", upcomingOnly] as const,
+  activities: (page = 1, type = "") => ["activities", page, type] as const,
+  slaBreaches: () => ["sla", "breaches"] as const,
 } as const;
+
+interface PaginatedResponse<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+  has_next: boolean;
+}
+
+interface ApiEnvelope<T> {
+  success: boolean;
+  message?: string;
+  data: PaginatedResponse<T>;
+}
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export function useCurrentUser() {
@@ -31,7 +49,7 @@ export function useCustomers(page = 1) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.customers(page),
-    queryFn: () => apiClient.get(`/api/v1/customers?page=${page}&page_size=20`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/customers?page=${page}&page_size=20`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -40,7 +58,7 @@ export function useCustomer(id: number) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.customer(id),
-    queryFn: () => apiClient.get(`/api/v1/customers/${id}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/customers/${id}`, token ?? undefined),
     enabled: id > 0,
   });
 }
@@ -49,7 +67,7 @@ export function useSearchCustomers(keyword: string) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: ["customers", "search", keyword],
-    queryFn: () => apiClient.get(`/api/v1/customers/search?keyword=${encodeURIComponent(keyword)}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/customers/search?keyword=${encodeURIComponent(keyword)}`, token ?? undefined),
     enabled: keyword.length > 0,
   });
 }
@@ -69,7 +87,7 @@ export function useOpportunities(page = 1) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.opportunities(page),
-    queryFn: () => apiClient.get(`/api/v1/sales/opportunities?page=${page}&page_size=20`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/sales/opportunities?page=${page}&page_size=20`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -78,7 +96,7 @@ export function usePipelines() {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.pipelines(),
-    queryFn: () => apiClient.get("/api/v1/sales/pipelines", token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/sales/pipelines`, token ?? undefined),
     staleTime: 60 * 1000,
   });
 }
@@ -100,7 +118,7 @@ export function useTickets(page = 1, status = "") {
   if (status) params.set("status", status);
   return useQuery({
     queryKey: qk.tickets(page, status),
-    queryFn: () => apiClient.get(`/api/v1/tickets?${params}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tickets?${params}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -120,8 +138,36 @@ export function useUsers(page = 1) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.users(page),
-    queryFn: () => apiClient.get(`/api/v1/users?page=${page}&page_size=20`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?page=${page}&page_size=20`, token ?? undefined),
     staleTime: 60 * 1000,
+  });
+}
+
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: { full_name?: string; email?: string; bio?: string }) =>
+      apiClient.patch("/api/v1/users/me", data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.me() }),
+  });
+}
+
+export function useChangePassword() {
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: { old_password: string; new_password: string }) =>
+      apiClient.post("/api/v1/auth/change-password", data, token ?? undefined),
+  });
+}
+
+export function useCreateUser() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      apiClient.post("/api/v1/users", data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
 }
 // ── Tasks ───────────────────────────────────────────────────────────────────
@@ -132,7 +178,7 @@ export function useTasks(page = 1, status = "") {
   if (status) params.set("status", status);
   return useQuery({
     queryKey: qk.tasks(page, status),
-    queryFn: () => apiClient.get(`/api/v1/tasks?${params}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tasks?${params}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -141,7 +187,7 @@ export function useTask(id: number) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.task(id),
-    queryFn: () => apiClient.get(`/api/v1/tasks/${id}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tasks/${id}`, token ?? undefined),
     enabled: id > 0,
   });
 }
@@ -183,5 +229,96 @@ export function useDeleteTask() {
     mutationFn: (id: number) =>
       apiClient.delete(`/api/v1/tasks/${id}`, token ?? undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
+  });
+}
+
+// ── Activities ───────────────────────────────────────────────────────────
+export function useActivities(page = 1, type = "") {
+  const token = useAuthStore((s) => s.token);
+  const params = new URLSearchParams({ page: String(page), page_size: "20" });
+  if (type) params.set("activity_type", type);
+  return useQuery({
+    queryKey: qk.activities(page, type),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/activities?${params}`, token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useActivity(id: number) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: ["activity", id] as const,
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/activities/${id}`, token ?? undefined),
+    enabled: id > 0,
+  });
+}
+
+export function useSlaBreaches() {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.slaBreaches(),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>("/api/v1/sla/breaches", token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+// ── Notifications ─────────────────────────────────────────────────────────
+export function useNotifications(page = 1, unreadOnly = false) {
+  const token = useAuthStore((s) => s.token);
+  const params = new URLSearchParams({ page: String(page), page_size: "20" });
+  if (unreadOnly) params.set("unread_only", "true");
+  return useQuery({
+    queryKey: qk.notifications(page, unreadOnly),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/notifications?${params}`, token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useMarkAllNotificationsRead() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: () => apiClient.post("/api/v1/notifications/mark-all-read", {}, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+export function useMarkNotificationRead() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.put(`/api/v1/notifications/${id}/read`, {}, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+}
+
+// ── Reminders ─────────────────────────────────────────────────────────────
+export function useReminders(upcomingOnly = false) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.reminders(upcomingOnly),
+    queryFn: () => apiClient.get(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useCreateReminder() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      apiClient.post("/api/v1/reminders", data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["reminders"] }),
+  });
+}
+
+export function useDeleteReminder() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v1/reminders/${id}`, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["reminders"] }),
   });
 }
