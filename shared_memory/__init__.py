@@ -99,6 +99,7 @@ def enqueue_task(task_id: str, agent_id: str, name: str, description: str,
             }],
         })
         write_queue(queue)
+        _sync_board_async()
 
 
 def update_task_status(task_id: str, agent_id: str, status: str,
@@ -124,6 +125,7 @@ def update_task_status(task_id: str, agent_id: str, status: str,
             task["status"] = "completed"
         break
     write_queue(queue)
+    _sync_board_async()
 
 
 # ─── State 操作 ─────────────────────────────────────────────────────────────
@@ -245,6 +247,23 @@ def read_task_record(task_id: str) -> dict | None:
 
 # ─── Agent 轮询接口 ───────────────────────────────────────────────────────────
 
+def _sync_board_async() -> None:
+    """后台触发 board 同步（非阻塞，失败不影响主流程）"""
+    try:
+        import asyncio, subprocess, threading
+        token = subprocess.check_output(["gh", "auth", "token"]).decode().strip()
+        os.environ["GITHUB_TOKEN"] = token
+
+        def _run():
+            from shared_memory.project_board import sync_all_agents_to_board
+            asyncio.run(sync_all_agents_to_board())
+
+        t = threading.Thread(target=_run, daemon=True)
+        t.start()
+    except Exception:
+        pass  # never block main thread
+
+
 def get_pending_agents(agent_id: str = None) -> list[dict]:
     """
     从 orchestrator_queue.json 找出状态为 pending 的 agent 任务。
@@ -318,3 +337,62 @@ if __name__ == "__main__":
     print()
     print("=== State ===")
     print(json.dumps(read_state(), ensure_ascii=False, indent=2))
+
+
+# ─── GitHub Project Board 同步 ────────────────────────────────────────────────
+
+def sync_board() -> None:
+    """
+    读取当前 shared memory 中的 agent 状态，同步到 GitHub Project V2 看板。
+    自动从 orchestrator_queue.json 读取各 agent 的 pending/running/done 计数。
+    """
+    import asyncio, subprocess
+    from shared_memory.project_board import sync_all_agents_to_board
+
+    token = subprocess.check_output(["gh", "auth", "token"]).decode().strip()
+    os.environ["GITHUB_TOKEN"] = token
+    asyncio.run(sync_all_agents_to_board())
+
+
+def commit_memory(task_id: str = None, message: str = None) -> bool:
+    """
+    将当前 shared memory 目录（agent-job-shared-memory）commit 并 push 到 GitHub。
+    用于 pipeline 运行结束后将执行记录持久化。
+
+    Args:
+        task_id:   可选，关联的任务 ID
+        message:   可选，commit message（默认自动生成）
+
+    Returns:
+        True = 成功，False = 失败（无 stdout/stderr）
+    """
+    import subprocess
+
+    if not SHARED_MEMORY_ROOT.exists():
+        return False
+
+    msg = message or (
+        f"chore: sync memory from pipeline"
+        + (f" task_id={task_id}" if task_id else "")
+    )
+
+    try:
+        subprocess.run(
+            ["git", "-C", str(SHARED_MEMORY_ROOT), "add", "-A"],
+            capture_output=True, timeout=30,
+        )
+        res = subprocess.run(
+            ["git", "-C", str(SHARED_MEMORY_ROOT), "commit", "-m", msg],
+            capture_output=True, timeout=30,
+        )
+        if res.returncode != 0:
+            if "nothing to commit" not in res.stderr.decode():
+                return False
+        subprocess.run(
+            ["git", "-C", str(SHARED_MEMORY_ROOT), "push", "origin", "HEAD"],
+            capture_output=True, timeout=30,
+        )
+        sync_board()
+        return True
+    except Exception:
+        return False
