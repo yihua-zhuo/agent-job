@@ -1,8 +1,8 @@
-# dev-agent-system — Claude Code Reference
+# Claude Code Reference
 
 Multi-tenant CRM system (FastAPI + SQLAlchemy 2.x async + PostgreSQL).
 
-**Branch:** `backend-issue-39-notification-service` → `master`
+**Branch:** `master`
 **CI:** GitHub Actions (Unit Tests + Integration Tests + Flake8/Lint)
 
 ---
@@ -10,7 +10,7 @@ Multi-tenant CRM system (FastAPI + SQLAlchemy 2.x async + PostgreSQL).
 ## Project Structure
 
 ```
-dev-agent-system/
+./
 ├── src/
 │   ├── api/routers/          # FastAPI route handlers
 │   ├── services/             # Business logic (one service per domain)
@@ -289,15 +289,3 @@ Code review follows this flow:
 - FastAPI: https://fastapi.tiangolo.com/
 - SQLAlchemy 2.x: https://docs.sqlalchemy.org/en/20/
 - Pytest: https://docs.pytest.org/
-- Project root: `/home/node/.openclaw/workspace/dev-agent-system/`
----
-
-## Pipeline Model Configuration
-
-The pipeline uses a custom `claw` wrapper that routes to AI Gateway. The model is controlled by `CLAW_MODEL` environment variable:
-
-- **Default**: `openai/MiniMax-M2.7` (defined in `docs/agents/_llm.py:60`)
-- **pipeline-code-review.yml override**: `CLAW_MODEL: claude-sonnet-4-6` in workflow `env:` block
-- Pipeline script `scripts/cron/pipeline.py` spawns `claw` as subprocess; `CLAW_MODEL` propagates to all `ask_agent()` calls
-
-To change model for a specific workflow, add/edit the env var in the workflow's `env:` section.
