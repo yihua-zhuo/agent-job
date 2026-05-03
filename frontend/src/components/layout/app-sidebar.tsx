@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/lib/store/auth-store";
-import { Users, TrendingUp, Ticket, BarChart3, Sparkles, LogOut, CheckSquare, Bell, Activity, UsersRound, Settings as SettingsIcon, Shield } from "lucide-react";
+import { Users, TrendingUp, Ticket, BarChart3, Sparkles, LogOut, CheckSquare, Bell, Activity, UsersRound, Settings as SettingsIcon, Shield, Upload } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -18,6 +18,7 @@ const navItems = [
   { href: "/settings", label: "Settings", icon: SettingsIcon },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/ai", label: "AI", icon: Sparkles },
+  { href: "/import-export", label: "Import/Export", icon: Upload },
 ];
 
 export function AppSidebar() {
