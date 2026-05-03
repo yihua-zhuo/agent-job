@@ -45,11 +45,11 @@ export function useCurrentUser() {
 }
 
 // ── Customers ──────────────────────────────────────────────────────────────
-export function useCustomers(page = 1) {
+export function useCustomers(page = 1, pageSize = 20) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.customers(page),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/customers?page=${page}&page_size=20`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/customers?page=${page}&page_size=${pageSize}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -78,6 +78,16 @@ export function useCreateCustomer() {
   return useMutation({
     mutationFn: (data: Record<string, unknown>) =>
       apiClient.post("/api/v1/customers", data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["customers"] }),
+  });
+}
+
+export function useDeleteCustomer() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v1/customers/${id}`, token ?? undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["customers"] }),
   });
 }
