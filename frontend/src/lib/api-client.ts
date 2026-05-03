@@ -1,7 +1,3 @@
-const API_BASE =
-  process.env.NEXT_PUBLIC_API_BASE_URL ??
-  (typeof window !== "undefined" ? window.location.origin : "http://localhost:8000");
-
 export class ApiError extends Error {
   constructor(
     public readonly status: number,
@@ -19,7 +15,6 @@ export class ApiError extends Error {
 }
 
 export const apiClient = {
-  baseUrl: API_BASE,
 
   async request<T>(path: string, options: RequestInit & { token?: string } = {}): Promise<T> {
     const { token, ...fetchOptions } = options;
@@ -29,11 +24,14 @@ export const apiClient = {
     }
     if (token) headers.set("Authorization", `Bearer ${token}`);
 
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...fetchOptions,
-      headers,
-      credentials: "include",
-    });
+    const response = await fetch(
+      (process.env.NEXT_PUBLIC_API_BASE_URL ?? window.location.origin) + path,
+      {
+        ...fetchOptions,
+        headers,
+        credentials: "include",
+      }
+    );
 
     if (!response.ok) {
       let message = response.statusText;
