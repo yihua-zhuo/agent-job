@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSlaBreaches, useTickets } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -36,17 +36,41 @@ function slaLabel(ticket: Record<string, unknown>) {
   return "On Track";
 }
 
+const MAX_PAGES = 10;
+
+function useAllOpenTickets() {
+  const [allItems, setAllItems] = useState<Record<string, unknown>[]>([]);
+  const [page, setPage] = useState(1);
+  const [done, setDone] = useState(false);
+  const { data, isLoading } = useTickets(page, "open");
+
+  useEffect(() => {
+    if (!data?.data) return;
+    setAllItems((prev) => [...prev, ...(data.data.items ?? [])]);
+    if (!data.data.has_next || page >= MAX_PAGES) {
+      setDone(true);
+    } else {
+      setPage((p) => p + 1);
+    }
+  }, [data, page]);
+
+  return { items: allItems, isLoading: isLoading && !done, done };
+}
+
 export default function SlaPage() {
   const { data: breachData, isLoading: breachLoading } = useSlaBreaches();
+  const { items: allTickets, isLoading } = useAllOpenTickets();
   const [page, setPage] = useState(1);
-  const { data, isLoading } = useTickets(page, "open");
-  const tickets = (data?.data?.items ?? []) as Record<string, unknown>[];
+  const { data, isLoading: isTableLoading, isError: isTableError } = useTickets(page, "open");
   const info = data?.data;
 
   const breaches = (breachData?.data?.items ?? []) as Record<string, unknown>[];
+  const atRisk = allTickets.filter((t) => slaStatus(t) === "at_risk");
+  const onTrack = allTickets.filter(
+    (t) => slaStatus(t) === "on_track" && t.status !== "resolved" && t.status !== "closed"
+  );
 
-  const atRisk = tickets.filter((t) => slaStatus(t) === "at_risk");
-  const onTrack = tickets.filter((t) => slaStatus(t) === "on_track" && t.status !== "resolved" && t.status !== "closed");
+  const paginatedTickets = (data?.data?.items ?? []) as Record<string, unknown>[];
 
   function fmtDeadline(deadline: unknown) {
     if (!deadline) return "—";
@@ -120,9 +144,10 @@ export default function SlaPage() {
             </tr>
           </thead>
           <tbody>
-            {isLoading && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">Loading…</td></tr>}
-            {!isLoading && tickets.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No open tickets</td></tr>}
-            {tickets.map((t) => (
+            {isTableLoading && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">Loading…</td></tr>}
+            {isTableError && <tr><td colSpan={6} className="px-3 py-8 text-center text-destructive">Failed to load open tickets</td></tr>}
+            {!isTableLoading && !isTableError && paginatedTickets.length === 0 && <tr><td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">No open tickets</td></tr>}
+            {paginatedTickets.map((t) => (
               <tr key={String(t.id)} className="border-b hover:bg-muted/50 transition-colors">
                 <td className="px-3 py-2.5 font-mono text-xs text-muted-foreground">#{String(t.id)}</td>
                 <td className="px-3 py-2.5 font-medium text-sm">{String(t.subject ?? "")}</td>

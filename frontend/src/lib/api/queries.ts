@@ -143,6 +143,24 @@ export function useUsers(page = 1) {
   });
 }
 
+export function useUpdateProfile() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: { full_name?: string; email?: string; bio?: string }) =>
+      apiClient.patch("/api/v1/users/me", data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: qk.me() }),
+  });
+}
+
+export function useChangePassword() {
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: { old_password: string; new_password: string }) =>
+      apiClient.post("/api/v1/auth/change-password", data, token ?? undefined),
+  });
+}
+
 export function useCreateUser() {
   const qc = useQueryClient();
   const token = useAuthStore((s) => s.token);

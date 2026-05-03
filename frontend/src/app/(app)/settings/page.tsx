@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useRef } from "react";
-import { useCurrentUser } from "@/lib/api/queries";
+import { useCurrentUser, useUpdateProfile, useChangePassword } from "@/lib/api/queries";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,6 +10,8 @@ export default function SettingsPage() {
   const { user } = useAuthStore();
   const { data } = useCurrentUser();
   const me = data?.data;
+  const updateProfile = useUpdateProfile();
+  const changePassword = useChangePassword();
 
   const [profile, setProfile] = useState({
     full_name: user?.full_name ?? "",
@@ -17,9 +19,10 @@ export default function SettingsPage() {
     bio: user?.bio ?? "",
   });
   const didHydrateProfile = useRef(false);
+  const hasUserEditedProfile = useRef(false);
 
   useEffect(() => {
-    if (!didHydrateProfile.current && me) {
+    if (!didHydrateProfile.current && me && !hasUserEditedProfile.current) {
       setProfile({
         full_name: me.full_name ?? "",
         email: me.email ?? "",
@@ -28,21 +31,40 @@ export default function SettingsPage() {
       didHydrateProfile.current = true;
     }
   }, [me]);
-  const [saved, setSaved] = useState(false);
-  const savedTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function handleSave() {
-    if (savedTimer.current) clearTimeout(savedTimer.current);
-    setSaved(true);
-    savedTimer.current = setTimeout(() => {
-      savedTimer.current = null;
-      setSaved(false);
-    }, 2000);
+  async function handleSave() {
+    try {
+      await updateProfile.mutateAsync(profile);
+    } catch {
+      // error surfaced via updateProfile.isError
+    }
   }
 
-  useEffect(() => {
-    return () => { if (savedTimer.current) clearTimeout(savedTimer.current); };
-  }, []);
+  const [pwForm, setPwForm] = useState({ old_password: "", new_password: "", confirm: "" });
+  const [pwError, setPwError] = useState("");
+  const [pwSuccess, setPwSuccess] = useState(false);
+  const pwTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  async function handleChangePassword() {
+    if (pwForm.new_password !== pwForm.confirm) {
+      setPwError("Passwords do not match");
+      return;
+    }
+    if (pwForm.new_password.length < 8) {
+      setPwError("Password must be at least 8 characters");
+      return;
+    }
+    setPwError("");
+    try {
+      await changePassword.mutateAsync({ old_password: pwForm.old_password, new_password: pwForm.new_password });
+      setPwForm({ old_password: "", new_password: "", confirm: "" });
+      setPwSuccess(true);
+      if (pwTimer.current) clearTimeout(pwTimer.current);
+      pwTimer.current = setTimeout(() => { pwTimer.current = null; setPwSuccess(false); }, 3000);
+    } catch (err) {
+      setPwError(err instanceof Error ? err.message : "Failed to change password");
+    }
+  }
 
   return (
     <div className="space-y-6 max-w-2xl">
@@ -68,7 +90,7 @@ export default function SettingsPage() {
             <Input
               id="full-name"
               value={profile.full_name}
-              onChange={(e) => setProfile((p) => ({ ...p, full_name: e.target.value }))}
+              onChange={(e) => { hasUserEditedProfile.current = true; setProfile((p) => ({ ...p, full_name: e.target.value })); }}
               placeholder="Full Name"
             />
           </div>
@@ -78,7 +100,7 @@ export default function SettingsPage() {
               id="email"
               type="email"
               value={profile.email}
-              onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
+              onChange={(e) => { hasUserEditedProfile.current = true; setProfile((p) => ({ ...p, email: e.target.value })); }}
               placeholder="email@example.com"
             />
           </div>
@@ -87,13 +109,19 @@ export default function SettingsPage() {
             <Input
               id="bio"
               value={profile.bio}
-              onChange={(e) => setProfile((p) => ({ ...p, bio: e.target.value }))}
+              onChange={(e) => { hasUserEditedProfile.current = true; setProfile((p) => ({ ...p, bio: e.target.value })); }}
               placeholder="A short bio about yourself"
             />
           </div>
-          <Button onClick={handleSave} disabled={saved}>
-            {saved ? "Saved!" : "Save Profile"}
+          <Button
+            onClick={handleSave}
+            disabled={updateProfile.isPending}
+          >
+            {updateProfile.isPending ? "Saving…" : updateProfile.isSuccess ? "Saved!" : "Save Profile"}
           </Button>
+          {updateProfile.isError && (
+            <p className="text-xs text-destructive">Failed to save profile</p>
+          )}
         </CardContent>
       </Card>
 
@@ -104,17 +132,43 @@ export default function SettingsPage() {
         <CardContent className="space-y-4">
           <div className="space-y-1.5">
             <label className="text-sm font-medium" htmlFor="old-pwd">Current Password</label>
-            <Input id="old-pwd" type="password" placeholder="Current password" />
+            <Input
+              id="old-pwd"
+              type="password"
+              placeholder="Current password"
+              value={pwForm.old_password}
+              onChange={(e) => setPwForm((p) => ({ ...p, old_password: e.target.value }))}
+            />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium" htmlFor="new-pwd">New Password</label>
-            <Input id="new-pwd" type="password" placeholder="Min 8 characters" />
+            <Input
+              id="new-pwd"
+              type="password"
+              placeholder="Min 8 characters"
+              value={pwForm.new_password}
+              onChange={(e) => setPwForm((p) => ({ ...p, new_password: e.target.value }))}
+            />
           </div>
           <div className="space-y-1.5">
             <label className="text-sm font-medium" htmlFor="confirm-pwd">Confirm Password</label>
-            <Input id="confirm-pwd" type="password" placeholder="Confirm new password" />
+            <Input
+              id="confirm-pwd"
+              type="password"
+              placeholder="Confirm new password"
+              value={pwForm.confirm}
+              onChange={(e) => setPwForm((p) => ({ ...p, confirm: e.target.value }))}
+            />
           </div>
-          <Button variant="outline">Change Password</Button>
+          {pwError && <p className="text-xs text-destructive">{pwError}</p>}
+          {pwSuccess && <p className="text-xs text-green-600">Password changed successfully</p>}
+          <Button
+            variant="outline"
+            onClick={handleChangePassword}
+            disabled={changePassword.isPending || !pwForm.old_password || !pwForm.new_password || !pwForm.confirm}
+          >
+            {changePassword.isPending ? "Changing…" : "Change Password"}
+          </Button>
         </CardContent>
       </Card>
 
