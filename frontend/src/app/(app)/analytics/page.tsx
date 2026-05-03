@@ -42,15 +42,22 @@ const STAGE_DATA = [
 export default function AnalyticsPage() {
   const [activeChart, setActiveChart] = useState<"bar" | "line" | "pie">("bar");
 
-  const { data: custData } = useCustomers(1, 1);
-  const { data: oppData } = useOpportunities(1);
-  const { data: ticketData } = useTickets(1, 1);
-  const { data: taskData } = useTasks(1);
+  const { data: custData, isLoading: custLoading } = useCustomers(1, 1);
+  const { data: oppData, isLoading: oppLoading } = useOpportunities(1);
+  const { data: ticketData, isLoading: ticketLoading } = useTickets(1, 1);
+  const { data: taskData, isLoading: taskLoading } = useTasks(1);
 
   const totalCustomers = Number(custData?.data?.total ?? 0);
   const totalOpps = Number(oppData?.data?.total ?? 0);
   const totalTickets = Number(ticketData?.data?.total ?? 0);
   const totalTasks = Number(taskData?.data?.total ?? 0);
+
+  const anyLoading = custLoading || oppLoading || ticketLoading || taskLoading;
+
+  function fmtVal(v: number) {
+    if (Number.isNaN(v)) return "—";
+    return v.toLocaleString();
+  }
 
   function handleExportPDF() {
     if (typeof window === "undefined") return;
@@ -71,10 +78,10 @@ export default function AnalyticsPage() {
       {/* KPI cards */}
       <div className="grid gap-4" style={{ gridTemplateColumns: "repeat(4, 1fr)" }}>
         {[
-          { label: "Customers", value: totalCustomers.toLocaleString(), color: "text-blue-600" },
-          { label: "Opportunities", value: totalOpps.toLocaleString(), color: "text-green-600" },
-          { label: "Open Tickets", value: totalTickets.toLocaleString(), color: "text-yellow-600" },
-          { label: "Active Tasks", value: totalTasks.toLocaleString(), color: "text-purple-600" },
+          { label: "Customers", value: fmtVal(totalCustomers), color: "text-blue-600" },
+          { label: "Opportunities", value: fmtVal(totalOpps), color: "text-green-600" },
+          { label: "Open Tickets", value: fmtVal(totalTickets), color: "text-yellow-600" },
+          { label: "Active Tasks", value: fmtVal(totalTasks), color: "text-purple-600" },
         ].map(({ label, value, color }) => (
           <Card key={label}>
             <CardContent className="p-4 text-center space-y-1">

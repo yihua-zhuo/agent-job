@@ -14,7 +14,7 @@ const STAGE_COLORS: Record<string, string> = {
   closed_lost: "bg-red-100 text-red-800",
 };
 
-const KANBAN_COLUMNS = ["lead", "qualified", "proposal", "negotiation", "closed_won"];
+const KANBAN_COLUMNS = ["lead", "qualified", "proposal", "negotiation", "closed_won", "closed_lost"];
 
 function fmtAmt(v: unknown) {
   if (!v && v !== 0) return "—";

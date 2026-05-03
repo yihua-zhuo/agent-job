@@ -15,23 +15,6 @@ import { Button } from "@/components/ui/button";
 const IDLE_TIMEOUT_MS = 25 * 60 * 1000;   // 25 min — warning appears
 const LOGOUT_TIMEOUT_MS = 30 * 60 * 1000; // 30 min — forced logout
 
-function resetIdleTimer(onActivity: () => void) {
-  window.removeEventListener("mousemove", onActivity);
-  window.removeEventListener("mousedown", onActivity);
-  window.removeEventListener("keydown", onActivity);
-  window.removeEventListener("touchstart", onActivity);
-  window.removeEventListener("scroll", onActivity);
-}
-
-function setupIdleTimer(onActivity: () => void) {
-  resetIdleTimer(onActivity);
-  window.addEventListener("mousemove", onActivity);
-  window.addEventListener("mousedown", onActivity);
-  window.addEventListener("keydown", onActivity);
-  window.addEventListener("touchstart", onActivity);
-  window.addEventListener("scroll", onActivity, { passive: true });
-}
-
 export function SessionTimeoutGuard() {
   const { isAuthenticated, clearAuth } = useAuthStore();
   const router = useRouter();
@@ -40,8 +23,8 @@ export function SessionTimeoutGuard() {
   const logoutTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const scheduleWarning = useCallback(() => {
-    clearTimeout(idleTimerRef.current!);
-    clearTimeout(logoutTimerRef.current!);
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
     idleTimerRef.current = setTimeout(() => setShowWarning(true), IDLE_TIMEOUT_MS);
     logoutTimerRef.current = setTimeout(() => {
       clearAuth();
@@ -50,20 +33,27 @@ export function SessionTimeoutGuard() {
     setShowWarning(false);
   }, [clearAuth, router]);
 
-  const handleActivity = useCallback(() => {
-    scheduleWarning();
-  }, [scheduleWarning]);
-
   useEffect(() => {
     if (!isAuthenticated()) return;
     scheduleWarning();
-    setupIdleTimer(handleActivity);
+
+    function onActivity() { scheduleWarning(); }
+    window.addEventListener("mousemove", onActivity);
+    window.addEventListener("mousedown", onActivity);
+    window.addEventListener("keydown", onActivity);
+    window.addEventListener("touchstart", onActivity);
+    window.addEventListener("scroll", onActivity, { passive: true });
+
     return () => {
-      resetIdleTimer(handleActivity);
-      clearTimeout(idleTimerRef.current!);
-      clearTimeout(logoutTimerRef.current!);
+      window.removeEventListener("mousemove", onActivity);
+      window.removeEventListener("mousedown", onActivity);
+      window.removeEventListener("keydown", onActivity);
+      window.removeEventListener("touchstart", onActivity);
+      window.removeEventListener("scroll", onActivity);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (logoutTimerRef.current) clearTimeout(logoutTimerRef.current);
     };
-  }, [isAuthenticated, scheduleWarning, handleActivity]);
+  }, [isAuthenticated, scheduleWarning]);
 
   return (
     <Dialog open={showWarning} onOpenChange={() => {}}>

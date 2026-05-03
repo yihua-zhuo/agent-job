@@ -153,6 +153,7 @@ function CustomerRow({
   onDelete,
   widths,
   hiddenCols,
+  onRowClick,
 }: {
   c: CustomerRowData;
   onNavigate: (id: number) => void;
@@ -161,13 +162,15 @@ function CustomerRow({
   onDelete: (c: CustomerRowData) => void;
   widths: Record<string, number>;
   hiddenCols: Set<string>;
+  onRowClick?: () => void;
 }) {
   return (
     <tr
       className={cn(
-        "border-b hover:bg-muted/40 transition-colors group",
+        "border-b hover:bg-muted/40 transition-colors group cursor-pointer",
         selected && "bg-primary/5"
       )}
+      onClick={onRowClick}
     >
       <td scope="row" className="px-3 py-2.5 w-10">
         <input
@@ -328,10 +331,6 @@ function CustomersPageInner() {
     setDebouncedKeyword("");
     setPage(1);
   }, []);
-
-  useEffect(() => {
-    pushParams({ q: debouncedKeyword || null, page: page > 1 ? String(page) : null });
-  }, [page, debouncedKeyword]);
 
   // Escape key clears search when search input is focused
   useEffect(() => {
@@ -749,21 +748,17 @@ function CustomersPageInner() {
               </tr>
             )}
             {sorted.map((c) => (
-              <tr
+              <CustomerRow
                 key={c.id}
-                className="border-b hover:bg-muted/40 transition-colors group"
-                onClick={() => navigateToCustomer(c.id)}
-              >
-                <CustomerRow
-                  c={c}
-                  onNavigate={navigateToCustomer}
-                  selected={selectedIds.has(c.id)}
-                  onToggle={toggleSelect}
-                  onDelete={openDelete}
-                  widths={widths}
-                  hiddenCols={hiddenCols}
-                />
-              </tr>
+                c={c}
+                onNavigate={navigateToCustomer}
+                selected={selectedIds.has(c.id)}
+                onToggle={toggleSelect}
+                onDelete={openDelete}
+                widths={widths}
+                hiddenCols={hiddenCols}
+                onRowClick={() => navigateToCustomer(c.id)}
+              />
             ))}
           </tbody>
         </table>
@@ -884,8 +879,11 @@ function CustomersPageInner() {
               variant="destructive"
               onClick={async () => {
                 const ids = Array.from(selectedIds);
-                await Promise.allSettled(ids.map((id) => deleteCustomer.mutateAsync(id)));
-                toast.success(`${ids.length} customers deleted`);
+                const results = await Promise.allSettled(ids.map((id) => deleteCustomer.mutateAsync(id)));
+                const failed = results.filter((r) => r.status === "rejected").length;
+                const succeeded = results.filter((r) => r.status === "fulfilled").length;
+                if (failed === 0) toast.success(`${succeeded} customers deleted`);
+                else toast.error(`${succeeded} deleted, ${failed} failed`);
                 setSelectedIds(new Set());
                 setBulkDeleteOpen(false);
               }}
