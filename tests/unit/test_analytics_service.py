@@ -4,8 +4,8 @@ from services.analytics_service import AnalyticsService
 
 
 @pytest.fixture
-def analytics_service():
-    return AnalyticsService()
+def analytics_service(mock_db_session):
+    return AnalyticsService(mock_db_session)
 
 
 @pytest.mark.asyncio

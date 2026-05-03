@@ -4,13 +4,13 @@ from services.marketing_service import MarketingService
 
 
 @pytest.fixture
-def marketing_service():
-    return MarketingService()
+def marketing_service(mock_db_session):
+    return MarketingService(mock_db_session)
 
 
 @pytest.fixture
 async def sample_campaign():
-    svc = MarketingService()
+    svc = MarketingService(mock_db_session)
     result = await svc.create_campaign(
         name="Test Campaign",
         campaign_type="email",

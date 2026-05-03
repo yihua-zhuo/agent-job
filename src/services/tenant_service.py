@@ -8,106 +8,99 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.response import ApiResponse, PaginatedData
 
-from db.connection import get_db_session
 
 
 class TenantService:
     """租户管理服务"""
 
     def __init__(self, session: AsyncSession = None):
-        self._session_context = None
-        if session is None:
-            context = get_db_session()
-            try:
-                session = context.__enter__()
-                self._session_context = context
-            except (AttributeError, TypeError):
-                # sync __enter__ not supported — leave session=None
-                # (async context callers must pass session explicitly)
-                session = None
-                self._session_context = None
-        else:
-            self._session_context = None
         self.session = session
+        if session is not None:
+            self._require_session()
+
+    def _require_session(self):
+        if self.session is None:
+            raise TypeError(
+                f"{self.__class__.__name__} requires an injected AsyncSession; "
+                "construct with XxxService(async_session)."
+            )
 
     async def create_tenant(self, name: str, plan: str, admin_email: str = None, **kwargs) -> ApiResponse[Dict]:
         """创建租户（公司）"""
-        async with self.session:
-            now = datetime.now(UTC)
-            settings = kwargs.get("settings", {})
-            settings_json = json.dumps(settings) if isinstance(settings, dict) else settings
-            result = await self.session.execute(
-                text(
-                    """
-                    INSERT INTO tenants (name, plan, status, settings, created_at, updated_at)
-                    VALUES (:name, :plan, 'active', :settings, :now, :now)
-                    RETURNING id, name, plan, status, settings, created_at, updated_at
-                    """
-                ),
-                {
-                    "name": name,
-                    "plan": plan,
-                    "settings": settings_json,
-                    "now": now,
-                },
-            )
-            await self.session.commit()
-            row = result.fetchone()
-            tenant = self._row_to_dict(row)
-            return ApiResponse.success(data=tenant, message="租户创建成功")
+
+        now = datetime.now(UTC)
+        settings = kwargs.get("settings", {})
+        settings_json = json.dumps(settings) if isinstance(settings, dict) else settings
+        result = await self.session.execute(
+            text(
+                """
+                INSERT INTO tenants (name, plan, status, settings, created_at, updated_at)
+                VALUES (:name, :plan, 'active', :settings, :now, :now)
+                RETURNING id, name, plan, status, settings, created_at, updated_at
+                """
+            ),
+            {
+                "name": name,
+                "plan": plan,
+                "settings": settings_json,
+                "now": now,
+            },
+        )
+        row = result.fetchone()
+        tenant = self._row_to_dict(row)
+        return ApiResponse.success(data=tenant, message="租户创建成功")
 
     async def get_tenant(self, tenant_id: int) -> ApiResponse[Dict]:
         """获取租户详情"""
-        async with self.session:
-            result = await self.session.execute(
-                text(
-                    """
-                    SELECT id, name, plan, status, settings, created_at, updated_at
-                    FROM tenants
-                    WHERE id = :tenant_id
-                    LIMIT 1
-                    """
-                ),
-                {"tenant_id": tenant_id},
-            )
-            row = result.fetchone()
-            if row is None:
-                return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
-            return ApiResponse.success(data=self._row_to_dict(row))
+
+        result = await self.session.execute(
+            text(
+                """
+                SELECT id, name, plan, status, settings, created_at, updated_at
+                FROM tenants
+                WHERE id = :tenant_id
+                LIMIT 1
+                """
+            ),
+            {"tenant_id": tenant_id},
+        )
+        row = result.fetchone()
+        if row is None:
+            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
+        return ApiResponse.success(data=self._row_to_dict(row))
 
     async def update_tenant(self, tenant_id: int, **kwargs) -> ApiResponse[Dict]:
         """更新租户信息"""
-        async with self.session:
-            set_clauses = []
-            params: Dict = {"tenant_id": tenant_id}
-            allowed_fields = {"name", "plan", "status"}
-            for key, value in kwargs.items():
-                if key in allowed_fields:
-                    set_clauses.append(f"{key} = :{key}")
-                    params[key] = value
-            if "settings" in kwargs:
-                settings_val = kwargs["settings"]
-                settings_json = json.dumps(settings_val) if isinstance(settings_val, dict) else settings_val
-                set_clauses.append("settings = :settings")
-                params["settings"] = settings_json
 
-            if not set_clauses:
-                return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
+        set_clauses = []
+        params: Dict = {"tenant_id": tenant_id}
+        allowed_fields = {"name", "plan", "status"}
+        for key, value in kwargs.items():
+            if key in allowed_fields:
+                set_clauses.append(f"{key} = :{key}")
+                params[key] = value
+        if "settings" in kwargs:
+            settings_val = kwargs["settings"]
+            settings_json = json.dumps(settings_val) if isinstance(settings_val, dict) else settings_val
+            set_clauses.append("settings = :settings")
+            params["settings"] = settings_json
 
-            set_clauses.append("updated_at = :now")
-            params["now"] = datetime.now(UTC)
+        if not set_clauses:
+            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
 
-            sql = text(
-                f"UPDATE tenants SET {', '.join(set_clauses)} "
-                f"WHERE id = :tenant_id "
-                f"RETURNING id, name, plan, status, settings, created_at, updated_at"
-            )
-            result = await self.session.execute(sql, params)
-            await self.session.commit()
-            row = result.fetchone()
-            if row is None:
-                return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
-            return ApiResponse.success(data=self._row_to_dict(row), message="租户信息更新成功")
+        set_clauses.append("updated_at = :now")
+        params["now"] = datetime.now(UTC)
+
+        sql = text(
+            f"UPDATE tenants SET {', '.join(set_clauses)} "
+            f"WHERE id = :tenant_id "
+            f"RETURNING id, name, plan, status, settings, created_at, updated_at"
+        )
+        result = await self.session.execute(sql, params)
+        row = result.fetchone()
+        if row is None:
+            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
+        return ApiResponse.success(data=self._row_to_dict(row), message="租户信息更新成功")
 
     async def list_tenants(
         self,
@@ -116,64 +109,63 @@ class TenantService:
         status: Optional[str] = None,
     ) -> ApiResponse[PaginatedData[Dict]]:
         """租户列表"""
-        async with self.session:
+
             # Count total
-            count_sql = text("SELECT COUNT(*) FROM tenants")
-            count_params: Dict = {}
-            if status:
-                count_sql = text("SELECT COUNT(*) FROM tenants WHERE status = :status")
-                count_params = {"status": status}
-            total_result = await self.session.execute(count_sql, count_params)
-            total = total_result.fetchone()[0]
+        count_sql = text("SELECT COUNT(*) FROM tenants")
+        count_params: Dict = {}
+        if status:
+            count_sql = text("SELECT COUNT(*) FROM tenants WHERE status = :status")
+            count_params = {"status": status}
+        total_result = await self.session.execute(count_sql, count_params)
+        total = total_result.fetchone()[0]
 
             # Fetch page
-            offset = (page - 1) * page_size
-            fetch_sql = text(
-                """
-                SELECT id, name, plan, status, settings, created_at, updated_at
-                FROM tenants
-                """
-                + ("WHERE status = :status" if status else "")
-                + """
-                ORDER BY created_at DESC
-                LIMIT :limit OFFSET :offset
-                """
-            )
-            fetch_params: Dict = {}
-            if status:
-                fetch_params["status"] = status
-            fetch_params["limit"] = page_size
-            fetch_params["offset"] = offset
-            rows = await self.session.execute(fetch_sql, fetch_params)
-            items = [self._row_to_dict(r) for r in rows.fetchall()]
-            return ApiResponse.paginated(
-                items=items,
-                total=total,
-                page=page,
-                page_size=page_size,
-                message="查询成功",
-            )
+        offset = (page - 1) * page_size
+        fetch_sql = text(
+            """
+            SELECT id, name, plan, status, settings, created_at, updated_at
+            FROM tenants
+            """
+            + ("WHERE status = :status" if status else "")
+            + """
+            ORDER BY created_at DESC
+            LIMIT :limit OFFSET :offset
+            """
+        )
+        fetch_params: Dict = {}
+        if status:
+            fetch_params["status"] = status
+        fetch_params["limit"] = page_size
+        fetch_params["offset"] = offset
+        rows = await self.session.execute(fetch_sql, fetch_params)
+        items = [self._row_to_dict(r) for r in rows.fetchall()]
+        return ApiResponse.paginated(
+            items=items,
+            total=total,
+            page=page,
+            page_size=page_size,
+            message="查询成功",
+        )
 
     async def delete_tenant(self, tenant_id: int) -> ApiResponse[Dict]:
         """删除租户（软删除）"""
-        async with self.session:
-            now = datetime.now(UTC)
-            result = await self.session.execute(
-                text(
-                    """
-                    UPDATE tenants
-                    SET status = 'deleted', updated_at = :now
-                    WHERE id = :tenant_id AND status != 'deleted'
-                    RETURNING id, name, plan, status, settings, created_at, updated_at
-                    """
-                ),
-                {"tenant_id": tenant_id, "now": now},
-            )
-            await self.session.commit()
-            row = result.fetchone()
-            if row is None:
-                return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
-            return ApiResponse.success(data={"id": row[0], "name": row[1], "plan": row[2], "status": row[3], "settings": row[4], "created_at": row[5].isoformat() if row[5] else None, "updated_at": row[6].isoformat() if row[6] else None}, message="租户已删除")
+
+        now = datetime.now(UTC)
+        result = await self.session.execute(
+            text(
+                """
+                UPDATE tenants
+                SET status = 'deleted', updated_at = :now
+                WHERE id = :tenant_id AND status != 'deleted'
+                RETURNING id, name, plan, status, settings, created_at, updated_at
+                """
+            ),
+            {"tenant_id": tenant_id, "now": now},
+        )
+        row = result.fetchone()
+        if row is None:
+            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
+        return ApiResponse.success(data={"id": row[0], "name": row[1], "plan": row[2], "status": row[3], "settings": row[4], "created_at": row[5].isoformat() if row[5] else None, "updated_at": row[6].isoformat() if row[6] else None}, message="租户已删除")
 
     async def get_tenant_stats(self, tenant_id: int) -> ApiResponse[Dict]:
         """获取租户统计信息"""
@@ -181,29 +173,28 @@ class TenantService:
 
     async def get_tenant_usage(self, tenant_id: int) -> ApiResponse[Dict]:
         """获取租户使用量统计（用户数、存储量、API调用量）"""
-        async with self.session:
             # Check tenant exists
-            tenant_result = await self.session.execute(
-                text("SELECT id FROM tenants WHERE id = :tenant_id LIMIT 1"),
-                {"tenant_id": tenant_id},
-            )
-            if tenant_result.fetchone() is None:
-                return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
+        tenant_result = await self.session.execute(
+            text("SELECT id FROM tenants WHERE id = :tenant_id LIMIT 1"),
+            {"tenant_id": tenant_id},
+        )
+        if tenant_result.fetchone() is None:
+            return ApiResponse.error(message=f"Tenant {tenant_id} not found", code=1404)
 
             # Count users under this tenant
-            user_count_result = await self.session.execute(
-                text("SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id"),
-                {"tenant_id": tenant_id},
-            )
-            user_count = user_count_result.fetchone()[0]
+        user_count_result = await self.session.execute(
+            text("SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id"),
+            {"tenant_id": tenant_id},
+        )
+        user_count = user_count_result.fetchone()[0]
 
-            usage = {
-                "tenant_id": tenant_id,
-                "user_count": user_count,
-                "storage_used": 0,
-                "api_calls": 0,
-            }
-            return ApiResponse.success(data=usage)
+        usage = {
+            "tenant_id": tenant_id,
+            "user_count": user_count,
+            "storage_used": 0,
+            "api_calls": 0,
+        }
+        return ApiResponse.success(data=usage)
 
     def _row_to_dict(self, row) -> Dict:
         """Map a tenants row to a dict."""

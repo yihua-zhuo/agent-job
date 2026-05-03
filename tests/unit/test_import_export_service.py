@@ -5,12 +5,12 @@ from services.import_export_service import ImportExportService
 
 
 @pytest.fixture
-def import_export_service():
-    return ImportExportService()
+def import_export_service(mock_db_session):
+    return ImportExportService(mock_db_session)
 
 
 @pytest.fixture
-def sample_customer_data():
+def sample_customer_data(mock_db_session):
     return [
         {"name": "Zhang San", "email": "zhangsan@example.com", "phone": "13800138000", "company": "Company A"},
         {"name": "Li Si", "email": "lisi@example.com", "phone": "13900139000", "company": "Company B"},
@@ -18,7 +18,7 @@ def sample_customer_data():
 
 
 @pytest.fixture
-def sample_opportunity_data():
+def sample_opportunity_data(mock_db_session):
     return [
         {"name": "Project A", "customer_id": 1, "amount": 100000, "stage": "proposal"},
         {"name": "Project B", "customer_id": 2, "amount": 200000, "stage": "negotiation"},
@@ -26,7 +26,7 @@ def sample_opportunity_data():
 
 
 @pytest.fixture
-def sample_lead_data():
+def sample_lead_data(mock_db_session):
     return [
         {"name": "Wang Wu", "email": "wangwu@example.com", "source": "website"},
         {"name": "Zhao Liu", "email": "zhaoliu@example.com", "source": "event"},
