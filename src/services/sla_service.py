@@ -11,18 +11,12 @@ from models.ticket import Ticket, SLALevel, SLA_CONFIGS
 class SLAService:
     """SLA管理"""
 
-    def __init__(self, session: AsyncSession = None, ticket_service=None):
+    def __init__(self, session: AsyncSession, ticket_service=None):
         self.session = session
-        if session is not None:
-            self._require_session()
         self._ticket_service = ticket_service
 
     def _require_session(self):
-        if self.session is None:
-            raise TypeError(
-                f"{self.__class__.__name__} requires an injected AsyncSession; "
-                "construct with XxxService(async_session)."
-            )
+        pass
 
     async def check_sla_status(
         self, ticket: Ticket

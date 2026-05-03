@@ -172,6 +172,7 @@ class TestTenantService:
         """Mock execute returning count and rows sequentially."""
         count_result = MagicMock()
         count_result.fetchone = MagicMock(return_value=(2,))
+        count_result.scalar_one = MagicMock(return_value=2)
         rows_result = MagicMock()
         rows_result.fetchall = MagicMock(return_value=[])
 
@@ -209,6 +210,7 @@ class TestTenantService:
         tenant_result.fetchone = MagicMock(return_value=(1,))
         user_count_result = MagicMock()
         user_count_result.fetchone = MagicMock(return_value=(7,))
+        user_count_result.scalar_one = MagicMock(return_value=7)
 
         mock_session = AsyncMock()
         mock_session.__aenter__ = AsyncMock(return_value=mock_session)

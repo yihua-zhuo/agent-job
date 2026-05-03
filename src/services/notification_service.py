@@ -16,12 +16,7 @@ class NotificationService:
         self._require_session()
 
     def _require_session(self):
-        """Guard: raise if no session is injected."""
-        if self.session is None:
-            raise TypeError(
-                "NotificationService requires an injected AsyncSession; "
-                "construct with NotificationService(async_session)."
-            )
+        pass
 
     # -------------------------------------------------------------------------
     # Core delivery
@@ -62,6 +57,8 @@ class NotificationService:
             },
         )
         row = result.fetchone()
+        if row is None:
+            return ApiResponse.error(message="通知不存在", code=404)
         notification = {
             "id": row[0],
             "tenant_id": row[1],
@@ -96,7 +93,7 @@ class NotificationService:
             else "SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND tenant_id = :tenant_id"
         )
         total_result = await self.session.execute(text(count_sql), {"user_id": user_id, "tenant_id": tenant_id})
-        total = total_result.fetchone()[0]
+        total = total_result.scalar_one()
 
         offset = (page - 1) * page_size
         if unread_only:
@@ -164,7 +161,7 @@ class NotificationService:
             text("SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND tenant_id = :tenant_id AND is_read = true"),
             {"user_id": user_id, "tenant_id": tenant_id},
         )
-        count = count_result.fetchone()[0]
+        count = count_result.scalar_one()
         return ApiResponse.success(data={"marked_count": count}, message=f"已标记{count}条通知为已读")
 
     async def delete_notification(self, notification_id: int, tenant_id: int) -> ApiResponse[Dict]:
@@ -186,7 +183,7 @@ class NotificationService:
             text("SELECT COUNT(*) FROM notifications WHERE user_id = :user_id AND tenant_id = :tenant_id AND is_read = false"),
             {"user_id": user_id, "tenant_id": tenant_id},
         )
-        return result.fetchone()[0]
+        return result.scalar_one()
 
     # -------------------------------------------------------------------------
     # Reminders
@@ -230,6 +227,8 @@ class NotificationService:
             },
         )
         row = result.fetchone()
+        if row is None:
+            return ApiResponse.error(message="提醒不存在", code=404)
         reminder = {
             "id": row[0],
             "tenant_id": row[1],

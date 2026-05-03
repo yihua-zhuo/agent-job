@@ -290,7 +290,7 @@ class TestTenantStatsEndpoint:
         svc.get_tenant_stats = AsyncMock(
             return_value=_make_service_response(data=stats_data)
         )
-        resp = client.get("/api/v1/tenants/1/stats")
+        resp = client.get("/api/v1/tenants/stats")
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["tenant_id"] == 1
@@ -323,7 +323,7 @@ class TestTenantUsageEndpoint:
         svc.get_tenant_usage = AsyncMock(
             return_value=_make_service_response(data=usage_data)
         )
-        resp = client.get("/api/v1/tenants/1/usage")
+        resp = client.get("/api/v1/tenants/usage")
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["api_calls"] == 2500

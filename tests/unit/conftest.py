@@ -115,7 +115,11 @@ class MockResult:
         return self._rows[0] if self._rows else None
 
     def scalar_one(self):
-        return self._rows[0]
+        first = self._rows[0] if self._rows else None
+        # Support list/tuple row (from COUNT queries — scalar_one returns the scalar, not the row)
+        if isinstance(first, (list, tuple)):
+            return first[0]
+        return first
 
     # sync: for scalar()
     def scalar(self):

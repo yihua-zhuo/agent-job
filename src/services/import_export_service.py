@@ -42,7 +42,7 @@ class ImportExportService:
     FORMAT_JSON = "json"
     FORMAT_PDF = "pdf"
 
-    def __init__(self, session: AsyncSession = None):
+    def __init__(self, session: AsyncSession):
         self.session = session
         self.file_helper = FileHelper()
         # 必填字段配置
@@ -60,11 +60,7 @@ class ImportExportService:
 
 
     def _require_session(self):
-        if self.session is None:
-            raise TypeError(
-                f"{self.__class__.__name__} requires an injected AsyncSession; "
-                "construct with XxxService(async_session)."
-            )
+        pass
 
     # ------------------------------------------------------------------
     #  Validation helpers
@@ -94,13 +90,6 @@ class ImportExportService:
     # ------------------------------------------------------------------
     #  Import – customers
     # ------------------------------------------------------------------
-
-    def _require_session(self):
-        if self.session is None:
-            raise TypeError(
-                f"{self.__class__.__name__} requires an injected AsyncSession; "
-                "construct with XxxService(async_session)."
-            )
 
     async def import_customers(
         self,

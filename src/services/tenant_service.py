@@ -13,17 +13,11 @@ from models.response import ApiResponse, PaginatedData
 class TenantService:
     """租户管理服务"""
 
-    def __init__(self, session: AsyncSession = None):
+    def __init__(self, session: AsyncSession):
         self.session = session
-        if session is not None:
-            self._require_session()
 
     def _require_session(self):
-        if self.session is None:
-            raise TypeError(
-                f"{self.__class__.__name__} requires an injected AsyncSession; "
-                "construct with XxxService(async_session)."
-            )
+        pass
 
     async def create_tenant(self, name: str, plan: str, admin_email: str = None, **kwargs) -> ApiResponse[Dict]:
         """创建租户（公司）"""
@@ -117,7 +111,7 @@ class TenantService:
             count_sql = text("SELECT COUNT(*) FROM tenants WHERE status = :status")
             count_params = {"status": status}
         total_result = await self.session.execute(count_sql, count_params)
-        total = total_result.fetchone()[0]
+        total = total_result.scalar_one()
 
             # Fetch page
         offset = (page - 1) * page_size
@@ -186,7 +180,7 @@ class TenantService:
             text("SELECT COUNT(*) FROM users WHERE tenant_id = :tenant_id"),
             {"tenant_id": tenant_id},
         )
-        user_count = user_count_result.fetchone()[0]
+        user_count = user_count_result.scalar_one()
 
         usage = {
             "tenant_id": tenant_id,

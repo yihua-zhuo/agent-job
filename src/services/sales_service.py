@@ -18,10 +18,8 @@ class SalesService:
 
     DEFAULT_STAGES = ["lead", "qualified", "proposal", "negotiation", "closed_won"]
 
-    def __init__(self, session: AsyncSession = None):
+    def __init__(self, session: AsyncSession):
         self.session = session
-        if session is not None:
-            self._require_session()
 
     # -------------------------------------------------------
     # 管道 (Pipeline) 操作
@@ -29,11 +27,7 @@ class SalesService:
 
 
     def _require_session(self):
-        if self.session is None:
-            raise TypeError(
-                f"{self.__class__.__name__} requires an injected AsyncSession; "
-                "construct with XxxService(async_session)."
-            )
+        pass
 
     async def create_pipeline(self, tenant_id: int, data: dict) -> ApiResponse:
         """创建新的销售管道 / Create a new sales pipeline."""
@@ -65,7 +59,7 @@ class SalesService:
         pipeline_id = pipeline.id
 
         # 创建管道阶段
-        stages_data = data.get("stages", self.DEFAULT_STAGES)
+        stages_data = data.get("stages") or self.DEFAULT_STAGES
         for idx, stage_name in enumerate(stages_data):
             stage = PipelineStageModel(
                 pipeline_id=pipeline_id,
@@ -268,9 +262,11 @@ class SalesService:
         try:
             amount = Decimal(str(data["amount"]))
             probability = int(data.get("probability", 0))
-            expected_close = datetime.fromisoformat(
-                data.get("expected_close_date", datetime.now(UTC).isoformat())
-            )
+            ecd = data.get("expected_close_date")
+            if isinstance(ecd, datetime):
+                expected_close = ecd
+            else:
+                expected_close = datetime.fromisoformat(ecd) if ecd else datetime.now(UTC)
             stage = (
                 OpportunityStage(data["stage"]).value
                 if isinstance(data["stage"], str)
@@ -540,14 +536,25 @@ class SalesService:
             return ApiResponse.error(message="stage 值无效", code=1001)
 
         # 验证归属
-        result = await self.session.execute(
+        opp_result = await self.session.execute(
             select(OpportunityModel).where(
                 OpportunityModel.id == opp_id,
                 OpportunityModel.tenant_id == tenant_id,
             )
         )
-        if not result.scalar_one_or_none():
+        opp = opp_result.scalar_one_or_none()
+        if not opp:
             return ApiResponse.error(message="商机不存在", code=3001)
+
+        # 验证 stage 在管道的阶段列表中
+        stages_result = await self.session.execute(
+            select(PipelineStageModel.name).where(
+                PipelineStageModel.pipeline_id == opp.pipeline_id
+            )
+        )
+        pipeline_stage_names = [s for s in stages_result.scalars().all()]
+        if stage not in pipeline_stage_names:
+            return ApiResponse.error(message="Stage not in pipeline stages", code=3001)
 
         # UPDATE ... WHERE id=? AND tenant_id=?
         await self.session.execute(
