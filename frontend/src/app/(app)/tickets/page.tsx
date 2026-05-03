@@ -39,6 +39,15 @@ const STATUS_COLORS: Record<string, string> = {
 type SortKey = "id" | "subject" | "status" | "priority" | "channel" | "created_at";
 type SortDir = "asc" | "desc";
 
+function SortIconStatic({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey | null; sortDir: SortDir }) {
+  if (sortKey !== col) {
+    return <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity inline ml-1" />;
+  }
+  return sortDir === "asc"
+    ? <ChevronUp className="h-3 w-3 opacity-100 inline ml-1 text-primary" />
+    : <ChevronDown className="h-3 w-3 opacity-100 inline ml-1 text-primary" />;
+}
+
 interface TicketRowData {
   id: number;
   subject: string;
@@ -229,15 +238,6 @@ export default function TicketsPage() {
     }
   }
 
-  function SortIcon({ col }: { col: SortKey }) {
-    if (sortKey !== col) {
-      return <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity inline ml-1" />;
-    }
-    return sortDir === "asc"
-      ? <ChevronUp className="h-3 w-3 opacity-100 inline ml-1 text-primary" />
-      : <ChevronDown className="h-3 w-3 opacity-100 inline ml-1 text-primary" />;
-  }
-
   function toggleSelect(id: number) {
     setSelectedIds((prev) => {
       const next = new Set(prev);
@@ -315,37 +315,37 @@ export default function TicketsPage() {
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("id")}
               >
-                ID<SortIcon col="id" />
+                ID<SortIconStatic col="id" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("subject")}
               >
-                Subject<SortIcon col="subject" />
+                Subject<SortIconStatic col="subject" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("status")}
               >
-                Status<SortIcon col="status" />
+                Status<SortIconStatic col="status" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("priority")}
               >
-                Priority<SortIcon col="priority" />
+                Priority<SortIconStatic col="priority" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("channel")}
               >
-                Channel<SortIcon col="channel" />
+                Channel<SortIconStatic col="channel" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th
                 className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
                 onClick={() => handleSort("created_at")}
               >
-                Created<SortIcon col="created_at" />
+                Created<SortIconStatic col="created_at" sortKey={sortKey} sortDir={sortDir} />
               </th>
               <th className="px-3 py-2.5 w-10" />
             </tr>

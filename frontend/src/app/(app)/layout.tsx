@@ -13,27 +13,24 @@ const STORAGE_KEY = "crm_sidebar_collapsed";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return localStorage.getItem(STORAGE_KEY) === "true"; } catch { return false; }
+  });
   const pathname = usePathname();
 
-  useEffect(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (stored !== null) setCollapsed(stored === "true");
-    } catch {}
-  }, []);
-
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: synchronizing sidebar open state with pathname change */
   useEffect(() => {
     setSidebarOpen(false);
   }, [pathname]);
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   function toggleSidebar() {
-    setCollapsed((c) => {
-      const next = !c;
-      try { localStorage.setItem(STORAGE_KEY, String(next)); } catch {}
-      return next;
-    });
+    setCollapsed((c) => !c);
   }
+
+  useEffect(() => {
+    try { localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch {}
+  }, [collapsed]);
 
   return (
     <AuthGuard>

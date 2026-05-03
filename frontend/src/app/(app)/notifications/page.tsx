@@ -2,7 +2,6 @@
 import { useState } from "react";
 import { useNotifications, useMarkAllNotificationsRead, useMarkNotificationRead } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
 const TYPE_COLORS: Record<string, string> = {
   info: "bg-blue-100 text-blue-800",

@@ -29,6 +29,10 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
 
+function SortIconStatic() {
+  return <span className="text-muted-foreground">↕</span>;
+}
+
 export default function TaskListPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
@@ -81,11 +85,6 @@ export default function TaskListPage() {
     }
   }
 
-  function SortIcon({ k }: { k: SortKey }) {
-    if (sortKey !== k) return <span className="text-muted-foreground">↕</span>;
-    return <span>{sortDir === "asc" ? "↑" : "↓"}</span>;
-  }
-
   const displayed = filteredAndSorted();
 
   return (
@@ -127,10 +126,10 @@ export default function TaskListPage() {
               <th className="px-3 py-2.5 text-left font-semibold">Status</th>
               <th className="px-3 py-2.5 text-left font-semibold">Priority</th>
               <th className="px-3 py-2.5 cursor-pointer text-left font-semibold select-none" onClick={() => toggleSort("due_date")}>
-                Due Date <SortIcon k="due_date" />
+                Due Date <SortIconStatic k="due_date" />
               </th>
               <th className="px-3 py-2.5 cursor-pointer text-left font-semibold select-none" onClick={() => toggleSort("created_at")}>
-                Created <SortIcon k="created_at" />
+                Created <SortIconStatic k="created_at" />
               </th>
             </tr>
           </thead>
