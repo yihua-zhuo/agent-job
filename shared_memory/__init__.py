@@ -190,6 +190,7 @@ def write_result(agent_id: str, result: dict) -> None:
         "updated_at": datetime.utcnow().isoformat() + "Z",
         **result,
     })
+    _sync_board_async()
 
 
 def read_result(agent_id: str) -> dict | None:
@@ -222,6 +223,7 @@ def write_report(task_id: str, report: dict) -> None:
         "generated_at": datetime.utcnow().isoformat() + "Z",
         **report,
     })
+    _sync_board_async()
 
 
 def read_report(task_id: str) -> dict | None:

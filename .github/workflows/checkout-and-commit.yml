@@ -1,0 +1,49 @@
+name: Checkout Source and Commit
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_branch:
+        description: "Source branch to checkout"
+        required: true
+        default: "master"
+      target_branch:
+        description: "Target branch to commit changes"
+        required: true
+        default: "developer"
+
+jobs:
+  checkout-and-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_branch }}
+          fetch-depth: 0
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Switch to target branch
+        run: |
+          git checkout ${{ inputs.target_branch }} || git checkout -b ${{ inputs.target_branch }}
+
+      - name: Merge source branch
+        run: |
+          git merge ${{ inputs.source_branch }} --no-edit || echo "No changes to merge"
+
+      - name: Commit changes if any
+        run: |
+          if git diff --stat | grep -q .; then
+            git add -A
+            git commit -m "chore: merge ${{ inputs.source_branch }} -> ${{ inputs.target_branch }}"
+          else
+            echo "No changes to commit"
+          fi
+
+      - name: Push to target branch
+        run: |
+          git push origin ${{ inputs.target_branch }} --force-with-lease
