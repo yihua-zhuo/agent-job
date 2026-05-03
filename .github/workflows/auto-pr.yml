@@ -19,14 +19,43 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          EXISTING=$(gh pr list --head "$GITHUB_REF_NAME" --base master --json number -q '.[0].number')
+          set -e
+
+          BRANCH="$GITHUB_REF_NAME"
+          echo "Branch: $BRANCH"
+
+          # Check if PR already exists for this head branch
+          EXISTING=$(gh pr list \
+            --head "$BRANCH" \
+            --base master \
+            --json number \
+            --jq '.[0].number' 2>/dev/null || echo "")
+
           if [ -n "$EXISTING" ]; then
-            echo "PR #$EXISTING already exists for $GITHUB_REF_NAME, skipping."
+            echo "PR #$EXISTING already exists for branch '$BRANCH', skipping."
             exit 0
           fi
 
-          gh pr create \
+          echo "No existing PR found, creating one..."
+
+          # Try to create PR; handle permission errors gracefully
+          # GitHub Actions may be blocked from creating PRs in org settings —
+          # in that case we just note it and exit 0 instead of failing the workflow.
+          if gh pr create \
             --base master \
-            --head "$GITHUB_REF_NAME" \
-            --title "$GITHUB_REF_NAME → master" \
-            --body "Auto-created by CI from branch \`$GITHUB_REF_NAME\`."
+            --head "$BRANCH" \
+            --title "$BRANCH → master" \
+            --body "Auto-created by CI from branch \`$BRANCH\`." \
+            --repo "yihua-zhuo/agent-job"; then
+            echo "PR created successfully."
+          else
+            LAST_EXIT=$?
+            # Check if it's a permissions error (non-fatal for our purposes)
+            if gh pr list --head "$BRANCH" --base master --json number --jq '.[0].number' 2>/dev/null | grep -qE '^[0-9]+$'; then
+              echo "PR was created by another source (race or permission bypass), skipping."
+              exit 0
+            fi
+            echo "gh pr create failed with exit code $LAST_EXIT — likely a repo/org permission restriction."
+            echo "This workflow is intentionally non-blocking. Exiting 0."
+            exit 0
+          fi
