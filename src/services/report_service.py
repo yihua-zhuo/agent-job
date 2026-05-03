@@ -85,8 +85,9 @@ def _build_pdf(title: str, headers: List[str], rows: List[List[str]]) -> bytes:
 class ReportService:
     """Report generation service supporting PDF, Excel, CSV and scheduled reports."""
 
-    def __init__(self, session: Optional[AsyncSession] = None):
-        self.session = session
+    def __init__(self, session: "AsyncSession" = None):
+        from db.connection import get_db_session
+        self.session = session or get_db_session()
 
     # -------------------------------------------------------------------------
     # Report config CRUD (stored in DB)

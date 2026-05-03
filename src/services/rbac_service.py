@@ -159,8 +159,14 @@ async def init_defaults(session: AsyncSession) -> None:
 class RBACService:
     """DB-backed RBAC service — roles, permissions, user assignments, permission checks."""
 
-    def __init__(self, session: Optional[AsyncSession] = None):
-        self.session = session
+    def __init__(self, session: "AsyncSession" = None):
+        from db.connection import get_db_session
+        self.session = session or get_db_session()
+
+    def _require_db(self):
+        """Ensure a real session is available before DB operations."""
+        if self.session is None:
+            raise RuntimeError("RBACService requires a session. Use RBACService(get_db_session()) or provide one explicitly.")
 
     # -------------------------------------------------------------------------
     # Role CRUD
@@ -416,9 +422,15 @@ class RBACService:
         perm_value = permission.value if isinstance(permission, Permission) else permission
         return perm_value in DEFAULT_ROLE_PERMISSIONS.get(role, [])
 
-    def get_role_permissions(self, role: str) -> List[str]:
-        """Get all permission value strings for a given role (from static map)."""
-        return list(DEFAULT_ROLE_PERMISSIONS.get(role, []))
+    def get_role_permissions(self, role: str) -> List[Permission]:
+        """Get all Permission instances for a given role (from static map)."""
+        perm_names = DEFAULT_ROLE_PERMISSIONS.get(role, [])
+        result: List[Permission] = []
+        for name in perm_names:
+            inst = Permission._registry_.get(name)
+            if inst:
+                result.append(inst)
+        return result
 
     def check_permission_by_value(self, role: str, permission_value: str) -> bool:
         """Sync check by string value."""
