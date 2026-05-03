@@ -1,7 +1,6 @@
 const API_BASE =
-  process.env.NODE_ENV === "production"
-    ? (process.env.NEXT_PUBLIC_API_BASE_URL ?? "https://agent-job-production.up.railway.app")
-    : (process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000");
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
+  (typeof window !== "undefined" ? window.location.origin : "http://localhost:8000");
 
 export class ApiError extends Error {
   constructor(
