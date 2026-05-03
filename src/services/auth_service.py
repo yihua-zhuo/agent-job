@@ -74,22 +74,21 @@ class AuthService:
             User dict if authentication succeeds, None otherwise.
         """
 
-        async with self.session:
-            result = await self.session.execute(
-                text(
-                    """
-                    SELECT id, tenant_id, username, email, password_hash, role,
-                           status, full_name, bio, created_at, updated_at
-                    FROM users
-                    WHERE username = :username
-                    LIMIT 1
-                    """
-                ),
-                {"username": username},
-            )
-            row = result.fetchone()
-            if row is None:
-                return None
+        result = await self.session.execute(
+            text(
+                """
+                SELECT id, tenant_id, username, email, password_hash, role,
+                       status, full_name, bio, created_at, updated_at
+                FROM users
+                WHERE username = :username
+                LIMIT 1
+                """
+            ),
+            {"username": username},
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
         if not self.verify_password(password, row[4]):
             return None
 
@@ -191,34 +190,33 @@ class AuthService:
         if not user_id:
             return None
 
-        async with self.session:
-            result = await self.session.execute(
-                text(
-                    """
-                    SELECT id, tenant_id, username, email, role, status,
-                           full_name, bio, created_at, updated_at
-                    FROM users
-                    WHERE id = :user_id
-                    LIMIT 1
-                    """
-                ),
-                {"user_id": user_id},
-            )
-            row = result.fetchone()
-            if row is None:
-                return None
-            return {
-                "id": row[0],
-                "tenant_id": row[1],
-                "username": row[2],
-                "email": row[3],
-                "role": row[4],
-                "status": row[5],
-                "full_name": row[6],
-                "bio": row[7],
-                "created_at": row[8].isoformat() if row[8] else None,
-                "updated_at": row[9].isoformat() if row[9] else None,
-            }
+        result = await self.session.execute(
+            text(
+                """
+                SELECT id, tenant_id, username, email, role, status,
+                       full_name, bio, created_at, updated_at
+                FROM users
+                WHERE id = :user_id
+                LIMIT 1
+                """
+            ),
+            {"user_id": user_id},
+        )
+        row = result.fetchone()
+        if row is None:
+            return None
+        return {
+            "id": row[0],
+            "tenant_id": row[1],
+            "username": row[2],
+            "email": row[3],
+            "role": row[4],
+            "status": row[5],
+            "full_name": row[6],
+            "bio": row[7],
+            "created_at": row[8].isoformat() if row[8] else None,
+            "updated_at": row[9].isoformat() if row[9] else None,
+        }
 
     async def refresh_token(self, old_token: str) -> Optional[str]:
         """Refresh an existing token with a new expiry time.
@@ -264,22 +262,20 @@ class AuthService:
 
         jti = payload.get("jti") or payload.get("sub")
         exp = payload.get("exp")
-        async with self.session:
-            await self.session.execute(
-                text(
-                    """
-                    INSERT INTO revoked_tokens (jti, revoked_at, expires_at)
-                    VALUES (:jti, :revoked_at, :exp)
-                    ON CONFLICT (jti) DO NOTHING
-                    """
-                ),
-                {
-                    "jti": str(jti),
-                    "revoked_at": datetime.now(UTC),
-                    "exp": datetime.utcfromtimestamp(exp) if exp else None,
-                },
-            )
-            await self.session.commit()
+        await self.session.execute(
+            text(
+                """
+                INSERT INTO revoked_tokens (jti, revoked_at, expires_at)
+                VALUES (:jti, :revoked_at, :exp)
+                ON CONFLICT (jti) DO NOTHING
+                """
+            ),
+            {
+                "jti": str(jti),
+                "revoked_at": datetime.now(UTC),
+                "exp": datetime.utcfromtimestamp(exp) if exp else None,
+            },
+        )
         return True
 
     @staticmethod

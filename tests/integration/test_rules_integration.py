@@ -470,9 +470,9 @@ class TestTriggerIntegration:
         return reg.data.id
 
     async def _seed_campaign(
-        self, tenant_id: int, created_by: int, trigger_type: TriggerType = None
+        self, tenant_id: int, created_by: int, trigger_type: TriggerType = None, async_session=None
     ):
-        marketing_svc = MarketingService()
+        marketing_svc = MarketingService(async_session)
         result = await marketing_svc.create_campaign(
             name=f"Trigger Test Campaign {uuid.uuid4().hex[:8]}",
             campaign_type=CampaignType.EMAIL,
@@ -487,9 +487,9 @@ class TestTriggerIntegration:
     async def test_check_triggers_user_register(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
         campaign = await self._seed_campaign(
-            tenant_id, uid, trigger_type=TriggerType.USER_REGISTER
+            tenant_id, uid, TriggerType.USER_REGISTER, async_session
         )
-        marketing_svc = MarketingService()
+        marketing_svc = MarketingService(async_session)
         trigger_svc = TriggerService(marketing_svc)
 
         triggered_ids = await trigger_svc.check_triggers(
@@ -499,7 +499,7 @@ class TestTriggerIntegration:
 
     async def test_check_triggers_unknown_event_returns_empty(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
-        marketing_svc = MarketingService()
+        marketing_svc = MarketingService(async_session)
         trigger_svc = TriggerService(marketing_svc)
 
         triggered_ids = await trigger_svc.check_triggers(
@@ -511,9 +511,9 @@ class TestTriggerIntegration:
         uid = await self._seed_user(tenant_id, async_session)
         # Campaign with different trigger type
         campaign = await self._seed_campaign(
-            tenant_id, uid, trigger_type=TriggerType.PURCHASE_MADE
+            tenant_id, uid, TriggerType.PURCHASE_MADE, async_session
         )
-        marketing_svc = MarketingService()
+        marketing_svc = MarketingService(async_session)
         trigger_svc = TriggerService(marketing_svc)
 
         triggered_ids = await trigger_svc.check_triggers(
@@ -528,9 +528,9 @@ class TestTriggerIntegration:
     async def test_execute_trigger_success(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
         campaign = await self._seed_campaign(
-            tenant_id, uid, trigger_type=TriggerType.USER_REGISTER
+            tenant_id, uid, TriggerType.USER_REGISTER, async_session
         )
-        marketing_svc = MarketingService()
+        marketing_svc = MarketingService(async_session)
         trigger_svc = TriggerService(marketing_svc)
 
         result = await trigger_svc.execute_trigger(campaign.id, [uid])
@@ -547,7 +547,7 @@ class TestTriggerIntegration:
 
     async def test_execute_trigger_campaign_not_found(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
-        marketing_svc = MarketingService()
+        marketing_svc = MarketingService(async_session)
         trigger_svc = TriggerService(marketing_svc)
 
         result = await trigger_svc.execute_trigger(99999, [uid])

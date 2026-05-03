@@ -142,7 +142,7 @@ class TestMarketingIntegration:
             tenant_id=tenant_id,
         )
         uid = user_reg.data.id
-        svc = MarketingService()
+        svc = MarketingService(async_session)
         result = await svc.create_campaign(
             name="Summer Sale 2026",
             campaign_type=CampaignType.EMAIL,
@@ -171,7 +171,7 @@ class TestMarketingIntegration:
             tenant_id=tenant_id,
         )
         uid = user_reg.data.id
-        svc = MarketingService()
+        svc = MarketingService(async_session)
         created = await svc.create_campaign(
             name="Launch Test",
             campaign_type=CampaignType.EMAIL,
@@ -201,7 +201,7 @@ class TestMarketingIntegration:
             tenant_id=tenant_id,
         )
         uid = user_reg.data.id
-        svc = MarketingService()
+        svc = MarketingService(async_session)
         created = await svc.create_campaign(
             name="Stats Test",
             campaign_type=CampaignType.EMAIL,
@@ -229,7 +229,7 @@ class TestMarketingIntegration:
             tenant_id=tenant_id,
         )
         uid = user_reg.data.id
-        svc = MarketingService()
+        svc = MarketingService(async_session)
         await svc.create_campaign(
             name=f"List Test A {suffix}",
             campaign_type="email",
@@ -276,7 +276,7 @@ class TestTaskIntegration:
 
     async def test_create_and_get_task(self, db_schema, tenant_id, async_session):
         from datetime import date
-        svc = TaskService()
+        svc = TaskService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.create_task(
             tenant_id=tenant_id,
@@ -295,7 +295,7 @@ class TestTaskIntegration:
         assert fetched["data"]["title"] == "Review PR #42"
 
     async def test_update_and_complete_task(self, db_schema, tenant_id, async_session):
-        svc = TaskService()
+        svc = TaskService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         created = await svc.create_task(
             tenant_id=tenant_id,
@@ -313,7 +313,7 @@ class TestTaskIntegration:
         assert completed["data"]["status"] == "completed"
 
     async def test_delete_task(self, db_schema, tenant_id, async_session):
-        svc = TaskService()
+        svc = TaskService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         created = await svc.create_task(tenant_id=tenant_id, title="To Delete", assigned_to=uid)
         tid = created["data"]["id"]
@@ -323,7 +323,7 @@ class TestTaskIntegration:
         assert fetched["data"] is None
 
     async def test_list_tasks(self, db_schema, tenant_id, async_session):
-        svc = TaskService()
+        svc = TaskService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
         await svc.create_task(tenant_id=tenant_id, title=f"List Task 1 {suffix}", assigned_to=uid)

@@ -73,67 +73,64 @@ class MarketingService:
         """创建营销活动"""
 
         now = datetime.now(UTC)
-        async with self.session:
-            stmt = text(
-                """
-                INSERT INTO campaigns (tenant_id, name, type, status, subject, content,
-                    target_audience, trigger_type, trigger_days, created_by,
-                    sent_count, open_count, click_count, created_at, updated_at)
-                VALUES (:tenant_id, :name, :type, :status, :subject, :content,
-                    :target_audience, :trigger_type, :trigger_days, :created_by,
-                    0, 0, 0, :now, :now)
-                RETURNING id, name, type, status, subject, content, target_audience,
-                          trigger_type, trigger_days, created_by,
-                          sent_count, open_count, click_count, created_at, updated_at
-                """
-            )
-            result = await self.session.execute(
-                stmt,
-                {
-                    "tenant_id": tenant_id,
-                    "name": name,
-                    "type": (
-                        campaign_type.value
-                        if hasattr(campaign_type, "value")
-                        else campaign_type
-                    ),
-                    "status": CampaignStatus.DRAFT.value,
-                    "subject": kwargs.get("subject"),
-                    "content": content,
-                    "target_audience": kwargs.get("target_audience", ""),
-                    "trigger_type": (
-                        kwargs["trigger_type"].value
-                        if isinstance(kwargs.get("trigger_type"), TriggerType)
-                        else kwargs.get("trigger_type")
-                    ),
-                    "trigger_days": kwargs.get("trigger_days"),
-                    "created_by": created_by,
-                    "now": now,
-                },
-            )
-            await self.session.commit()
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="创建营销活动失败", code=500)
-            return ApiResponse.success(data=_row_to_campaign(row), message="营销活动创建成功")
+        stmt = text(
+            """
+            INSERT INTO campaigns (tenant_id, name, type, status, subject, content,
+                target_audience, trigger_type, trigger_days, created_by,
+                sent_count, open_count, click_count, created_at, updated_at)
+            VALUES (:tenant_id, :name, :type, :status, :subject, :content,
+                :target_audience, :trigger_type, :trigger_days, :created_by,
+                0, 0, 0, :now, :now)
+            RETURNING id, name, type, status, subject, content, target_audience,
+                      trigger_type, trigger_days, created_by,
+                      sent_count, open_count, click_count, created_at, updated_at
+            """
+        )
+        result = await self.session.execute(
+            stmt,
+            {
+                "tenant_id": tenant_id,
+                "name": name,
+                "type": (
+                    campaign_type.value
+                    if hasattr(campaign_type, "value")
+                    else campaign_type
+                ),
+                "status": CampaignStatus.DRAFT.value,
+                "subject": kwargs.get("subject"),
+                "content": content,
+                "target_audience": kwargs.get("target_audience", ""),
+                "trigger_type": (
+                    kwargs["trigger_type"].value
+                    if isinstance(kwargs.get("trigger_type"), TriggerType)
+                    else kwargs.get("trigger_type")
+                ),
+                "trigger_days": kwargs.get("trigger_days"),
+                "created_by": created_by,
+                "now": now,
+            },
+        )
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="创建营销活动失败", code=500)
+        return ApiResponse.success(data=_row_to_campaign(row), message="营销活动创建成功")
 
     async def get_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """获取活动详情"""
 
-        async with self.session:
-            stmt = text(
-                """
-                SELECT id, name, type, status, subject, content, target_audience,
-                       trigger_type, trigger_days, created_by,
-                       sent_count, open_count, click_count, created_at, updated_at
-                FROM campaigns WHERE id = :id
-                """
-            )
-            result = await self.session.execute(stmt, {"id": campaign_id})
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="营销活动不存在", code=1404)
-            return ApiResponse.success(data=_row_to_campaign(row))
+        stmt = text(
+            """
+            SELECT id, name, type, status, subject, content, target_audience,
+                   trigger_type, trigger_days, created_by,
+                   sent_count, open_count, click_count, created_at, updated_at
+            FROM campaigns WHERE id = :id
+            """
+        )
+        result = await self.session.execute(stmt, {"id": campaign_id})
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="营销活动不存在", code=1404)
+        return ApiResponse.success(data=_row_to_campaign(row))
 
     async def update_campaign(
         self, campaign_id: int, tenant_id: int = 0, **kwargs
@@ -153,28 +150,26 @@ class MarketingService:
         if not updates:
             return await self.get_campaign(campaign_id, tenant_id)
 
-        async with self.session:
-            where = "id = :id"
-            if tenant_id > 0:
-                where += " AND tenant_id = :tenant_id"
-                params["tenant_id"] = tenant_id
+        where = "id = :id"
+        if tenant_id > 0:
+            where += " AND tenant_id = :tenant_id"
+            params["tenant_id"] = tenant_id
 
-            stmt = text(
-                f"""
-                UPDATE campaigns SET {', '.join(updates)}, updated_at = :now
-                WHERE {where}
-                RETURNING id, name, type, status, subject, content, target_audience,
-                          trigger_type, trigger_days, created_by,
-                          sent_count, open_count, click_count, created_at, updated_at
-                """
-            )
-            params["now"] = datetime.now(UTC)
-            result = await self.session.execute(stmt, params)
-            await self.session.commit()
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="营销活动不存在", code=1404)
-            return ApiResponse.success(data=_row_to_campaign(row), message="营销活动更新成功")
+        stmt = text(
+            f"""
+            UPDATE campaigns SET {', '.join(updates)}, updated_at = :now
+            WHERE {where}
+            RETURNING id, name, type, status, subject, content, target_audience,
+                      trigger_type, trigger_days, created_by,
+                      sent_count, open_count, click_count, created_at, updated_at
+            """
+        )
+        params["now"] = datetime.now(UTC)
+        result = await self.session.execute(stmt, params)
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="营销活动不存在", code=1404)
+        return ApiResponse.success(data=_row_to_campaign(row), message="营销活动更新成功")
 
     async def launch_campaign(self, campaign_id: int, tenant_id: int = 0) -> ApiResponse[Campaign]:
         """启动活动"""
@@ -189,28 +184,27 @@ class MarketingService:
     async def get_campaign_stats(self, campaign_id: int) -> ApiResponse[Dict[str, Any]]:
         """获取活动统计"""
 
-        async with self.session:
-            stmt = text(
-                "SELECT sent_count, open_count, click_count FROM campaigns WHERE id = :id"
-            )
-            result = await self.session.execute(stmt, {"id": campaign_id})
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="营销活动不存在", code=1404)
+        stmt = text(
+            "SELECT sent_count, open_count, click_count FROM campaigns WHERE id = :id"
+        )
+        result = await self.session.execute(stmt, {"id": campaign_id})
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="营销活动不存在", code=1404)
 
-            sent, opens, clicks = row
-            open_rate = (opens / sent * 100) if sent > 0 else 0.0
-            click_rate = (clicks / sent * 100) if sent > 0 else 0.0
-            return ApiResponse.success(
-                data={
-                    "campaign_id": campaign_id,
-                    "sent_count": sent,
-                    "open_count": opens,
-                    "click_count": clicks,
-                    "open_rate": round(open_rate, 2),
-                    "click_rate": round(click_rate, 2),
-                }
-            )
+        sent, opens, clicks = row
+        open_rate = (opens / sent * 100) if sent > 0 else 0.0
+        click_rate = (clicks / sent * 100) if sent > 0 else 0.0
+        return ApiResponse.success(
+            data={
+                "campaign_id": campaign_id,
+                "sent_count": sent,
+                "open_count": opens,
+                "click_count": clicks,
+                "open_rate": round(open_rate, 2),
+                "click_rate": round(click_rate, 2),
+            }
+        )
 
     async def list_campaigns(
         self,
@@ -222,42 +216,41 @@ class MarketingService:
     ) -> ApiResponse[PaginatedData[Campaign]]:
         """活动列表"""
 
-        async with self.session:
-            conditions: List[str] = []
-            params: Dict[str, Any] = {"offset": (page - 1) * page_size, "limit": page_size}
-            if tenant_id > 0:
-                conditions.append("tenant_id = :tenant_id")
-                params["tenant_id"] = tenant_id
-            if status:
-                conditions.append("status = :status")
-                params["status"] = status.value
-            if campaign_type:
-                conditions.append("type = :type")
-                params["type"] = campaign_type.value
+        conditions: List[str] = []
+        params: Dict[str, Any] = {"offset": (page - 1) * page_size, "limit": page_size}
+        if tenant_id > 0:
+            conditions.append("tenant_id = :tenant_id")
+            params["tenant_id"] = tenant_id
+        if status:
+            conditions.append("status = :status")
+            params["status"] = status.value
+        if campaign_type:
+            conditions.append("type = :type")
+            params["type"] = campaign_type.value
 
-            where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
+        where = f"WHERE {' AND '.join(conditions)}" if conditions else ""
 
-            count_stmt = text(f"SELECT COUNT(*) FROM campaigns {where}")
-            count_result = await self.session.execute(count_stmt, params)
-            total = count_result.scalar() or 0
+        count_stmt = text(f"SELECT COUNT(*) FROM campaigns {where}")
+        count_result = await self.session.execute(count_stmt, params)
+        total = count_result.scalar() or 0
 
-            select_stmt = text(
-                f"""
-                SELECT id, name, type, status, subject, content, target_audience,
-                       trigger_type, trigger_days, created_by,
-                       sent_count, open_count, click_count, created_at, updated_at
-                FROM campaigns {where}
-                ORDER BY created_at DESC
-                OFFSET :offset LIMIT :limit
-                """
-            )
-            result = await self.session.execute(select_stmt, params)
-            rows = result.fetchall()
+        select_stmt = text(
+            f"""
+            SELECT id, name, type, status, subject, content, target_audience,
+                   trigger_type, trigger_days, created_by,
+                   sent_count, open_count, click_count, created_at, updated_at
+            FROM campaigns {where}
+            ORDER BY created_at DESC
+            OFFSET :offset LIMIT :limit
+            """
+        )
+        result = await self.session.execute(select_stmt, params)
+        rows = result.fetchall()
 
-            items = [_row_to_campaign(r) for r in rows]
-            return ApiResponse.paginated(
-                items=items, total=total, page=page, page_size=page_size, message="查询成功"
-            )
+        items = [_row_to_campaign(r) for r in rows]
+        return ApiResponse.paginated(
+            items=items, total=total, page=page, page_size=page_size, message="查询成功"
+        )
 
     async def record_event(
         self,
@@ -269,62 +262,58 @@ class MarketingService:
         """记录用户事件"""
 
         now = datetime.now(UTC)
-        async with self.session:
             # Insert event
-            stmt = text(
-                """
-                INSERT INTO campaign_events (campaign_id, tenant_id, customer_id, event_type, created_at)
-                VALUES (:campaign_id, :tenant_id, :customer_id, :event_type, :now)
-                RETURNING id, campaign_id, customer_id, event_type, created_at
-                """
-            )
-            result = await self.session.execute(
-                stmt,
-                {
-                    "campaign_id": campaign_id,
-                    "tenant_id": tenant_id,
-                    "customer_id": customer_id,
-                    "event_type": event_type,
-                    "now": now,
-                },
-            )
-            await self.session.commit()
-            row = result.fetchone()
-            if not row:
-                return ApiResponse.error(message="记录事件失败", code=500)
+        stmt = text(
+            """
+            INSERT INTO campaign_events (campaign_id, tenant_id, customer_id, event_type, created_at)
+            VALUES (:campaign_id, :tenant_id, :customer_id, :event_type, :now)
+            RETURNING id, campaign_id, customer_id, event_type, created_at
+            """
+        )
+        result = await self.session.execute(
+            stmt,
+            {
+                "campaign_id": campaign_id,
+                "tenant_id": tenant_id,
+                "customer_id": customer_id,
+                "event_type": event_type,
+                "now": now,
+            },
+        )
+        row = result.fetchone()
+        if not row:
+            return ApiResponse.error(message="记录事件失败", code=500)
 
             # Update counts
-            count_col = {
-                "sent": "sent_count",
-                "opened": "open_count",
-                "clicked": "click_count",
-            }.get(event_type)
-            if count_col:
-                await self.session.execute(
-                    text(
-                        f"UPDATE campaigns SET {count_col} = {count_col} + 1 WHERE id = :id"
-                    ),
-                    {"id": campaign_id},
-                )
-                await self.session.commit()
+        count_col = {
+            "sent": "sent_count",
+            "opened": "open_count",
+            "clicked": "click_count",
+        }.get(event_type)
+        if count_col:
+            await self.session.execute(
+                text(
+                    f"UPDATE campaigns SET {count_col} = {count_col} + 1 WHERE id = :id"
+                ),
+                {"id": campaign_id},
+            )
 
-            return ApiResponse.success(data=_row_to_event(row), message="事件记录成功")
+        return ApiResponse.success(data=_row_to_event(row), message="事件记录成功")
 
     async def get_user_events(self, customer_id: int, tenant_id: int = 0) -> List[CampaignEvent]:
         """获取用户的所有营销事件"""
 
-        async with self.session:
-            stmt = text(
-                """
-                SELECT id, campaign_id, customer_id, event_type, created_at
-                FROM campaign_events
-                WHERE customer_id = :customer_id
-                  AND (:tenant_id = 0 OR tenant_id = :tenant_id)
-                ORDER BY created_at DESC
-                """
-            )
-            result = await self.session.execute(stmt, {"customer_id": customer_id, "tenant_id": tenant_id})
-            return [_row_to_event(r) for r in result.fetchall()]
+        stmt = text(
+            """
+            SELECT id, campaign_id, customer_id, event_type, created_at
+            FROM campaign_events
+            WHERE customer_id = :customer_id
+              AND (:tenant_id = 0 OR tenant_id = :tenant_id)
+            ORDER BY created_at DESC
+            """
+        )
+        result = await self.session.execute(stmt, {"customer_id": customer_id, "tenant_id": tenant_id})
+        return [_row_to_event(r) for r in result.fetchall()]
 
     async def setup_trigger(
         self,
@@ -369,15 +358,14 @@ class MarketingService:
     ) -> List[CampaignEvent]:
         """获取活动事件列表"""
 
-        async with self.session:
-            stmt = text(
-                """
-                SELECT id, campaign_id, customer_id, event_type, created_at
-                FROM campaign_events
-                WHERE campaign_id = :campaign_id
-                  AND (:tenant_id = 0 OR tenant_id = :tenant_id)
-                ORDER BY created_at DESC
-                """
-            )
-            result = await self.session.execute(stmt, {"campaign_id": campaign_id, "tenant_id": tenant_id})
-            return [_row_to_event(r) for r in result.fetchall()]
+        stmt = text(
+            """
+            SELECT id, campaign_id, customer_id, event_type, created_at
+            FROM campaign_events
+            WHERE campaign_id = :campaign_id
+              AND (:tenant_id = 0 OR tenant_id = :tenant_id)
+            ORDER BY created_at DESC
+            """
+        )
+        result = await self.session.execute(stmt, {"campaign_id": campaign_id, "tenant_id": tenant_id})
+        return [_row_to_event(r) for r in result.fetchall()]
