@@ -275,6 +275,7 @@ class AuthService:
                 "exp": datetime.utcfromtimestamp(exp) if exp else None,
             },
         )
+        await self.session.commit()
         return True
 
     @staticmethod
