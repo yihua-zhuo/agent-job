@@ -7,6 +7,11 @@ from typing import Dict, List, Optional, Any
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.styles import ParagraphStyle
+from reportlab.lib.units import mm
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,73 +19,67 @@ from db.models.analytics import ReportModel
 from models.response import ApiResponse, PaginatedData
 
 
-# Minimal PDF generation using raw PDF syntax (no external lib needed).
-# For richer PDFs install: pip install reportlab
-def _build_minimal_pdf(title: str, headers: List[str], rows: List[List[str]]) -> bytes:
-    """Generate a minimal valid PDF directly (no external lib).
-    
-    Produces a simple table-style PDF with header row and data rows.
-    For professional PDFs, install reportlab and replace this.
-    """
-    import os
-    _W = 595  # A4 width pts
-    _H = 842  # A4 height pts
-    _M = 40   # margin
+def _build_pdf(title: str, headers: List[str], rows: List[List[str]]) -> bytes:
+    """Generate a PDF report using ReportLab."""
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(
+        buf,
+        pagesize=A4,
+        leftMargin=20 * mm,
+        rightMargin=20 * mm,
+        topMargin=20 * mm,
+        bottomMargin=20 * mm,
+        title=title,
+    )
 
-    def _pt(txt: str, x: float, y: float) -> str:
-        return f"BT /F1 10 Tf {x:.1f} {(842 - y):.1f} Td ({txt}) Tj ET"
+    # Styles
+    title_style = ParagraphStyle("title", fontSize=16, fontName="Helvetica-Bold", spaceAfter=6)
+    meta_style = ParagraphStyle("meta", fontSize=8, fontName="Helvetica", textColor=colors.grey)
+    header_style = ParagraphStyle("header", fontSize=10, fontName="Helvetica-Bold", textColor=colors.white)
+    cell_style = ParagraphStyle("cell", fontSize=9, fontName="Helvetica")
 
-    lines = [
-        b"%PDF-1.4",
-        b"1 0 obj <</Type /Catalog /Pages 2 0 R>> endobj",
-        b"2 0 obj <</Type /Pages /Kids [3 0 R] /Count 1>> endobj",
-        b"4 0 obj <</Type /Font /Subtype /Type1 /BaseFont /Helvetica>> endobj",
+    elements = [
+        Paragraph(title, title_style),
+        Paragraph(f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')} | {len(rows)} rows", meta_style),
+        Spacer(1, 8 * mm),
     ]
 
-    body = "\n".join([
-        "3 0 obj <</Type /Page /Parent 2 0 R /MediaBox [0 0 595 842]"
-        " /Contents 5 0 R /Resources <</Font <</F1 4 0 R>>>>>> endobj",
-        "5 0 obj <</Length ", str(4096 + len(rows) * 40), ">>",
-        "stream",
-        f"0.5 0.5 0.5 rg 0 841.9 595 0.9 re f",  # header bg
-        "0.7 0.7 0.7 rg 0 811.9 595 0.9 re f",   # alt row stripe
-        _pt(title, _M, 25),
-        _pt(f"Generated: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}", _M, 40),
-        "",
-    ])
+    # Table data
+    table_data = [[Paragraph(str(h), header_style) for h in headers]]
+    for row in rows:
+        table_data.append([Paragraph(str(cell)[:120], cell_style) for cell in row])
 
-    row_y = 60
-    col_x = [_M]
-    step = (_W - 2 * _M) / max(len(headers), 1)
-    for i in range(len(headers) - 1):
-        col_x.append(col_x[-1] + step)
+    # Calculate column widths
+    available_width = A4[0] - 40 * mm
+    col_count = len(headers)
+    col_widths = [available_width / col_count] * col_count
 
-    # header
-    for i, h in enumerate(headers):
-        body += _pt(h, col_x[i] + 2, row_y) + "\n"
-    row_y += 16
+    table = Table(table_data, colWidths=col_widths, repeatRows=1)
+    table.setStyle(TableStyle([
+        # Header
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#3B82F6")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+        ("FONTSIZE", (0, 0), (-1, 0), 10),
+        ("ALIGN", (0, 0), (-1, 0), "CENTER"),
+        ("BOTTOMPADDING", (0, 0), (-1, 0), 8),
+        ("TOPPADDING", (0, 0), (-1, 0), 8),
+        # Body
+        ("FONTNAME", (0, 1), (-1, -1), "Helvetica"),
+        ("FONTSIZE", (0, 1), (-1, -1), 9),
+        ("ALIGN", (0, 1), (-1, -1), "LEFT"),
+        ("BOTTOMPADDING", (0, 1), (-1, -1), 5),
+        ("TOPPADDING", (0, 1), (-1, -1), 5),
+        # Alternating row colors
+        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F3F4F6")]),
+        # Grid
+        ("GRID", (0, 0), (-1, -1), 0.5, colors.HexColor("#E5E7EB")),
+        ("BOX", (0, 0), (-1, -1), 1, colors.HexColor("#D1D5DB")),
+    ]))
 
-    for ri, row in enumerate(rows):
-        stripe = "0.93 0.93 0.93 rg" if ri % 2 == 1 else "1 1 1 rg"
-        body += f"{stripe} 0 {842 - row_y - 14} {_W - 2*_M} 14 re f\n"
-        for ci, val in enumerate(row[:len(headers)]):
-            body += _pt(str(val)[:80], col_x[ci] + 2, row_y) + "\n"
-        row_y += 16
-
-    body += "endstream\nendobj"
-    stream_len = body.encode("latin-1", "replace").count(b"\n") + 4096 + len(rows) * 40
-    lines.append(f"5 0 obj <</Length {stream_len}>> endobj".encode())
-    lines.append(body.encode("latin-1", "replace"))
-    lines.append(b"xref")
-    lines.append(b"0 6")
-    lines.append(b"0000000000 65535 f ")
-    for i in range(1, 6):
-        lines.append(f"0000000000 00000 n ".encode())
-    lines.append(b"trailer <</Size 6 /Root 1 0 R>>")
-    lines.append(b"startxref")
-    lines.append(str(sum(len(l) for l in lines) + 20).encode())
-    lines.append(b"%%EOF")
-    return b"\n".join(lines)
+    elements.append(table)
+    doc.build(elements)
+    return buf.getvalue()
 
 
 class ReportService:
@@ -256,7 +255,7 @@ class ReportService:
             headers = report_data.get("labels", [])
             rows = [list(d) for d in zip(*report_data.get("datasets", [{}]))]
             title = title or "Report"
-            pdf_bytes = _build_minimal_pdf(title, headers, rows)
+            pdf_bytes = _build_pdf(title, headers, rows)
             return {
                 "status": "generated",
                 "format": "pdf",
@@ -280,7 +279,7 @@ class ReportService:
             date_to=date_to,
         )
 
-        pdf_bytes = _build_minimal_pdf(title, headers, rows)
+        pdf_bytes = _build_pdf(title, headers, rows)
 
         return ApiResponse.success(
             data={
