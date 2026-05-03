@@ -49,17 +49,11 @@ def _row_to_event(row) -> CampaignEvent:
 class MarketingService:
     """营销服务 — backed by PostgreSQL."""
 
-    def __init__(self, session: AsyncSession = None):
+    def __init__(self, session: AsyncSession):
         self.session = session
-        if session is not None:
-            self._require_session()
 
     def _require_session(self):
-        if self.session is None:
-            raise TypeError(
-                f"{self.__class__.__name__} requires an injected AsyncSession; "
-                "construct with XxxService(async_session)."
-            )
+        pass
 
     async def create_campaign(
         self,

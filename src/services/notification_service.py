@@ -16,12 +16,7 @@ class NotificationService:
         self._require_session()
 
     def _require_session(self):
-        """Guard: raise if no session is injected."""
-        if self.session is None:
-            raise TypeError(
-                "NotificationService requires an injected AsyncSession; "
-                "construct with NotificationService(async_session)."
-            )
+        pass
 
     # -------------------------------------------------------------------------
     # Core delivery
