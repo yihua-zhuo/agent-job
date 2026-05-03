@@ -4,6 +4,7 @@ import { useTasks, useCreateTask, useUpdateTask, useCompleteTask, useDeleteTask 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { TaskModal } from "./task-modal";
+import { cn } from "@/lib/utils";
 
 const COLUMNS = [
   { id: "pending", label: "To Do", color: "text-blue-600", borderColor: "border-blue-400" },
@@ -18,14 +19,38 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: "bg-gray-100 text-gray-600",
 };
 
-function TaskCard({ task, onClick }: { task: Record<string, unknown>; onClick: () => void }) {
+function TaskCard({ task, onClick, onComplete }: {
+  task: Record<string, unknown>;
+  onClick: () => void;
+  onComplete?: (id: number) => void;
+}) {
   const due = task.due_date ? new Date(String(task.due_date)) : null;
   const isOverdue = due && due < new Date() && task.status !== "completed";
 
   return (
-    <Card className="cursor-pointer hover:shadow-md transition-shadow" onClick={onClick}>
+    <Card className="cursor-pointer hover:shadow-md transition-shadow group" onClick={onClick}>
       <CardContent className="p-3 space-y-2">
-        <div className="font-medium text-sm leading-snug">{String(task.title ?? "")}</div>
+        <div className="flex items-start gap-2">
+          {task.status !== "completed" && onComplete && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onComplete(Number(task.id)); }}
+              className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border-2 border-muted-foreground/40 hover:border-green-500 hover:bg-green-500/10 transition-colors cursor-pointer"
+              aria-label="Mark as complete"
+              title="Mark complete"
+            />
+          )}
+          {task.status === "completed" && (
+            <div className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full bg-green-500" aria-label="Completed">
+              <svg className="h-2.5 w-2.5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              </svg>
+            </div>
+          )}
+          <div className={cn("font-medium text-sm leading-snug flex-1", task.status === "completed" && "line-through text-muted-foreground")}>
+            {String(task.title ?? "")}
+          </div>
+        </div>
         {Boolean(task.description) && (
           <p className="text-xs text-muted-foreground line-clamp-2">{String(task.description)}</p>
         )}
@@ -34,8 +59,8 @@ function TaskCard({ task, onClick }: { task: Record<string, unknown>; onClick: (
             {String(task.priority ?? "normal")}
           </span>
           {due && (
-            <span className={`text-xs ${isOverdue ? "text-red-500" : "text-muted-foreground"}`}>
-              {due.toLocaleDateString()}
+            <span className={`text-xs ${isOverdue ? "text-red-500 font-semibold" : "text-muted-foreground"}`}>
+              {isOverdue ? `⚠ ${due.toLocaleDateString()}` : due.toLocaleDateString()}
             </span>
           )}
         </div>
@@ -120,7 +145,12 @@ export default function TasksPage() {
                 <div className="py-8 text-center text-sm text-muted-foreground">No tasks</div>
               ) : (
                 tasksByStatus(col.id).map((t) => (
-                  <TaskCard key={String(t.id)} task={t} onClick={() => setEditTask(t)} />
+                  <TaskCard
+                    key={String(t.id)}
+                    task={t}
+                    onClick={() => setEditTask(t)}
+                    onComplete={handleComplete}
+                  />
                 ))
               )}
             </div>
