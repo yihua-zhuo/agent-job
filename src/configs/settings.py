@@ -37,4 +37,4 @@ class Settings(BaseSettings):
     )
 
 
-settings = Settings(database_url="")  # type: ignore[call-arg]
+settings = Settings()

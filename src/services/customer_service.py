@@ -509,6 +509,8 @@ class CustomerService:
         result = dict(mapping)
         if "status" in result and hasattr(result["status"], "value"):
             result["status"] = result["status"].value
+        if "tags" in result and isinstance(result["tags"], dict):
+            result["tags"] = []
         for field in ("created_at", "updated_at"):
             val = result.get(field)
             if isinstance(val, datetime):
