@@ -4,6 +4,7 @@ import { useSlaBreaches, useTickets } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 const STATUS_COLORS: Record<string, string> = {
   open: "bg-blue-100 text-blue-800",
@@ -29,6 +30,19 @@ function slaStatus(ticket: Record<string, unknown>) {
   return "on_track";
 }
 
+function slaHoursLeft(ticket: Record<string, unknown>): number {
+  const deadline = ticket.response_deadline ? new Date(String(ticket.response_deadline)) : null;
+  if (!deadline) return 100;
+  return (deadline.getTime() - Date.now()) / 3600000;
+}
+
+function slaProgress(ticket: Record<string, unknown>): number {
+  const hours = slaHoursLeft(ticket);
+  if (hours <= 0) return 0;
+  if (hours >= 24) return 100;
+  return Math.round((hours / 24) * 100);
+}
+
 function slaLabel(ticket: Record<string, unknown>) {
   const s = slaStatus(ticket);
   if (s === "breached") return "Breached";
@@ -42,7 +56,7 @@ function useAllOpenTickets() {
   const [allItems, setAllItems] = useState<Record<string, unknown>[]>([]);
   const [page, setPage] = useState(1);
   const [done, setDone] = useState(false);
-  const { data, isLoading } = useTickets(page, "open");
+  const { data, isLoading } = useTickets(page, 20, "open");
 
   useEffect(() => {
     if (!data?.data) return;
@@ -52,7 +66,8 @@ function useAllOpenTickets() {
     } else {
       setPage((p) => p + 1);
     }
-  }, [data, page]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [data]);
 
   return { items: allItems, isLoading: isLoading && !done, done };
 }
@@ -61,7 +76,7 @@ export default function SlaPage() {
   const { data: breachData, isLoading: breachLoading } = useSlaBreaches();
   const { items: allTickets, isLoading } = useAllOpenTickets();
   const [page, setPage] = useState(1);
-  const { data, isLoading: isTableLoading, isError: isTableError } = useTickets(page, "open");
+  const { data, isLoading: isTableLoading, isError: isTableError } = useTickets(page, 20, "open");
   const info = data?.data;
 
   const breaches = (breachData?.data?.items ?? []) as Record<string, unknown>[];
@@ -155,6 +170,27 @@ export default function SlaPage() {
                 <td className="px-3 py-2.5"><Badge colorClass={STATUS_COLORS[String(t.status)] ?? "bg-gray-100 text-gray-600"}>{String(t.status ?? "")}</Badge></td>
                 <td className="px-3 py-2.5 text-sm text-muted-foreground">{fmtDeadline(t.response_deadline)}</td>
                 <td className="px-3 py-2.5"><Badge colorClass={SLA_COLORS[slaStatus(t)]}>{slaLabel(t)}</Badge></td>
+                <td className="px-3 py-2.5 min-w-[120px]">
+                  <div className="space-y-1">
+                    <div className="h-1.5 w-full rounded-full bg-muted overflow-hidden">
+                      <div
+                        className={cn(
+                          "h-full rounded-full transition-all",
+                          slaStatus(t) === "breached" ? "bg-red-500" :
+                          slaStatus(t) === "at_risk" ? "bg-yellow-500" : "bg-green-500"
+                        )}
+                        style={{ width: `${slaProgress(t)}%` }}
+                      />
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {slaHoursLeft(t) <= 0
+                        ? "Breached"
+                        : slaHoursLeft(t) < 1
+                        ? `${Math.round(slaHoursLeft(t) * 60)}m left`
+                        : `${Math.round(slaHoursLeft(t))}h left`}
+                    </div>
+                  </div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -163,10 +199,10 @@ export default function SlaPage() {
 
       {info && (
         <div className="flex items-center justify-between text-xs text-muted-foreground">
-          <span>Showing {info.total === 0 ? 0 : ((page - 1) * info.page_size) + 1}–{Math.min(page * info.page_size, info.total)} of {info.total}</span>
+          <span>Showing {(info.total ?? 0) === 0 ? 0 : ((page - 1) * (info.page_size ?? 20)) + 1}–{Math.min(page * (info.page_size ?? 20), info.total ?? 0)} of {info.total ?? 0}</span>
           <div className="flex gap-1">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(page - 1)}>← Prev</Button>
-            <Button variant="outline" size="sm" disabled={!info.has_next} onClick={() => setPage(page + 1)}>Next →</Button>
+            <Button variant="outline" size="sm" disabled={!(info.has_next ?? false)} onClick={() => setPage(page + 1)}>Next →</Button>
           </div>
         </div>
       )}
