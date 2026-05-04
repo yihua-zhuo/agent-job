@@ -126,10 +126,10 @@ export default function TaskListPage() {
               <th className="px-3 py-2.5 text-left font-semibold">Status</th>
               <th className="px-3 py-2.5 text-left font-semibold">Priority</th>
               <th className="px-3 py-2.5 cursor-pointer text-left font-semibold select-none" onClick={() => toggleSort("due_date")}>
-                Due Date <SortIconStatic k="due_date" />
+                Due Date <SortIconStatic />
               </th>
               <th className="px-3 py-2.5 cursor-pointer text-left font-semibold select-none" onClick={() => toggleSort("created_at")}>
-                Created <SortIconStatic k="created_at" />
+                Created <SortIconStatic />
               </th>
             </tr>
           </thead>
