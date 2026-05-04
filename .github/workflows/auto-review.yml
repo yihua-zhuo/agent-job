@@ -1,0 +1,102 @@
+name: Claude Agent PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [main, master, developer]
+  push:
+    branches: [main, master, developer]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout PR branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Claude Agent SDK
+        run: pip install claude-agent-sdk
+
+      - name: Get PR info
+        id: pr_info
+        run: |
+          pr_number=$(echo $GITHUB_REF | grep -oP '(?<=refs\/pull\/)\d+')
+          echo "pr_number=$pr_number" >> $GITHUB_OUTPUT
+          owner=$(echo $GITHUB_REPOSITORY | cut -d/ -f1)
+          repo=$(echo $GITHUB_REPOSITORY | cut -d/ -f2)
+          echo "owner=$owner" >> $GITHUB_OUTPUT
+          echo "repo=$repo" >> $GITHUB_OUTPUT
+
+      - name: Get diff
+        run: |
+          git fetch origin main:main 2>/dev/null || git fetch origin master:master 2>/dev/null || true
+          git diff main...HEAD > /tmp/pr_diff.diff 2>/dev/null || git diff master...HEAD > /tmp/pr_diff.diff 2>/dev/null || echo "" > /tmp/pr_diff.diff
+
+      - name: Run Claude review
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          python3 << 'PYEOF'
+          import os, subprocess, json, re
+
+          diff_content = open("/tmp/pr_diff.diff").read()
+          pr_number = os.environ.get("PR_NUMBER", "")
+          owner = os.environ.get("OWNER", "")
+          repo = os.environ.get("REPO", "")
+
+          review_prompt = f"""You are an expert code reviewer. Analyze the following PR diff and provide actionable feedback.
+
+PR #{pr_number} from {owner}/{repo}
+
+DIFF:
+{diff_content[:15000]}
+
+Respond with ONLY a valid JSON object (no markdown, no explanation):
+{{
+  "summary": "one line summary of changes",
+  "body": "detailed review in markdown with sections: ## Summary, ## Issues Found, ## Suggestions, ## Security, ## Recommendation",
+  "event": "APPROVE" if no blocking issues else "REQUEST_CHANGES"
+}}"""
+
+          from claude_agent_sdk import query, ClaudeAgentOptions
+
+          result = query(
+              model="claude-opus-4-7",
+              messages=[{"role": "user", "content": review_prompt}],
+              api_key=os.environ["ANTHROPIC_API_KEY"],
+              options=ClaudeAgentOptions(max_tokens=4000, temperature=0.3)
+          )
+
+          response_text = result.content[0].text
+          json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+          review_data = json.loads(json_match.group()) if json_match else {
+              "summary": "Review completed", "body": response_text, "event": "COMMENT"}
+
+          commit_id = subprocess.check_output(["git", "rev-parse", "HEAD"]).decode().strip()
+          review_data["commit_id"] = commit_id
+
+          with open(os.environ["GITHUB_OUTPUT"], "a") as f:
+              f.write(f"review_body={json.dumps(review_data.get('body', '')).strip()}\n")
+              f.write(f"review_event={review_data.get('event', 'COMMENT')}\n")
+              f.write(f"review_summary={json.dumps(review_data.get('summary', '')).strip()}\n")
+
+          print("Review done")
+          PYEOF
+
+      - name: Submit PR review
+        if: steps.review.outputs.review_body != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh api repos/${{ steps.pr_info.outputs.owner }}/${{ steps.pr_info.outputs.repo }}/pulls/${{ steps.pr_info.outputs.pr_number }}/reviews \
+            --method POST \
+            -f event="${{ steps.review.outputs.review_event || 'COMMENT' }}" \
+            -f body="${{ steps.review.outputs.review_body || 'Review completed by Claude Agent SDK.' }}"
