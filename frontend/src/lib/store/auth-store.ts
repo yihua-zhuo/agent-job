@@ -1,5 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
+import CryptoJS from "crypto-js";
+
+const STORAGE_KEY = "crm_auth";
+const ENCRYPT_KEY = process.env.NEXT_PUBLIC_AUTH_SECRET ?? "dev-auth-secret-change-in-prod";
 
 export interface AuthUser {
   id: number;
@@ -22,6 +26,15 @@ interface AuthState {
   isAuthenticated: () => boolean;
 }
 
+function encrypt(data: string): string {
+  return CryptoJS.AES.encrypt(data, ENCRYPT_KEY).toString();
+}
+
+function decrypt(encrypted: string): string {
+  const bytes = CryptoJS.AES.decrypt(encrypted, ENCRYPT_KEY);
+  return bytes.toString(CryptoJS.enc.Utf8);
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -32,6 +45,35 @@ export const useAuthStore = create<AuthState>()(
       clearAuth: () => set({ token: null, user: null }),
       isAuthenticated: () => !!get().token,
     }),
-    { name: "crm_auth" }
+    {
+      name: STORAGE_KEY,
+      storage: {
+        getItem: (name) => {
+          try {
+            const raw = localStorage.getItem(name);
+            if (!raw) return null;
+            const parsed = JSON.parse(raw);
+            if (parsed.encrypted && typeof parsed.ciphertext === "string") {
+              const decrypted = decrypt(parsed.ciphertext);
+              if (!decrypted) return null;
+              return { state: JSON.parse(decrypted) };
+            }
+            return null;
+          } catch {
+            return null;
+          }
+        },
+        setItem: (name, value) => {
+          try {
+            const json = JSON.stringify(value.state);
+            const ciphertext = encrypt(json);
+            localStorage.setItem(name, JSON.stringify({ encrypted: true, ciphertext }));
+          } catch {
+            // storage full or unavailable — fail silently
+          }
+        },
+        removeItem: (name) => localStorage.removeItem(name),
+      },
+    }
   )
 );
