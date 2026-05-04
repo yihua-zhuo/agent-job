@@ -155,7 +155,15 @@ class TestAuthService:
         hashed = auth_service.hash_password("CorrectPassword")
 
         class Row(dict):
-            pass
+            @property
+            def _fields(self):
+                return list(self.keys())
+
+            def __getattr__(self, name):
+                try:
+                    return self[name]
+                except KeyError:
+                    raise AttributeError(name)
 
         async def fake_execute(sql, params=None):
             if "username" in str(sql).lower():
@@ -184,7 +192,15 @@ class TestAuthService:
         hashed = auth_service.hash_password(password)
 
         class Row(dict):
-            pass
+            @property
+            def _fields(self):
+                return list(self.keys())
+
+            def __getattr__(self, name):
+                try:
+                    return self[name]
+                except KeyError:
+                    raise AttributeError(name)
 
         async def fake_execute(sql, params=None):
             if "username" in str(sql).lower():
@@ -303,7 +319,15 @@ class TestAuthService:
         now = datetime.now(UTC)
 
         class Row(dict):
-            pass
+            @property
+            def _fields(self):
+                return list(self.keys())
+
+            def __getattr__(self, name):
+                try:
+                    return self[name]
+                except KeyError:
+                    raise AttributeError(name)
 
         async def fake_execute(sql, params=None):
             row = Row({

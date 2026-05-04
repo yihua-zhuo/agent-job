@@ -156,8 +156,10 @@ async def init_defaults(session: AsyncSession) -> None:
 class RBACService:
     """DB-backed RBAC service — roles, permissions, user assignments, permission checks."""
 
-    def __init__(self, session: "AsyncSession"):
+    def __init__(self, session: "AsyncSession" = None):
         self.session = session
+        if session is None:
+            return
         self._require_session()
 
     def _require_db(self):
