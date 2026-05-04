@@ -1,99 +1,98 @@
-"""营销服务"""
-from datetime import datetime
+"""营销服务 — DB-backed via SQLAlchemy async ORM."""
+from datetime import UTC, datetime
 from typing import Any
 
-from src.models.marketing import (
-    Campaign,
-    CampaignEvent,
-    CampaignStatus,
-    CampaignType,
-    TriggerType,
-)
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models.marketing import CampaignEventModel, CampaignModel
+from models.marketing import CampaignStatus, CampaignType, TriggerType
+from pkg.errors.app_exceptions import NotFoundException
+
+
+def _enum_val(v) -> str | None:
+    """Coerce enum or string to string."""
+    if v is None:
+        return None
+    return v.value if hasattr(v, "value") else str(v)
 
 
 class MarketingService:
-    """营销服务"""
+    """营销服务 — backed by PostgreSQL via SQLAlchemy async ORM."""
 
-    def __init__(self):
-        self._campaigns: dict[int, Campaign] = {}
-        self._events: dict[int, list[CampaignEvent]] = {}
-        self._next_id: int = 1
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
-    def create_campaign(
+    async def create_campaign(
         self,
         name: str,
-        campaign_type: CampaignType,
+        campaign_type: CampaignType | str,
         content: str,
         created_by: int,
-        **kwargs
-    ) -> Campaign:
+        tenant_id: int = 0,
+        **kwargs,
+    ) -> CampaignModel:
         """创建营销活动"""
-        now = datetime.now()
-        campaign = Campaign(
-            id=self._next_id,
+        now = datetime.now(UTC)
+        campaign = CampaignModel(
+            tenant_id=tenant_id,
             name=name,
-            type=campaign_type,
-            status=CampaignStatus.DRAFT,
+            type=_enum_val(campaign_type),
+            status=CampaignStatus.DRAFT.value,
             subject=kwargs.get("subject"),
             content=content,
-            target_audience=kwargs.get("target_audience", ""),
-            trigger_type=kwargs.get("trigger_type"),
+            target_audience=kwargs.get("target_audience"),
+            trigger_type=_enum_val(kwargs.get("trigger_type")),
             trigger_days=kwargs.get("trigger_days"),
             created_by=created_by,
             created_at=now,
             updated_at=now,
         )
-        self._campaigns[self._next_id] = campaign
-        self._next_id += 1
-        self._events[campaign.id] = []
+        self.session.add(campaign)
+        await self.session.flush()
+        await self.session.refresh(campaign)
+        await self.session.commit()
         return campaign
 
-    def get_campaign(self, campaign_id: int) -> Campaign | None:
+    async def get_campaign(self, campaign_id: int, tenant_id: int = 0) -> CampaignModel:
         """获取活动详情"""
-        return self._campaigns.get(campaign_id)
+        result = await self.session.execute(
+            select(CampaignModel).where(
+                and_(CampaignModel.id == campaign_id, CampaignModel.tenant_id == tenant_id)
+            )
+        )
+        campaign = result.scalar_one_or_none()
+        if campaign is None:
+            raise NotFoundException("Campaign")
+        return campaign
 
-    def update_campaign(self, campaign_id: int, **kwargs) -> Campaign | None:
+    async def update_campaign(self, campaign_id: int, tenant_id: int = 0, **kwargs) -> CampaignModel:
         """更新活动"""
-        campaign = self._campaigns.get(campaign_id)
-        if not campaign:
-            return None
-
+        campaign = await self.get_campaign(campaign_id, tenant_id)
         for key, value in kwargs.items():
             if hasattr(campaign, key):
+                if key in ("type", "trigger_type", "status"):
+                    value = _enum_val(value)
                 setattr(campaign, key, value)
-        campaign.updated_at = datetime.now()
+        campaign.updated_at = datetime.now(UTC)
+        await self.session.commit()
+        await self.session.refresh(campaign)
         return campaign
 
-    def launch_campaign(self, campaign_id: int) -> Campaign | None:
+    async def launch_campaign(self, campaign_id: int, tenant_id: int = 0) -> CampaignModel:
         """启动活动"""
-        campaign = self._campaigns.get(campaign_id)
-        if not campaign:
-            return None
+        return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.ACTIVE)
 
-        campaign.status = CampaignStatus.ACTIVE
-        campaign.updated_at = datetime.now()
-        return campaign
-
-    def pause_campaign(self, campaign_id: int) -> Campaign | None:
+    async def pause_campaign(self, campaign_id: int, tenant_id: int = 0) -> CampaignModel:
         """暂停活动"""
-        campaign = self._campaigns.get(campaign_id)
-        if not campaign:
-            return None
+        return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.PAUSED)
 
-        campaign.status = CampaignStatus.PAUSED
-        campaign.updated_at = datetime.now()
-        return campaign
-
-    def get_campaign_stats(self, campaign_id: int) -> dict[str, Any] | None:
+    async def get_campaign_stats(self, campaign_id: int, tenant_id: int = 0) -> dict[str, Any]:
         """获取活动统计"""
-        campaign = self._campaigns.get(campaign_id)
-        if not campaign:
-            return None
-
+        campaign = await self.get_campaign(campaign_id, tenant_id)
         sent = campaign.sent_count
         open_rate = (campaign.open_count / sent * 100) if sent > 0 else 0
         click_rate = (campaign.click_count / sent * 100) if sent > 0 else 0
-
         return {
             "campaign_id": campaign_id,
             "sent_count": campaign.sent_count,
@@ -103,88 +102,90 @@ class MarketingService:
             "click_rate": round(click_rate, 2),
         }
 
-    def list_campaigns(
+    async def list_campaigns(
         self,
+        tenant_id: int = 0,
         page: int = 1,
         page_size: int = 20,
-        status: CampaignStatus | None = None,
-        campaign_type: CampaignType | None = None,
-    ) -> dict[str, Any]:
-        """活动列表"""
-        filtered = list(self._campaigns.values())
+        status: CampaignStatus | str | None = None,
+        campaign_type: CampaignType | str | None = None,
+    ) -> tuple[list[CampaignModel], int]:
+        """活动列表 — returns (items, total). Router serializes."""
+        conditions = [CampaignModel.tenant_id == tenant_id]
+        if status is not None:
+            conditions.append(CampaignModel.status == _enum_val(status))
+        if campaign_type is not None:
+            conditions.append(CampaignModel.type == _enum_val(campaign_type))
 
-        if status:
-            filtered = [c for c in filtered if c.status == status]
-        if campaign_type:
-            filtered = [c for c in filtered if c.type == campaign_type]
+        count_result = await self.session.execute(
+            select(func.count(CampaignModel.id)).where(and_(*conditions))
+        )
+        total = count_result.scalar_one()
 
-        total = len(filtered)
-        start = (page - 1) * page_size
-        end = start + page_size
-        items = [c.to_dict() for c in filtered[start:end]]
+        offset = (page - 1) * page_size
+        result = await self.session.execute(
+            select(CampaignModel)
+            .where(and_(*conditions))
+            .order_by(CampaignModel.id)
+            .offset(offset)
+            .limit(page_size)
+        )
+        return result.scalars().all(), total
 
-        return {
-            "items": items,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size,
-        }
-
-    def record_event(
+    async def record_event(
         self,
         campaign_id: int,
         customer_id: int,
         event_type: str,
-    ) -> CampaignEvent | None:
+        tenant_id: int = 0,
+    ) -> CampaignEventModel:
         """记录用户事件"""
-        campaign = self._campaigns.get(campaign_id)
-        if not campaign:
-            return None
+        campaign = await self.get_campaign(campaign_id, tenant_id)
 
-        event = CampaignEvent(
-            id=len(self._events.get(campaign_id, [])) + 1,
+        event = CampaignEventModel(
             campaign_id=campaign_id,
+            tenant_id=tenant_id,
             customer_id=customer_id,
             event_type=event_type,
-            created_at=datetime.now(),
+            created_at=datetime.now(UTC),
         )
+        self.session.add(event)
 
-        if campaign_id not in self._events:
-            self._events[campaign_id] = []
-        self._events[campaign_id].append(event)
-
-        # 更新计数
         if event_type == "sent":
             campaign.sent_count += 1
         elif event_type == "opened":
             campaign.open_count += 1
         elif event_type == "clicked":
             campaign.click_count += 1
+        campaign.updated_at = datetime.now(UTC)
 
+        await self.session.commit()
+        await self.session.refresh(event)
         return event
 
-    def get_user_events(self, customer_id: int) -> list[CampaignEvent]:
+    async def get_user_events(self, customer_id: int, tenant_id: int = 0) -> list[CampaignEventModel]:
         """获取用户的所有营销事件"""
-        result = []
-        for events in self._events.values():
-            for event in events:
-                if event.customer_id == customer_id:
-                    result.append(event)
-        return result
+        result = await self.session.execute(
+            select(CampaignEventModel)
+            .where(
+                and_(
+                    CampaignEventModel.customer_id == customer_id,
+                    CampaignEventModel.tenant_id == tenant_id,
+                )
+            )
+            .order_by(CampaignEventModel.created_at.desc())
+        )
+        return result.scalars().all()
 
-    def setup_trigger(
+    async def setup_trigger(
         self,
         campaign_id: int,
         trigger_type: TriggerType,
         trigger_days: int | None = None,
-    ) -> Campaign | None:
+        tenant_id: int = 0,
+    ) -> CampaignModel:
         """设置触发器"""
-        campaign = self._campaigns.get(campaign_id)
-        if not campaign:
-            return None
-
-        campaign.trigger_type = trigger_type
-        campaign.trigger_days = trigger_days
-        campaign.updated_at = datetime.now()
-        return campaign
+        return await self.update_campaign(
+            campaign_id, tenant_id,
+            trigger_type=trigger_type, trigger_days=trigger_days,
+        )

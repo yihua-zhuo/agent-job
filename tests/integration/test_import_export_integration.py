@@ -1,11 +1,7 @@
 """Integration tests for ImportExportService - tests data import/export in CSV/JSON/Excel formats."""
-import csv
-import io
 import json
-import os
 import sys
 from pathlib import Path
-from decimal import Decimal
 
 # Ensure src/ is on sys.path
 _src_root = Path(__file__).resolve().parents[2] / "src"
@@ -13,6 +9,7 @@ if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 
 import pytest
+
 from services.import_export_service import ImportExportService
 
 
@@ -20,7 +17,7 @@ class TestImportExportServiceInit:
     """Test service instantiation and constants."""
 
     def test_service_instantiates(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         assert svc is not None
 
     def test_format_constants(self):
@@ -30,7 +27,7 @@ class TestImportExportServiceInit:
         assert ImportExportService.FORMAT_PDF == "pdf"
 
     def test_required_fields_configured(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         assert "customer" in svc.required_fields
         assert "opportunity" in svc.required_fields
         assert "lead" in svc.required_fields
@@ -41,14 +38,14 @@ class TestValidationHelpers:
     """Test internal validation methods."""
 
     def test_valid_email(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         assert svc._is_valid_email("user@example.com") is True
         assert svc._is_valid_email("test@domain.co.uk") is True
         assert svc._is_valid_email("not-an-email") is False
         assert svc._is_valid_email("") is False
 
     def test_valid_phone(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         assert svc._is_valid_phone("13812345678") is True
         assert svc._is_valid_phone("19912345678") is True
         assert svc._is_valid_phone("1234567890") is False   # too short
@@ -56,7 +53,7 @@ class TestValidationHelpers:
         assert svc._is_valid_phone("") is False
 
     def test_valid_number(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         assert svc._is_valid_number("100") is True
         assert svc._is_valid_number("99.5") is True
         assert svc._is_valid_number("abc") is False
@@ -67,7 +64,7 @@ class TestValidateImportData:
     """Test import data validation."""
 
     def test_validate_good_customer_data(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         data = [
             {"name": "Acme Corp", "email": "contact@acme.com", "phone": "13812345678"},
             {"name": "Beta Ltd", "email": "info@beta.com", "phone": "13912345678"},
@@ -76,24 +73,24 @@ class TestValidateImportData:
         assert result["errors"] == []
 
     def test_validate_missing_required_field(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         data = [{"name": "Acme Corp", "email": "contact@acme.com"}]  # missing phone
         result = svc.validate_import_data(data, "customer")
         assert len(result["errors"]) > 0
 
     def test_validate_empty_data(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         result = svc.validate_import_data([], "customer")
         assert result["errors"] == ["数据为空"]
 
     def test_validate_invalid_email_format(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         data = [{"name": "Bad Email Co", "email": "not-an-email", "phone": "13812345678"}]
         result = svc.validate_import_data(data, "customer")
         assert any("格式不正确" in e for e in result["errors"])
 
     def test_validate_duplicate_entry(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         data = [
             {"name": "Acme", "email": "same@email.com", "phone": "13812345678"},
             {"name": "Beta", "email": "same@email.com", "phone": "13912345678"},
@@ -102,7 +99,7 @@ class TestValidateImportData:
         assert any("数据重复" in e for e in result["errors"])
 
     def test_validate_unknown_entity_type(self):
-        svc = ImportExportService(None)
+        svc = ImportExportService()
         data = [{"name": "Test"}]
         result = svc.validate_import_data(data, "unknown_type")
         # No required fields for unknown type, so no errors
@@ -236,7 +233,10 @@ class TestExportData:
         # hardcoded sample data (张三/李四) regardless of tenant_id.
         data = await svc.export_customers(filters={}, file_format="json", tenant_id=tenant_id)
         parsed = json.loads(data.decode("utf-8"))
-        assert len(parsed) == 1, f"expected 1 DB row, got sample data instead — export query returned 0 rows for tenant {tenant_id}"
+        assert len(parsed) == 1, (
+            f"expected 1 DB row, got sample data instead — "
+            f"export query returned 0 rows for tenant {tenant_id}"
+        )
         assert parsed[0]["name"] == "Test Co"
 
         # A completely different tenant_id returns no rows → sample data fallback

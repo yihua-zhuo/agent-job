@@ -1,210 +1,345 @@
-from datetime import datetime, timedelta
+"""Analytics service — DB-backed dashboards & reports + aggregated query reports."""
+from datetime import UTC, datetime, timedelta
+
+from sqlalchemy import and_, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models.analytics import DashboardModel, ReportModel
+from db.models.customer import CustomerModel
+from db.models.opportunity import OpportunityModel
+from pkg.errors.app_exceptions import NotFoundException
 
 
 class AnalyticsService:
-    def __init__(self, session):
-        self._session = session
-        self._dashboards = {}
-        self._reports = {}
-        self._next_id = 1
+    """Backed by PostgreSQL via SQLAlchemy async ORM."""
 
-    # Dashboard methods
-    def create_dashboard(self, name: str, owner_id: int, description: str | None = None) -> dict:
-        """创建仪表板"""
-        now = datetime.utcnow()
-        dashboard = {
-            "id": self._next_id,
-            "name": name,
-            "description": description,
-            "widgets": [],
-            "owner_id": owner_id,
-            "is_default": False,
-            "created_at": now,
-            "updated_at": now,
-        }
-        self._dashboards[self._next_id] = dashboard
-        self._next_id += 1
+    def __init__(self, session: AsyncSession):
+        self.session = session
+
+    # -------------------------------------------------------------------------
+    # Dashboard CRUD
+    # -------------------------------------------------------------------------
+
+    async def create_dashboard(
+        self, name: str, owner_id: int, tenant_id: int = 0, description: str | None = None,
+    ) -> DashboardModel:
+        now = datetime.now(UTC)
+        dashboard = DashboardModel(
+            tenant_id=tenant_id,
+            name=name,
+            description=description,
+            widgets=[],
+            owner_id=owner_id,
+            is_default=False,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(dashboard)
+        await self.session.flush()
+        await self.session.refresh(dashboard)
+        await self.session.commit()
         return dashboard
 
-    def get_dashboard(self, dashboard_id: int) -> dict | None:
-        """获取仪表板"""
-        return self._dashboards.get(dashboard_id)
+    async def get_dashboard(self, dashboard_id: int, tenant_id: int = 0) -> DashboardModel:
+        result = await self.session.execute(
+            select(DashboardModel).where(
+                and_(DashboardModel.id == dashboard_id, DashboardModel.tenant_id == tenant_id)
+            )
+        )
+        dashboard = result.scalar_one_or_none()
+        if dashboard is None:
+            raise NotFoundException("Dashboard")
+        return dashboard
 
-    def update_dashboard(self, dashboard_id: int, **kwargs) -> dict | None:
-        """更新仪表板"""
-        if dashboard_id not in self._dashboards:
-            return None
-        dashboard = self._dashboards[dashboard_id]
+    async def update_dashboard(self, dashboard_id: int, tenant_id: int = 0, **kwargs) -> DashboardModel:
+        dashboard = await self.get_dashboard(dashboard_id, tenant_id)
+        allowed = {"name", "description", "widgets", "is_default"}
         for key, value in kwargs.items():
-            if key in ["name", "description", "widgets", "is_default"]:
-                dashboard[key] = value
-        dashboard["updated_at"] = datetime.utcnow()
+            if key in allowed:
+                setattr(dashboard, key, value)
+        dashboard.updated_at = datetime.now(UTC)
+        await self.session.commit()
+        await self.session.refresh(dashboard)
         return dashboard
 
-    def list_dashboards(self, owner_id: int | None = None) -> list[dict]:
-        """仪表板列表"""
-        if owner_id is None:
-            return list(self._dashboards.values())
-        return [d for d in self._dashboards.values() if d["owner_id"] == owner_id]
+    async def list_dashboards(
+        self, tenant_id: int = 0, owner_id: int | None = None,
+    ) -> list[DashboardModel]:
+        conditions = [DashboardModel.tenant_id == tenant_id]
+        if owner_id is not None:
+            conditions.append(DashboardModel.owner_id == owner_id)
+        result = await self.session.execute(
+            select(DashboardModel).where(and_(*conditions)).order_by(DashboardModel.id)
+        )
+        return result.scalars().all()
 
-    def add_widget(self, dashboard_id: int, widget_config: dict) -> dict | None:
-        """添加组件"""
-        if dashboard_id not in self._dashboards:
-            return None
-        dashboard = self._dashboards[dashboard_id]
-        widget = {"id": len(dashboard["widgets"]) + 1, **widget_config}
-        dashboard["widgets"].append(widget)
-        dashboard["updated_at"] = datetime.utcnow()
+    async def add_widget(self, dashboard_id: int, widget_config: dict, tenant_id: int = 0) -> dict:
+        dashboard = await self.get_dashboard(dashboard_id, tenant_id)
+        widgets = list(dashboard.widgets or [])
+        widget = {"id": len(widgets) + 1, **widget_config}
+        widgets.append(widget)
+        dashboard.widgets = widgets
+        dashboard.updated_at = datetime.now(UTC)
+        await self.session.commit()
         return widget
 
-    def remove_widget(self, dashboard_id: int, widget_id: int) -> bool:
-        """移除组件"""
-        if dashboard_id not in self._dashboards:
-            return False
-        dashboard = self._dashboards[dashboard_id]
-        dashboard["widgets"] = [w for w in dashboard["widgets"] if w["id"] != widget_id]
-        dashboard["updated_at"] = datetime.utcnow()
+    async def remove_widget(self, dashboard_id: int, widget_id: int, tenant_id: int = 0) -> bool:
+        dashboard = await self.get_dashboard(dashboard_id, tenant_id)
+        widgets = [w for w in (dashboard.widgets or []) if w.get("id") != widget_id]
+        dashboard.widgets = widgets
+        dashboard.updated_at = datetime.now(UTC)
+        await self.session.commit()
         return True
 
-    # Report methods
-    def create_report(
-        self,
-        name: str,
-        report_type: str,
-        config: dict,
-        created_by: int,
-    ) -> dict:
-        """创建报表"""
-        now = datetime.utcnow()
-        report = {
-            "id": self._next_id,
-            "name": name,
-            "type": report_type,
-            "config": config,
-            "date_range": {"start": None, "end": None},
-            "created_by": created_by,
-            "created_at": now,
-            "last_run_at": None,
-        }
-        self._reports[self._next_id] = report
-        self._next_id += 1
+    # -------------------------------------------------------------------------
+    # Report CRUD
+    # -------------------------------------------------------------------------
+
+    async def create_report(
+        self, name: str, report_type: str, config: dict, created_by: int, tenant_id: int = 0,
+    ) -> ReportModel:
+        report = ReportModel(
+            tenant_id=tenant_id,
+            name=name,
+            type=report_type,
+            config=config,
+            date_range={},
+            created_by=created_by,
+            created_at=datetime.now(UTC),
+        )
+        self.session.add(report)
+        await self.session.flush()
+        await self.session.refresh(report)
+        await self.session.commit()
         return report
 
-    def run_report(self, report_id: int, date_range: dict) -> dict | None:
-        """运行报表"""
-        if report_id not in self._reports:
-            return None
-        report = self._reports[report_id]
-        report["date_range"] = date_range
-        report["last_run_at"] = datetime.utcnow()
+    async def get_report(self, report_id: int, tenant_id: int = 0) -> ReportModel:
+        result = await self.session.execute(
+            select(ReportModel).where(
+                and_(ReportModel.id == report_id, ReportModel.tenant_id == tenant_id)
+            )
+        )
+        report = result.scalar_one_or_none()
+        if report is None:
+            raise NotFoundException("Report")
+        return report
 
-        report_type = report["type"]
+    async def run_report(self, report_id: int, date_range: dict, tenant_id: int = 0) -> dict:
+        report = await self.get_report(report_id, tenant_id)
+        report.date_range = date_range
+        report.last_run_at = datetime.now(UTC)
+        await self.session.commit()
+
         start = date_range.get("start")
         end = date_range.get("end")
 
-        if report_type == "sales_revenue":
-            return self.get_sales_revenue_report(start, end)
-        elif report_type == "sales_conversion":
-            return self.get_sales_conversion_report(start, end)
-        elif report_type == "customer_growth":
-            return self.get_customer_growth_report(start, end)
-        elif report_type == "pipeline_forecast":
-            return self.get_pipeline_forecast(date_range.get("pipeline_id"))
-        elif report_type == "team_performance":
-            return self.get_team_performance(start, end)
-        else:
-            return {"error": "Unknown report type"}
+        if report.type == "sales_revenue":
+            return await self.get_sales_revenue_report(start, end, tenant_id=tenant_id)
+        if report.type == "sales_conversion":
+            return await self.get_sales_conversion_report(start, end, tenant_id=tenant_id)
+        if report.type == "customer_growth":
+            return await self.get_customer_growth_report(start, end, tenant_id=tenant_id)
+        if report.type == "pipeline_forecast":
+            return await self.get_pipeline_forecast(date_range.get("pipeline_id"), tenant_id=tenant_id)
+        if report.type == "team_performance":
+            return await self.get_team_performance(start, end, tenant_id=tenant_id)
+        return {"error": "Unknown report type"}
 
-    def get_sales_revenue_report(self, start_date, end_date, group_by: str = "day") -> dict:
-        """销售营收报表"""
-        # 返回：每日/周/月销售额
-        labels = []
-        data = []
-        if start_date and end_date:
-            start = datetime.fromisoformat(start_date) if isinstance(start_date, str) else start_date
-            end = datetime.fromisoformat(end_date) if isinstance(end_date, str) else end_date
-            delta = end - start
-            periods = []
+    # -------------------------------------------------------------------------
+    # Aggregated reports — query real DB
+    # -------------------------------------------------------------------------
+
+    @staticmethod
+    def _parse_date(d):
+        if d is None:
+            return None
+        if isinstance(d, str):
+            return datetime.fromisoformat(d)
+        return d
+
+    async def get_sales_revenue_report(
+        self, start_date, end_date, group_by: str = "day", tenant_id: int = 0,
+    ) -> dict:
+        """Sum opportunity amount per period within [start, end]."""
+        start = self._parse_date(start_date)
+        end = self._parse_date(end_date)
+
+        labels: list[str] = []
+        data: list[float] = []
+
+        if start and end:
+            # Build label periods
+            periods: list[datetime] = []
             current = start
             while current <= end:
                 periods.append(current)
-                if group_by == "day":
-                    current += timedelta(days=1)
-                elif group_by == "week":
+                if group_by == "week":
                     current += timedelta(weeks=1)
                 elif group_by == "month":
-                    # approximate month advance
                     month = current.month + 1
                     year = current.year + (month // 13)
                     month = month % 13 or 12
                     current = current.replace(year=year, month=month)
+                else:
+                    current += timedelta(days=1)
+
             labels = [p.strftime("%Y-%m-%d") for p in periods]
-            data = [0.0] * len(periods)  # placeholder data
+
+            # Sum revenue per period from opportunities
+            result = await self.session.execute(
+                select(
+                    func.date_trunc(group_by, OpportunityModel.created_at).label("period"),
+                    func.coalesce(func.sum(OpportunityModel.amount), 0).label("total"),
+                )
+                .where(
+                    and_(
+                        OpportunityModel.tenant_id == tenant_id,
+                        OpportunityModel.created_at >= start,
+                        OpportunityModel.created_at <= end,
+                    )
+                )
+                .group_by("period")
+            )
+            rows = {r._mapping["period"].strftime("%Y-%m-%d"): float(r._mapping["total"]) for r in result.fetchall()}
+            data = [rows.get(lbl, 0.0) for lbl in labels]
+
         return {
             "labels": labels,
             "datasets": [{"label": "Sales Revenue", "data": data, "color": "#4F46E5"}],
             "chart_type": "line",
         }
 
-    def get_sales_conversion_report(self, start_date, end_date) -> dict:
-        """销售转化报表"""
-        # 返回：各阶段转化率
+    async def get_sales_conversion_report(self, start_date, end_date, tenant_id: int = 0) -> dict:
+        """Count opportunities by stage."""
+        start = self._parse_date(start_date)
+        end = self._parse_date(end_date)
+
+        conditions = [OpportunityModel.tenant_id == tenant_id]
+        if start:
+            conditions.append(OpportunityModel.created_at >= start)
+        if end:
+            conditions.append(OpportunityModel.created_at <= end)
+
+        result = await self.session.execute(
+            select(OpportunityModel.stage, func.count(OpportunityModel.id))
+            .where(and_(*conditions))
+            .group_by(OpportunityModel.stage)
+        )
+        counts = {row[0]: row[1] for row in result.fetchall()}
+
+        stages = ["lead", "qualified", "proposal", "negotiation", "closed_won"]
+        labels = ["Leads", "Qualified", "Proposal", "Negotiation", "Closed Won"]
+        data = [counts.get(s, 0) for s in stages]
         return {
-            "labels": ["Leads", "Qualified", "Proposal", "Negotiation", "Closed Won"],
-            "datasets": [
-                {
-                    "label": "Conversion Rate",
-                    "data": [100, 65, 40, 25, 15],
-                    "color": "#10B981",
-                }
-            ],
+            "labels": labels,
+            "datasets": [{"label": "Conversion", "data": data, "color": "#10B981"}],
             "chart_type": "funnel",
         }
 
-    def get_customer_growth_report(self, start_date, end_date) -> dict:
-        """客户增长报表"""
-        # 返回：新增客户数、流失数、净增长
+    async def get_customer_growth_report(self, start_date, end_date, tenant_id: int = 0) -> dict:
+        """Count new and churned customers in the period."""
+        start = self._parse_date(start_date)
+        end = self._parse_date(end_date)
+
+        conditions = [CustomerModel.tenant_id == tenant_id]
+        if start:
+            conditions.append(CustomerModel.created_at >= start)
+        if end:
+            conditions.append(CustomerModel.created_at <= end)
+
+        new_result = await self.session.execute(
+            select(func.count(CustomerModel.id)).where(and_(*conditions))
+        )
+        new_count = new_result.scalar() or 0
+
+        churned_result = await self.session.execute(
+            select(func.count(CustomerModel.id)).where(
+                and_(
+                    CustomerModel.tenant_id == tenant_id,
+                    CustomerModel.status == "blocked",
+                )
+            )
+        )
+        churned = churned_result.scalar() or 0
+
         return {
             "labels": ["New Customers", "Churned", "Net Growth"],
-            "datasets": [
-                {"label": "Customer Growth", "data": [120, 30, 90], "color": "#F59E0B"}
-            ],
+            "datasets": [{
+                "label": "Customer Growth",
+                "data": [new_count, churned, new_count - churned],
+                "color": "#F59E0B",
+            }],
             "chart_type": "bar",
         }
 
-    def get_pipeline_forecast(self, pipeline_id) -> dict:
-        """管道预测"""
-        # 按概率计算预期收入
-        if pipeline_id is None:
-            pipeline_id = "default"
+    async def get_pipeline_forecast(self, pipeline_id, tenant_id: int = 0) -> dict:
+        """Expected revenue by stage = sum(amount * probability/100)."""
+        conditions = [OpportunityModel.tenant_id == tenant_id]
+        if pipeline_id is not None and pipeline_id != "default":
+            conditions.append(OpportunityModel.pipeline_id == pipeline_id)
+
+        result = await self.session.execute(
+            select(
+                OpportunityModel.stage,
+                func.coalesce(
+                    func.sum(OpportunityModel.amount * OpportunityModel.probability / 100), 0,
+                ),
+            )
+            .where(and_(*conditions))
+            .group_by(OpportunityModel.stage)
+        )
+        rows = {r[0]: float(r[1]) for r in result.fetchall()}
+
+        stages = ["lead", "qualified", "proposal", "closed_won"]
+        labels = ["Stage 1", "Stage 2", "Stage 3", "Closed"]
+        data = [rows.get(s, 0.0) for s in stages]
         return {
-            "pipeline_id": pipeline_id,
-            "labels": ["Stage 1", "Stage 2", "Stage 3", "Closed"],
-            "datasets": [
-                {
-                    "label": "Expected Revenue",
-                    "data": [500000, 350000, 200000, 150000],
-                    "color": "#8B5CF6",
-                }
-            ],
+            "pipeline_id": pipeline_id or "default",
+            "labels": labels,
+            "datasets": [{"label": "Expected Revenue", "data": data, "color": "#8B5CF6"}],
             "chart_type": "bar",
         }
 
-    def get_team_performance(self, start_date, end_date) -> dict:
-        """团队绩效"""
-        # 各销售的任务完成数、成交数、金额
+    async def get_team_performance(self, start_date, end_date, tenant_id: int = 0) -> dict:
+        """Aggregate closed-won deals per owner."""
+        start = self._parse_date(start_date)
+        end = self._parse_date(end_date)
+
+        conditions = [
+            OpportunityModel.tenant_id == tenant_id,
+            OpportunityModel.stage == "closed_won",
+        ]
+        if start:
+            conditions.append(OpportunityModel.created_at >= start)
+        if end:
+            conditions.append(OpportunityModel.created_at <= end)
+
+        result = await self.session.execute(
+            select(
+                OpportunityModel.owner_id,
+                func.count(OpportunityModel.id),
+                func.coalesce(func.sum(OpportunityModel.amount), 0),
+            )
+            .where(and_(*conditions))
+            .group_by(OpportunityModel.owner_id)
+            .order_by(OpportunityModel.owner_id)
+        )
+        rows = result.fetchall()
+
+        labels = [f"Owner {r[0]}" for r in rows]
+        deals = [int(r[1]) for r in rows]
+        revenue = [float(r[2]) for r in rows]
         return {
-            "labels": ["Alice", "Bob", "Charlie", "Diana"],
+            "labels": labels,
             "datasets": [
-                {"label": "Deals Closed", "data": [15, 12, 18, 10], "color": "#EC4899"},
-                {"label": "Revenue", "data": [150000, 120000, 180000, 100000], "color": "#3B82F6"},
+                {"label": "Deals Closed", "data": deals, "color": "#EC4899"},
+                {"label": "Revenue", "data": revenue, "color": "#3B82F6"},
             ],
             "chart_type": "bar",
         }
 
-    # Chart data methods
     def get_chart_data(self, chart_type: str, data: list, labels: list[str]) -> dict:
-        """格式化图表数据"""
+        """Format raw data into a chart structure (sync utility, no DB)."""
         return {
             "labels": labels,
             "datasets": [{"label": "Data", "data": data, "color": "#6366F1"}],

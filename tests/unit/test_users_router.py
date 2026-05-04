@@ -4,13 +4,15 @@ from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from models.response import ResponseStatus
-from api.routers.users import (
-    users_router,
-    _http_status,
-)
+from api.routers.users import users_router
 from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
+from pkg.errors.app_exceptions import (
+    AppException,
+    NotFoundException,
+    UnauthorizedException,
+    ValidationException,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -19,14 +21,6 @@ from db.connection import get_db
 
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
-
-
-def _make_service_response(status=ResponseStatus.SUCCESS, data=None, message="OK"):
-    resp = MagicMock()
-    resp.status = status
-    resp.data = data
-    resp.message = message
-    return resp
 
 
 USER_ROW = {
@@ -41,65 +35,6 @@ USER_ROW = {
     "created_at": None,
     "updated_at": None,
 }
-
-
-# ---------------------------------------------------------------------------
-# _http_status
-# ---------------------------------------------------------------------------
-
-class TestHttpStatus:
-    def test_success_returns_200(self):
-        assert _http_status(ResponseStatus.SUCCESS) == 200
-
-    def test_not_found_returns_404(self):
-        assert _http_status(ResponseStatus.NOT_FOUND) == 404
-
-    def test_validation_error_returns_400(self):
-        assert _http_status(ResponseStatus.VALIDATION_ERROR) == 400
-
-    def test_unauthorized_returns_401(self):
-        assert _http_status(ResponseStatus.UNAUTHORIZED) == 401
-
-    def test_server_error_returns_500(self):
-        assert _http_status(ResponseStatus.SERVER_ERROR) == 500
-
-    def test_error_returns_400(self):
-        assert _http_status(ResponseStatus.ERROR) == 400
-
-    def test_unknown_status_returns_400(self):
-        unknown = MagicMock()
-        assert _http_status(unknown) == 400
-
-
-# ---------------------------------------------------------------------------
-# Mock user-like object for service responses
-# ---------------------------------------------------------------------------
-
-class MockUser:
-    """Dict-like mock that returns plain strings for all string fields.
-
-    Required because router handlers call str() on role/status/email/etc,
-    and str(MagicMock attribute) returns a repr string like "<MagicMock...>".
-    """
-    def __init__(self, data=None):
-        data = data or {}
-        self._data = {k: (str(v) if v is not None else None) for k, v in data.items()}
-
-    def __getattr__(self, name):
-        if name.startswith("_"):
-            raise AttributeError(name)
-        if name in self._data:
-            return self._data[name]
-        raise AttributeError(name)
-
-    def __getitem__(self, key):
-        return self._data[key]
-
-    def get(self, key, default=None):
-        return self._data.get(key, default)
-
-    def __repr__(self):
-        return f"MockUser({self._data!r})"
 
 
 # ---------------------------------------------------------------------------
@@ -127,6 +62,13 @@ def client_with_service(monkeypatch):
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
     app.dependency_overrides[get_db] = lambda: MagicMock()
 
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
     @app.exception_handler(Exception)
     async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
         return JSONResponse(
@@ -145,14 +87,7 @@ def client_with_service(monkeypatch):
 class TestCreateUserEndpoint:
     def test_success_returns_201(self, client_with_service):
         client, svc = client_with_service
-        mock_user = MockUser({
-            "id": 1, "tenant_id": 1, "username": "alice",
-            "email": "alice@example.com", "role": "user", "status": "active",
-            "full_name": "Alice", "bio": None,
-        })
-        svc.create_user = AsyncMock(
-            return_value=_make_service_response(data=mock_user, message="用户创建成功")
-        )
+        svc.create_user = AsyncMock(return_value=USER_ROW)
         resp = client.post(
             "/api/v1/users",
             json={
@@ -171,10 +106,7 @@ class TestCreateUserEndpoint:
     def test_service_error_returns_4xx(self, client_with_service):
         client, svc = client_with_service
         svc.create_user = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.VALIDATION_ERROR,
-                message="用户名已存在",
-            )
+            side_effect=ValidationException("用户名已存在")
         )
         resp = client.post(
             "/api/v1/users",
@@ -184,7 +116,7 @@ class TestCreateUserEndpoint:
                 "password": "password123",
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_short_username_rejected(self, client_with_service):
         client, _ = client_with_service
@@ -218,37 +150,12 @@ class TestCreateUserEndpoint:
 class TestListUsersEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        mock_user = MockUser({
-            "id": 1, "tenant_id": 1, "username": "alice",
-            "email": "alice@example.com", "role": "user", "status": "active",
-            "full_name": "Alice", "bio": None, "created_at": None, "updated_at": None,
-        })
-        mock_list = MagicMock()
-        mock_list.items = [mock_user]
-        mock_list.total = 1
-        mock_list.page = 1
-        mock_list.page_size = 20
-        mock_list.total_pages = 1
-        mock_list.has_next = False
-        mock_list.has_prev = False
-        svc.list_users = AsyncMock(
-            return_value=_make_service_response(data=mock_list)
-        )
+        svc.list_users = AsyncMock(return_value=([USER_ROW], 1))
         resp = client.get("/api/v1/users")
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["total"] == 1
-
-    def test_service_error_propagates(self, client_with_service):
-        client, svc = client_with_service
-        svc.list_users = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.SERVER_ERROR, message="Server error"
-            )
-        )
-        resp = client.get("/api/v1/users")
-        assert resp.status_code == 500
 
 
 # ---------------------------------------------------------------------------
@@ -258,19 +165,16 @@ class TestListUsersEndpoint:
 class TestGetUserEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        mock_user = MockUser({
-            "id": 1, "tenant_id": 1, "username": "alice",
-            "email": "alice@example.com", "role": "user", "status": "active",
-            "full_name": "Alice", "bio": None, "created_at": None, "updated_at": None,
-        })
-        svc.get_user_by_id = AsyncMock(return_value=mock_user)
+        svc.get_user_by_id = AsyncMock(return_value=USER_ROW)
         resp = client.get("/api/v1/users/1")
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == 1
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
-        svc.get_user_by_id = AsyncMock(return_value=None)
+        svc.get_user_by_id = AsyncMock(
+            side_effect=NotFoundException("User")
+        )
         resp = client.get("/api/v1/users/9999")
         assert resp.status_code == 404
 
@@ -282,13 +186,8 @@ class TestGetUserEndpoint:
 class TestUpdateUserEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        mock_user = MockUser({
-            "id": 1, "tenant_id": 1, "username": "alice",
-            "email": "alice@example.com", "role": "user", "status": "active",
-            "full_name": "Updated", "bio": None, "created_at": None, "updated_at": None,
-        })
         svc.update_user = AsyncMock(
-            return_value=_make_service_response(data=mock_user, message="用户更新成功")
+            return_value={**USER_ROW, "full_name": "Updated"}
         )
         resp = client.put("/api/v1/users/1", json={"full_name": "Updated"})
         assert resp.status_code == 200
@@ -297,9 +196,7 @@ class TestUpdateUserEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.update_user = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="用户不存在"
-            )
+            side_effect=NotFoundException("User")
         )
         resp = client.put("/api/v1/users/9999", json={"full_name": "X"})
         assert resp.status_code == 404
@@ -312,9 +209,7 @@ class TestUpdateUserEndpoint:
 class TestDeleteUserEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.delete_user = AsyncMock(
-            return_value=_make_service_response(message="用户删除成功")
-        )
+        svc.delete_user = AsyncMock(return_value=None)
         resp = client.delete("/api/v1/users/1")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
@@ -322,9 +217,7 @@ class TestDeleteUserEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.delete_user = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="用户不存在"
-            )
+            side_effect=NotFoundException("User")
         )
         resp = client.delete("/api/v1/users/9999")
         assert resp.status_code == 404
@@ -337,26 +230,8 @@ class TestDeleteUserEndpoint:
 class TestSearchUsersEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        mock_user = MockUser({
-            "id": 1, "tenant_id": 1, "username": "alice",
-            "email": "alice@example.com", "role": "user", "status": "active",
-            "full_name": "Alice", "bio": None, "created_at": None, "updated_at": None,
-        })
-        mock_list = MagicMock()
-        mock_list.items = [mock_user]
-        mock_list.total = 1
-        mock_list.page = 1
-        mock_list.page_size = 20
-        mock_list.total_pages = 1
-        mock_list.has_next = False
-        mock_list.has_prev = False
-        svc.search_users = AsyncMock(
-            return_value=_make_service_response(data=mock_list)
-        )
+        svc.search_users = AsyncMock(return_value=([USER_ROW], 1))
         resp = client.post("/api/v1/users/search?keyword=alice")
-        # Note: keyword is a Query param so it's GET, but the router uses POST
-        # Actually the router is POST with Query param, let's try POST with query string
-        resp = client.post("/api/v1/users/search?keyword=alice", json={})
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -364,7 +239,7 @@ class TestSearchUsersEndpoint:
     def test_empty_keyword_rejected(self, client_with_service):
         client, _ = client_with_service
         # keyword is required min_length=1
-        resp = client.post("/api/v1/users/search?keyword=", json={})
+        resp = client.post("/api/v1/users/search?keyword=")
         assert resp.status_code in (422, 400)
 
 
@@ -375,9 +250,7 @@ class TestSearchUsersEndpoint:
 class TestChangePasswordEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.change_password = AsyncMock(
-            return_value=_make_service_response(message="密码修改成功")
-        )
+        svc.change_password = AsyncMock(return_value=None)
         resp = client.post(
             "/api/v1/users/1/password",
             json={"old_password": "old123456", "new_password": "new123456"},
@@ -395,16 +268,13 @@ class TestChangePasswordEndpoint:
     def test_service_error_returns_4xx(self, client_with_service):
         client, svc = client_with_service
         svc.change_password = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.VALIDATION_ERROR,
-                message="旧密码不正确",
-            )
+            side_effect=ValidationException("旧密码不正确")
         )
         resp = client.post(
             "/api/v1/users/1/password",
             json={"old_password": "wrong", "new_password": "new123456"},
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -414,15 +284,7 @@ class TestChangePasswordEndpoint:
 class TestRegisterEndpoint:
     def test_success_returns_201(self, client_with_service):
         client, svc = client_with_service
-        mock_user = MockUser({
-            "id": 1, "tenant_id": 0, "username": "newuser",
-            "email": "new@example.com", "role": "user", "status": "active",
-            "full_name": "New User", "bio": None,
-            "created_at": None, "updated_at": None,
-        })
-        svc.create_user = AsyncMock(
-            return_value=_make_service_response(data=mock_user, message="注册成功")
-        )
+        svc.create_user = AsyncMock(return_value=USER_ROW)
         resp = client.post(
             "/api/v1/auth/register",
             json={
@@ -438,10 +300,7 @@ class TestRegisterEndpoint:
     def test_service_error_returns_4xx(self, client_with_service):
         client, svc = client_with_service
         svc.create_user = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.VALIDATION_ERROR,
-                message="用户名已存在",
-            )
+            side_effect=ValidationException("用户名已存在")
         )
         resp = client.post(
             "/api/v1/auth/register",
@@ -451,7 +310,7 @@ class TestRegisterEndpoint:
                 "password": "password123",
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -461,14 +320,8 @@ class TestRegisterEndpoint:
 class TestLoginEndpoint:
     def test_success_returns_200(self, client_with_service):
         client, svc = client_with_service
-        svc.authenticate_user = AsyncMock(
-            return_value={
-                "id": 1,
-                "username": "alice",
-                "role": "user",
-                "tenant_id": 1,
-            }
-        )
+        fake_user = MagicMock(id=1, username="alice", role="user", tenant_id=1)
+        svc.authenticate_user = AsyncMock(return_value=fake_user)
         svc.generate_token = MagicMock(return_value="fake-jwt-token")
         resp = client.post(
             "/api/v1/auth/login",
@@ -481,7 +334,9 @@ class TestLoginEndpoint:
 
     def test_invalid_credentials_returns_401(self, client_with_service):
         client, svc = client_with_service
-        svc.authenticate_user = AsyncMock(return_value=None)
+        svc.authenticate_user = AsyncMock(
+            side_effect=UnauthorizedException("Invalid credentials")
+        )
         resp = client.post(
             "/api/v1/auth/login",
             data={"username": "alice", "password": "wrong"},

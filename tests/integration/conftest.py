@@ -9,8 +9,9 @@ Services import `get_db_session` at module load time by name:
 so we monkey-patch that attribute on every service module (not just on
 db.connection) so the services transparently use the test DB session.
 """
-from dotenv import load_dotenv
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Load .env so DATABASE_URL is available at module load time.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
@@ -23,7 +24,7 @@ import os
 import pkgutil
 import random
 import sys
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
 
 # Ensure src/ is on sys.path so top-level package imports resolve
 _src_root = Path(__file__).resolve().parents[2] / "src"
@@ -220,14 +221,12 @@ def fresh_schema() -> Generator[None, None, None]:
 def db_schema(fresh_schema) -> Generator[None, None, None]:
     """Truncate all tables between each test for function-level isolation."""
     sync_engine = _get_test_sync_engine()
-    with sync_engine.begin() as conn:
-        for table in _TABLES:
-            try:
-                conn.execute(
-                    text(f"TRUNCATE {table} CASCADE RESTART IDENTITY")
-                )
-            except Exception:
-                pass
+    for table in _TABLES:
+        try:
+            with sync_engine.begin() as conn:
+                conn.execute(text(f"TRUNCATE {table} RESTART IDENTITY CASCADE"))
+        except Exception:
+            pass
     yield
 
 
@@ -276,12 +275,12 @@ def _cleanup_after_module() -> Generator[None, None, None]:
     """Truncate all tables once after every test file completes."""
     yield
     sync_engine = _get_test_sync_engine()
-    with sync_engine.begin() as conn:
-        for table in _TABLES:
-            try:
-                conn.execute(text(f"TRUNCATE {table} CASCADE RESTART IDENTITY"))
-            except Exception:  # pragma: no cover — best-effort, never fails a clean run
-                pass
+    for table in _TABLES:
+        try:
+            with sync_engine.begin() as conn:
+                conn.execute(text(f"TRUNCATE {table} RESTART IDENTITY CASCADE"))
+        except Exception:  # pragma: no cover — best-effort, never fails a clean run
+            pass
 
 
 # ── Event loop policy ──────────────────────────────────────────────────────────
@@ -294,9 +293,10 @@ def event_loop_policy():
 # These are imported so pytest discovers them without needing web_conftest.py
 # to be explicitly listed as a conftest.py plugin.
 
+from collections.abc import AsyncGenerator
+
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from typing import AsyncGenerator
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture(scope="session")
@@ -342,11 +342,10 @@ async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
     os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
     from services.auth_service import AuthService
     from services.user_service import UserService
-    from models.user import UserRole, UserStatus
 
     # Create the test user in the DB so /users/me resolves correctly.
     user_svc = UserService(async_session)
-    result = await user_svc.create_user(
+    await user_svc.create_user(
         username="webtest",
         email="webtest@example.com",
         password="TestPass123!",
@@ -356,7 +355,7 @@ async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
     await async_session.commit()
     # Retrieve the actual DB-assigned user id (not hardcoded 999).
     created_user = await user_svc.get_user_by_username("webtest")
-    actual_user_id = created_user["id"] if created_user else 999
+    actual_user_id = created_user.id if created_user else 999
 
     auth_svc = AuthService(async_session, secret_key="integration-test-jwt-secret-key")
     token = auth_svc.generate_token(

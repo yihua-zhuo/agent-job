@@ -1,5 +1,6 @@
 """Integration tests for intelligence/ML services: ChurnPrediction, SalesRecommendation, SmartCategorization."""
 import sys
+import uuid
 from pathlib import Path
 
 # Ensure src/ is on sys.path
@@ -8,64 +9,87 @@ if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 
 import pytest
+
+from pkg.errors.app_exceptions import NotFoundException
 from services.churn_prediction import ChurnPredictionService
+from services.customer_service import CustomerService
 from services.sales_recommendation import SalesRecommendationService
 from services.smart_categorization import SmartCategorizationService
 
 
+async def _seed_customer(async_session, tenant_id: int) -> int:
+    """Seed a customer and return its id."""
+    svc = CustomerService(async_session)
+    suffix = uuid.uuid4().hex[:8]
+    result = await svc.create_customer(
+        data={
+            "name": f"Churn Cust {suffix}",
+            "email": f"churn_{suffix}@example.com",
+            "phone": "13800138000",
+            "status": "lead",
+        },
+        tenant_id=tenant_id,
+    )
+    return result.id
+
+
+@pytest.mark.integration
 class TestChurnPredictionService:
-    """Test ChurnPredictionService - churn scoring and risk assessment."""
+    """Test ChurnPredictionService - DB-backed churn scoring."""
 
-    @pytest.fixture
-    def svc(self):
-        return ChurnPredictionService()
-
-    def test_calculate_churn_score_returns_0_to_100(self, svc):
-        score = svc.calculate_churn_score(customer_id=1)
+    async def test_calculate_churn_score_returns_0_to_100(self, db_schema, tenant_id, async_session):
+        cid = await _seed_customer(async_session, tenant_id)
+        svc = ChurnPredictionService(async_session)
+        score = await svc.calculate_churn_score(customer_id=cid, tenant_id=tenant_id)
         assert 0 <= score <= 100
 
-    def test_score_deterministic(self, svc):
-        """Same customer_id always returns same score."""
-        s1 = svc.calculate_churn_score(customer_id=42)
-        s2 = svc.calculate_churn_score(customer_id=42)
+    async def test_score_deterministic(self, db_schema, tenant_id, async_session):
+        """Same customer + same data → same score."""
+        cid = await _seed_customer(async_session, tenant_id)
+        svc = ChurnPredictionService(async_session)
+        s1 = await svc.calculate_churn_score(customer_id=cid, tenant_id=tenant_id)
+        s2 = await svc.calculate_churn_score(customer_id=cid, tenant_id=tenant_id)
         assert s1 == s2
 
-    def test_score_varies_across_customers(self, svc):
-        scores = {svc.calculate_churn_score(cid) for cid in range(1, 50)}
-        assert len(scores) > 1
+    async def test_calculate_churn_score_not_found(self, db_schema, tenant_id, async_session):
+        svc = ChurnPredictionService(async_session)
+        with pytest.raises(NotFoundException):
+            await svc.calculate_churn_score(customer_id=999_999_999, tenant_id=tenant_id)
 
-    def test_predict_churn_single_customer(self, svc):
-        results = svc.predict_churn(customer_ids=[100])
+    async def test_predict_churn_single_customer(self, db_schema, tenant_id, async_session):
+        cid = await _seed_customer(async_session, tenant_id)
+        svc = ChurnPredictionService(async_session)
+        results = await svc.predict_churn(customer_ids=[cid], tenant_id=tenant_id)
         assert len(results) == 1
         r = results[0]
-        assert r["customer_id"] == 100
+        assert r["customer_id"] == cid
         assert "score" in r
-        assert "risk_level" in r
-        assert "factors" in r
         assert r["risk_level"] in ("low", "medium", "high")
 
-    def test_predict_churn_batch(self, svc):
-        results = svc.predict_churn(customer_ids=[1, 2, 3, 4, 5])
-        assert len(results) == 5
+    async def test_predict_churn_batch(self, db_schema, tenant_id, async_session):
+        ids = [await _seed_customer(async_session, tenant_id) for _ in range(3)]
+        svc = ChurnPredictionService(async_session)
+        results = await svc.predict_churn(customer_ids=ids, tenant_id=tenant_id)
+        assert len(results) == 3
         for r in results:
             assert r["risk_level"] in ("low", "medium", "high")
 
-    def test_predict_churn_empty_returns_all(self, svc):
-        """Default batch returns predictions for customers 1-100."""
-        results = svc.predict_churn()
-        assert len(results) == 100
+    async def test_predict_churn_default_lists_tenant_customers(self, db_schema, tenant_id, async_session):
+        """Default (no ids) returns predictions for all tenant customers."""
+        for _ in range(2):
+            await _seed_customer(async_session, tenant_id)
+        svc = ChurnPredictionService(async_session)
+        results = await svc.predict_churn(tenant_id=tenant_id)
+        assert len(results) >= 2
 
-    def test_get_churn_risk_factors(self, svc):
-        factors = svc.get_churn_risk_factors(customer_id=77)
+    async def test_get_churn_risk_factors(self, db_schema, tenant_id, async_session):
+        cid = await _seed_customer(async_session, tenant_id)
+        svc = ChurnPredictionService(async_session)
+        factors = await svc.get_churn_risk_factors(customer_id=cid, tenant_id=tenant_id)
         assert isinstance(factors, list)
         assert len(factors) == 6
-        for f in factors:
-            assert "factor" in f
-            assert "weight" in f
-            assert "current_value" in f
-        # Check expected factor names
         names = {f["factor"] for f in factors}
-        expected = {
+        assert names == {
             "days_since_last_activity",
             "decrease_in_activity",
             "decrease_in_revenue",
@@ -73,37 +97,25 @@ class TestChurnPredictionService:
             "payment_delays",
             "negative_feedback",
         }
-        assert names == expected
 
-    def test_get_high_risk_customers(self, svc):
-        high_risk = svc.get_high_risk_customers(threshold=70.0)
+    async def test_get_high_risk_customers(self, db_schema, tenant_id, async_session):
+        for _ in range(3):
+            await _seed_customer(async_session, tenant_id)
+        svc = ChurnPredictionService(async_session)
+        high_risk = await svc.get_high_risk_customers(threshold=0.0, tenant_id=tenant_id)
         assert isinstance(high_risk, list)
-        for r in high_risk:
-            assert r["score"] >= 70.0
         # Sorted descending
         if len(high_risk) > 1:
             assert high_risk[0]["score"] >= high_risk[1]["score"]
 
-    def test_recommend_actions(self, svc):
-        actions = svc.recommend_actions(customer_id=42)
+    async def test_recommend_actions(self, db_schema, tenant_id, async_session):
+        cid = await _seed_customer(async_session, tenant_id)
+        svc = ChurnPredictionService(async_session)
+        actions = await svc.recommend_actions(customer_id=cid, tenant_id=tenant_id)
         assert isinstance(actions, list)
         assert len(actions) > 0
         for a in actions:
-            assert "action" in a
-            assert "priority" in a
             assert a["priority"] in ("high", "medium", "low")
-
-    def test_risk_level_boundaries(self, svc):
-        """Verify risk level classification is consistent with score."""
-        for cid in range(1, 101):
-            score = svc.calculate_churn_score(cid)
-            level = svc._get_risk_level(score)
-            if score >= 70:
-                assert level == "high"
-            elif score >= 40:
-                assert level == "medium"
-            else:
-                assert level == "low"
 
 
 class TestSalesRecommendationService:

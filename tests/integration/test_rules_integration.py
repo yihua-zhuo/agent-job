@@ -14,29 +14,28 @@ import uuid
 
 import pytest
 
-from models.marketing import TriggerType, CampaignType, CampaignStatus
-from models.response import ResponseStatus
+from models.marketing import CampaignType, TriggerType
 from models.ticket import (
-    Ticket,
-    TicketStatus,
-    TicketPriority,
-    TicketChannel,
     SLALevel,
+    Ticket,
+    TicketChannel,
+    TicketPriority,
+    TicketStatus,
 )
 from services.automation_rules import AutomationRules
 from services.data_isolation import (
+    DataIsolationError,
     TenantScope,
-    require_tenant_id,
-    sanitize_tenant_write,
     get_cross_tenant_fields,
     is_cross_tenant_safe,
-    DataIsolationError,
+    require_tenant_id,
+    sanitize_tenant_write,
 )
-from services.rbac_service import RBACService, Permission
-from services.sla_service import SLAService
-from services.trigger_service import TriggerService
 from services.marketing_service import MarketingService
+from services.rbac_service import Permission, RBACService
+from services.sla_service import SLAService
 from services.ticket_service import TicketService
+from services.trigger_service import TriggerService
 from services.user_service import UserService
 
 
@@ -201,8 +200,13 @@ class TestDataIsolationIntegration:
 class TestRBACServiceIntegration:
     """RBAC permission engine — no database needed."""
 
+    @pytest.fixture(autouse=True)
+    def _mock_session(self):
+        from unittest.mock import MagicMock
+        self._session = MagicMock()
+
     def test_admin_has_all_customer_permissions(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         for perm in [
             Permission.CUSTOMER_CREATE,
             Permission.CUSTOMER_READ,
@@ -212,7 +216,7 @@ class TestRBACServiceIntegration:
             assert svc.has_permission("admin", perm) is True
 
     def test_admin_has_all_opportunity_permissions(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         for perm in [
             Permission.OPPORTUNITY_CREATE,
             Permission.OPPORTUNITY_READ,
@@ -222,82 +226,82 @@ class TestRBACServiceIntegration:
             assert svc.has_permission("admin", perm) is True
 
     def test_admin_has_admin_permissions(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.has_permission("admin", Permission.ADMIN_ALL) is True
         assert svc.has_permission("admin", Permission.USER_MANAGE) is True
 
     def test_manager_can_read_but_not_delete_customers(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.has_permission("manager", Permission.CUSTOMER_READ) is True
         assert svc.has_permission("manager", Permission.CUSTOMER_CREATE) is False
         assert svc.has_permission("manager", Permission.CUSTOMER_DELETE) is False
 
     def test_manager_can_create_update_opportunities(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.has_permission("manager", Permission.OPPORTUNITY_CREATE) is True
         assert svc.has_permission("manager", Permission.OPPORTUNITY_UPDATE) is True
         assert svc.has_permission("manager", Permission.OPPORTUNITY_DELETE) is False
 
     def test_sales_can_create_customers(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.has_permission("sales", Permission.CUSTOMER_CREATE) is True
         assert svc.has_permission("sales", Permission.CUSTOMER_READ) is True
         assert svc.has_permission("sales", Permission.CUSTOMER_UPDATE) is True
         assert svc.has_permission("sales", Permission.CUSTOMER_DELETE) is False
 
     def test_sales_can_create_opportunities(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.has_permission("sales", Permission.OPPORTUNITY_CREATE) is True
         assert svc.has_permission("sales", Permission.OPPORTUNITY_READ) is True
         assert svc.has_permission("sales", Permission.OPPORTUNITY_UPDATE) is True
         assert svc.has_permission("sales", Permission.OPPORTUNITY_DELETE) is False
 
     def test_support_read_only(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.has_permission("support", Permission.CUSTOMER_READ) is True
         assert svc.has_permission("support", Permission.OPPORTUNITY_READ) is True
         assert svc.has_permission("support", Permission.CUSTOMER_CREATE) is False
         assert svc.has_permission("support", Permission.OPPORTUNITY_CREATE) is False
 
     def test_viewer_read_only(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.has_permission("viewer", Permission.CUSTOMER_READ) is True
         assert svc.has_permission("viewer", Permission.OPPORTUNITY_READ) is True
         assert svc.has_permission("viewer", Permission.CUSTOMER_CREATE) is False
 
     def test_unknown_role_has_no_permissions(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.has_permission("ghost", Permission.CUSTOMER_READ) is False
         assert svc.has_permission("", Permission.CUSTOMER_READ) is False
 
     def test_get_role_permissions_admin(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         perms = svc.get_role_permissions("admin")
         assert Permission.ADMIN_ALL in perms
         assert Permission.USER_MANAGE in perms
         assert Permission.CUSTOMER_READ in perms
 
     def test_get_role_permissions_manager(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         perms = svc.get_role_permissions("manager")
         assert Permission.CUSTOMER_READ in perms
         assert Permission.CUSTOMER_DELETE not in perms
 
     def test_get_role_permissions_unknown_returns_empty(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.get_role_permissions("unknown_role") == []
 
     def test_check_permission_by_value_valid(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.check_permission_by_value("admin", "customer:read") is True
         assert svc.check_permission_by_value("sales", "customer:create") is True
 
     def test_check_permission_by_value_invalid_role(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.check_permission_by_value("ghost", "customer:read") is False
 
     def test_check_permission_by_value_invalid_permission_string(self):
-        svc = RBACService()
+        svc = RBACService(self._session)
         assert svc.check_permission_by_value("admin", "nonexistent:perm") is False
 
 
@@ -313,7 +317,7 @@ class TestSLAIntegration:
     ) -> Ticket:
         """Create a ticket via TicketService and return the domain model."""
         ticket_svc = TicketService(async_session)
-        result = await ticket_svc.create_ticket(
+        ticket = await ticket_svc.create_ticket(
             subject=f"SLA Test Ticket {uuid.uuid4().hex[:8]}",
             description="Testing SLA status",
             customer_id=1,
@@ -322,8 +326,7 @@ class TestSLAIntegration:
             sla_level=sla_level,
             tenant_id=tenant_id,
         )
-        assert result.status == ResponseStatus.SUCCESS
-        return result.data
+        return ticket
 
     async def _seed_user(self, tenant_id: int, async_session) -> int:
         user_svc = UserService(async_session)
@@ -334,17 +337,17 @@ class TestSLAIntegration:
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        return reg.data.id
+        return reg.id
 
     async def test_check_sla_status_normal(self, db_schema, tenant_id, async_session):
         ticket = await self._seed_ticket(tenant_id, async_session, sla_level=SLALevel.PREMIUM)
         sla_svc = SLAService(async_session)
-        status = await sla_svc.check_sla_status(ticket)
+        status = sla_svc.check_sla_status(ticket)
         # Fresh ticket well within SLA window
         assert status in ("normal", "warning")
 
     async def test_check_sla_status_breached(self, db_schema, tenant_id, async_session):
-        from datetime import datetime, timedelta, UTC
+        from datetime import UTC, datetime, timedelta
 
         # Create a ticket that's already past response_deadline
         ticket = await self._seed_ticket(tenant_id, async_session, sla_level=SLALevel.STANDARD)
@@ -367,11 +370,11 @@ class TestSLAIntegration:
             response_deadline=datetime.now(UTC) - timedelta(hours=40),
         )
         sla_svc = SLAService(async_session)
-        status = await sla_svc.check_sla_status(expired_ticket)
+        status = sla_svc.check_sla_status(expired_ticket)
         assert status == "breached"
 
     async def test_check_sla_status_resolved_is_normal(self, db_schema, tenant_id, async_session):
-        from datetime import datetime, timedelta, UTC
+        from datetime import UTC, datetime, timedelta
 
         ticket = await self._seed_ticket(tenant_id, async_session)
         # Resolved ticket is always "normal"
@@ -393,17 +396,17 @@ class TestSLAIntegration:
             response_deadline=datetime.now(UTC) - timedelta(hours=40),
         )
         sla_svc = SLAService(async_session)
-        status = await sla_svc.check_sla_status(resolved_ticket)
+        status = sla_svc.check_sla_status(resolved_ticket)
         assert status == "normal"
 
     async def test_calculate_remaining_time_positive(self, db_schema, tenant_id, async_session):
         ticket = await self._seed_ticket(tenant_id, async_session, sla_level=SLALevel.ENTERPRISE)
         sla_svc = SLAService(async_session)
-        remaining = await sla_svc.calculate_remaining_time(ticket)
+        remaining = sla_svc.calculate_remaining_time(ticket)
         assert remaining.total_seconds() > 0
 
     async def test_calculate_remaining_time_zero_if_resolved(self, db_schema, tenant_id, async_session):
-        from datetime import datetime, timedelta, UTC
+        from datetime import UTC, datetime, timedelta
 
         ticket = await self._seed_ticket(tenant_id, async_session)
         resolved_ticket = Ticket(
@@ -424,29 +427,19 @@ class TestSLAIntegration:
             response_deadline=datetime.now(UTC) + timedelta(hours=1),
         )
         sla_svc = SLAService(async_session)
-        remaining = await sla_svc.calculate_remaining_time(resolved_ticket)
+        remaining = sla_svc.calculate_remaining_time(resolved_ticket)
         assert remaining == timedelta(0)
 
     async def test_get_breach_tickets_returns_list(self, db_schema, tenant_id, async_session):
         # Create an already-breached ticket by setting deadline in the past
-        import asyncio
-        from datetime import datetime, timedelta, UTC
-        from sqlalchemy import text
-        from db.connection import get_db_session
+        from datetime import UTC, datetime, timedelta
 
         ticket = await self._seed_ticket(tenant_id, async_session, sla_level=SLALevel.BASIC)
-        # Force deadline to the past
-        async with get_db_session() as session:
-            await session.execute(
-                text(
-                    "UPDATE tickets SET response_deadline = :deadline WHERE id = :id"
-                ),
-                {"deadline": datetime.now(UTC) - timedelta(hours=1), "id": ticket.id},
-            )
-            await session.commit()
+        # Force deadline to the past (in-memory ticket)
+        ticket.response_deadline = datetime.now(UTC) - timedelta(hours=1)
 
         sla_svc = SLAService(async_session)
-        breached = await sla_svc.get_breach_tickets(tenant_id)
+        breached = sla_svc.get_breach_tickets(tickets=[ticket])
         breached_ids = [t.id for t in breached]
         assert ticket.id in breached_ids
 
@@ -467,13 +460,13 @@ class TestTriggerIntegration:
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        return reg.data.id
+        return reg.id
 
     async def _seed_campaign(
-        self, tenant_id: int, created_by: int, trigger_type: TriggerType = None, async_session=None
+        self, tenant_id: int, created_by: int, trigger_type: TriggerType, async_session
     ):
         marketing_svc = MarketingService(async_session)
-        result = await marketing_svc.create_campaign(
+        return await marketing_svc.create_campaign(
             name=f"Trigger Test Campaign {uuid.uuid4().hex[:8]}",
             campaign_type=CampaignType.EMAIL,
             content="Test content",
@@ -481,8 +474,6 @@ class TestTriggerIntegration:
             tenant_id=tenant_id,
             trigger_type=trigger_type,
         )
-        assert result.status == ResponseStatus.SUCCESS
-        return result.data
 
     async def test_check_triggers_user_register(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
@@ -509,8 +500,7 @@ class TestTriggerIntegration:
 
     async def test_check_triggers_no_matching_campaign(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
-        # Campaign with different trigger type
-        campaign = await self._seed_campaign(
+        await self._seed_campaign(
             tenant_id, uid, TriggerType.PURCHASE_MADE, async_session
         )
         marketing_svc = MarketingService(async_session)
@@ -519,11 +509,8 @@ class TestTriggerIntegration:
         triggered_ids = await trigger_svc.check_triggers(
             "user_register", {"user_id": uid}, tenant_id=tenant_id
         )
-        # If any campaign was triggered, it must NOT be a user_register campaign
-        if triggered_ids:
-            for cid in triggered_ids:
-                c = await marketing_svc.get_campaign(cid, tenant_id=tenant_id)
-                assert c.data.trigger_type != TriggerType.USER_REGISTER
+        # No USER_REGISTER campaign exists for this tenant
+        assert triggered_ids == []
 
     async def test_execute_trigger_success(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
@@ -533,7 +520,7 @@ class TestTriggerIntegration:
         marketing_svc = MarketingService(async_session)
         trigger_svc = TriggerService(marketing_svc)
 
-        result = await trigger_svc.execute_trigger(campaign.id, [uid])
+        result = await trigger_svc.execute_trigger(campaign.id, [uid], tenant_id=tenant_id)
         assert result["success"] is True
         assert result["campaign_id"] == campaign.id
         assert result["sent_count"] == 1
@@ -550,6 +537,6 @@ class TestTriggerIntegration:
         marketing_svc = MarketingService(async_session)
         trigger_svc = TriggerService(marketing_svc)
 
-        result = await trigger_svc.execute_trigger(99999, [uid])
+        result = await trigger_svc.execute_trigger(99999, [uid], tenant_id=tenant_id)
         assert result["success"] is False
         assert "not found" in result["message"]

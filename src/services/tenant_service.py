@@ -1,111 +1,144 @@
-"""租户管理服务"""
-from datetime import datetime
-from typing import Any
+"""Tenant service — CRUD via SQLAlchemy ORM (TenantModel)."""
+from datetime import UTC, datetime
 
-from models.response import ApiResponse, ResponseStatus
+from sqlalchemy import and_, func, select, update
+from sqlalchemy.ext.asyncio import AsyncSession
 
-# Module-level state for persistence across instances (since routers create fresh service per request)
-_tenants_db: dict[int, dict[str, Any]] = {}
-_tenant_counter = 0
+from db.models.tenant import TenantModel
+from db.models.user import UserModel
+from pkg.errors.app_exceptions import NotFoundException
 
 
 class TenantService:
-    """租户管理服务"""
+    """Tenant management backed by PostgreSQL via SQLAlchemy async ORM."""
 
-    def __init__(self, session):
-        self._session = session
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
-    async def create_tenant(self, name: str, plan: str, admin_email: str, tenant_id: int = 0) -> ApiResponse:
-        global _tenant_counter
-        _tenant_counter += 1
-        now = datetime.utcnow().isoformat()
-        tenant = {
-            "id": _tenant_counter,
-            "name": name,
-            "plan": plan,
-            "admin_email": admin_email,
-            "status": "active",
-            "created_at": now,
-            "updated_at": now,
-            "deleted_at": None,
-            "user_count": 0,
+    @staticmethod
+    def _to_dict(t: TenantModel) -> dict:
+        d = t.to_dict()
+        settings = d.get("settings") or {}
+        d["admin_email"] = settings.get("admin_email")
+        d["deleted_at"] = settings.get("deleted_at")
+        return d
+
+    async def create_tenant(
+        self, name: str, plan: str, admin_email: str | None = None, settings: dict | None = None,
+        tenant_id: int = 0,
+    ) -> dict:
+        merged: dict = dict(settings or {})
+        if admin_email is not None:
+            merged["admin_email"] = admin_email
+        now = datetime.now(UTC)
+        tenant = TenantModel(
+            name=name,
+            plan=plan,
+            status="active",
+            settings=merged,
+            created_at=now,
+            updated_at=now,
+        )
+        self.session.add(tenant)
+        await self.session.flush()
+        await self.session.refresh(tenant)
+        await self.session.commit()
+        return self._to_dict(tenant)
+
+    async def _fetch(self, tenant_id: int) -> TenantModel:
+        result = await self.session.execute(
+            select(TenantModel).where(TenantModel.id == tenant_id)
+        )
+        tenant = result.scalar_one_or_none()
+        if tenant is None or tenant.status == "deleted":
+            raise NotFoundException(f"Tenant {tenant_id}")
+        return tenant
+
+    async def get_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
+        tenant = await self._fetch(tenant_id)
+        return self._to_dict(tenant)
+
+    async def update_tenant(self, tenant_id: int, _tenant_id: int = 0, **kwargs) -> dict:
+        tenant = await self._fetch(tenant_id)
+
+        allowed = {"name", "plan", "status"}
+        update_values: dict = {"updated_at": datetime.now(UTC)}
+        for key, value in kwargs.items():
+            if key in allowed:
+                update_values[key] = value
+
+        settings_changed = False
+        new_settings = dict(tenant.settings or {})
+        if "admin_email" in kwargs:
+            new_settings["admin_email"] = kwargs["admin_email"]
+            settings_changed = True
+        if "settings" in kwargs and isinstance(kwargs["settings"], dict):
+            new_settings.update(kwargs["settings"])
+            settings_changed = True
+        if settings_changed:
+            update_values["settings"] = new_settings
+
+        await self.session.execute(
+            update(TenantModel).where(TenantModel.id == tenant_id).values(**update_values)
+        )
+        await self.session.commit()
+
+        refreshed = await self.session.execute(
+            select(TenantModel).where(TenantModel.id == tenant_id)
+        )
+        return self._to_dict(refreshed.scalar_one())
+
+    async def suspend_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
+        return await self.update_tenant(tenant_id, status="suspended")
+
+    async def delete_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
+        tenant = await self._fetch(tenant_id)
+        now = datetime.now(UTC)
+        new_settings = dict(tenant.settings or {})
+        new_settings["deleted_at"] = now.isoformat()
+        await self.session.execute(
+            update(TenantModel)
+            .where(TenantModel.id == tenant_id)
+            .values(status="deleted", settings=new_settings, updated_at=now)
+        )
+        await self.session.commit()
+        return {"id": tenant_id}
+
+    async def list_tenants(
+        self, page: int = 1, page_size: int = 20, status: str | None = None, _tenant_id: int = 0,
+    ) -> tuple[list[dict], int]:
+        conditions = [TenantModel.status != "deleted"]
+        if status:
+            conditions = [TenantModel.status == status]
+
+        count_result = await self.session.execute(
+            select(func.count(TenantModel.id)).where(and_(*conditions))
+        )
+        total = count_result.scalar() or 0
+
+        offset = (page - 1) * page_size
+        result = await self.session.execute(
+            select(TenantModel)
+            .where(and_(*conditions))
+            .order_by(TenantModel.id)
+            .offset(offset)
+            .limit(page_size)
+        )
+        items = [self._to_dict(t) for t in result.scalars().all()]
+        return items, total
+
+    async def get_tenant_stats(self, tenant_id: int = 0) -> dict:
+        await self._fetch(tenant_id)
+        user_count_result = await self.session.execute(
+            select(func.count(UserModel.id)).where(UserModel.tenant_id == tenant_id)
+        )
+        user_count = user_count_result.scalar() or 0
+        return {
+            "tenant_id": tenant_id,
+            "user_count": user_count,
             "storage_used": 0,
             "api_calls": 0,
         }
-        _tenants_db[_tenant_counter] = tenant
-        return ApiResponse(status=ResponseStatus.SUCCESS, data=tenant, message="租户创建成功")
 
-    async def get_tenant(self, tenant_id: int, _tenant_id: int = 0) -> ApiResponse:
-        tenant = _tenants_db.get(tenant_id)
-        if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
-        if tenant.get("deleted_at"):
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} has been deleted")
-        return ApiResponse(status=ResponseStatus.SUCCESS, data=tenant, message="")
-
-    async def update_tenant(self, tenant_id: int, _tenant_id: int = 0, **kwargs) -> ApiResponse:
-        tenant = _tenants_db.get(tenant_id)
-        if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
-        allowed_fields = {"name", "plan", "admin_email", "status"}
-        for key, value in kwargs.items():
-            if key in allowed_fields:
-                tenant[key] = value
-        tenant["updated_at"] = datetime.utcnow().isoformat()
-        return ApiResponse(status=ResponseStatus.SUCCESS, data=tenant, message="租户更新成功")
-
-    async def suspend_tenant(self, tenant_id: int, _tenant_id: int = 0) -> ApiResponse:
-        tenant = _tenants_db.get(tenant_id)
-        if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
-        tenant["status"] = "suspended"
-        tenant["updated_at"] = datetime.utcnow().isoformat()
-        return ApiResponse(status=ResponseStatus.SUCCESS, data=tenant, message="租户已暂停")
-
-    async def delete_tenant(self, tenant_id: int, _tenant_id: int = 0) -> ApiResponse:
-        tenant = _tenants_db.get(tenant_id)
-        if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
-        tenant["status"] = "deleted"
-        tenant["deleted_at"] = datetime.utcnow().isoformat()
-        tenant["updated_at"] = tenant["deleted_at"]
-        return ApiResponse(status=ResponseStatus.SUCCESS, data={"id": tenant_id}, message="租户已删除")
-
-    async def list_tenants(self, page: int = 1, page_size: int = 20, status: str | None = None, _tenant_id: int = 0) -> ApiResponse:
-        tenants = [t for t in _tenants_db.values() if t["status"] != "deleted"]
-        if status:
-            tenants = [t for t in tenants if t["status"] == status]
-        total = len(tenants)
-        start = (page - 1) * page_size
-        end = start + page_size
-        return ApiResponse(status=ResponseStatus.SUCCESS, data={
-            "items": tenants[start:end],
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size if total > 0 else 0,
-            "has_next": end < total,
-            "has_prev": page > 1,
-        }, message="")
-
-    async def get_tenant_stats(self, tenant_id: int = 0) -> ApiResponse:
-        tenant = _tenants_db.get(tenant_id)
-        if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
-        return ApiResponse(status=ResponseStatus.SUCCESS, data={
-            "tenant_id": tenant_id,
-            "user_count": tenant.get("user_count", 0),
-            "storage_used": tenant.get("storage_used", 0),
-            "api_calls": tenant.get("api_calls", 0),
-        }, message="")
-
-    async def get_tenant_usage(self, tenant_id: int, _tenant_id: int = 0) -> ApiResponse:
-        tenant = _tenants_db.get(tenant_id)
-        if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
-        return ApiResponse(status=ResponseStatus.SUCCESS, data={
-            "tenant_id": tenant_id,
-            "user_count": tenant.get("user_count", 0),
-            "storage_used": tenant.get("storage_used", 0),
-            "api_calls": tenant.get("api_calls", 0),
-        }, message="")
+    async def get_tenant_usage(self, tenant_id: int, _tenant_id: int = 0) -> dict:
+        return await self.get_tenant_stats(tenant_id)

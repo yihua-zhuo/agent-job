@@ -10,6 +10,7 @@ from db.models.pipeline import PipelineModel
 from db.models.pipeline_stage import PipelineStageModel
 from db.models.rbac import PermissionModel, RoleModel, RolePermissionModel, UserRoleModel
 from db.models.reminder import ReminderModel
+from db.models.report_schedule import ReportScheduleModel
 from db.models.task import TaskModel
 from db.models.tenant import TenantModel
 from db.models.ticket import TicketModel
@@ -30,6 +31,7 @@ __all__ = [
     "PipelineStageModel",
     "ReminderModel",
     "ReportModel",
+    "ReportScheduleModel",
     "TaskModel",
     "TenantModel",
     "TicketModel",
