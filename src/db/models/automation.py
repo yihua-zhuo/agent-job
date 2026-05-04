@@ -1,6 +1,5 @@
 """Automation rules and execution logs ORM models."""
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -17,7 +16,7 @@ class AutomationRuleModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
     trigger_event: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
     conditions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     actions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
@@ -61,7 +60,7 @@ class AutomationLogModel(Base):
     trigger_context: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     actions_executed: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="success", nullable=False)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     executed_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     executed_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

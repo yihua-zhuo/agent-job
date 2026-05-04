@@ -1,8 +1,7 @@
 """Pipeline service layer - handles pipeline and stage CRUD via PostgreSQL/SQLAlchemy async."""
-from datetime import datetime, UTC
-from typing import Optional, List
+from datetime import UTC, datetime
 
-from sqlalchemy import select, update, delete, func, text
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.pipeline import PipelineModel
@@ -359,7 +358,7 @@ class PipelineService:
         return ApiResponse.success(message="阶段删除成功")
 
     async def reorder_stages(
-        self, tenant_id: int, pipeline_id: int, stage_ids: List[int]
+        self, tenant_id: int, pipeline_id: int, stage_ids: list[int]
     ) -> ApiResponse:
         """Reorder pipeline stages by assigning display_order from the stage_ids list."""
         pipeline_result = await self.session.execute(

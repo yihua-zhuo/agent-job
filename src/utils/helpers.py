@@ -1,11 +1,11 @@
 """
 通用工具函数
 """
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
-import re
-import json
 import hashlib
+import json
+import re
+from datetime import datetime, timedelta
+from typing import Any
 
 
 def generate_id(*parts: str) -> str:
@@ -29,7 +29,7 @@ def truncate_string(s: str, max_length: int, suffix: str = "...") -> str:
     return s[:max_length - len(suffix)] + suffix
 
 
-def parse_datetime(date_string: str) -> Optional[datetime]:
+def parse_datetime(date_string: str) -> datetime | None:
     """解析日期时间字符串"""
     formats = [
         "%Y-%m-%d",
@@ -92,7 +92,7 @@ def is_valid_ip(ip: str) -> bool:
     return all(0 <= int(part) <= 255 for part in parts)
 
 
-def deep_get(dictionary: Dict, *keys, default=None) -> Any:
+def deep_get(dictionary: dict, *keys, default=None) -> Any:
     """安全获取嵌套字典值"""
     result = dictionary
     for key in keys:
@@ -107,7 +107,7 @@ def deep_get(dictionary: Dict, *keys, default=None) -> Any:
     return result if result is not None else default
 
 
-def flatten_dict(d: Dict, parent_key: str = '', sep: str = '.') -> Dict:
+def flatten_dict(d: dict, parent_key: str = '', sep: str = '.') -> dict:
     """扁平化嵌套字典"""
     items = []
     for k, v in d.items():
@@ -125,12 +125,12 @@ def flatten_dict(d: Dict, parent_key: str = '', sep: str = '.') -> Dict:
     return dict(items)
 
 
-def chunk_list(lst: List, chunk_size: int) -> List[List]:
+def chunk_list(lst: list, chunk_size: int) -> list[list]:
     """将列表分块"""
     return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 
-def remove_duplicates(items: List, key=None) -> List:
+def remove_duplicates(items: list, key=None) -> list:
     """移除列表重复项"""
     if key is None:
         return list(dict.fromkeys(items))
@@ -159,33 +159,33 @@ def safe_json_dumps(obj: Any, default=str, **kwargs) -> str:
 
 class Pagination:
     """分页工具类"""
-    
-    def __init__(self, items: List, page: int = 1, page_size: int = 20):
+
+    def __init__(self, items: list, page: int = 1, page_size: int = 20):
         self.items = items
         self.page = page
         self.page_size = page_size
         self.total = len(items)
         self.total_pages = (self.total + page_size - 1) // page_size
-    
+
     @property
     def start_index(self) -> int:
         return (self.page - 1) * self.page_size
-    
+
     @property
     def end_index(self) -> int:
         return min(self.start_index + self.page_size, self.total)
-    
+
     @property
     def has_next(self) -> bool:
         return self.page < self.total_pages
-    
+
     @property
     def has_prev(self) -> bool:
         return self.page > 1
-    
-    def get_page_items(self) -> List:
+
+    def get_page_items(self) -> list:
         return self.items[self.start_index:self.end_index]
-    
+
     def to_dict(self) -> dict:
         return {
             "items": self.get_page_items(),

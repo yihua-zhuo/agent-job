@@ -73,11 +73,22 @@ class TestHttpStatus:
 # ---------------------------------------------------------------------------
 
 class MockTenantList:
+    """List-like mock with dict-like subscript access.
+
+    Required because router handlers access resp.data["items"], resp.data["total"], etc.
+    via subscript [] on the data object returned from the service.
+    """
     def __init__(self, items):
         self.items = items
         self.total = len(items)
         self.page = 1
         self.page_size = 20
+
+    def __getitem__(self, key):
+        return getattr(self, key)
+
+    def get(self, key, default=None):
+        return getattr(self, key, default)
 
 
 # ---------------------------------------------------------------------------
@@ -87,6 +98,8 @@ class MockTenantList:
 @pytest.fixture
 def client_with_service(monkeypatch):
     from internal.middleware.fastapi_auth import require_auth
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
 
     mock_service = MagicMock()
     monkeypatch.setattr(
@@ -98,6 +111,13 @@ def client_with_service(monkeypatch):
     app.include_router(tenants_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
     app.dependency_overrides[get_db] = lambda: MagicMock()
+
+    @app.exception_handler(Exception)
+    async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": str(exc)},
+        )
 
     client = TestClient(app, raise_server_exceptions=False)
     return client, mock_service
@@ -196,9 +216,7 @@ class TestListTenantsEndpoint:
 
     def test_with_pagination_params(self, client_with_service):
         client, svc = client_with_service
-        mock_list = MagicMock()
-        mock_list.items = [TENANT_ROW]
-        mock_list.total = 1
+        mock_list = MockTenantList([TENANT_ROW])
         mock_list.page = 2
         mock_list.page_size = 5
         svc.list_tenants = AsyncMock(

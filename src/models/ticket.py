@@ -1,7 +1,6 @@
-from dataclasses import dataclass
-from datetime import datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import datetime
 from enum import Enum
-from typing import Optional, List
 
 
 class TicketStatus(Enum):
@@ -35,36 +34,40 @@ class SLALevel(Enum):
 
 @dataclass
 class Ticket:
-    id: Optional[int]
-    subject: str
-    description: str
-    status: TicketStatus
-    priority: TicketPriority
-    channel: TicketChannel
-    customer_id: int
-    assigned_to: Optional[int]
-    sla_level: SLALevel
-    created_at: datetime
-    updated_at: datetime
-    resolved_at: Optional[datetime]
-    first_response_at: Optional[datetime]
-    response_deadline: Optional[datetime]
+    id: int | None = None
+    subject: str = ""
+    description: str = ""
+    status: TicketStatus = TicketStatus.OPEN
+    priority: TicketPriority = TicketPriority.MEDIUM
+    channel: TicketChannel = TicketChannel.EMAIL
+    customer_id: int = 0
+    assigned_to: int | None = None
+    sla_level: SLALevel = SLALevel.BASIC
+    created_at: datetime = field(default_factory=datetime.utcnow)
+    updated_at: datetime = field(default_factory=datetime.utcnow)
+    resolved_at: datetime | None = None
+    first_response_at: datetime | None = None
+    response_deadline: datetime | None = None
 
     def check_sla_breach(self) -> bool:
         """检查是否SLA超时"""
         if self.resolved_at:
             return False
-        return datetime.now() > self.response_deadline
+        if not self.response_deadline:
+            return False
+        now = datetime.now(self.response_deadline.tzinfo) if self.response_deadline.tzinfo else datetime.now()
+        return now > self.response_deadline
 
 
 @dataclass
 class TicketReply:
-    id: Optional[int]
-    ticket_id: int
-    content: str
-    is_internal: bool  # 内部备注，不对客户可见
-    created_by: int
-    created_at: datetime
+    id: int | None = None
+    ticket_id: int = 0
+    tenant_id: int = 0
+    content: str = ""
+    is_internal: bool = False
+    created_by: int = 0
+    created_at: datetime = field(default_factory=datetime.utcnow)
 
 
 @dataclass

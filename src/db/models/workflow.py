@@ -1,6 +1,5 @@
 """Workflow ORM models."""
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -17,7 +16,7 @@ class WorkflowModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[Optional[str]] = mapped_column(String(2000), nullable=True)
+    description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
     trigger_config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     actions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
@@ -62,11 +61,11 @@ class WorkflowExecutionModel(Base):
     started_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
-    completed_at: Mapped[Optional[datetime]] = mapped_column(
+    completed_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
     )
     status: Mapped[str] = mapped_column(String(50), default="running", nullable=False)
-    result: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     def to_dict(self) -> dict:
         return {

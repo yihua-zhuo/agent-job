@@ -28,7 +28,7 @@ def process_data(data: list) -> dict:
     """Process a list of numbers and return statistics"""
     if not data:
         return {"count": 0, "sum": 0, "average": 0}
-    
+
     return {
         "count": len(data),
         "sum": sum(data),

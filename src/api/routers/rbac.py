@@ -1,13 +1,12 @@
 """RBAC router — /api/v1/rbac/* role, permission, and user-role endpoints."""
+
 from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from db.connection import get_db
-from internal.middleware.fastapi_auth import require_auth, AuthContext
-from services.rbac_service import RBACService
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.response import ResponseStatus
-
+from services.rbac_service import RBACService
 
 rbac_router = APIRouter(prefix="/api/v1/rbac", tags=["rbac"])
 
@@ -28,19 +27,19 @@ def _status(status: ResponseStatus) -> int:
 # Schemas
 class RoleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=50)
-    display_name: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = Field("")
+    display_name: str | None = Field(None, max_length=100)
+    description: str | None = Field("")
     priority: int = Field(0)
 
 
 class RoleUpdate(BaseModel):
-    display_name: Optional[str] = Field(None, max_length=100)
-    description: Optional[str] = Field(None)
-    priority: Optional[int] = Field(None)
+    display_name: str | None = Field(None, max_length=100)
+    description: str | None = Field(None)
+    priority: int | None = Field(None)
 
 
 class PermissionAssign(BaseModel):
-    permission_names: List[str] = Field(..., min_items=1)
+    permission_names: list[str] = Field(..., min_items=1)
 
 
 class RoleAssign(BaseModel):
@@ -48,7 +47,7 @@ class RoleAssign(BaseModel):
 
 
 class UserRolesSet(BaseModel):
-    role_ids: List[int] = Field(..., min_items=1)
+    role_ids: list[int] = Field(..., min_items=1)
 
 
 # Endpoints — Roles
@@ -125,7 +124,7 @@ async def delete_role(
 # Endpoints — Permissions
 @rbac_router.get("/permissions")
 async def list_permissions(
-    category: Optional[str] = Query(None),
+    category: str | None = Query(None),
     ctx: AuthContext = Depends(require_auth),
 ):
     async with get_db() as session:

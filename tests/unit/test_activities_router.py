@@ -332,8 +332,10 @@ class TestGetCustomerActivitiesEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         mock_activity = MockActivity(ACTIVITY_ROW)
+        mock_paginated = MagicMock()
+        mock_paginated.items = [mock_activity]
         svc.get_customer_activities = AsyncMock(
-            return_value=_make_service_response(data=[mock_activity])
+            return_value=_make_service_response(data=mock_paginated)
         )
         resp = client.get("/api/v1/activities/customer/1")
         assert resp.status_code == 200

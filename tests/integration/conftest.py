@@ -76,7 +76,8 @@ TEST_SYNC_DATABASE_URL: str = TEST_DATABASE_URL.replace(
 )
 
 # Ensure required env vars are present for services instantiated in tests.
-os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
+# Note: dotenv loaded .env above which may have the real secret; override for tests.
+os.environ["JWT_SECRET_KEY"] = "integration-test-jwt-secret-key"
 os.environ.setdefault("SECRET_KEY", "integration-test-secret-key")
 os.environ.setdefault("DATABASE_URL", TEST_SYNC_DATABASE_URL)
 
@@ -349,16 +350,15 @@ async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
         username="webtest",
         email="webtest@example.com",
         password="TestPass123!",
-        role=UserRole.ADMIN,
+        role="admin",
         tenant_id=tenant_id_web,
-        full_name="Web Test User",
     )
     await async_session.commit()
     # Retrieve the actual DB-assigned user id (not hardcoded 999).
-    created_user = await user_svc.get_user_by_username("webtest", tenant_id=tenant_id_web)
-    actual_user_id = created_user.id if created_user else 999
+    created_user = await user_svc.get_user_by_username("webtest")
+    actual_user_id = created_user["id"] if created_user else 999
 
-    auth_svc = AuthService(async_session)
+    auth_svc = AuthService(async_session, secret_key="integration-test-jwt-secret-key")
     token = auth_svc.generate_token(
         user_id=actual_user_id,
         username="webtest",
@@ -374,7 +374,7 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
     os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
     from services.auth_service import AuthService
 
-    auth_svc = AuthService(async_session)
+    auth_svc = AuthService(async_session, secret_key="integration-test-jwt-secret-key")
     token = auth_svc.generate_token(
         user_id=999,
         username="webtest2",

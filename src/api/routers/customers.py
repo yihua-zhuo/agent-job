@@ -1,26 +1,26 @@
 """Customer router — all /api/v1/customers endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field, field_validator
-from typing import Optional, List
 import re
 
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel, Field, field_validator
+
 from db.connection import get_db
-from internal.middleware.fastapi_auth import require_auth, AuthContext
-from services.customer_service import CustomerService
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.response import ResponseStatus
 from pkg.response.schemas import (
+    BulkImportResponse,
     CustomerData,
+    CustomerListData,
+    CustomerListResponse,
     CustomerResponse,
     CustomerSearchData,
     CustomerSearchResponse,
-    CustomerListData,
-    CustomerListResponse,
-    TagResponse,
-    StatusChangeResponse,
-    OwnerChangeResponse,
-    BulkImportResponse,
     ErrorEnvelope,
+    OwnerChangeResponse,
+    StatusChangeResponse,
+    TagResponse,
 )
+from services.customer_service import CustomerService
 
 customers_router = APIRouter(prefix='/api/v1/customers', tags=['customers'])
 
@@ -60,12 +60,12 @@ def _http_status(status: ResponseStatus) -> int:
 
 class CustomerCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="客户名称")
-    email: Optional[str] = Field(None, max_length=255, description="邮箱")
-    phone: Optional[str] = Field(None, max_length=50, description="电话")
-    company: Optional[str] = Field(None, max_length=200, description="公司")
-    status: Optional[str] = Field(default='lead', pattern="^(lead|customer|partner|prospect)$")
-    owner_id: Optional[int] = Field(default=0, ge=0, description="负责人 ID")
-    tags: Optional[List[str]] = Field(default_factory=list, description="标签列表")
+    email: str | None = Field(None, max_length=255, description="邮箱")
+    phone: str | None = Field(None, max_length=50, description="电话")
+    company: str | None = Field(None, max_length=200, description="公司")
+    status: str | None = Field(default='lead', pattern="^(lead|customer|partner|prospect)$")
+    owner_id: int | None = Field(default=0, ge=0, description="负责人 ID")
+    tags: list[str] | None = Field(default_factory=list, description="标签列表")
 
     @field_validator('name')
     @classmethod
@@ -95,7 +95,7 @@ class OwnerChange(BaseModel):
 
 
 class BulkImport(BaseModel):
-    customers: List[dict] = Field(..., max_length=1000)
+    customers: list[dict] = Field(..., max_length=1000)
 
 
 class PaginationQuery(BaseModel):
@@ -134,9 +134,9 @@ async def create_customer(
 async def list_customers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    status: Optional[str] = None,
-    owner_id: Optional[int] = Query(None, ge=0),
-    tags: Optional[str] = None,
+    status: str | None = None,
+    owner_id: int | None = Query(None, ge=0),
+    tags: str | None = None,
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
@@ -242,7 +242,9 @@ async def update_customer(
     status = _http_status(resp.status)
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
-    return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
+    if resp.data:
+        return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
+    return CustomerResponse(message=resp.message, data=None)
 
 
 @customers_router.delete(
@@ -279,7 +281,10 @@ async def add_tag(
     status = _http_status(resp.status)
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
-    return TagResponse(message=resp.message, data=resp.data)
+    return TagResponse(
+        message=resp.message,
+        data={"id": customer_id, "tag": body.tag},
+    )
 
 
 @customers_router.delete(
@@ -298,7 +303,10 @@ async def remove_tag(
     status = _http_status(resp.status)
     if status != 200:
         raise HTTPException(status_code=status, detail=resp.message)
-    return TagResponse(message=resp.message, data=resp.data)
+    return TagResponse(
+        message=resp.message,
+        data={"id": customer_id, "tag": tag},
+    )
 
 
 @customers_router.put(

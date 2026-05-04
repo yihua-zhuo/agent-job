@@ -1,6 +1,5 @@
 """Reminder ORM model."""
 from datetime import datetime
-from typing import Optional
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
@@ -16,11 +15,11 @@ class ReminderModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    title: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
-    content: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    content: Mapped[str | None] = mapped_column(Text, nullable=True)
     remind_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
-    related_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
-    related_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    related_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    related_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

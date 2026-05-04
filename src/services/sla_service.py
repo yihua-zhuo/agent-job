@@ -1,13 +1,14 @@
 from datetime import datetime, timedelta
-from typing import List, Literal
+from typing import Literal
 
-from models.ticket import Ticket, SLALevel, SLA_CONFIGS
+from models.ticket import SLA_CONFIGS, Ticket
 
 
 class SLAService:
     """SLA管理"""
 
-    def __init__(self, ticket_service=None):
+    def __init__(self, session, ticket_service=None):
+        self._session = session
         self._ticket_service = ticket_service
 
     def check_sla_status(
@@ -38,7 +39,7 @@ class SLAService:
 
         return "normal"
 
-    def get_breach_tickets(self, tickets: List[Ticket] = None) -> List[Ticket]:
+    def get_breach_tickets(self, tickets: list[Ticket] = None) -> list[Ticket]:
         """获取所有超时的工单"""
         if tickets is None and self._ticket_service:
             tickets = self._ticket_service._tickets.values()

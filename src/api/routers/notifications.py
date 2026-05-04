@@ -1,13 +1,13 @@
 """Notifications router — /api/v1/notifications and /api/v1/reminders endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, Query, Path
+
+from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from db.connection import get_db
-from internal.middleware.fastapi_auth import require_auth, AuthContext
-from services.notification_service import NotificationService
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.response import ResponseStatus
 from pkg.response.schemas import ErrorEnvelope, SuccessEnvelope
+from services.notification_service import NotificationService
 
 notifications_router = APIRouter(prefix="/api/v1", tags=["notifications"])
 
@@ -36,8 +36,8 @@ class NotificationCreate(BaseModel):
     notification_type: str = Field(..., min_length=1, max_length=50)
     title: str = Field(..., min_length=1, max_length=255)
     content: str = Field(..., min_length=1)
-    related_type: Optional[str] = Field(None, max_length=50)
-    related_id: Optional[int] = Field(None, ge=1)
+    related_type: str | None = Field(None, max_length=50)
+    related_id: int | None = Field(None, ge=1)
 
 
 class NotificationData(BaseModel):
@@ -48,17 +48,17 @@ class NotificationData(BaseModel):
     title: str
     content: str
     is_read: bool
-    related_type: Optional[str] = None
-    related_id: Optional[int] = None
-    created_at: Optional[str] = None
+    related_type: str | None = None
+    related_id: int | None = None
+    created_at: str | None = None
 
 
 class NotificationResponse(SuccessEnvelope):
-    data: Optional[NotificationData] = None
+    data: NotificationData | None = None
 
 
 class NotificationListData(BaseModel):
-    items: List[NotificationData]
+    items: list[NotificationData]
     total: int = Field(..., ge=0)
     page: int = Field(..., ge=1)
     page_size: int = Field(..., ge=1)
@@ -92,10 +92,10 @@ class PreferencesResponse(SuccessEnvelope):
 
 class ReminderCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
-    content: Optional[str] = None
+    content: str | None = None
     remind_at: str = Field(..., description="ISO 8601 datetime string")
-    related_type: Optional[str] = Field(None, max_length=50)
-    related_id: Optional[int] = Field(None, ge=1)
+    related_type: str | None = Field(None, max_length=50)
+    related_id: int | None = Field(None, ge=1)
 
 
 class ReminderData(BaseModel):
@@ -103,20 +103,20 @@ class ReminderData(BaseModel):
     tenant_id: int
     user_id: int
     title: str
-    content: Optional[str] = None
+    content: str | None = None
     remind_at: str
-    related_type: Optional[str] = None
-    related_id: Optional[int] = None
+    related_type: str | None = None
+    related_id: int | None = None
     is_completed: bool
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
 
 class ReminderResponse(SuccessEnvelope):
-    data: Optional[ReminderData] = None
+    data: ReminderData | None = None
 
 
 class ReminderListData(BaseModel):
-    items: List[ReminderData]
+    items: list[ReminderData]
     total: int = Field(..., ge=0)
 
 

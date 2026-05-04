@@ -1,16 +1,15 @@
 import csv
-import json
 from datetime import datetime
-from typing import Dict, List, Optional
 
 
 class ReportService:
     """报表生成服务"""
 
-    def __init__(self):
+    def __init__(self, session):
+        self._session = session
         self._scheduled_reports = {}
 
-    def generate_pdf_report(self, report_data: Dict, title: str) -> Dict:
+    def generate_pdf_report(self, report_data: dict, title: str, tenant_id: int = 0) -> dict:
         """生成PDF报表"""
         # Placeholder for PDF generation logic
         # In production, use libraries like reportlab, weasyprint, or pdfkit
@@ -26,7 +25,7 @@ class ReportService:
         }
         return result
 
-    def generate_excel_report(self, report_data: Dict, title: str) -> Dict:
+    def generate_excel_report(self, report_data: dict, title: str, tenant_id: int = 0) -> dict:
         """生成Excel报表"""
         # Placeholder for Excel generation logic
         # In production, use openpyxl or xlsxwriter
@@ -42,7 +41,7 @@ class ReportService:
         }
         return result
 
-    def export_to_csv(self, data: List[Dict], filename: str) -> Dict:
+    def export_to_csv(self, data: list[dict], filename: str, tenant_id: int = 0) -> dict:
         """导出CSV"""
         if not data:
             return {"status": "error", "message": "No data to export"}
@@ -75,8 +74,9 @@ class ReportService:
     def schedule_report(
         self,
         report_id: int,
-        schedule: Dict,
-    ) -> Dict:
+        schedule: dict,
+        tenant_id: int = 0,
+    ) -> dict:
         """定时生成报表"""
         # schedule format: {"frequency": "daily|weekly|monthly", "time": "HH:MM", "day_of_week": 1-7, "day_of_month": 1-31}
         schedule_entry = {

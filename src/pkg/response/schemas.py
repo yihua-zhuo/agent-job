@@ -4,9 +4,9 @@ Concrete typed response schemas — one per endpoint shape.
 Each schema documents the exact data structure Swagger will display.
 """
 from datetime import datetime
-from typing import Generic, TypeVar, Optional, List
-from pydantic import BaseModel, Field
+from typing import Generic, TypeVar
 
+from pydantic import BaseModel, Field
 
 T = TypeVar("T")
 
@@ -35,7 +35,7 @@ class APIResponse(BaseModel, Generic[T]):
     """Single-item response envelope."""
     success: bool = True
     message: str = "OK"
-    data: Optional[T] = None
+    data: T | None = None
 
     @classmethod
     def ok(cls, data: T, message: str = "OK") -> "APIResponse[T]":
@@ -55,20 +55,20 @@ class CustomerData(BaseModel):
     id: int
     tenant_id: int
     name: str = Field(..., min_length=1, max_length=200)
-    email: Optional[str] = Field(None, max_length=255)
-    phone: Optional[str] = Field(None, max_length=50)
-    company: Optional[str] = Field(None, max_length=200)
+    email: str | None = Field(None, max_length=255)
+    phone: str | None = Field(None, max_length=50)
+    company: str | None = Field(None, max_length=200)
     status: str = Field(..., pattern="^(lead|customer|partner|prospect|active|inactive|blocked)$")
     owner_id: int = Field(..., ge=0)
-    tags: List[str] = Field(default_factory=list)
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    tags: list[str] = Field(default_factory=list)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class CustomerSearchData(BaseModel):
     """Non-paginated search result data field."""
     keyword: str
-    items: List[CustomerData]
+    items: list[CustomerData]
 
 
 class CustomerSearchResponse(SuccessEnvelope):
@@ -78,7 +78,7 @@ class CustomerSearchResponse(SuccessEnvelope):
 
 class CustomerListData(BaseModel):
     """Paginated customer list data field."""
-    items: List[CustomerData]
+    items: list[CustomerData]
     total: int = Field(..., ge=0)
     page: int = Field(..., ge=1)
     page_size: int = Field(..., ge=1)
@@ -89,7 +89,7 @@ class CustomerListData(BaseModel):
 
 class CustomerResponse(SuccessEnvelope):
     """POST /customers · GET /{id} — single customer."""
-    data: Optional[CustomerData] = None
+    data: CustomerData | None = None
 
 
 class CustomerListResponse(SuccessEnvelope):
@@ -104,28 +104,28 @@ class TagData(BaseModel):
 
 class TagResponse(SuccessEnvelope):
     """POST /{id}/tags · DELETE /{id}/tags/{tag}."""
-    data: Optional[TagData] = None
+    data: TagData | None = None
 
 
 class IdData(BaseModel):
     id: int
-    status: Optional[str] = None
-    owner_id: Optional[int] = None
+    status: str | None = None
+    owner_id: int | None = None
 
 
 class StatusChangeResponse(SuccessEnvelope):
     """PUT /{id}/status."""
-    data: Optional[IdData] = None
+    data: IdData | None = None
 
 
 class OwnerChangeResponse(SuccessEnvelope):
     """PUT /{id}/owner."""
-    data: Optional[IdData] = None
+    data: IdData | None = None
 
 
 class BulkImportData(BaseModel):
     imported: int = Field(..., ge=0)
-    errors: List[dict] = Field(default_factory=list)
+    errors: list[dict] = Field(default_factory=list)
 
 
 class BulkImportResponse(SuccessEnvelope):
@@ -142,14 +142,14 @@ class PipelineData(BaseModel):
     id: int
     tenant_id: int
     name: str = Field(..., min_length=1, max_length=200)
-    stages: List[str]
+    stages: list[str]
     is_default: bool
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class PipelineListData(BaseModel):
-    items: List[PipelineData]
+    items: list[PipelineData]
     total: int = Field(..., ge=0)
 
 
@@ -162,12 +162,12 @@ class PipelineStatsData(BaseModel):
 
 class PipelineFunnelData(BaseModel):
     pipeline_id: int
-    stages: List[dict]
+    stages: list[dict]
 
 
 class PipelineResponse(SuccessEnvelope):
     """POST /pipelines · GET /pipelines/{id}."""
-    data: Optional[PipelineData] = None
+    data: PipelineData | None = None
 
 
 class PipelineListResponse(SuccessEnvelope):
@@ -199,14 +199,14 @@ class OpportunityData(BaseModel):
     stage: str
     amount: str
     probability: int = Field(..., ge=0, le=100)
-    expected_close_date: Optional[str] = None
+    expected_close_date: str | None = None
     owner_id: int
-    created_at: Optional[datetime] = None
-    updated_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class OpportunityListData(BaseModel):
-    items: List[OpportunityData]
+    items: list[OpportunityData]
     total: int = Field(..., ge=0)
     page: int = Field(..., ge=1)
     page_size: int = Field(..., ge=1)
@@ -217,7 +217,7 @@ class OpportunityListData(BaseModel):
 
 class OpportunityResponse(SuccessEnvelope):
     """POST /opportunities · GET /{id}."""
-    data: Optional[OpportunityData] = None
+    data: OpportunityData | None = None
 
 
 class OpportunityListResponse(SuccessEnvelope):
@@ -245,7 +245,7 @@ class OwnerForecastData(BaseModel):
 
 
 class ForecastData(BaseModel):
-    owner_id: Optional[int] = None
+    owner_id: int | None = None
     forecast: dict
 
 

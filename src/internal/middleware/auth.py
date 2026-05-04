@@ -1,9 +1,10 @@
 """认证中间件"""
 import os
-import jwt
 from functools import wraps
-from flask import request, g
-from typing import Optional, List
+
+import jwt
+from flask import g, request
+
 from ..pkg.errors import AppError, ErrorCode
 
 # 配置（建议从 config.yaml 加载）
@@ -11,7 +12,7 @@ JWT_SECRET = os.environ.get('JWT_SECRET', 'your-secret-key')
 JWT_ALGORITHM = "HS256"
 
 
-def extract_token_from_header() -> Optional[str]:
+def extract_token_from_header() -> str | None:
     """从请求头提取 Token"""
     auth_header = request.headers.get("Authorization", "")
     if auth_header.startswith("Bearer "):

@@ -8,11 +8,12 @@ Usage:
     # All roles:
     @router.get("/", dependencies=[Depends(require_role("admin", "editor"))])
 """
-from fastapi import Depends, HTTPException
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-import jwt
 import os
-from typing import Optional, Callable
+from collections.abc import Callable
+
+import jwt
+from fastapi import Depends, HTTPException
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from internal.middleware.fastapi_auth import AuthContext
 
@@ -73,8 +74,8 @@ def require_role(*allowed_roles: str) -> Callable:
 
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
-) -> Optional[AuthContext]:
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
+) -> AuthContext | None:
     """Optional auth — returns None if no bearer token provided."""
     if not credentials:
         return None

@@ -1,27 +1,27 @@
 """Sales router — /api/v1/sales/pipelines, /api/v1/sales/opportunities, /api/v1/sales/forecast."""
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from db.connection import get_db
-from internal.middleware.fastapi_auth import require_auth, AuthContext
-from services.sales_service import SalesService
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.response import ResponseStatus
 from pkg.response.schemas import (
-    PipelineData,
-    PipelineListData,
-    PipelineResponse,
-    PipelineListResponse,
-    PipelineStatsResponse,
-    PipelineFunnelResponse,
+    ErrorEnvelope,
+    ForecastResponse,
     OpportunityData,
     OpportunityListData,
-    OpportunityResponse,
     OpportunityListResponse,
+    OpportunityResponse,
+    PipelineData,
+    PipelineFunnelResponse,
+    PipelineListData,
+    PipelineListResponse,
+    PipelineResponse,
+    PipelineStatsResponse,
     StageChangeResponse,
-    ForecastResponse,
-    ErrorEnvelope,
 )
+from services.sales_service import SalesService
 
 sales_router = APIRouter(prefix='/api/v1/sales', tags=['sales'])
 
@@ -51,25 +51,25 @@ class OpportunityCreate(BaseModel):
     stage: str = Field(..., min_length=1, max_length=50, description="阶段")
     amount: float = Field(..., ge=0, description="金额")
     owner_id: int = Field(..., ge=0, description="负责人 ID")
-    close_date: Optional[str] = Field(None, description="预计关闭日期 ISO 格式")
-    notes: Optional[str] = Field(None, max_length=2000, description="备注")
+    close_date: str | None = Field(None, description="预计关闭日期 ISO 格式")
+    notes: str | None = Field(None, max_length=2000, description="备注")
 
 
 class OpportunityUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1, max_length=200)
-    customer_id: Optional[int] = Field(None, ge=1)
-    pipeline_id: Optional[int] = Field(None, ge=1)
-    stage: Optional[str] = Field(None, min_length=1, max_length=50)
-    amount: Optional[float] = Field(None, ge=0)
-    owner_id: Optional[int] = Field(None, ge=0)
-    close_date: Optional[str] = None
-    notes: Optional[str] = Field(None, max_length=2000)
+    name: str | None = Field(None, min_length=1, max_length=200)
+    customer_id: int | None = Field(None, ge=1)
+    pipeline_id: int | None = Field(None, ge=1)
+    stage: str | None = Field(None, min_length=1, max_length=50)
+    amount: float | None = Field(None, ge=0)
+    owner_id: int | None = Field(None, ge=0)
+    close_date: str | None = None
+    notes: str | None = Field(None, max_length=2000)
 
 
 class PipelineCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="管道名称")
-    is_default: Optional[bool] = Field(default=False, description="是否默认管道")
-    stages: Optional[List[str]] = Field(default=None, description="阶段列表")
+    is_default: bool | None = Field(default=False, description="是否默认管道")
+    stages: list[str] | None = Field(default=None, description="阶段列表")
 
 
 class StageChange(BaseModel):
@@ -209,9 +209,9 @@ async def create_opportunity(
 async def list_opportunities(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    pipeline_id: Optional[int] = None,
-    stage: Optional[str] = None,
-    owner_id: Optional[int] = None,
+    pipeline_id: int | None = None,
+    stage: str | None = None,
+    owner_id: int | None = None,
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
@@ -302,7 +302,7 @@ async def change_stage(
     responses={401: {"model": ErrorEnvelope}},
 )
 async def get_forecast(
-    owner_id: Optional[int] = Query(None, ge=0),
+    owner_id: int | None = Query(None, ge=0),
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):

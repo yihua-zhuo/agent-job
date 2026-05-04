@@ -1,15 +1,15 @@
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict
 
 
 class AnalyticsService:
-    def __init__(self):
+    def __init__(self, session):
+        self._session = session
         self._dashboards = {}
         self._reports = {}
         self._next_id = 1
 
     # Dashboard methods
-    def create_dashboard(self, name: str, owner_id: int, description: Optional[str] = None) -> Dict:
+    def create_dashboard(self, name: str, owner_id: int, description: str | None = None) -> dict:
         """创建仪表板"""
         now = datetime.utcnow()
         dashboard = {
@@ -26,11 +26,11 @@ class AnalyticsService:
         self._next_id += 1
         return dashboard
 
-    def get_dashboard(self, dashboard_id: int) -> Optional[Dict]:
+    def get_dashboard(self, dashboard_id: int) -> dict | None:
         """获取仪表板"""
         return self._dashboards.get(dashboard_id)
 
-    def update_dashboard(self, dashboard_id: int, **kwargs) -> Optional[Dict]:
+    def update_dashboard(self, dashboard_id: int, **kwargs) -> dict | None:
         """更新仪表板"""
         if dashboard_id not in self._dashboards:
             return None
@@ -41,13 +41,13 @@ class AnalyticsService:
         dashboard["updated_at"] = datetime.utcnow()
         return dashboard
 
-    def list_dashboards(self, owner_id: Optional[int] = None) -> List[Dict]:
+    def list_dashboards(self, owner_id: int | None = None) -> list[dict]:
         """仪表板列表"""
         if owner_id is None:
             return list(self._dashboards.values())
         return [d for d in self._dashboards.values() if d["owner_id"] == owner_id]
 
-    def add_widget(self, dashboard_id: int, widget_config: Dict) -> Optional[Dict]:
+    def add_widget(self, dashboard_id: int, widget_config: dict) -> dict | None:
         """添加组件"""
         if dashboard_id not in self._dashboards:
             return None
@@ -71,9 +71,9 @@ class AnalyticsService:
         self,
         name: str,
         report_type: str,
-        config: Dict,
+        config: dict,
         created_by: int,
-    ) -> Dict:
+    ) -> dict:
         """创建报表"""
         now = datetime.utcnow()
         report = {
@@ -90,7 +90,7 @@ class AnalyticsService:
         self._next_id += 1
         return report
 
-    def run_report(self, report_id: int, date_range: Dict) -> Optional[Dict]:
+    def run_report(self, report_id: int, date_range: dict) -> dict | None:
         """运行报表"""
         if report_id not in self._reports:
             return None
@@ -115,7 +115,7 @@ class AnalyticsService:
         else:
             return {"error": "Unknown report type"}
 
-    def get_sales_revenue_report(self, start_date, end_date, group_by: str = "day") -> Dict:
+    def get_sales_revenue_report(self, start_date, end_date, group_by: str = "day") -> dict:
         """销售营收报表"""
         # 返回：每日/周/月销售额
         labels = []
@@ -146,7 +146,7 @@ class AnalyticsService:
             "chart_type": "line",
         }
 
-    def get_sales_conversion_report(self, start_date, end_date) -> Dict:
+    def get_sales_conversion_report(self, start_date, end_date) -> dict:
         """销售转化报表"""
         # 返回：各阶段转化率
         return {
@@ -161,7 +161,7 @@ class AnalyticsService:
             "chart_type": "funnel",
         }
 
-    def get_customer_growth_report(self, start_date, end_date) -> Dict:
+    def get_customer_growth_report(self, start_date, end_date) -> dict:
         """客户增长报表"""
         # 返回：新增客户数、流失数、净增长
         return {
@@ -172,7 +172,7 @@ class AnalyticsService:
             "chart_type": "bar",
         }
 
-    def get_pipeline_forecast(self, pipeline_id) -> Dict:
+    def get_pipeline_forecast(self, pipeline_id) -> dict:
         """管道预测"""
         # 按概率计算预期收入
         if pipeline_id is None:
@@ -190,7 +190,7 @@ class AnalyticsService:
             "chart_type": "bar",
         }
 
-    def get_team_performance(self, start_date, end_date) -> Dict:
+    def get_team_performance(self, start_date, end_date) -> dict:
         """团队绩效"""
         # 各销售的任务完成数、成交数、金额
         return {
@@ -203,7 +203,7 @@ class AnalyticsService:
         }
 
     # Chart data methods
-    def get_chart_data(self, chart_type: str, data: List, labels: List[str]) -> Dict:
+    def get_chart_data(self, chart_type: str, data: list, labels: list[str]) -> dict:
         """格式化图表数据"""
         return {
             "labels": labels,

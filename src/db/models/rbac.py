@@ -1,6 +1,5 @@
 """RBAC ORM models — roles, permissions, user role assignments."""
 from datetime import datetime
-from typing import List
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -28,10 +27,10 @@ class RoleModel(Base):
     )
 
     # Relationships
-    permissions: Mapped[List["RolePermissionModel"]] = relationship(
+    permissions: Mapped[list["RolePermissionModel"]] = relationship(
         "RolePermissionModel", back_populates="role", cascade="all, delete-orphan"
     )
-    user_assignments: Mapped[List["UserRoleModel"]] = relationship(
+    user_assignments: Mapped[list["UserRoleModel"]] = relationship(
         "UserRoleModel", back_populates="role", cascade="all, delete-orphan"
     )
 
@@ -63,7 +62,7 @@ class PermissionModel(Base):
     )
 
     # Relationships
-    roles: Mapped[List["RolePermissionModel"]] = relationship(
+    roles: Mapped[list["RolePermissionModel"]] = relationship(
         "RolePermissionModel", back_populates="permission", cascade="all, delete-orphan"
     )
 

@@ -2,7 +2,6 @@
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, List
 
 
 class CustomerStatus(Enum):
@@ -19,11 +18,11 @@ class Customer:
     name: str
     email: str
     owner_id: int
-    id: Optional[int] = None
-    phone: Optional[str] = None
-    company: Optional[str] = None
+    id: int | None = None
+    phone: str | None = None
+    company: str | None = None
     status: CustomerStatus = CustomerStatus.LEAD
-    tags: List[str] = field(default_factory=list)
+    tags: list[str] = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.utcnow)
     updated_at: datetime = field(default_factory=datetime.utcnow)
 

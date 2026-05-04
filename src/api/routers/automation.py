@@ -1,12 +1,12 @@
 """Automation rules router — /api/v1/automation/rules endpoints."""
-from fastapi import APIRouter, Depends, HTTPException, Path, Query
+
+from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from db.connection import get_db
-from internal.middleware.fastapi_auth import require_auth, AuthContext
-from services.automation_service import AutomationService
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.response import ResponseStatus
+from services.automation_service import AutomationService
 
 automation_router = APIRouter(prefix="/api/v1/automation", tags=["automation"])
 
@@ -43,44 +43,44 @@ class ActionItem(BaseModel):
 
 class AutomationRuleCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
-    description: Optional[str] = Field(None, max_length=2000)
+    description: str | None = Field(None, max_length=2000)
     trigger_event: str = Field(..., min_length=1, max_length=100)
-    conditions: List[ConditionItem] = Field(default_factory=list)
-    actions: List[ActionItem] = Field(..., min_length=1)
+    conditions: list[ConditionItem] = Field(default_factory=list)
+    actions: list[ActionItem] = Field(..., min_length=1)
     enabled: bool = Field(default=True)
 
 
 class AutomationRuleUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=255)
-    description: Optional[str] = Field(None, max_length=2000)
-    trigger_event: Optional[str] = Field(None, max_length=100)
-    conditions: Optional[List[ConditionItem]] = Field(None)
-    actions: Optional[List[ActionItem]] = Field(None)
-    enabled: Optional[bool] = Field(None)
+    name: str | None = Field(None, max_length=255)
+    description: str | None = Field(None, max_length=2000)
+    trigger_event: str | None = Field(None, max_length=100)
+    conditions: list[ConditionItem] | None = Field(None)
+    actions: list[ActionItem] | None = Field(None)
+    enabled: bool | None = Field(None)
 
 
 class AutomationRuleData(BaseModel):
     id: int
     tenant_id: int
     name: str
-    description: Optional[str]
+    description: str | None
     trigger_event: str
-    conditions: List[dict]
-    actions: List[dict]
+    conditions: list[dict]
+    actions: list[dict]
     enabled: bool
     created_by: int
-    created_at: Optional[str]
-    updated_at: Optional[str]
+    created_at: str | None
+    updated_at: str | None
 
 
 class AutomationRuleResponse(BaseModel):
     success: bool
-    data: Optional[AutomationRuleData] = None
-    message: Optional[str] = None
+    data: AutomationRuleData | None = None
+    message: str | None = None
 
 
 class AutomationRuleListData(BaseModel):
-    items: List[AutomationRuleData]
+    items: list[AutomationRuleData]
     total: int
     page: int
     page_size: int
@@ -88,8 +88,8 @@ class AutomationRuleListData(BaseModel):
 
 class AutomationRuleListResponse(BaseModel):
     success: bool
-    data: Optional[AutomationRuleListData] = None
-    message: Optional[str] = None
+    data: AutomationRuleListData | None = None
+    message: str | None = None
 
 
 class AutomationLogData(BaseModel):
@@ -98,15 +98,15 @@ class AutomationLogData(BaseModel):
     tenant_id: int
     trigger_event: str
     trigger_context: dict
-    actions_executed: List[dict]
+    actions_executed: list[dict]
     status: str
-    error_message: Optional[str]
+    error_message: str | None
     executed_by: int
-    executed_at: Optional[str]
+    executed_at: str | None
 
 
 class AutomationLogListData(BaseModel):
-    items: List[AutomationLogData]
+    items: list[AutomationLogData]
     total: int
     page: int
     page_size: int
@@ -114,8 +114,8 @@ class AutomationLogListData(BaseModel):
 
 class AutomationLogListResponse(BaseModel):
     success: bool
-    data: Optional[AutomationLogListData] = None
-    message: Optional[str] = None
+    data: AutomationLogListData | None = None
+    message: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -148,8 +148,8 @@ async def create_automation_rule(
 async def list_automation_rules(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    trigger_event: Optional[str] = Query(None),
-    enabled: Optional[bool] = Query(None),
+    trigger_event: str | None = Query(None),
+    enabled: bool | None = Query(None),
     ctx: AuthContext = Depends(require_auth),
 ):
     """List automation rules for the tenant."""
@@ -231,8 +231,8 @@ async def toggle_automation_rule(
 async def list_automation_logs(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    rule_id: Optional[int] = Query(None),
-    status: Optional[str] = Query(None),
+    rule_id: int | None = Query(None),
+    status: str | None = Query(None),
     ctx: AuthContext = Depends(require_auth),
 ):
     """List automation execution logs."""

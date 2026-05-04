@@ -25,10 +25,46 @@ def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
 
 
 def _make_service_response(status=ResponseStatus.SUCCESS, data=None, message="OK"):
-    resp = MagicMock()
-    resp.status = status
-    resp.data = data
-    resp.message = message
+    """Build a ticket-service-style dict response.
+
+    TicketService methods return dicts with "status", "data", "message" keys
+    (not ApiResponse objects). This helper constructs that dict shape.
+    """
+    if isinstance(data, list):
+        # List of tickets returned directly (e.g. from get_sla_breaches, get_customer_tickets).
+        return {
+            "status": status,
+            "data": data,
+            "message": message,
+        }
+    if isinstance(data, MagicMock) and hasattr(data, "items"):
+        # Paginated list wrapper (list_tickets-style).
+        items = getattr(data, "items", [])
+        return {
+            "status": status,
+            "data": {
+                "items": items,
+                "total": getattr(data, "total", len(items)),
+                "page": getattr(data, "page", 1),
+                "page_size": getattr(data, "page_size", len(items)),
+                "total_pages": getattr(data, "total_pages", 1),
+                "has_next": getattr(data, "has_next", False),
+                "has_prev": getattr(data, "has_prev", False),
+            },
+            "message": message,
+        }
+    resp = {"status": status, "data": data, "message": message}
+    if isinstance(data, MagicMock):
+        # Single MagicMock ticket object: convert to plain dict so the router can
+        # JSON-serialise it without "not JSON serializable" errors.
+        obj = data
+        known = {
+            "id", "tenant_id", "subject", "description", "status", "priority",
+            "channel", "customer_id", "assigned_to", "sla_level",
+            "created_at", "updated_at", "resolved_at", "first_response_at",
+            "response_deadline",
+        }
+        resp["data"] = {k: getattr(obj, k, None) for k in known if hasattr(obj, k)}
     return resp
 
 
@@ -131,6 +167,7 @@ def client_with_service(monkeypatch):
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
     app.dependency_overrides[get_db] = lambda: MagicMock()
 
+    # raise_server_exceptions=False so 500s surface as HTTP responses, not exceptions
     client = TestClient(app, raise_server_exceptions=False)
     return client, mock_service, mock_sla_service
 
@@ -412,7 +449,9 @@ class TestGetCustomerTicketsEndpoint:
     def test_success(self, client_with_service):
         client, svc, _ = client_with_service
         mock_ticket = MockTicket(TICKET_ROW)
-        svc.get_customer_tickets = AsyncMock(return_value=[mock_ticket])
+        svc.get_customer_tickets = AsyncMock(
+            return_value=_make_service_response(data=[mock_ticket])
+        )
         resp = client.get("/api/v1/tickets/customer/1")
         assert resp.status_code == 200
         body = resp.json()
@@ -427,6 +466,7 @@ class TestSlaBreachesEndpoint:
     def test_success(self, client_with_service):
         client, svc, _ = client_with_service
         mock_ticket = MockTicket(TICKET_ROW)
+        # Router calls service.get_sla_breaches() directly (not ["data"]), expects list
         svc.get_sla_breaches = AsyncMock(return_value=[mock_ticket])
         resp = client.get("/api/v1/tickets/sla/breaches")
         assert resp.status_code == 200

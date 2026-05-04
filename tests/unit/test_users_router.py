@@ -76,9 +76,30 @@ class TestHttpStatus:
 # ---------------------------------------------------------------------------
 
 class MockUser:
+    """Dict-like mock that returns plain strings for all string fields.
+
+    Required because router handlers call str() on role/status/email/etc,
+    and str(MagicMock attribute) returns a repr string like "<MagicMock...>".
+    """
     def __init__(self, data=None):
-        for k, v in (data or {}).items():
-            setattr(self, k, v)
+        data = data or {}
+        self._data = {k: (str(v) if v is not None else None) for k, v in data.items()}
+
+    def __getattr__(self, name):
+        if name.startswith("_"):
+            raise AttributeError(name)
+        if name in self._data:
+            return self._data[name]
+        raise AttributeError(name)
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+
+    def __repr__(self):
+        return f"MockUser({self._data!r})"
 
 
 # ---------------------------------------------------------------------------
@@ -88,6 +109,8 @@ class MockUser:
 @pytest.fixture
 def client_with_service(monkeypatch):
     from internal.middleware.fastapi_auth import require_auth
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
 
     mock_service = MagicMock()
     monkeypatch.setattr(
@@ -103,6 +126,13 @@ def client_with_service(monkeypatch):
     app.include_router(users_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
     app.dependency_overrides[get_db] = lambda: MagicMock()
+
+    @app.exception_handler(Exception)
+    async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": str(exc)},
+        )
 
     client = TestClient(app, raise_server_exceptions=False)
     return client, mock_service

@@ -1,13 +1,13 @@
 """Activities router — /api/v1/activities endpoints."""
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
-from typing import Optional, List
 
 from db.connection import get_db
-from internal.middleware.fastapi_auth import require_auth, AuthContext
-from services.activity_service import ActivityService
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.response import ResponseStatus
 from pkg.response.schemas import ErrorEnvelope, SuccessEnvelope
+from services.activity_service import ActivityService
 
 activities_router = APIRouter(prefix='/api/v1/activities', tags=['activities'])
 
@@ -35,13 +35,13 @@ class ActivityCreate(BaseModel):
     activity_type: str = Field(..., min_length=1, max_length=50)
     content: str = Field(..., min_length=1, max_length=5000)
     created_by: int = Field(..., ge=1)
-    opportunity_id: Optional[int] = Field(None, ge=1)
+    opportunity_id: int | None = Field(None, ge=1)
 
 
 class ActivityUpdate(BaseModel):
-    content: Optional[str] = Field(None, min_length=1, max_length=5000)
-    activity_type: Optional[str] = Field(None, min_length=1, max_length=50)
-    opportunity_id: Optional[int] = Field(None, ge=1)
+    content: str | None = Field(None, min_length=1, max_length=5000)
+    activity_type: str | None = Field(None, min_length=1, max_length=50)
+    opportunity_id: int | None = Field(None, ge=1)
 
 
 class ActivitySearchRequest(BaseModel):
@@ -52,19 +52,19 @@ class ActivityData(BaseModel):
     id: int
     tenant_id: int
     customer_id: int
-    opportunity_id: Optional[int] = None
+    opportunity_id: int | None = None
     type: str
     content: str
     created_by: int
-    created_at: Optional[str] = None
+    created_at: str | None = None
 
 
 class ActivityResponse(SuccessEnvelope):
-    data: Optional[ActivityData] = None
+    data: ActivityData | None = None
 
 
 class ActivityListData(BaseModel):
-    items: List[ActivityData]
+    items: list[ActivityData]
     total: int = Field(..., ge=0)
     page: int = Field(..., ge=1)
     page_size: int = Field(..., ge=1)
@@ -78,7 +78,7 @@ class ActivityListResponse(SuccessEnvelope):
 
 
 class ActivitySearchData(BaseModel):
-    items: List[dict]
+    items: list[dict]
 
 
 class ActivitySearchResponse(SuccessEnvelope):
@@ -88,7 +88,7 @@ class ActivitySearchResponse(SuccessEnvelope):
 class ActivitySummaryData(BaseModel):
     total: int
     by_type: dict
-    recent_activities: List[dict]
+    recent_activities: list[dict]
 
 
 class ActivitySummaryResponse(SuccessEnvelope):
@@ -99,9 +99,24 @@ class ActivitySummaryResponse(SuccessEnvelope):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-def _activity_to_data(activity) -> Optional[ActivityData]:
+def _activity_to_data(activity) -> ActivityData | None:
     if activity is None:
         return None
+    if isinstance(activity, dict):
+        act_type = activity.get('type', '')
+        act_created_at = activity.get('created_at')
+        if hasattr(act_created_at, 'isoformat'):
+            act_created_at = act_created_at.isoformat()
+        return ActivityData(
+            id=activity.get('id', 0),
+            tenant_id=activity.get('tenant_id', 0),
+            customer_id=activity.get('customer_id', 0),
+            opportunity_id=activity.get('opportunity_id'),
+            type=act_type if act_type else '',
+            content=activity.get('content', ''),
+            created_by=activity.get('created_by', 0),
+            created_at=act_created_at,
+        )
     type_val = activity.type.value if hasattr(activity.type, "value") else str(activity.type)
     return ActivityData(
         id=activity.id,
@@ -149,8 +164,8 @@ async def create_activity(
 )
 async def get_activity_summary(
     customer_id: int = Query(..., ge=1),
-    start_date: Optional[str] = Query(None),
-    end_date: Optional[str] = Query(None),
+    start_date: str | None = Query(None),
+    end_date: str | None = Query(None),
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
@@ -239,8 +254,8 @@ async def delete_activity(
 async def list_activities(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    customer_id: Optional[int] = Query(None, ge=1),
-    activity_type: Optional[str] = Query(None, max_length=50),
+    customer_id: int | None = Query(None, ge=1),
+    activity_type: str | None = Query(None, max_length=50),
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
@@ -285,7 +300,7 @@ async def get_customer_activities(
     status_code = _http_status(resp.status)
     if status_code != 200:
         raise HTTPException(status_code=status_code, detail=resp.message)
-    items = [a.to_dict() if hasattr(a, "to_dict") else a for a in resp.data]
+    items = [a.to_dict() if hasattr(a, "to_dict") else a for a in resp.data.items]
     # Convert dicts to ActivityData
     activity_items = []
     for item in items:

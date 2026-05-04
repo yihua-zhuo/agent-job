@@ -1,15 +1,12 @@
 """Role-Based Access Control (RBAC) service — DB-backed with SQLAlchemy ORM."""
-from datetime import datetime, UTC
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
 
-from sqlalchemy import delete, select, and_, func
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
 
-from db.models.rbac import RoleModel, PermissionModel, RolePermissionModel, UserRoleModel
+from db.models.rbac import PermissionModel, RoleModel, RolePermissionModel, UserRoleModel
 from db.models.user import UserModel
 from models.response import ApiResponse, PaginatedData
-
 
 # Default system roles
 DEFAULT_ROLES = [
@@ -45,7 +42,7 @@ DEFAULT_PERMISSIONS = [
 ]
 
 # Default role → permission name mappings
-DEFAULT_ROLE_PERMISSIONS: Dict[str, List[str]] = {
+DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "admin": [p[0] for p in DEFAULT_PERMISSIONS],
     "manager": [
         "customer:read", "customer:update",
@@ -72,7 +69,7 @@ DEFAULT_ROLE_PERMISSIONS: Dict[str, List[str]] = {
 class Permission:
     """Permission value object — comparable by value for test compatibility."""
     __slots__ = ("value",)
-    _registry_: Dict[str, "Permission"] = {}
+    _registry_: dict[str, "Permission"] = {}
 
     def __init__(self, value: str):
         self.value = value
@@ -161,8 +158,9 @@ class RBACService:
 
     def __init__(self, session: "AsyncSession" = None):
         self.session = session
-        if session is not None:
-            self._require_session()
+        if session is None:
+            return
+        self._require_session()
 
     def _require_db(self):
         """Ensure a real session is available before DB operations."""
@@ -188,7 +186,7 @@ class RBACService:
         description: str = "",
         is_system: bool = False,
         priority: int = 0,
-    ) -> ApiResponse[Dict]:
+    ) -> ApiResponse[dict]:
         """Create a new role."""
         role = RoleModel(
             tenant_id=tenant_id,
@@ -209,7 +207,7 @@ class RBACService:
         page: int = 1,
         page_size: int = 50,
         include_system: bool = True,
-    ) -> ApiResponse[PaginatedData[Dict]]:
+    ) -> ApiResponse[PaginatedData[dict]]:
         """List roles (system roles + custom tenant roles)."""
         conditions = [
             or_(RoleModel.tenant_id == tenant_id, RoleModel.tenant_id == 0) if include_system
@@ -234,7 +232,7 @@ class RBACService:
         items = [r.to_dict() for r in roles]
         return ApiResponse.paginated(items=items, total=total, page=page, page_size=page_size)
 
-    async def get_role(self, role_id: int, tenant_id: int) -> ApiResponse[Dict]:
+    async def get_role(self, role_id: int, tenant_id: int) -> ApiResponse[dict]:
         """Get a role by ID."""
         result = await self.session.execute(
             select(RoleModel).where(
@@ -249,7 +247,7 @@ class RBACService:
             return ApiResponse.error(message="角色不存在", code=404)
         return ApiResponse.success(data=role.to_dict())
 
-    async def update_role(self, role_id: int, tenant_id: int, **kwargs) -> ApiResponse[Dict]:
+    async def update_role(self, role_id: int, tenant_id: int, **kwargs) -> ApiResponse[dict]:
         """Update a role's display_name, description, priority."""
         allowed = {"display_name", "description", "priority"}
         values = {k: v for k, v in kwargs.items() if k in allowed}
@@ -270,7 +268,7 @@ class RBACService:
         await self.session.flush()
         return ApiResponse.success(data=role.to_dict(), message="角色更新成功")
 
-    async def delete_role(self, role_id: int, tenant_id: int) -> ApiResponse[Dict]:
+    async def delete_role(self, role_id: int, tenant_id: int) -> ApiResponse[dict]:
         """Delete a custom role (system roles cannot be deleted)."""
         result = await self.session.execute(
             select(RoleModel).where(and_(RoleModel.id == role_id, RoleModel.tenant_id == tenant_id))
@@ -287,7 +285,7 @@ class RBACService:
     # Permission CRUD
     # -------------------------------------------------------------------------
 
-    async def list_permissions(self, category: Optional[str] = None) -> ApiResponse[PaginatedData[Dict]]:
+    async def list_permissions(self, category: str | None = None) -> ApiResponse[PaginatedData[dict]]:
         """List all permissions, optionally filtered by category."""
         query = select(PermissionModel)
         if category:
@@ -298,7 +296,7 @@ class RBACService:
         items = [p.to_dict() for p in perms]
         return ApiResponse.paginated(items=items, total=len(items), page=1, page_size=len(items))
 
-    async def list_role_permissions(self, role_id: int, tenant_id: int) -> ApiResponse[List[Dict]]:
+    async def list_role_permissions(self, role_id: int, tenant_id: int) -> ApiResponse[list[dict]]:
         """List all permissions assigned to a role."""
         # Tenant-ownership check: role must belong to this tenant or be shared (tenant_id=0)
         role_check = await self.session.execute(
@@ -320,7 +318,7 @@ class RBACService:
         perms = result.scalars().all()
         return ApiResponse.success(data=[p.to_dict() for p in perms])
 
-    async def set_role_permissions(self, role_id: int, permission_names: List[str], tenant_id: int) -> ApiResponse[Dict]:
+    async def set_role_permissions(self, role_id: int, permission_names: list[str], tenant_id: int) -> ApiResponse[dict]:
         """Replace all permissions for a role with the given list."""
         # Only allow editing tenant-owned roles (strict: not system/shared roles from other tenants)
         role_result = await self.session.execute(
@@ -364,7 +362,7 @@ class RBACService:
         role_id: int,
         tenant_id: int,
         granted_by: int = 0,
-    ) -> ApiResponse[Dict]:
+    ) -> ApiResponse[dict]:
         """Assign a role to a user."""
         # Verify user exists in tenant
         user_result = await self.session.execute(
@@ -410,7 +408,7 @@ class RBACService:
         await self.session.flush()
         return ApiResponse.success(data={"user_id": user_id, "role_id": role_id}, message="角色分配成功")
 
-    async def revoke_role_from_user(self, user_id: int, role_id: int, tenant_id: int) -> ApiResponse[Dict]:
+    async def revoke_role_from_user(self, user_id: int, role_id: int, tenant_id: int) -> ApiResponse[dict]:
         """Revoke a role from a user."""
         result = await self.session.execute(
             delete(UserRoleModel).where(
@@ -425,7 +423,7 @@ class RBACService:
             return ApiResponse.error(message="该用户没有此角色", code=404)
         return ApiResponse.success(data={"user_id": user_id, "role_id": role_id}, message="角色撤销成功")
 
-    async def get_user_roles(self, user_id: int, tenant_id: int) -> ApiResponse[List[Dict]]:
+    async def get_user_roles(self, user_id: int, tenant_id: int) -> ApiResponse[list[dict]]:
         """Get all roles assigned to a user in a given tenant."""
         result = await self.session.execute(
             select(RoleModel)
@@ -441,7 +439,7 @@ class RBACService:
         roles = result.scalars().all()
         return ApiResponse.success(data=[r.to_dict() for r in roles])
 
-    async def get_user_permissions(self, user_id: int, tenant_id: int) -> ApiResponse[List[str]]:
+    async def get_user_permissions(self, user_id: int, tenant_id: int) -> ApiResponse[list[str]]:
         """Get all permission strings for a user (union of all assigned roles in this tenant)."""
         result = await self.session.execute(
             select(PermissionModel.name)
@@ -463,7 +461,7 @@ class RBACService:
         perm_value = permission.value if isinstance(permission, Permission) else permission
         return perm_value in DEFAULT_ROLE_PERMISSIONS.get(role, [])
 
-    def get_role_permissions(self, role: str) -> List[str]:
+    def get_role_permissions(self, role: str) -> list[str]:
         """Get all permission value strings for a given role (from static map)."""
         return list(DEFAULT_ROLE_PERMISSIONS.get(role, []))
 
@@ -488,7 +486,7 @@ class RBACService:
         )
         return result.scalar_one_or_none() is not None
 
-    async def require_permission(self, user_id: int, permission: str, tenant_id: int) -> ApiResponse[Dict]:
+    async def require_permission(self, user_id: int, permission: str, tenant_id: int) -> ApiResponse[dict]:
         """Check permission and return error if denied."""
         if not await self._has_permission_db(user_id, permission, tenant_id):
             return ApiResponse.error(message=f"权限不足: {permission}", code=403)
@@ -497,10 +495,10 @@ class RBACService:
     async def set_user_roles(
         self,
         user_id: int,
-        role_ids: List[int],
+        role_ids: list[int],
         tenant_id: int,
         granted_by: int = 0,
-    ) -> ApiResponse[Dict]:
+    ) -> ApiResponse[dict]:
         """Replace all roles for a user with the given list."""
         # Verify user exists
         user_result = await self.session.execute(
@@ -543,7 +541,7 @@ class RBACService:
         await self.session.flush()
         return ApiResponse.success(data={"user_id": user_id, "role_ids": role_ids}, message="用户角色更新成功")
 
-    async def list_users_with_role(self, role_id: int, tenant_id: int) -> ApiResponse[List[Dict]]:
+    async def list_users_with_role(self, role_id: int, tenant_id: int) -> ApiResponse[list[dict]]:
         """List all users who have a specific role."""
         result = await self.session.execute(
             select(UserModel)

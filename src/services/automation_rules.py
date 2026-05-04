@@ -1,4 +1,3 @@
-from typing import List, Dict
 
 
 class AutomationRules:
@@ -46,14 +45,14 @@ class AutomationRules:
         }
     }
 
-    def get_available_rules(self) -> List[Dict]:
+    def get_available_rules(self) -> list[dict]:
         """获取所有可用规则"""
         return [
             {"key": key, **value}
             for key, value in self.RULES.items()
         ]
 
-    def apply_rule(self, rule_name: str, context: Dict) -> Dict:
+    def apply_rule(self, rule_name: str, context: dict) -> dict:
         """应用指定规则"""
         rule = self.RULES.get(rule_name)
         if not rule:

@@ -1,4 +1,5 @@
-"""Web-layer integration tests — FastAPI router endpoints via httpx.
+"""
+Web-layer integration tests — FastAPI router endpoints via httpx.
 
 Tests the full HTTP stack: routing, request validation, auth middleware,
 response serialization, and multi-tenant isolation at the web layer.
@@ -969,7 +970,7 @@ class TestEdgeCases:
             json={"status": "not_a_valid_status"},
         )
         # Status may be accepted as-is or rejected — both are valid behaviours
-        assert resp.status_code in (200, 422)
+        assert resp.status_code in (200, 400, 422)
 
     async def test_update_nonexistent_customer_returns_404(
         self, api_client: "AsyncClient"

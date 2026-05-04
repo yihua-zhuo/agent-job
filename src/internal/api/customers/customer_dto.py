@@ -1,5 +1,4 @@
 """客户 DTO 定义"""
-from typing import Optional, List
 from dataclasses import dataclass
 
 
@@ -8,8 +7,8 @@ class CreateCustomerDTO:
     """创建客户 DTO"""
     name: str
     email: str
-    phone: Optional[str] = None
-    tags: List[str] = None
+    phone: str | None = None
+    tags: list[str] = None
 
     def __post_init__(self):
         if self.tags is None:
@@ -19,11 +18,11 @@ class CreateCustomerDTO:
 @dataclass
 class UpdateCustomerDTO:
     """更新客户 DTO"""
-    name: Optional[str] = None
-    email: Optional[str] = None
-    phone: Optional[str] = None
-    tags: Optional[List[str]] = None
-    status: Optional[str] = None
+    name: str | None = None
+    email: str | None = None
+    phone: str | None = None
+    tags: list[str] | None = None
+    status: str | None = None
 
 
 @dataclass
@@ -33,10 +32,10 @@ class CustomerResponseDTO:
     name: str
     email: str
     status: str
-    phone: Optional[str] = None
-    tags: List[str] = None
-    created_at: Optional[str] = None
-    updated_at: Optional[str] = None
+    phone: str | None = None
+    tags: list[str] = None
+    created_at: str | None = None
+    updated_at: str | None = None
 
     def to_dict(self):
         return {
