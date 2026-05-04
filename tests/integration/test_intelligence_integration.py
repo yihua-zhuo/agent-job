@@ -8,6 +8,7 @@ if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 
 import pytest
+
 from services.churn_prediction import ChurnPredictionService
 from services.sales_recommendation import SalesRecommendationService
 from services.smart_categorization import SmartCategorizationService

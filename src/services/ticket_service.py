@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta
 
-from models.response import ResponseStatus
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from models.ticket import (
     SLA_CONFIGS,
     SLALevel,
@@ -10,6 +11,7 @@ from models.ticket import (
     TicketReply,
     TicketStatus,
 )
+from pkg.errors.app_exceptions import NotFoundException
 
 # Module-level state so tickets persist across service instances per test
 _tickets_db: dict = {}
@@ -20,7 +22,7 @@ _ticket_agent_index = 0
 
 
 class TicketService:
-    def __init__(self, session):
+    def __init__(self, session: AsyncSession):
         self._session = session
 
     async def create_ticket(
@@ -33,7 +35,7 @@ class TicketService:
         sla_level: SLALevel = SLALevel.STANDARD,
         assigned_to: int | None = None,
         tenant_id: int = 0,
-    ) -> dict:
+    ) -> Ticket:
         """创建工单"""
         now = datetime.now()
         sla_config = SLA_CONFIGS[sla_level]
@@ -64,31 +66,31 @@ class TicketService:
         if assigned_to is None:
             _auto_assign(ticket.id)
 
-        return {"status": ResponseStatus.SUCCESS, "data": ticket, "message": "工单创建成功"}
+        return ticket
 
-    async def get_ticket(self, ticket_id: int, tenant_id: int = 0) -> dict:
+    async def get_ticket(self, ticket_id: int, tenant_id: int = 0) -> Ticket:
         ticket = _tickets_db.get(ticket_id)
         if not ticket:
-            return {"status": ResponseStatus.NOT_FOUND, "data": None, "message": "Ticket not found"}
-        return {"status": ResponseStatus.SUCCESS, "data": ticket, "message": ""}
+            raise NotFoundException("Ticket")
+        return ticket
 
-    async def update_ticket(self, ticket_id: int, tenant_id: int = 0, **kwargs) -> dict:
+    async def update_ticket(self, ticket_id: int, tenant_id: int = 0, **kwargs) -> Ticket:
         ticket = _tickets_db.get(ticket_id)
         if not ticket:
-            return {"status": ResponseStatus.NOT_FOUND, "data": None, "message": "Ticket not found"}
+            raise NotFoundException("Ticket")
         for key, value in kwargs.items():
             if hasattr(ticket, key):
                 setattr(ticket, key, value)
         ticket.updated_at = datetime.now()
-        return {"status": ResponseStatus.SUCCESS, "data": ticket, "message": "工单更新成功"}
+        return ticket
 
-    async def assign_ticket(self, ticket_id: int, assigned_to: int, tenant_id: int = 0) -> dict:
+    async def assign_ticket(self, ticket_id: int, assigned_to: int, tenant_id: int = 0) -> Ticket:
         return await self.update_ticket(ticket_id, assigned_to=assigned_to)
 
-    async def add_reply(self, ticket_id: int, content: str, created_by: int, is_internal: bool = False, tenant_id: int = 0) -> dict:
+    async def add_reply(self, ticket_id: int, content: str, created_by: int, is_internal: bool = False, tenant_id: int = 0) -> TicketReply:
         ticket = _tickets_db.get(ticket_id)
         if not ticket:
-            return {"status": ResponseStatus.NOT_FOUND, "data": None, "message": "Ticket not found"}
+            raise NotFoundException("Ticket")
         reply = TicketReply(
             id=len(_ticket_replies_db[ticket_id]) + 1,
             ticket_id=ticket_id,
@@ -102,21 +104,21 @@ class TicketService:
         if not ticket.first_response_at and not is_internal:
             ticket.first_response_at = datetime.now()
             ticket.updated_at = datetime.now()
-        return {"status": ResponseStatus.SUCCESS, "data": reply, "message": ""}
+        return reply
 
-    async def change_status(self, ticket_id: int, new_status: TicketStatus, tenant_id: int = 0) -> dict:
+    async def change_status(self, ticket_id: int, new_status: TicketStatus, tenant_id: int = 0) -> Ticket:
         ticket = _tickets_db.get(ticket_id)
         if not ticket:
-            return {"status": ResponseStatus.NOT_FOUND, "data": None, "message": "Ticket not found"}
+            raise NotFoundException("Ticket")
         ticket.status = new_status
         ticket.updated_at = datetime.now()
         if new_status == TicketStatus.RESOLVED:
             ticket.resolved_at = datetime.now()
-        return {"status": ResponseStatus.SUCCESS, "data": ticket, "message": "状态更新成功"}
+        return ticket
 
-    async def get_customer_tickets(self, customer_id: int, tenant_id: int = 0) -> dict:
+    async def get_customer_tickets(self, customer_id: int, tenant_id: int = 0) -> list[Ticket]:
         tickets = [t for t in _tickets_db.values() if t.customer_id == customer_id]
-        return {"status": ResponseStatus.SUCCESS, "data": tickets, "message": ""}
+        return tickets
 
     async def list_tickets(
         self,
@@ -126,7 +128,7 @@ class TicketService:
         priority: TicketPriority | None = None,
         assigned_to: int | None = None,
         tenant_id: int = 0,
-    ) -> dict:
+    ) -> tuple[list[Ticket], int]:
         """工单列表"""
         tickets = list(_tickets_db.values())
 
@@ -143,30 +145,17 @@ class TicketService:
         start = (page - 1) * page_size
         end = start + page_size
         page_tickets = tickets[start:end]
-        pg = {
-            "items": page_tickets,
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size if total > 0 else 0,
-            "has_next": end < total,
-            "has_prev": page > 1,
-        }
-        return {
-            "status": ResponseStatus.SUCCESS,
-            "data": pg,
-            "message": "",
-        }
+        return page_tickets, total
 
-    async def get_sla_breaches(self, tenant_id: int = 0) -> dict:
+    async def get_sla_breaches(self, tenant_id: int = 0) -> list[Ticket]:
         """获取SLA超时的工单"""
         tickets = [t for t in _tickets_db.values() if t.check_sla_breach()]
-        return {"status": ResponseStatus.SUCCESS, "data": tickets, "message": ""}
+        return tickets
 
     async def auto_assign(self, ticket_id: int, tenant_id: int = 0) -> dict:
         """自动分配客服"""
         result = _auto_assign(ticket_id)
-        return {"status": ResponseStatus.SUCCESS, "data": {"ticket_id": ticket_id, "assigned_to": result}, "message": ""}
+        return {"ticket_id": ticket_id, "assigned_to": result}
 
 
 def _auto_assign(ticket_id: int) -> int | None:

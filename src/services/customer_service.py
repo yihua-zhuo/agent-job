@@ -4,7 +4,7 @@ import json
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.response import ApiResponse, ResponseStatus
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 # For placeholder stubs that don't use DB — module-level state so tests
 # that bypass the router (calling service directly) can still track data.
@@ -20,7 +20,7 @@ class CustomerService:
     def __init__(self, session: AsyncSession):
         self._session = session
 
-    async def create_customer(self, data: dict, tenant_id: int = 0) -> ApiResponse:
+    async def create_customer(self, data: dict, tenant_id: int = 0) -> dict:
         """Insert into DB."""
         name = (data or {}).get("name") or "Customer"
         email = (data or {}).get("email")
@@ -49,11 +49,7 @@ class CustomerService:
         })
         await self._session.commit()
         result = row.fetchone()
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={c: getattr(result, c) for c in result._fields} if result else None,
-            message="客户创建成功",
-        )
+        return {c: getattr(result, c) for c in result._fields} if result else None
 
     async def list_customers(
         self,
@@ -63,7 +59,7 @@ class CustomerService:
         owner_id: int = None,
         tags: str = None,
         tenant_id: int = 0,
-    ) -> ApiResponse:
+    ) -> tuple[list[dict], int]:
         """SELECT FROM customers WHERE tenant_id = :tid [+ optional filters]."""
         conditions = ["tenant_id = :tenant_id"]
         params: dict = {"tenant_id": tenant_id, "page": page, "page_size": page_size}
@@ -94,23 +90,10 @@ class CustomerService:
         """)
         rows = await self._session.execute(list_sql, params)
         items = [{c: getattr(r, c) for c in r._fields} for r in rows.fetchall()]
-        total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={
-                "items": items,
-                "total": total,
-                "page": page,
-                "page_size": page_size,
-                "total_pages": total_pages,
-                "has_next": offset + page_size < total,
-                "has_prev": page > 1,
-            },
-            message="",
-        )
+        return items, total
 
-    async def get_customer(self, customer_id: int, tenant_id: int = 0) -> ApiResponse:
+    async def get_customer(self, customer_id: int, tenant_id: int = 0) -> dict:
         """SELECT FROM customers WHERE id = :id AND tenant_id = :tid."""
         sql = text("""
             SELECT id, tenant_id, name, email, phone, company, status, owner_id, tags,
@@ -121,29 +104,17 @@ class CustomerService:
         row = await self._session.execute(sql, {"id": customer_id, "tenant_id": tenant_id})
         result = row.fetchone()
         if result is None:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
-        return ApiResponse(status=ResponseStatus.SUCCESS, data={c: getattr(result, c) for c in result._fields}, message="")
+            raise NotFoundException("客户")
+        return {c: getattr(result, c) for c in result._fields}
 
     async def update_customer(
         self, customer_id: int, data: dict, tenant_id: int = 0
-    ) -> ApiResponse:
+    ) -> dict:
         """UPDATE customers SET ... WHERE id = :id AND tenant_id = :tid."""
         if customer_id >= 900000000 or customer_id in _deleted_customer_ids:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
+            raise NotFoundException("客户")
         if "status" in data and data["status"] not in self.VALID_STATUSES:
-            return ApiResponse(
-                status=ResponseStatus.VALIDATION_ERROR,
-                data=None,
-                message=f"Invalid status: {data['status']}",
-            )
+            raise ValidationException(f"Invalid status: {data['status']}")
         # Build dynamic UPDATE
         set_clauses = []
         params: dict = {"id": customer_id, "tenant_id": tenant_id}
@@ -152,11 +123,7 @@ class CustomerService:
                 set_clauses.append(f"{field} = :{field}")
                 params[field] = data[field]
         if not set_clauses:
-            return ApiResponse(
-                status=ResponseStatus.SUCCESS,
-                data=None,
-                message="没有需要更新的字段",
-            )
+            return None
         sql = text(f"""
             UPDATE customers
             SET {", ".join(set_clauses)}, updated_at = NOW()
@@ -168,25 +135,13 @@ class CustomerService:
         await self._session.commit()
         result = row.fetchone()
         if result is None:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={c: getattr(result, c) for c in result._fields},
-            message="客户更新成功",
-        )
+            raise NotFoundException("客户")
+        return {c: getattr(result, c) for c in result._fields}
 
-    async def delete_customer(self, customer_id: int, tenant_id: int = 0) -> ApiResponse:
+    async def delete_customer(self, customer_id: int, tenant_id: int = 0) -> dict:
         """DELETE FROM customers WHERE id = :id AND tenant_id = :tid."""
         if customer_id >= 900000000:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
+            raise NotFoundException("客户")
         sql = text("""
             DELETE FROM customers
             WHERE id = :id AND tenant_id = :tenant_id
@@ -197,19 +152,11 @@ class CustomerService:
         deleted = row.fetchone()
         if deleted is None:
             _deleted_customer_ids.add(customer_id)
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data={"id": customer_id},
-                message="Customer not found",
-            )
+            raise NotFoundException("客户")
         _deleted_customer_ids.add(customer_id)
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={"id": customer_id},
-            message="客户删除成功",
-        )
+        return {"id": customer_id}
 
-    async def search_customers(self, keyword: str, tenant_id: int = 0) -> ApiResponse:
+    async def search_customers(self, keyword: str, tenant_id: int = 0) -> list[dict]:
         """SELECT FROM customers WHERE tenant_id = :tid AND (name ILIKE ... OR email ILIKE ...)."""
         sql = text("""
             SELECT id, tenant_id, name, email, phone, company, status, owner_id, tags,
@@ -225,20 +172,12 @@ class CustomerService:
             "kw": f"%{keyword}%",
         })
         items = [{c: getattr(r, c) for c in r._fields} for r in rows.fetchall()]
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={"keyword": keyword, "items": items},
-            message="",
-        )
+        return items
 
-    async def add_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> ApiResponse:
+    async def add_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> dict:
         """UPDATE customers SET tags = array_append(tags, :tag) WHERE id = :id."""
         if customer_id >= 900000000:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
+            raise NotFoundException("客户")
         # Read current tags, modify in Python, write back
         get_sql = text("""
             SELECT tags FROM customers
@@ -250,11 +189,7 @@ class CustomerService:
         })
         existing = row.fetchone()
         if existing is None:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
+            raise NotFoundException("客户")
         tags_val = existing._mapping.get("tags") or []
         if tag not in tags_val:
             tags_val = tags_val + [tag]
@@ -274,25 +209,13 @@ class CustomerService:
         await self._session.commit()
         result = row.fetchone()
         if result is None:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={c: getattr(result, c) for c in result._fields},
-            message="标签添加成功",
-        )
+            raise NotFoundException("客户")
+        return {c: getattr(result, c) for c in result._fields}
 
-    async def remove_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> ApiResponse:
+    async def remove_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> dict:
         """UPDATE customers SET tags = array_remove(tags, :tag) WHERE id = :id."""
         if customer_id >= 900000000:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
+            raise NotFoundException("客户")
         get_sql = text("""
             SELECT tags FROM customers
             WHERE id = :id AND tenant_id = :tenant_id
@@ -303,11 +226,7 @@ class CustomerService:
         })
         existing = row.fetchone()
         if existing is None:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
+            raise NotFoundException("客户")
         tags_val = existing._mapping.get("tags") or []
         if tag in tags_val:
             tags_val = [t for t in tags_val if t != tag]
@@ -327,33 +246,17 @@ class CustomerService:
         await self._session.commit()
         result = row.fetchone()
         if result is None:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={c: getattr(result, c) for c in result._fields},
-            message="标签移除成功",
-        )
+            raise NotFoundException("客户")
+        return {c: getattr(result, c) for c in result._fields}
 
     async def change_status(
         self, customer_id: int, status: str, tenant_id: int = 0
-    ) -> ApiResponse:
+    ) -> dict:
         """UPDATE customers SET status = :status WHERE id = :id."""
         if customer_id >= 900000000:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
+            raise NotFoundException("客户")
         if status not in self.VALID_STATUSES:
-            return ApiResponse(
-                status=ResponseStatus.VALIDATION_ERROR,
-                data=None,
-                message=f"Invalid status: {status}",
-            )
+            raise ValidationException(f"Invalid status: {status}")
         sql = text("""
             UPDATE customers
             SET status = :status, updated_at = NOW()
@@ -369,20 +272,12 @@ class CustomerService:
         await self._session.commit()
         result = row.fetchone()
         if result is None:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={c: getattr(result, c) for c in result._fields},
-            message="状态更新成功",
-        )
+            raise NotFoundException("客户")
+        return {c: getattr(result, c) for c in result._fields}
 
     async def assign_owner(
         self, customer_id: int, owner_id: int, tenant_id: int = 0
-    ) -> ApiResponse:
+    ) -> dict:
         """UPDATE customers SET owner_id = :owner_id WHERE id = :id."""
         sql = text("""
             UPDATE customers
@@ -399,25 +294,13 @@ class CustomerService:
         await self._session.commit()
         result = row.fetchone()
         if result is None:
-            return ApiResponse(
-                status=ResponseStatus.NOT_FOUND,
-                data=None,
-                message="Customer not found",
-            )
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={c: getattr(result, c) for c in result._fields},
-            message="负责人分配成功",
-        )
+            raise NotFoundException("客户")
+        return {c: getattr(result, c) for c in result._fields}
 
-    async def bulk_import(self, customers: list, tenant_id: int = 0) -> ApiResponse:
+    async def bulk_import(self, customers: list, tenant_id: int = 0) -> int:
         """Insert all customers in bulk."""
         if not customers:
-            return ApiResponse(
-                status=ResponseStatus.SUCCESS,
-                data={"imported": 0},
-                message="没有数据需要导入",
-            )
+            return 0
         imported = 0
         for c in customers:
             name = c.get("name") or "Customer"
@@ -444,8 +327,4 @@ class CustomerService:
             })
             imported += 1
         await self._session.commit()
-        return ApiResponse(
-            status=ResponseStatus.SUCCESS,
-            data={"imported": imported},
-            message=f"成功导入{imported}条客户记录",
-        )
+        return imported

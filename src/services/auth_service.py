@@ -5,8 +5,14 @@ from datetime import UTC, datetime, timedelta
 import bcrypt
 import jwt
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.response import ApiResponse
+from models.response import ApiResponse, ResponseStatus
+from pkg.errors.app_exceptions import (
+    NotFoundException,
+    UnauthorizedException,
+    ValidationException,
+)
 
 
 def is_valid_email(email: str) -> bool:
@@ -39,7 +45,7 @@ class AuthService:
 
     TOKEN_EXPIRY_HOURS = 24
 
-    def __init__(self, session, secret_key: str = "dev-secret"):
+    def __init__(self, session: AsyncSession, secret_key: str = "dev-secret"):
         """Initialize AuthService.
 
         Args:
@@ -107,7 +113,7 @@ class AuthService:
         """Async alias for generate_token."""
         return self.generate_token(user_id, username, role, tenant_id=tenant_id)
 
-    async def authenticate_user(self, username: str, password: str) -> dict | None:
+    async def authenticate_user(self, username: str, password: str) -> dict:
         """Authenticate a user by username and password.
 
         Args:
@@ -115,18 +121,21 @@ class AuthService:
             password: The plain-text password.
 
         Returns:
-            User dict if credentials are valid, None otherwise.
+            User dict if credentials are valid.
+
+        Raises:
+            UnauthorizedException: If session is missing or credentials are invalid.
         """
         if not self.session:
-            return None
+            raise UnauthorizedException("Invalid credentials")
         sql = text("SELECT id, tenant_id, username, email, password_hash, role, status, full_name, bio, created_at, updated_at FROM users WHERE username = :username")
         row = await self.session.execute(sql, {"username": username})
         user = row.fetchone()
         if not user:
-            return None
+            raise UnauthorizedException("Invalid credentials")
         user_dict = {c: getattr(user, c) for c in user._fields}
         if not self.verify_password(password, user_dict["password_hash"]):
-            return None
+            raise UnauthorizedException("Invalid credentials")
         return {
             "id": user_dict["id"],
             "tenant_id": user_dict["tenant_id"],
@@ -137,8 +146,16 @@ class AuthService:
             "full_name": user_dict["full_name"],
         }
 
-    async def create_user(self, username: str, email: str, password: str, role: str = "user", tenant_id: int = 0, full_name: str = None) -> ApiResponse:
-        """Register a new user via UserService."""
+    async def create_user(self, username: str, email: str, password: str, role: str = "user", tenant_id: int = 0, full_name: str = None) -> dict:
+        """Register a new user via UserService.
+
+        Returns:
+            User dict on success.
+
+        Raises:
+            ValidationException: If validation fails.
+            ConflictException: If user already exists (from UserService).
+        """
         from services.user_service import UserService
         svc = UserService(self.session)
         result = await svc.create_user(
@@ -149,23 +166,32 @@ class AuthService:
             role=role,
             full_name=full_name,
         )
+        # UserService still returns ApiResponse — unwrap it
+        if isinstance(result, ApiResponse):
+            if result.status == ResponseStatus.SUCCESS:
+                return result.data
+            raise ValidationException(result.message)
         return result
 
-    async def get_current_user(self, token: str) -> dict | None:
-        """Return user dict for a valid token, or None."""
+    async def get_current_user(self, token: str) -> dict:
+        """Return user dict for a valid token.
+
+        Raises:
+            UnauthorizedException: If token is invalid or user not found.
+        """
         payload = self.verify_token(token)
         if not payload:
-            return None
+            raise UnauthorizedException("Invalid or expired token")
         user_id = payload.get("user_id")
         if not user_id:
-            return None
+            raise UnauthorizedException("Invalid token payload")
         if not self.session:
-            return None
+            raise UnauthorizedException("No database session")
         sql = text("SELECT id, tenant_id, username, email, role, status, full_name, bio, created_at, updated_at FROM users WHERE id = :id")
         row = await self.session.execute(sql, {"id": user_id})
         user = row.fetchone()
         if not user:
-            return None
+            raise NotFoundException("用户")
         user_dict = {c: getattr(user, c) for c in user._fields}
         return {
             "id": user_dict["id"],
@@ -178,10 +204,14 @@ class AuthService:
         }
 
     async def revoke_token(self, token: str) -> bool:
-        """Revoke a token by inserting it into the revoked tokens table."""
+        """Revoke a token by inserting it into the revoked tokens table.
+
+        Raises:
+            UnauthorizedException: If token is invalid.
+        """
         payload = self.verify_token(token)
         if not payload:
-            return False
+            raise UnauthorizedException("Invalid or expired token")
         if not self.session:
             return True
         jti = payload.get("jti") or f"{payload.get('user_id')}-{payload.get('exp')}"
@@ -192,22 +222,25 @@ class AuthService:
         await self.session.commit()
         return True
 
-    async def refresh_token(self, old_token: str) -> str | None:
+    async def refresh_token(self, old_token: str) -> str:
         """Refresh an existing token with a new expiry time.
 
         Args:
             old_token: The current JWT token to refresh.
 
         Returns:
-            New JWT token if old token is valid, None otherwise.
+            New JWT token string.
+
+        Raises:
+            UnauthorizedException: If old token is invalid or missing required fields.
         """
         payload = self.verify_token(old_token)
         if not payload:
-            return None
+            raise UnauthorizedException("Invalid or expired token")
         user_id = payload.get("user_id")
         username = payload.get("username")
         role = payload.get("role")
         tenant_id = payload.get("tenant_id")
         if not all([user_id, username, role]):
-            return None
+            raise UnauthorizedException("Invalid token payload")
         return self.generate_token(user_id, username, role, tenant_id=tenant_id)

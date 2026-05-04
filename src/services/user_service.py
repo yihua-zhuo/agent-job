@@ -5,7 +5,11 @@ import bcrypt
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.response import ApiResponse
+from pkg.errors.app_exceptions import (
+    ConflictException,
+    NotFoundException,
+    ValidationException,
+)
 
 
 class ValidationError(Exception):
@@ -61,24 +65,16 @@ class UserService:
 
     async def create_user(self, username: str, email: str, password: str,
                          tenant_id: int = 0, role: str = "user",
-                         full_name: str = None) -> ApiResponse:
+                         full_name: str = None) -> dict:
         """INSERT INTO users ... ON CONFLICT DO NOTHING."""
         # Validate
         if not self._validate_username(username):
-            return ApiResponse.error(
-                message="用户名格式不正确",
-                code=1001,
-                errors=[],
-            )
+            raise ValidationException("用户名格式不正确")
         if not self._validate_email(email):
-            return ApiResponse.error(
-                message="邮箱格式不正确",
-                code=1001,
-                errors=[],
-            )
+            raise ValidationException("邮箱格式不正确")
         is_valid, error_msg = self._validate_password(password)
         if not is_valid:
-            return ApiResponse.error(message=error_msg, code=1001, errors=[])
+            raise ValidationException(error_msg)
 
         password_hash = self._hash_password(password)
 
@@ -100,21 +96,18 @@ class UserService:
             })
             await self._session.commit()
             result = row.fetchone()
-            return ApiResponse.success(
-                data={c: getattr(result, c) for c in result._fields},
-                message="用户创建成功",
-            )
+            return {c: getattr(result, c) for c in result._fields}
         except Exception as e:
             await self._session.rollback()
             err_str = str(e).lower()
             if "unique" in err_str or "duplicate" in err_str:
                 if "username" in err_str:
-                    return ApiResponse.error(message="用户名已存在", code=2002, errors=[])
+                    raise ConflictException("用户名已存在")
                 if "email" in err_str:
-                    return ApiResponse.error(message="邮箱已被注册", code=2005, errors=[])
-            return ApiResponse.error(message="用户创建失败", code=500, errors=[])
+                    raise ConflictException("邮箱已被注册")
+            raise
 
-    async def get_user_by_id(self, user_id: int, tenant_id: int = 0) -> dict | None:
+    async def get_user_by_id(self, user_id: int, tenant_id: int = 0) -> dict:
         """SELECT FROM users WHERE id = :id AND tenant_id = :tid."""
         sql = text("""
             SELECT id, tenant_id, username, email, role, status, full_name, bio,
@@ -125,7 +118,7 @@ class UserService:
         row = await self._session.execute(sql, {"id": user_id, "tenant_id": tenant_id})
         result = row.fetchone()
         if result is None:
-            return None
+            raise NotFoundException("用户")
         return {c: getattr(result, c) for c in result._fields}
 
     async def get_user_by_username(self, username: str) -> dict | None:
@@ -160,7 +153,7 @@ class UserService:
         self, page: int = 1, page_size: int = 20,
         role: str = None, status: str = None, q: str = None,
         tenant_id: int = 0,
-    ) -> ApiResponse:
+    ) -> tuple[list[dict], int]:
         """SELECT FROM users WHERE tenant_id = :tid [+ optional filters]."""
         conditions = ["tenant_id = :tenant_id"]
         params: dict = {"tenant_id": tenant_id, "page": page, "page_size": page_size}
@@ -195,18 +188,12 @@ class UserService:
         rows = await self._session.execute(list_sql, params)
         items = [{c: getattr(r, c) for c in r._fields} for r in rows.fetchall()]
 
-        return ApiResponse.paginated(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
-            message="查询成功",
-        )
+        return items, total
 
     async def search_users(
         self, keyword: str, tenant_id: int = 0,
         page: int = 1, page_size: int = 20,
-    ) -> ApiResponse:
+    ) -> tuple[list[dict], int]:
         """SELECT FROM users WHERE tenant_id = :tid AND (username ILIKE ...)."""
         sql = text("""
             SELECT id, tenant_id, username, email, role, status, full_name, bio,
@@ -237,15 +224,9 @@ class UserService:
         })
         total = count_row.scalar() or 0
 
-        return ApiResponse.paginated(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
-            message="搜索成功",
-        )
+        return items, total
 
-    async def update_user(self, user_id: int, **kwargs) -> ApiResponse:
+    async def update_user(self, user_id: int, **kwargs) -> dict:
         """UPDATE users SET ... WHERE id = :id AND tenant_id = :tid."""
         # Check existence
         check_sql = text("SELECT id FROM users WHERE id = :id AND tenant_id = :tenant_id")
@@ -254,12 +235,12 @@ class UserService:
             "tenant_id": kwargs.get("tenant_id", 0),
         })
         if row.fetchone() is None:
-            return ApiResponse.error(message="用户不存在", code=2001, errors=[])
+            raise NotFoundException("用户")
 
         # Validate email if provided
         if "email" in kwargs:
             if not self._validate_email(kwargs["email"]):
-                return ApiResponse.error(message="邮箱格式不正确", code=1001, errors=[])
+                raise ValidationException("邮箱格式不正确")
 
         allowed_fields = {"email", "bio", "full_name", "status"}
         set_clauses = []
@@ -270,7 +251,7 @@ class UserService:
                 params[field] = kwargs[field]
 
         if not set_clauses:
-            return ApiResponse.success(data=None, message="没有需要更新的字段")
+            return None
 
         params["tenant_id"] = kwargs.get("tenant_id", 0)
         sql = text(f"""
@@ -284,13 +265,10 @@ class UserService:
         await self._session.commit()
         result = row.fetchone()
         if result is None:
-            return ApiResponse.error(message="用户不存在", code=2001, errors=[])
-        return ApiResponse.success(
-            data={c: getattr(result, c) for c in result._fields},
-            message="用户更新成功",
-        )
+            raise NotFoundException("用户")
+        return {c: getattr(result, c) for c in result._fields}
 
-    async def delete_user(self, user_id: int, tenant_id: int = 0) -> ApiResponse:
+    async def delete_user(self, user_id: int, tenant_id: int = 0) -> None:
         """DELETE FROM users WHERE id = :id AND tenant_id = :tid."""
         sql = text("""
             DELETE FROM users
@@ -301,13 +279,12 @@ class UserService:
         await self._session.commit()
         deleted = row.fetchone()
         if deleted is None:
-            return ApiResponse.error(message="用户不存在", code=2001)
-        return ApiResponse.success(message="用户删除成功")
+            raise NotFoundException("用户")
 
     async def change_password(
         self, user_id: int, old_password: str, new_password: str,
         tenant_id: int = 0,
-    ) -> ApiResponse:
+    ) -> None:
         """Verify old password then update to new password hash."""
         # Fetch current user with password hash
         sql = text("""
@@ -317,23 +294,19 @@ class UserService:
         row = await self._session.execute(sql, {"id": user_id, "tenant_id": tenant_id})
         user = row.fetchone()
         if user is None:
-            return ApiResponse.error(message="用户不存在", code=2001)
+            raise NotFoundException("用户")
 
         user_dict = {c: getattr(user, c) for c in user._fields}
         stored_hash = user_dict.get("password_hash", "")
 
         # Verify old password
         if not self._verify_password(old_password, stored_hash):
-            return ApiResponse.error(
-                message="旧密码不正确",
-                code=2003,
-                errors=[],
-            )
+            raise ValidationException("旧密码不正确")
 
         # Validate new password strength
         is_valid, error_msg = self._validate_password(new_password)
         if not is_valid:
-            return ApiResponse.error(message=error_msg, code=2004, errors=[])
+            raise ValidationException(error_msg)
 
         # Update password hash
         new_hash = self._hash_password(new_password)
@@ -348,4 +321,3 @@ class UserService:
             "password_hash": new_hash,
         })
         await self._session.commit()
-        return ApiResponse.success(message="密码修改成功")

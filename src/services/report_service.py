@@ -1,11 +1,15 @@
 import csv
 from datetime import datetime
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from pkg.errors.app_exceptions import ValidationException
+
 
 class ReportService:
     """报表生成服务"""
 
-    def __init__(self, session):
+    def __init__(self, session: AsyncSession):
         self._session = session
         self._scheduled_reports = {}
 
@@ -44,7 +48,7 @@ class ReportService:
     def export_to_csv(self, data: list[dict], filename: str, tenant_id: int = 0) -> dict:
         """导出CSV"""
         if not data:
-            return {"status": "error", "message": "No data to export"}
+            raise ValidationException("No data to export")
 
         # Extract headers from first row
         headers = list(data[0].keys()) if isinstance(data[0], dict) else []

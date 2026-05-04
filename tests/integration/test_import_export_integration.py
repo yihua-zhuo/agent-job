@@ -1,11 +1,7 @@
 """Integration tests for ImportExportService - tests data import/export in CSV/JSON/Excel formats."""
-import csv
-import io
 import json
-import os
 import sys
 from pathlib import Path
-from decimal import Decimal
 
 # Ensure src/ is on sys.path
 _src_root = Path(__file__).resolve().parents[2] / "src"
@@ -13,6 +9,7 @@ if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 
 import pytest
+
 from services.import_export_service import ImportExportService
 
 
@@ -236,7 +233,10 @@ class TestExportData:
         # hardcoded sample data (张三/李四) regardless of tenant_id.
         data = await svc.export_customers(filters={}, file_format="json", tenant_id=tenant_id)
         parsed = json.loads(data.decode("utf-8"))
-        assert len(parsed) == 1, f"expected 1 DB row, got sample data instead — export query returned 0 rows for tenant {tenant_id}"
+        assert len(parsed) == 1, (
+            f"expected 1 DB row, got sample data instead — "
+            f"export query returned 0 rows for tenant {tenant_id}"
+        )
         assert parsed[0]["name"] == "Test Co"
 
         # A completely different tenant_id returns no rows → sample data fallback

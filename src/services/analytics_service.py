@@ -1,8 +1,12 @@
 from datetime import datetime, timedelta
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from pkg.errors.app_exceptions import NotFoundException
+
 
 class AnalyticsService:
-    def __init__(self, session):
+    def __init__(self, session: AsyncSession):
         self._session = session
         self._dashboards = {}
         self._reports = {}
@@ -26,14 +30,17 @@ class AnalyticsService:
         self._next_id += 1
         return dashboard
 
-    def get_dashboard(self, dashboard_id: int) -> dict | None:
+    def get_dashboard(self, dashboard_id: int) -> dict:
         """获取仪表板"""
-        return self._dashboards.get(dashboard_id)
+        dashboard = self._dashboards.get(dashboard_id)
+        if dashboard is None:
+            raise NotFoundException("Dashboard")
+        return dashboard
 
-    def update_dashboard(self, dashboard_id: int, **kwargs) -> dict | None:
+    def update_dashboard(self, dashboard_id: int, **kwargs) -> dict:
         """更新仪表板"""
         if dashboard_id not in self._dashboards:
-            return None
+            raise NotFoundException("Dashboard")
         dashboard = self._dashboards[dashboard_id]
         for key, value in kwargs.items():
             if key in ["name", "description", "widgets", "is_default"]:
@@ -47,10 +54,10 @@ class AnalyticsService:
             return list(self._dashboards.values())
         return [d for d in self._dashboards.values() if d["owner_id"] == owner_id]
 
-    def add_widget(self, dashboard_id: int, widget_config: dict) -> dict | None:
+    def add_widget(self, dashboard_id: int, widget_config: dict) -> dict:
         """添加组件"""
         if dashboard_id not in self._dashboards:
-            return None
+            raise NotFoundException("Dashboard")
         dashboard = self._dashboards[dashboard_id]
         widget = {"id": len(dashboard["widgets"]) + 1, **widget_config}
         dashboard["widgets"].append(widget)
@@ -60,7 +67,7 @@ class AnalyticsService:
     def remove_widget(self, dashboard_id: int, widget_id: int) -> bool:
         """移除组件"""
         if dashboard_id not in self._dashboards:
-            return False
+            raise NotFoundException("Dashboard")
         dashboard = self._dashboards[dashboard_id]
         dashboard["widgets"] = [w for w in dashboard["widgets"] if w["id"] != widget_id]
         dashboard["updated_at"] = datetime.utcnow()
@@ -90,10 +97,10 @@ class AnalyticsService:
         self._next_id += 1
         return report
 
-    def run_report(self, report_id: int, date_range: dict) -> dict | None:
+    def run_report(self, report_id: int, date_range: dict) -> dict:
         """运行报表"""
         if report_id not in self._reports:
-            return None
+            raise NotFoundException("Report")
         report = self._reports[report_id]
         report["date_range"] = date_range
         report["last_run_at"] = datetime.utcnow()

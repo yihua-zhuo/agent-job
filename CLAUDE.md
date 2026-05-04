@@ -3,7 +3,7 @@
 Multi-tenant CRM system (FastAPI + SQLAlchemy 2.x async + PostgreSQL).
 
 Branch: fastapi-migration → master
-CI: GitHub Actions (Unit Tests + Integration Tests + Flake8/Lint)
+CI: GitHub Actions (Unit Tests + Integration Tests + Ruff/Lint)
 
 ---
 
@@ -24,7 +24,7 @@ dev-agent-system/
 │   └── main.py               # App entry point
 ├── tests/
 │   ├── unit/                 # Mock DB, fast (<5s)
-│   │   ├── conftest.py       # MockSession, _execute_side_effect
+│   │   ├── conftest.py       # MockRow, MockResult, MockState, domain handlers
 │   │   └── test_*.py
 │   └── integration/          # Real PostgreSQL
 │       └── conftest.py       # Real DB fixtures
@@ -48,44 +48,93 @@ DATABASE_URL="postgresql+asyncpg://..." pytest tests/integration/ -v
 # Run all tests except integration
 pytest tests/ -m "not integration" -v
 
-# Format first, then lint — black reformats, flake8 checks the output
-black src/ && flake8 src/ --select=E9,F63,F7,F82
+# Lint + format
+ruff check src/ && ruff format --check src/
 
 # Type check
 mypy src/
 
 # Full check pipeline
-black src/ && flake8 src/ && mypy src/
+ruff check src/ && ruff format --check src/ && mypy src/
 
 ---
 
 ## Conventions
 
-### Pydantic Schemas & ApiResponse
-
-All service methods return ApiResponse[T]:
-
-    from models.response import ApiResponse, ResponseStatus
-
-    result = await customer_svc.create_customer(...)
-    if result.status == ResponseStatus.SUCCESS:
-        data = result.data      # T type
-    else:
-        message = result.message  # error string
-
 ### Service Pattern
 
 - One service class per domain (e.g. CustomerService, SalesService)
-- Constructor takes required session: AsyncSession — caller provides it
+- Constructor takes required `session: AsyncSession` — **null is not allowed**, no default value
 - All methods accept tenant_id: int and include it in every SQL WHERE clause
+- **Return ORM/model objects** on success — never call `.to_dict()` in the service
+- **Raise exceptions** on errors — never return `ApiResponse.error()` from a service
+- Router handles serialization (`.to_dict()`) and response envelope
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
     class MyService:
         def __init__(self, session: AsyncSession):
             self.session = session
 
-        async def create_entity(self, data: dict, tenant_id: int) -> ApiResponse:
-            self.session.execute(...)
-            ...
+        async def get_entity(self, entity_id: int, tenant_id: int) -> EntityModel:
+            result = await self.session.execute(...)
+            entity = result.scalar_one_or_none()
+            if entity is None:
+                raise NotFoundException("Entity")
+            return entity  # return ORM object, not dict
+
+        async def list_entities(self, tenant_id: int, page: int, page_size: int) -> tuple[list[EntityModel], int]:
+            # ... count + fetch ...
+            return entities, total  # return (items, total) for paginated
+
+**Rules:**
+- Every service `__init__` that takes a session must type it as `AsyncSession` with no default. Never allow `session=None`.
+- Services return domain objects. Routers serialize them.
+- Services raise `AppException` subclasses (`NotFoundException`, `ValidationException`, `ForbiddenException`). The global exception handler in `main.py` converts them to JSON responses.
+
+### Error Handling
+
+Services raise, routers catch (via global handler in `main.py`):
+
+| Exception | HTTP | When |
+|---|---|---|
+| `NotFoundException(resource)` | 404 | Entity not found |
+| `ValidationException(detail)` | 422 | Invalid input / business rule |
+| `ForbiddenException(detail)` | 403 | Insufficient permissions |
+| `ConflictException(detail)` | 409 | Duplicate / constraint violation |
+| `UnauthorizedException(detail)` | 401 | Missing / invalid auth |
+
+Defined in `pkg/errors/app_exceptions.py`. All extend `AppException`.
+
+### Router Pattern
+
+Routers call services, serialize results, return envelope:
+
+    @router.get("/{entity_id}")
+    async def get_entity(
+        entity_id: int,
+        ctx: AuthContext = Depends(require_auth),
+        session: AsyncSession = Depends(get_db),
+    ):
+        svc = MyService(session)
+        entity = await svc.get_entity(entity_id, tenant_id=ctx.tenant_id)
+        return {"success": True, "data": entity.to_dict()}
+
+    @router.get("/")
+    async def list_entities(
+        page: int = 1,
+        page_size: int = 20,
+        ctx: AuthContext = Depends(require_auth),
+        session: AsyncSession = Depends(get_db),
+    ):
+        svc = MyService(session)
+        items, total = await svc.list_entities(tenant_id=ctx.tenant_id, page=page, page_size=page_size)
+        return {"success": True, "data": {"items": [i.to_dict() for i in items], "total": total, ...}}
+
+**Rules:**
+- Session is injected via `Depends(get_db)` — never use `async with get_db() as session:` manually.
+- No try/catch needed — `AppException` is caught globally. Router only handles serialization.
 
 ### SQLAlchemy Async
 
@@ -101,20 +150,38 @@ Every SQL query must filter by tenant_id:
 
 ### Unit Test SQL Mocks
 
-conftest.py uses MockSession + _execute_side_effect to simulate SQL.
+Each test file mocks only what it needs. conftest.py provides composable building blocks:
 
-Rule: all tests use MockSession; real SQL is never executed in unit tests.
+- **`MockState`** — per-test mutable state (customers, users auto-increment IDs)
+- **`MockRow` / `MockResult`** — simulate SQLAlchemy Row / Result objects
+- **`make_mock_session(handlers)`** — build a mock session with specific domain handlers
+- **Domain handlers** — one per table, each handles INSERT/UPDATE/DELETE/SELECT/COUNT:
 
-| SQL pattern | Mock behavior |
-|---|---|
-| INSERT ... VALUES | Insert fixed rows |
-| SELECT ... FROM X WHERE id = Y | Return fixed row |
-| SELECT ... FROM X (no WHERE) | Return paginated data |
-| UPDATE ... RETURNING * | Return updated row |
-| DELETE ... RETURNING * | Return deleted row |
+| Handler | Factory | Stateful |
+|---|---|---|
+| `make_customer_handler(state)` | yes | yes |
+| `make_user_handler(state)` | yes | yes |
+| `tenant_handler` | no | no |
+| `pipeline_handler` | no | no |
+| `opportunity_handler` | no | no |
+| `ticket_sql_handler` | no | no |
+| `campaign_handler` | no | no |
+| `make_count_handler(state)` | yes | yes |
 
-**Critical:** mock must match the SQL string exactly — whitespace and clause order count.
-No `RETURNING *` in unit mock? → test silently returns wrong data. Check conftest.py first.
+Each test file defines its own `mock_db_session` fixture with only the handlers it needs:
+
+    from tests.unit.conftest import make_mock_session, make_customer_handler, make_count_handler, MockState
+
+    @pytest.fixture
+    def mock_db_session():
+        state = MockState()
+        return make_mock_session([make_customer_handler(state), make_count_handler(state)])
+
+    @pytest.fixture
+    def customer_service(mock_db_session):
+        return CustomerService(mock_db_session)
+
+Rule: no global autouse patching — each test owns its mock. Real SQL is never executed in unit tests.
 
 ### Integration Test Fixtures
 
@@ -126,16 +193,36 @@ No `RETURNING *` in unit mock? → test silently returns wrong data. Check conft
 
 ---
 
+## Rules
+
+### Do
+
+1. Services return domain objects (ORM models, dataclasses, dicts from rows) — never `ApiResponse` or `.to_dict()`.
+2. Services raise `AppException` subclasses on errors — never return error responses.
+3. Routers serialize via `.to_dict()` and wrap in `{"success": True, "data": ..., "message": ...}`.
+4. Routers inject session via `session: AsyncSession = Depends(get_db)` — never `async with get_db()`.
+5. Every service `__init__` types session as `AsyncSession` with no default — never `session=None`.
+6. Every SQL query filters by `tenant_id`.
+7. Each test file defines its own `mock_db_session` fixture with only the handlers it needs.
+8. Linting uses ruff — `ruff check src/` for lint, `ruff format` for formatting.
+
+### Don't
+
+1. Don't call `.to_dict()` in services — that's the router's job.
+2. Don't return `ApiResponse` from services — return the object directly.
+3. Don't use `async with get_db() as session:` in routers — use `Depends(get_db)`.
+4. Don't use try/catch in routers for service errors — the global `AppException` handler covers it.
+5. Don't use flake8/pylint/black — use ruff.
+6. Don't use global autouse DB patching in tests — each test owns its mock.
+7. Don't use module-level in-memory state for new services — use real DB with ORM models.
+
 ## Gotchas & Tips
 
 1. PYTHONPATH is required — always export PYTHONPATH=src before running anything.
 2. DATABASE_URL must use `postgresql+asyncpg` — the asyncpg driver, not psycopg2.
-3. Unit test mocks parse raw SQL strings — mock must exactly match what the code generates (whitespace, clause order, etc.). Common mismatch: `WHERE id = :id` vs `WHERE :id = id`.
-4. No `RETURNING *` in unit mock? → Test silently returns wrong data. Check conftest.py first.
-5. pre-push hook blocks on mypy — use `git push --no-verify` as a temporary bypass, then fix the type error. Don't normalize the bypass.
-6. Integration test TRUNCATE CASCADE — schema fixture truncates all tables between tests; don't rely on data persisting within a test file.
-7. Cross-service seeds — use `_seed_customer` / `_seed_user` helpers to set up dependencies (e.g. ticket needs a customer first).
-8. black + flake8 order — run black first, then flake8. Black reformats; flake8 checks the formatted output.
+3. pre-push hook blocks on ruff/mypy — use `git push --no-verify` as a temporary bypass, then fix the error. Don't normalize the bypass.
+4. Integration test TRUNCATE CASCADE — schema fixture truncates all tables between tests; don't rely on data persisting within a test file.
+5. Cross-service seeds — use `_seed_customer` / `_seed_user` helpers to set up dependencies (e.g. ticket needs a customer first).
 
 ---
 
@@ -143,28 +230,47 @@ No `RETURNING *` in unit mock? → test silently returns wrong data. Check conft
 
 ### New unit test
 
-1. Create/edit tests/unit/test_XXX.py
-2. If new SQL pattern needed → edit tests/unit/conftest.py's _execute_side_effect
+1. Create tests/unit/test_XXX.py
+2. Define a `mock_db_session` fixture with only the handlers your test needs
+3. If new SQL pattern needed → add a handler in conftest.py, then use it in the test file
+
+    from tests.unit.conftest import make_mock_session, make_customer_handler, make_count_handler, MockState
+
+    @pytest.fixture
+    def mock_db_session():
+        state = MockState()
+        return make_mock_session([make_customer_handler(state), make_count_handler(state)])
+
+    @pytest.fixture
+    def my_service(mock_db_session):
+        return MyService(mock_db_session)
 
 ### New integration test
 
 1. Create tests/integration/test_XXX_integration.py
 2. Use fixtures: db_schema, tenant_id, async_session
 3. Seed cross-service data with helpers if needed
+4. Services raise exceptions on error — use `pytest.raises()` for error cases
 
     @pytest.mark.integration
     class TestMyFeature:
         async def test_something(self, db_schema, tenant_id, async_session):
             svc = MyService(async_session)
-            _seed_customer(async_session, tenant_id)  # set up dependencies
+            _seed_customer(async_session, tenant_id)
             result = await svc.my_method(...)
-            assert result.status == ResponseStatus.SUCCESS
+            assert result.name == "expected"
+
+        async def test_not_found(self, db_schema, tenant_id, async_session):
+            svc = MyService(async_session)
+            with pytest.raises(NotFoundException):
+                await svc.get_entity(9999, tenant_id=tenant_id)
 
 ### New API router
 
     from fastapi import APIRouter, Depends
-    from dependencies import get_db, require_auth
-    from models.auth import AuthContext
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from db.connection import get_db
+    from internal.middleware.fastapi_auth import AuthContext, require_auth
 
     router = APIRouter(prefix="/my", tags=["My"])
 
@@ -174,17 +280,18 @@ No `RETURNING *` in unit mock? → test silently returns wrong data. Check conft
         session: AsyncSession = Depends(get_db),
     ):
         svc = MyService(session)
-        return await svc.list_things(tenant_id=ctx.tenant_id)
+        items, total = await svc.list_things(tenant_id=ctx.tenant_id)
+        return {"success": True, "data": {"items": [i.to_dict() for i in items], "total": total}}
 
-    @router.put("/{user_id}")
-    async def update_user(
-        user_id: int,
-        body: UserUpdate,
+    @router.get("/{entity_id}")
+    async def get_thing(
+        entity_id: int,
         ctx: AuthContext = Depends(require_auth),
         session: AsyncSession = Depends(get_db),
     ):
-        svc = UserService(session)
-        return await svc.update_user(user_id, body, tenant_id=ctx.tenant_id)
+        svc = MyService(session)
+        entity = await svc.get_thing(entity_id, tenant_id=ctx.tenant_id)
+        return {"success": True, "data": entity.to_dict()}
 
 ---
 

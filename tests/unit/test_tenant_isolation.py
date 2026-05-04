@@ -4,6 +4,25 @@ from src.middleware.tenant import TenantMiddleware
 from src.services.tenant_service import TenantService
 from src.services.data_isolation import DataIsolationService
 from src.utils.tenant_context import TenantContext
+from pkg.errors.app_exceptions import NotFoundException
+import src.services.tenant_service as tenant_mod
+from tests.unit.conftest import make_mock_session, tenant_handler, make_count_handler, MockState
+
+
+@pytest.fixture(autouse=True)
+def _reset_tenant_state():
+    """Reset module-level state before each test."""
+    tenant_mod._tenants_db.clear()
+    tenant_mod._tenant_counter = 0
+    yield
+    tenant_mod._tenants_db.clear()
+    tenant_mod._tenant_counter = 0
+
+
+@pytest.fixture
+def mock_db_session():
+    state = MockState()
+    return make_mock_session([tenant_handler, make_count_handler(state)])
 
 
 class TestCustomerIsolation:
@@ -35,15 +54,13 @@ class TestUserIsolation:
         """测试用户数据隔离"""
         data_service = DataIsolationService()
 
-        # 创建两个租户
-        tenant_a_resp = await tenant_service.create_tenant(
+        # 创建两个租户 — now returns dict directly
+        tenant_a = await tenant_service.create_tenant(
             name="Company A", plan="pro", admin_email="admin@a.com"
         )
-        tenant_a = tenant_a_resp.data
-        tenant_b_resp = await tenant_service.create_tenant(
+        tenant_b = await tenant_service.create_tenant(
             name="Company B", plan="basic", admin_email="admin@b.com"
         )
-        tenant_b = tenant_b_resp.data
 
         # 验证用户数据隔离
         isolation_a = data_service.verify_tenant_isolation(tenant_a["id"])
@@ -121,75 +138,64 @@ class TestTenantService:
 
     async def test_create_and_get_tenant(self, service):
         """测试创建和获取租户"""
-        tenant_resp = await service.create_tenant(
+        tenant = await service.create_tenant(
             name="Test Corp", plan="enterprise", admin_email="test@corp.com"
         )
-        tenant = tenant_resp.data
 
         assert tenant["name"] == "Test Corp"
         assert tenant["plan"] == "enterprise"
         assert tenant["status"] == "active"
 
-        retrieved_resp = await service.get_tenant(tenant["id"])
-        retrieved = retrieved_resp.data
+        retrieved = await service.get_tenant(tenant["id"])
         assert retrieved["id"] == tenant["id"]
 
     async def test_update_tenant(self, service):
         """测试更新租户"""
-        tenant_resp = await service.create_tenant(
+        tenant = await service.create_tenant(
             name="Old Name", plan="basic", admin_email="old@corp.com"
         )
-        tenant = tenant_resp.data
 
-        updated_resp = await service.update_tenant(tenant["id"], name="New Name", plan="pro")
-        updated = updated_resp.data
+        updated = await service.update_tenant(tenant["id"], name="New Name", plan="pro")
         assert updated["name"] == "New Name"
         assert updated["plan"] == "pro"
 
     async def test_suspend_tenant(self, service):
         """测试暂停租户"""
-        tenant_resp = await service.create_tenant(
+        tenant = await service.create_tenant(
             name="Suspend Me", plan="basic", admin_email="suspend@corp.com"
         )
-        tenant = tenant_resp.data
 
         await service.suspend_tenant(tenant["id"])
-        suspended_resp = await service.get_tenant(tenant["id"])
-        suspended = suspended_resp.data
+        suspended = await service.get_tenant(tenant["id"])
         assert suspended["status"] == "suspended"
 
     async def test_delete_tenant(self, service):
         """测试删除租户（软删除）"""
-        tenant_resp = await service.create_tenant(
+        tenant = await service.create_tenant(
             name="Delete Me", plan="basic", admin_email="delete@corp.com"
         )
-        tenant = tenant_resp.data
 
         await service.delete_tenant(tenant["id"])
-        # 软删除后再次获取应返回 NOT_FOUND
-        deleted_resp = await service.get_tenant(tenant["id"])
-        assert deleted_resp.data is None
-        assert "deleted" in deleted_resp.message.lower()
+        # 软删除后再次获取应抛出 NotFoundException
+        with pytest.raises(NotFoundException):
+            await service.get_tenant(tenant["id"])
 
     async def test_list_tenants(self, service):
         """测试租户列表"""
         await service.create_tenant(name="T1", plan="basic", admin_email="t1@t.com")
         await service.create_tenant(name="T2", plan="pro", admin_email="t2@t.com")
 
-        result_resp = await service.list_tenants()
-        result = result_resp.data
-        assert result["total"] >= 2
-        assert len(result["items"]) >= 2
+        items, total = await service.list_tenants()
+        assert total >= 2
+        assert len(items) >= 2
 
     async def test_get_tenant_usage(self, service):
         """测试获取租户使用量"""
-        tenant_resp = await service.create_tenant(
+        tenant = await service.create_tenant(
             name="Usage Test", plan="basic", admin_email="usage@t.com"
         )
-        tenant = tenant_resp.data
 
-        usage_resp = await service.get_tenant_usage(tenant["id"])
-        usage = usage_resp.data
+        usage = await service.get_tenant_usage(tenant["id"])
         assert "user_count" in usage
         assert "storage_used" in usage
         assert "api_calls" in usage

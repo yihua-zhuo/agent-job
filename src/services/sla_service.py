@@ -1,13 +1,15 @@
 from datetime import datetime, timedelta
 from typing import Literal
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from models.ticket import SLA_CONFIGS, Ticket
 
 
 class SLAService:
     """SLA管理"""
 
-    def __init__(self, session, ticket_service=None):
+    def __init__(self, session: AsyncSession, ticket_service=None):
         self._session = session
         self._ticket_service = ticket_service
 

@@ -141,17 +141,17 @@ class TestMockResultScalars:
 
 
 # ---------------------------------------------------------------------------
-# _make_mock_session — key SQL routing behaviours
+# make_mock_session — key SQL routing behaviours
 # ---------------------------------------------------------------------------
 
 class TestMakeMockSession:
     """Tests for the session mock's SQL dispatch logic updated in this PR."""
 
     def test_insert_customers_returns_row(self):
-        from tests.unit.conftest import _make_mock_session
+        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
 
-        session = _make_mock_session()
+        session = make_mock_session()
         sql = text("INSERT INTO customers (...) RETURNING *")
         result = session.execute(sql, {"tenant_id": 5, "name": "Test"})
         # execute is AsyncMock, get the return value synchronously
@@ -162,11 +162,11 @@ class TestMakeMockSession:
 
     def test_select_from_customers_where_id_returns_single_row_for_id_1(self):
         """New SQL-matching logic: 'from customers where id' returns row only for id=1."""
-        from tests.unit.conftest import _make_mock_session
+        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
         import asyncio
 
-        session = _make_mock_session()
+        session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE id = :id")
 
         coro = session.execute(sql, {"id": 1})
@@ -177,11 +177,11 @@ class TestMakeMockSession:
 
     def test_select_from_customers_where_id_returns_empty_for_id_9999(self):
         """New SQL-matching logic: non-fixture IDs return empty result."""
-        from tests.unit.conftest import _make_mock_session
+        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
         import asyncio
 
-        session = _make_mock_session()
+        session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE id = :id")
 
         coro = session.execute(sql, {"id": 9999})
@@ -191,11 +191,11 @@ class TestMakeMockSession:
 
     def test_select_all_customers_returns_two_rows(self):
         """New logic: SELECT without WHERE id returns list of 2 fixture rows."""
-        from tests.unit.conftest import _make_mock_session
+        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
         import asyncio
 
-        session = _make_mock_session()
+        session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE tenant_id = :tenant_id LIMIT 20 OFFSET 0")
 
         coro = session.execute(sql, {"tenant_id": 1})
@@ -205,11 +205,11 @@ class TestMakeMockSession:
 
     def test_delete_customers_returns_row(self):
         """New logic: DELETE FROM customers returns a row with id."""
-        from tests.unit.conftest import _make_mock_session
+        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
         import asyncio
 
-        session = _make_mock_session()
+        session = make_mock_session()
         sql = text("DELETE FROM customers WHERE id = :id RETURNING id")
 
         coro = session.execute(sql, {"id": 1})
@@ -219,11 +219,11 @@ class TestMakeMockSession:
         assert row["id"] == 1
 
     def test_count_query_returns_scalar(self):
-        from tests.unit.conftest import _make_mock_session
+        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
         import asyncio
 
-        session = _make_mock_session()
+        session = make_mock_session()
         sql = text("SELECT count(*) FROM customers WHERE tenant_id = :tenant_id")
 
         coro = session.execute(sql, {"tenant_id": 1})
@@ -232,11 +232,11 @@ class TestMakeMockSession:
 
     def test_unknown_sql_returns_empty(self):
         """Default case: unrecognised SQL returns empty MockResult."""
-        from tests.unit.conftest import _make_mock_session
+        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
         import asyncio
 
-        session = _make_mock_session()
+        session = make_mock_session()
         sql = text("SELECT * FROM unknown_table WHERE x = :x")
 
         coro = session.execute(sql, {"x": 1})

@@ -4,7 +4,28 @@ Unit tests for SalesService.
 import pytest
 from datetime import date, datetime
 from decimal import Decimal
+import src.services.sales_service as sales_mod
 from src.services.sales_service import SalesService
+from tests.unit.conftest import (
+    make_mock_session, pipeline_handler, opportunity_handler,
+    make_count_handler, MockState,
+)
+
+
+@pytest.fixture(autouse=True)
+def _reset_sales_state():
+    """Reset module-level state before each test."""
+    sales_mod._pipelines_db.clear()
+    sales_mod._pipeline_next_id = 1
+    yield
+    sales_mod._pipelines_db.clear()
+    sales_mod._pipeline_next_id = 1
+
+
+@pytest.fixture
+def mock_db_session():
+    state = MockState()
+    return make_mock_session([pipeline_handler, opportunity_handler, make_count_handler(state)])
 
 
 @pytest.fixture
@@ -20,42 +41,36 @@ class TestSalesService:
         """Test creating a sales pipeline."""
         result = await sales_service.create_pipeline(data={"name": "Test Pipeline"})
 
-        assert result.status.value == "success"
-        assert result.message == "管道创建成功"
-        assert result.data is not None
-        assert result.data["name"] == "Test Pipeline"
+        assert result is not None
+        assert result["name"] == "Test Pipeline"
 
     async def test_create_opportunity(self, sales_service):
         """Test creating an opportunity."""
-        pipeline_result = await sales_service.create_pipeline(data={"name": "Test Pipeline"})
-        pipeline_id = 1  # Stub uses sequential IDs starting at 1
+        await sales_service.create_pipeline(data={"name": "Test Pipeline"})
 
         result = await sales_service.create_opportunity(
             data={
                 "customer_id": 1,
                 "name": "Test Opportunity",
-                "pipeline_id": pipeline_id,
+                "pipeline_id": 1,
                 "amount": Decimal("50000"),
                 "expected_close_date": date(2024, 12, 31),
                 "owner_id": 1
             }
         )
 
-        assert result.status.value == "success"
-        assert result.message == "商机创建成功"
-        assert result.data is not None
-        assert result.data["name"] == "Test Opportunity"
+        assert result is not None
+        assert result["name"] == "Test Opportunity"
 
     async def test_create_opportunity_invalid_amount(self, sales_service):
         """Test creating opportunity with invalid amount - stub accepts any amount."""
-        pipeline_result = await sales_service.create_pipeline(data={"name": "Test Pipeline"})
-        pipeline_id = 1
+        await sales_service.create_pipeline(data={"name": "Test Pipeline"})
 
         result = await sales_service.create_opportunity(
             data={
                 "customer_id": 1,
                 "name": "Test Opportunity",
-                "pipeline_id": pipeline_id,
+                "pipeline_id": 1,
                 "amount": Decimal("-100"),
                 "expected_close_date": date(2024, 12, 31),
                 "owner_id": 1
@@ -67,9 +82,9 @@ class TestSalesService:
 
     async def test_get_opportunity(self, sales_service):
         """Test getting opportunity by ID."""
-        sales_service.create_pipeline(data={"name": "Test Pipeline"})
+        await sales_service.create_pipeline(data={"name": "Test Pipeline"})
 
-        opp_result = await sales_service.create_opportunity(
+        await sales_service.create_opportunity(
             data={
                 "customer_id": 1,
                 "name": "Test Opportunity",
@@ -83,8 +98,7 @@ class TestSalesService:
 
         result = await sales_service.get_opportunity(opp_id=opp_id)
 
-        assert result.status.value == "success"
-        assert result.data is not None
+        assert result is not None
 
     async def test_update_opportunity(self, sales_service):
         """Test updating opportunity."""
@@ -103,9 +117,8 @@ class TestSalesService:
 
         result = await sales_service.update_opportunity(opp_id=1, data={"name": "Updated Opportunity"})
 
-        assert result.status.value == "success"
-        assert result.data is not None
-        assert result.data["id"] == 1
+        assert result is not None
+        assert result["id"] == 1
 
     async def test_change_stage(self, sales_service):
         """Test changing opportunity stage."""
@@ -124,8 +137,7 @@ class TestSalesService:
 
         result = await sales_service.change_stage(opp_id=1, stage="QUALIFIED")
 
-        assert result.status.value == "success"
-        assert result.data is not None
+        assert result is not None
 
     async def test_change_stage_auto_probability(self, sales_service):
         """Test that changing stage updates probability - stub doesn't track probability."""
@@ -143,10 +155,10 @@ class TestSalesService:
         )
 
         result1 = await sales_service.change_stage(opp_id=1, stage="QUALIFIED")
-        assert result1.status.value == "success"
+        assert result1 is not None
 
         result2 = await sales_service.change_stage(opp_id=1, stage="PROPOSAL")
-        assert result2.status.value == "success"
+        assert result2 is not None
 
     async def test_change_stage_closed_locked(self, sales_service):
         """Test that closed opportunities cannot change stage - stub accepts any change."""
@@ -175,7 +187,7 @@ class TestSalesService:
 
     async def test_get_pipeline_stats(self, sales_service):
         """Test getting pipeline statistics."""
-        pipeline_result = await sales_service.create_pipeline(data={"name": "Test Pipeline"})
+        await sales_service.create_pipeline(data={"name": "Test Pipeline"})
 
         await sales_service.create_opportunity(
             data={
@@ -190,9 +202,8 @@ class TestSalesService:
 
         result = await sales_service.get_pipeline_stats(pipeline_id=1)
 
-        assert result.status.value == "success"
-        assert result.data is not None
-        assert result.data["pipeline_id"] == 1
+        assert result is not None
+        assert result["pipeline_id"] == 1
 
     async def test_list_opportunities(self, sales_service):
         """Test listing opportunities with pagination."""
@@ -212,10 +223,9 @@ class TestSalesService:
 
         result = await sales_service.list_opportunities(page=1, page_size=3)
 
-        assert result.status.value == "success"
-        assert result.data is not None
-        assert result.data["page"] == 1
-        assert result.data["page_size"] == 3
+        assert result is not None
+        assert result["page"] == 1
+        assert result["page_size"] == 3
 
     async def test_list_opportunities_filter_by_stage(self, sales_service):
         """Test filtering opportunities by stage."""
@@ -248,8 +258,7 @@ class TestSalesService:
 
         result = await sales_service.list_opportunities(stage="QUALIFIED")
 
-        assert result.status.value == "success"
-        assert result.data is not None
+        assert result is not None
 
     async def test_get_sales_forecast(self, sales_service):
         """Test sales forecast calculation."""
@@ -268,12 +277,11 @@ class TestSalesService:
 
         result = await sales_service.get_forecast()
 
-        assert result.status.value == "success"
-        assert result.data is not None
+        assert result is not None
 
     async def test_get_pipeline_funnel(self, sales_service):
         """Test pipeline funnel view."""
-        pipeline_result = await sales_service.create_pipeline(data={"name": "Test Pipeline"})
+        await sales_service.create_pipeline(data={"name": "Test Pipeline"})
 
         await sales_service.create_opportunity(
             data={
@@ -288,6 +296,5 @@ class TestSalesService:
 
         result = await sales_service.get_pipeline_funnel(pipeline_id=1)
 
-        assert result.status.value == "success"
-        assert result.data is not None
-        assert result.data["id"] == 1
+        assert result is not None
+        assert result["id"] == 1

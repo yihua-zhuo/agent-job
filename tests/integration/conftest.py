@@ -9,8 +9,9 @@ Services import `get_db_session` at module load time by name:
 so we monkey-patch that attribute on every service module (not just on
 db.connection) so the services transparently use the test DB session.
 """
-from dotenv import load_dotenv
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 # Load .env so DATABASE_URL is available at module load time.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
@@ -23,7 +24,7 @@ import os
 import pkgutil
 import random
 import sys
-from typing import AsyncGenerator, Generator
+from collections.abc import AsyncGenerator, Generator
 
 # Ensure src/ is on sys.path so top-level package imports resolve
 _src_root = Path(__file__).resolve().parents[2] / "src"
@@ -294,9 +295,10 @@ def event_loop_policy():
 # These are imported so pytest discovers them without needing web_conftest.py
 # to be explicitly listed as a conftest.py plugin.
 
+from collections.abc import AsyncGenerator
+
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from typing import AsyncGenerator
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.fixture(scope="session")
@@ -342,11 +344,10 @@ async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
     os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
     from services.auth_service import AuthService
     from services.user_service import UserService
-    from models.user import UserRole, UserStatus
 
     # Create the test user in the DB so /users/me resolves correctly.
     user_svc = UserService(async_session)
-    result = await user_svc.create_user(
+    await user_svc.create_user(
         username="webtest",
         email="webtest@example.com",
         password="TestPass123!",

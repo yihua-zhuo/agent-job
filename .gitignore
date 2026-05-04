@@ -12,3 +12,7 @@ dist/
 build/
 *.egg
 .DS_Store
+.idea
+all-code.txt
+cat_all.py
+scripts/push-and-watch.sh

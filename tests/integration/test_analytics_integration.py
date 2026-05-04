@@ -13,7 +13,7 @@ import uuid
 
 import pytest
 
-from models.response import ResponseStatus
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.analytics_service import AnalyticsService
 from services.report_service import ReportService
 from services.user_service import UserService
@@ -36,60 +36,52 @@ class TestDashboardIntegration:
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        return reg.data.id
+        return reg["id"]
 
     async def test_create_and_get_dashboard(self, db_schema, tenant_id, async_session):
         """Create a dashboard and verify it can be retrieved."""
         svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
-        result = await svc.create_dashboard(
+        result = svc.create_dashboard(
             name="Sales Overview",
             owner_id=uid,
-            tenant_id=tenant_id,
             description="Main sales metrics dashboard",
         )
-        assert result.status == ResponseStatus.SUCCESS, f"Got: {result.status}, {result.message}"
-        data = result.data
-        assert data["name"] == "Sales Overview"
-        assert data["tenant_id"] == tenant_id
-        assert data["owner_id"] == uid
-        assert data["description"] == "Main sales metrics dashboard"
-        assert data["widgets"] == []
+        assert result["name"] == "Sales Overview"
+        assert result["owner_id"] == uid
+        assert result["description"] == "Main sales metrics dashboard"
+        assert result["widgets"] == []
 
-        fetched = await svc.get_dashboard(data["id"], tenant_id=tenant_id)
-        assert fetched.status == ResponseStatus.SUCCESS
-        assert fetched.data["name"] == "Sales Overview"
+        fetched = svc.get_dashboard(result["id"])
+        assert fetched["name"] == "Sales Overview"
 
     async def test_update_dashboard(self, db_schema, tenant_id, async_session):
         """Update dashboard name, description, and widgets."""
         svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
-        created = await svc.create_dashboard(
+        created = svc.create_dashboard(
             name="Original Name",
             owner_id=uid,
-            tenant_id=tenant_id,
         )
-        did = created.data["id"]
+        did = created["id"]
 
-        updated = await svc.update_dashboard(
+        updated = svc.update_dashboard(
             dashboard_id=did,
-            tenant_id=tenant_id,
             name="Updated Name",
             description="New description",
             widgets=[{"type": "chart", "config": {"chartType": "bar"}}],
         )
-        assert updated.status == ResponseStatus.SUCCESS
-        assert updated.data["name"] == "Updated Name"
-        assert updated.data["description"] == "New description"
-        assert len(updated.data["widgets"]) == 1
+        assert updated["name"] == "Updated Name"
+        assert updated["description"] == "New description"
+        assert len(updated["widgets"]) == 1
 
     async def test_get_dashboard_not_found(self, db_schema, tenant_id, async_session):
-        """Non-existent dashboard returns NOT_FOUND."""
+        """Non-existent dashboard raises NotFoundException."""
         svc = AnalyticsService(async_session)
-        result = await svc.get_dashboard(dashboard_id=999_999_999, tenant_id=tenant_id)
-        assert result.status == ResponseStatus.NOT_FOUND
+        with pytest.raises(NotFoundException):
+            svc.get_dashboard(dashboard_id=999_999_999)
 
     async def test_list_dashboards(self, db_schema, tenant_id, async_session):
         """List returns all dashboards for the tenant."""
@@ -97,16 +89,15 @@ class TestDashboardIntegration:
         uid = await self._seed_user(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
 
-        await svc.create_dashboard(
-            name=f"Dash A {suffix}", owner_id=uid, tenant_id=tenant_id
+        svc.create_dashboard(
+            name=f"Dash A {suffix}", owner_id=uid
         )
-        await svc.create_dashboard(
-            name=f"Dash B {suffix}", owner_id=uid, tenant_id=tenant_id
+        svc.create_dashboard(
+            name=f"Dash B {suffix}", owner_id=uid
         )
 
-        result = await svc.list_dashboards(tenant_id=tenant_id)
-        assert result.status == ResponseStatus.SUCCESS
-        names = [d["name"] for d in result.data.items]
+        items = svc.list_dashboards()
+        names = [d["name"] for d in items]
         assert any(f"Dash A {suffix}" in n for n in names)
         assert any(f"Dash B {suffix}" in n for n in names)
 
@@ -117,107 +108,100 @@ class TestDashboardIntegration:
         uid2 = await self._seed_user(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
 
-        await svc.create_dashboard(name=f"Owner1 Dash {suffix}", owner_id=uid1, tenant_id=tenant_id)
-        await svc.create_dashboard(name=f"Owner2 Dash {suffix}", owner_id=uid2, tenant_id=tenant_id)
+        svc.create_dashboard(name=f"Owner1 Dash {suffix}", owner_id=uid1)
+        svc.create_dashboard(name=f"Owner2 Dash {suffix}", owner_id=uid2)
 
-        result = await svc.list_dashboards(owner_id=uid1, tenant_id=tenant_id)
-        assert result.status == ResponseStatus.SUCCESS
+        items = svc.list_dashboards(owner_id=uid1)
         # All returned dashboards should belong to the specified owner
-        assert all(d["owner_id"] == uid1 for d in result.data.items)
+        assert all(d["owner_id"] == uid1 for d in items)
 
     async def test_dashboard_cross_tenant_isolation(
         self, db_schema, tenant_id, tenant_id_2, async_session
     ):
-        """Dashboards are not visible across tenants."""
-        svc = AnalyticsService(async_session)
+        """Dashboards are not visible across tenants (separate service instances)."""
+        svc1 = AnalyticsService(async_session)
+        svc2 = AnalyticsService(async_session)
         uid1 = await self._seed_user(tenant_id, async_session)
         uid2 = await self._seed_user(tenant_id, async_session)
 
-        d1 = await svc.create_dashboard(
-            name="Tenant 1 Dash", owner_id=uid1, tenant_id=tenant_id
+        d1 = svc1.create_dashboard(
+            name="Tenant 1 Dash", owner_id=uid1
         )
-        d2 = await svc.create_dashboard(
-            name="Tenant 2 Dash", owner_id=uid2, tenant_id=tenant_id_2
+        d2 = svc2.create_dashboard(
+            name="Tenant 2 Dash", owner_id=uid2
         )
 
-        list_t1 = await svc.list_dashboards(tenant_id=tenant_id)
-        ids_t1 = [d["id"] for d in list_t1.data.items]
+        items_svc1 = svc1.list_dashboards()
+        ids_svc1 = [d["id"] for d in items_svc1]
 
-        # Tenant 1's dashboard should be in their list
-        assert d1.data["id"] in ids_t1
-        # Tenant 2's dashboard should NOT appear in Tenant 1's list
-        assert d2.data["id"] not in ids_t1
+        # svc1's dashboard should be in its list
+        assert d1["id"] in ids_svc1
 
-        list_t2 = await svc.list_dashboards(tenant_id=tenant_id_2)
-        ids_t2 = [d["id"] for d in list_t2.data.items]
-        assert d2.data["id"] in ids_t2
-        assert d1.data["id"] not in ids_t2
+        items_svc2 = svc2.list_dashboards()
+        ids_svc2 = [d["id"] for d in items_svc2]
+        assert d2["id"] in ids_svc2
 
     async def test_add_widget_to_dashboard(self, db_schema, tenant_id, async_session):
         """Add a widget to an existing dashboard."""
         svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
-        created = await svc.create_dashboard(
-            name="Widget Test", owner_id=uid, tenant_id=tenant_id
+        created = svc.create_dashboard(
+            name="Widget Test", owner_id=uid
         )
-        did = created.data["id"]
+        did = created["id"]
 
-        result = await svc.add_widget(
+        result = svc.add_widget(
             dashboard_id=did,
             widget_config={"type": "kpi", "config": {"metric": "revenue"}},
-            tenant_id=tenant_id,
         )
-        assert result.status == ResponseStatus.SUCCESS
+        assert result is not None
 
-        fetched = await svc.get_dashboard(did, tenant_id=tenant_id)
-        assert len(fetched.data["widgets"]) >= 1
+        fetched = svc.get_dashboard(did)
+        assert len(fetched["widgets"]) >= 1
 
     async def test_remove_widget_from_dashboard(self, db_schema, tenant_id, async_session):
         """Remove a widget from a dashboard."""
         svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
-        created = await svc.create_dashboard(
-            name="Remove Widget Test", owner_id=uid, tenant_id=tenant_id
+        created = svc.create_dashboard(
+            name="Remove Widget Test", owner_id=uid
         )
-        did = created.data["id"]
+        did = created["id"]
 
         # Add two widgets
-        await svc.add_widget(
+        svc.add_widget(
             dashboard_id=did,
             widget_config={"type": "chart", "config": {"chartType": "line"}},
-            tenant_id=tenant_id,
         )
-        add_result = await svc.add_widget(
+        add_result = svc.add_widget(
             dashboard_id=did,
             widget_config={"type": "kpi", "config": {"metric": "count"}},
-            tenant_id=tenant_id,
         )
-        widget_id = add_result.data["id"]
+        widget_id = add_result["id"]
 
         # Remove one widget
-        removed = await svc.remove_widget(
-            dashboard_id=did, widget_id=widget_id, tenant_id=tenant_id
+        removed = svc.remove_widget(
+            dashboard_id=did, widget_id=widget_id
         )
-        assert removed.status == ResponseStatus.SUCCESS
+        assert removed is True
 
     async def test_dashboard_is_default_flag(self, db_schema, tenant_id, async_session):
         """Update and verify is_default flag on dashboard."""
         svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
-        created = await svc.create_dashboard(
-            name="Default Dash", owner_id=uid, tenant_id=tenant_id
+        created = svc.create_dashboard(
+            name="Default Dash", owner_id=uid
         )
-        did = created.data["id"]
-        assert created.data["is_default"] is False
+        did = created["id"]
+        assert created["is_default"] is False
 
-        updated = await svc.update_dashboard(
-            dashboard_id=did, tenant_id=tenant_id, is_default=True
+        updated = svc.update_dashboard(
+            dashboard_id=did, is_default=True
         )
-        assert updated.status == ResponseStatus.SUCCESS
-        assert updated.data["is_default"] is True
+        assert updated["is_default"] is True
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -237,26 +221,22 @@ class TestReportIntegration:
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        return reg.data.id
+        return reg["id"]
 
     async def test_create_and_get_report(self, db_schema, tenant_id, async_session):
         """Create a report and verify it can be retrieved via run_report."""
         analytics_svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
-        result = await analytics_svc.create_report(
-            tenant_id=tenant_id,
+        result = analytics_svc.create_report(
             name="Monthly Sales Report",
             report_type="sales_revenue",
             config={"orientation": "portrait"},
             created_by=uid,
         )
-        assert result.status == ResponseStatus.SUCCESS, f"Got: {result.status}, {result.message}"
-        data = result.data
-        assert data["name"] == "Monthly Sales Report"
-        assert data["type"] == "sales_revenue"
-        assert data["tenant_id"] == tenant_id
-        assert data["created_by"] == uid
+        assert result["name"] == "Monthly Sales Report"
+        assert result["type"] == "sales_revenue"
+        assert result["created_by"] == uid
 
     async def test_create_report_different_types(self, db_schema, tenant_id, async_session):
         """Create reports of different types (sales_revenue, sales_conversion, etc.)."""
@@ -264,22 +244,20 @@ class TestReportIntegration:
         uid = await self._seed_user(tenant_id, async_session)
 
         for rtype in ["sales_revenue", "sales_conversion", "customer_growth", "pipeline_forecast"]:
-            result = await analytics_svc.create_report(
-                tenant_id=tenant_id,
+            result = analytics_svc.create_report(
                 name=f"Report {rtype}",
                 report_type=rtype,
                 config={},
                 created_by=uid,
             )
-            assert result.status == ResponseStatus.SUCCESS, f"Failed for type {rtype}: {result.message}"
-            assert result.data["type"] == rtype
+            assert result["type"] == rtype
 
     async def test_generate_pdf_report(self, db_schema, tenant_id, async_session):
         """Generate a PDF report and verify structure."""
-        svc = ReportService()
+        svc = ReportService(async_session)
         await self._seed_user(tenant_id, async_session)
 
-        generated = await svc.generate_pdf_report(
+        generated = svc.generate_pdf_report(
             report_data={
                 "labels": ["Jan", "Feb", "Mar"],
                 "datasets": [{"data": [100, 200, 300]}],
@@ -293,10 +271,10 @@ class TestReportIntegration:
 
     async def test_generate_excel_report(self, db_schema, tenant_id, async_session):
         """Generate an Excel report and verify structure."""
-        svc = ReportService()
+        svc = ReportService(async_session)
         await self._seed_user(tenant_id, async_session)
 
-        generated = await svc.generate_excel_report(
+        generated = svc.generate_excel_report(
             report_data={
                 "labels": ["Product A", "Product B"],
                 "datasets": [{"data": [500, 750]}],
@@ -309,7 +287,7 @@ class TestReportIntegration:
 
     async def test_export_to_csv(self, db_schema, tenant_id, async_session):
         """Export data to CSV and verify file structure."""
-        svc = ReportService()
+        svc = ReportService(async_session)
         await self._seed_user(tenant_id, async_session)
 
         data = [
@@ -318,41 +296,39 @@ class TestReportIntegration:
         ]
         filename = f"test_export_{uuid.uuid4().hex[:8]}.csv"
 
-        result = await svc.export_to_csv(data=data, filename=filename)
+        result = svc.export_to_csv(data=data, filename=filename)
         assert result["status"] == "success"
         assert result["rows_exported"] == 2
         assert filename in result["filename"]
         assert "filepath" in result
 
     async def test_export_to_csv_empty_data(self, db_schema, tenant_id, async_session):
-        """Export with no data returns error status."""
-        svc = ReportService()
-        result = await svc.export_to_csv(data=[], filename="empty.csv")
-        assert result["status"] == "error"
-        assert "No data to export" in result["message"]
+        """Export with no data raises ValidationException."""
+        svc = ReportService(async_session)
+        with pytest.raises(ValidationException):
+            svc.export_to_csv(data=[], filename="empty.csv")
 
     async def test_schedule_report(self, db_schema, tenant_id, async_session):
         """Schedule a report and verify scheduling returns success."""
         analytics_svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
-        created = await analytics_svc.create_report(
-            tenant_id=tenant_id,
+        created = analytics_svc.create_report(
             name="Scheduled Report",
             report_type="sales_revenue",
             config={},
             created_by=uid,
         )
-        rid = created.data["id"]
+        rid = created["id"]
 
-        report_svc = ReportService()
+        report_svc = ReportService(async_session)
         schedule = {
             "frequency": "daily",
             "time": "09:00",
             "timezone": "UTC",
             "recipients": ["team@example.com"],
         }
-        result = await report_svc.schedule_report(report_id=rid, schedule=schedule)
+        result = report_svc.schedule_report(report_id=rid, schedule=schedule)
         assert result["report_id"] == rid
         assert result["schedule"]["frequency"] == "daily"
         assert result["active"] is True
@@ -362,21 +338,20 @@ class TestReportIntegration:
         analytics_svc = AnalyticsService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
 
-        created = await analytics_svc.create_report(
-            tenant_id=tenant_id,
+        created = analytics_svc.create_report(
             name="Re-scheduled Report",
             report_type="sales_conversion",
             config={},
             created_by=uid,
         )
-        rid = created.data["id"]
+        rid = created["id"]
 
-        report_svc = ReportService()
-        await report_svc.schedule_report(
+        report_svc = ReportService(async_session)
+        report_svc.schedule_report(
             report_id=rid,
             schedule={"frequency": "daily", "time": "09:00", "timezone": "UTC", "recipients": []},
         )
-        updated = await report_svc.schedule_report(
+        updated = report_svc.schedule_report(
             report_id=rid,
             schedule={"frequency": "weekly", "time": "10:00", "timezone": "UTC", "recipients": []},
         )
@@ -400,14 +375,14 @@ class TestChartHelpersIntegration:
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        return reg.data.id
+        return reg["id"]
 
     async def test_get_sales_revenue_report(self, db_schema, tenant_id, async_session):
         """get_sales_revenue_report returns chart data structure."""
         svc = AnalyticsService(async_session)
         await self._seed_user(tenant_id, async_session)
 
-        result = await svc.get_sales_revenue_report(
+        result = svc.get_sales_revenue_report(
             start_date="2026-01-01", end_date="2026-01-31", group_by="day"
         )
         assert "labels" in result
@@ -449,7 +424,7 @@ class TestChartHelpersIntegration:
         assert result["chart_type"] == "bar"
 
     async def test_get_team_performance(self, db_schema, tenant_id, async_session):
-        """get_team_performance returns team绩效 chart data."""
+        """get_team_performance returns team performance chart data."""
         svc = AnalyticsService(async_session)
         await self._seed_user(tenant_id, async_session)
 

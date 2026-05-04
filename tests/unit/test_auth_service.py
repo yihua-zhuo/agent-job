@@ -6,6 +6,12 @@ import pytest
 from datetime import datetime, timedelta, UTC
 from unittest.mock import AsyncMock, MagicMock, patch
 
+from pkg.errors.app_exceptions import (
+    NotFoundException,
+    UnauthorizedException,
+    ValidationException,
+)
+
 
 # Install fake jwt before auth_service imports it.
 class _ExpiredSignatureError(Exception):
@@ -51,6 +57,13 @@ class _FakeJWT:
 sys.modules["jwt"] = _FakeJWT  # type: ignore[assign]
 
 from services.auth_service import AuthService, is_valid_email, sanitize_string, validate_id
+from tests.unit.conftest import make_mock_session, make_user_handler, make_count_handler, MockState
+
+
+@pytest.fixture
+def mock_db_session():
+    state = MockState()
+    return make_mock_session([make_user_handler(state), make_count_handler(state)])
 
 
 @pytest.fixture
@@ -81,7 +94,7 @@ class TestAuthService:
         assert payload is not None
         assert payload["tenant_id"] == 42
 
-    async def test_generate_token_without_tenant(self, auth_service):
+    async def test_generate_token_without_tenant_no_key(self, auth_service):
         """When tenant_id is None it should not appear in payload."""
         token = auth_service.generate_token(2, "bob", "user")
         payload = auth_service.verify_token(token)
@@ -142,16 +155,16 @@ class TestAuthService:
     # ── authenticate_user (login) ────────────────────────────────────────────
 
     async def test_authenticate_user_user_not_found(self, auth_service, mock_db_session):
-        """User does not exist → returns None."""
+        """User does not exist → raises UnauthorizedException."""
         # Override: make users query return empty
         mock_db_session.execute.side_effect = lambda sql, params: MagicMock(
             fetchone=MagicMock(return_value=None)
         )
-        result = await auth_service.authenticate_user("ghost", "anypassword")
-        assert result is None
+        with pytest.raises(UnauthorizedException):
+            await auth_service.authenticate_user("ghost", "anypassword")
 
     async def test_authenticate_user_wrong_password(self, auth_service, mock_db_session):
-        """User exists but password is wrong → returns None."""
+        """User exists but password is wrong → raises UnauthorizedException."""
         hashed = auth_service.hash_password("CorrectPassword")
 
         class Row(dict):
@@ -183,8 +196,8 @@ class TestAuthService:
             return MagicMock(fetchone=MagicMock(return_value=None))
 
         mock_db_session.execute = AsyncMock(side_effect=fake_execute)
-        result = await auth_service.authenticate_user("alice", "WrongPassword")
-        assert result is None
+        with pytest.raises(UnauthorizedException):
+            await auth_service.authenticate_user("alice", "WrongPassword")
 
     async def test_authenticate_user_success(self, auth_service, mock_db_session):
         """Valid credentials → returns user dict."""
@@ -228,58 +241,44 @@ class TestAuthService:
     # ── create_user (register) ───────────────────────────────────────────────
 
     async def test_create_user_duplicate_email(self, auth_service, mock_db_session):
-        """UserService.create_user returns duplicate email error → propagate."""
+        """UserService.create_user raises ConflictException → propagate."""
         from unittest.mock import AsyncMock as AMock
-
-        error_response = MagicMock()
-        error_response.success = False
-        error_response.message = "邮箱已被注册"
-        error_response.errors = [MagicMock(code=2005, message="邮箱已被使用", field="email")]
+        from pkg.errors.app_exceptions import ConflictException
 
         fake_user_svc = MagicMock()
-        fake_user_svc.create_user = AMock(return_value=error_response)
+        fake_user_svc.create_user = AMock(side_effect=ConflictException("邮箱已被注册"))
 
         with patch("services.user_service.UserService", return_value=fake_user_svc):
-            result = await auth_service.create_user(
-                username="newuser",
-                email="existing@test.com",
-                password="StrongPass1",
-            )
-        assert result.success is False
-        assert "邮箱已被注册" in result.message
+            with pytest.raises((ValidationException, ConflictException)):
+                await auth_service.create_user(
+                    username="newuser",
+                    email="existing@test.com",
+                    password="StrongPass1",
+                )
 
     async def test_create_user_weak_password(self, auth_service, mock_db_session):
-        """UserService.create_user rejects weak password → propagate."""
+        """UserService.create_user raises ValidationException → propagate."""
         from unittest.mock import AsyncMock as AMock
 
-        error_response = MagicMock()
-        error_response.success = False
-        error_response.message = "密码长度至少8位"
-        error_response.errors = [MagicMock(code=1001, message="密码长度至少8位", field="password")]
-
         fake_user_svc = MagicMock()
-        fake_user_svc.create_user = AMock(return_value=error_response)
+        fake_user_svc.create_user = AMock(side_effect=ValidationException("密码长度至少8位"))
 
         with patch("services.user_service.UserService", return_value=fake_user_svc):
-            result = await auth_service.create_user(
-                username="newuser",
-                email="new@test.com",
-                password="weak",
-            )
-        assert result.success is False
-        assert "密码" in result.message
+            with pytest.raises(ValidationException):
+                await auth_service.create_user(
+                    username="newuser",
+                    email="new@test.com",
+                    password="weak",
+                )
 
     async def test_create_user_success(self, auth_service, mock_db_session):
-        """UserService.create_user succeeds → propagate."""
+        """UserService.create_user succeeds → returns user dict."""
         from unittest.mock import AsyncMock as AMock
 
-        success_response = MagicMock()
-        success_response.success = True
-        success_response.message = "用户创建成功"
-        success_response.data = MagicMock(id=99, username="newuser")
+        user_dict = {"id": 99, "username": "newuser", "email": "new@test.com"}
 
         fake_user_svc = MagicMock()
-        fake_user_svc.create_user = AMock(return_value=success_response)
+        fake_user_svc.create_user = AMock(return_value=user_dict)
 
         with patch("services.user_service.UserService", return_value=fake_user_svc):
             result = await auth_service.create_user(
@@ -287,32 +286,33 @@ class TestAuthService:
                 email="new@test.com",
                 password="StrongPass1",
             )
-        assert result.success is True
+        assert result is not None
+        assert result["username"] == "newuser"
 
     # ── get_current_user ────────────────────────────────────────────────────
 
     async def test_get_current_user_invalid_token(self, auth_service, mock_db_session):
-        """verify_token returns None → get_current_user returns None."""
+        """verify_token returns None → raises UnauthorizedException."""
         with patch.object(auth_service, "verify_token", return_value=None):
-            result = await auth_service.get_current_user("bad.token")
-            assert result is None
+            with pytest.raises(UnauthorizedException):
+                await auth_service.get_current_user("bad.token")
 
     async def test_get_current_user_no_user_id_in_payload(self, auth_service, mock_db_session):
-        """verify_token returns payload without user_id → returns None."""
+        """verify_token returns payload without user_id → raises UnauthorizedException."""
         with patch.object(auth_service, "verify_token", return_value={"sub": "1"}):
-            result = await auth_service.get_current_user("any.token")
-            assert result is None
+            with pytest.raises(UnauthorizedException):
+                await auth_service.get_current_user("any.token")
 
     async def test_get_current_user_not_found_in_db(self, auth_service, mock_db_session):
-        """Token valid but user not in DB → returns None."""
+        """Token valid but user not in DB → raises NotFoundException."""
         async def fake_execute(sql, params=None):
             return MagicMock(fetchone=MagicMock(return_value=None))
 
         mock_db_session.execute = AsyncMock(side_effect=fake_execute)
 
         with patch.object(auth_service, "verify_token", return_value={"user_id": 99, "username": "ghost", "role": "user"}):
-            result = await auth_service.get_current_user("valid.token")
-            assert result is None
+            with pytest.raises(NotFoundException):
+                await auth_service.get_current_user("valid.token")
 
     async def test_get_current_user_success(self, auth_service, mock_db_session):
         """Token valid + user exists → returns user dict."""
@@ -356,10 +356,10 @@ class TestAuthService:
     # ── revoke_token ─────────────────────────────────────────────────────────
 
     async def test_revoke_token_invalid(self, auth_service, mock_db_session):
-        """verify_token returns None → revoke_token returns False."""
+        """verify_token returns None → raises UnauthorizedException."""
         with patch.object(auth_service, "verify_token", return_value=None):
-            result = await auth_service.revoke_token("bad.token")
-            assert result is False
+            with pytest.raises(UnauthorizedException):
+                await auth_service.revoke_token("bad.token")
 
     async def test_revoke_token_success(self, auth_service, mock_db_session):
         """Valid token → revoke_token calls DB and returns True."""
@@ -377,16 +377,16 @@ class TestAuthService:
     # ── refresh_token ─────────────────────────────────────────────────────────
 
     async def test_refresh_token_invalid(self, auth_service):
-        """verify_token returns None → refresh_token returns None."""
+        """verify_token returns None → raises UnauthorizedException."""
         with patch.object(auth_service, "verify_token", return_value=None):
-            result = await auth_service.refresh_token("bad.token")
-            assert result is None
+            with pytest.raises(UnauthorizedException):
+                await auth_service.refresh_token("bad.token")
 
     async def test_refresh_token_missing_fields(self, auth_service):
-        """Payload missing user_id/username/role → returns None."""
+        """Payload missing user_id/username/role → raises UnauthorizedException."""
         with patch.object(auth_service, "verify_token", return_value={"sub": "1"}):
-            result = await auth_service.refresh_token("token.without.user.fields")
-            assert result is None
+            with pytest.raises(UnauthorizedException):
+                await auth_service.refresh_token("token.without.user.fields")
 
     async def test_refresh_token_success(self, auth_service):
         """Valid payload → returns new token string."""

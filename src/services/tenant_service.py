@@ -2,7 +2,9 @@
 from datetime import datetime
 from typing import Any
 
-from models.response import ApiResponse, ResponseStatus
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from pkg.errors.app_exceptions import NotFoundException
 
 # Module-level state for persistence across instances (since routers create fresh service per request)
 _tenants_db: dict[int, dict[str, Any]] = {}
@@ -12,10 +14,10 @@ _tenant_counter = 0
 class TenantService:
     """租户管理服务"""
 
-    def __init__(self, session):
+    def __init__(self, session: AsyncSession):
         self._session = session
 
-    async def create_tenant(self, name: str, plan: str, admin_email: str, tenant_id: int = 0) -> ApiResponse:
+    async def create_tenant(self, name: str, plan: str, admin_email: str, tenant_id: int = 0) -> dict:
         global _tenant_counter
         _tenant_counter += 1
         now = datetime.utcnow().isoformat()
@@ -33,79 +35,71 @@ class TenantService:
             "api_calls": 0,
         }
         _tenants_db[_tenant_counter] = tenant
-        return ApiResponse(status=ResponseStatus.SUCCESS, data=tenant, message="租户创建成功")
+        return tenant
 
-    async def get_tenant(self, tenant_id: int, _tenant_id: int = 0) -> ApiResponse:
+    async def get_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
         tenant = _tenants_db.get(tenant_id)
         if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
+            raise NotFoundException(f"Tenant {tenant_id}")
         if tenant.get("deleted_at"):
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} has been deleted")
-        return ApiResponse(status=ResponseStatus.SUCCESS, data=tenant, message="")
+            raise NotFoundException(f"Tenant {tenant_id}")
+        return tenant
 
-    async def update_tenant(self, tenant_id: int, _tenant_id: int = 0, **kwargs) -> ApiResponse:
+    async def update_tenant(self, tenant_id: int, _tenant_id: int = 0, **kwargs) -> dict:
         tenant = _tenants_db.get(tenant_id)
         if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
+            raise NotFoundException(f"Tenant {tenant_id}")
         allowed_fields = {"name", "plan", "admin_email", "status"}
         for key, value in kwargs.items():
             if key in allowed_fields:
                 tenant[key] = value
         tenant["updated_at"] = datetime.utcnow().isoformat()
-        return ApiResponse(status=ResponseStatus.SUCCESS, data=tenant, message="租户更新成功")
+        return tenant
 
-    async def suspend_tenant(self, tenant_id: int, _tenant_id: int = 0) -> ApiResponse:
+    async def suspend_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
         tenant = _tenants_db.get(tenant_id)
         if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
+            raise NotFoundException(f"Tenant {tenant_id}")
         tenant["status"] = "suspended"
         tenant["updated_at"] = datetime.utcnow().isoformat()
-        return ApiResponse(status=ResponseStatus.SUCCESS, data=tenant, message="租户已暂停")
+        return tenant
 
-    async def delete_tenant(self, tenant_id: int, _tenant_id: int = 0) -> ApiResponse:
+    async def delete_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
         tenant = _tenants_db.get(tenant_id)
         if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
+            raise NotFoundException(f"Tenant {tenant_id}")
         tenant["status"] = "deleted"
         tenant["deleted_at"] = datetime.utcnow().isoformat()
         tenant["updated_at"] = tenant["deleted_at"]
-        return ApiResponse(status=ResponseStatus.SUCCESS, data={"id": tenant_id}, message="租户已删除")
+        return {"id": tenant_id}
 
-    async def list_tenants(self, page: int = 1, page_size: int = 20, status: str | None = None, _tenant_id: int = 0) -> ApiResponse:
+    async def list_tenants(self, page: int = 1, page_size: int = 20, status: str | None = None, _tenant_id: int = 0) -> tuple[list, int]:
         tenants = [t for t in _tenants_db.values() if t["status"] != "deleted"]
         if status:
             tenants = [t for t in tenants if t["status"] == status]
         total = len(tenants)
         start = (page - 1) * page_size
         end = start + page_size
-        return ApiResponse(status=ResponseStatus.SUCCESS, data={
-            "items": tenants[start:end],
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "total_pages": (total + page_size - 1) // page_size if total > 0 else 0,
-            "has_next": end < total,
-            "has_prev": page > 1,
-        }, message="")
+        return tenants[start:end], total
 
-    async def get_tenant_stats(self, tenant_id: int = 0) -> ApiResponse:
+    async def get_tenant_stats(self, tenant_id: int = 0) -> dict:
         tenant = _tenants_db.get(tenant_id)
         if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
-        return ApiResponse(status=ResponseStatus.SUCCESS, data={
+            raise NotFoundException(f"Tenant {tenant_id}")
+        return {
             "tenant_id": tenant_id,
             "user_count": tenant.get("user_count", 0),
             "storage_used": tenant.get("storage_used", 0),
             "api_calls": tenant.get("api_calls", 0),
-        }, message="")
+        }
 
-    async def get_tenant_usage(self, tenant_id: int, _tenant_id: int = 0) -> ApiResponse:
+    async def get_tenant_usage(self, tenant_id: int, _tenant_id: int = 0) -> dict:
         tenant = _tenants_db.get(tenant_id)
         if not tenant:
-            return ApiResponse(status=ResponseStatus.NOT_FOUND, data=None, message=f"Tenant {tenant_id} not found")
-        return ApiResponse(status=ResponseStatus.SUCCESS, data={
+            raise NotFoundException(f"Tenant {tenant_id}")
+        return {
             "tenant_id": tenant_id,
             "user_count": tenant.get("user_count", 0),
             "storage_used": tenant.get("storage_used", 0),
             "api_calls": tenant.get("api_calls", 0),
-        }, message="")
+        }

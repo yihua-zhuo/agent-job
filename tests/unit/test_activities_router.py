@@ -1,17 +1,17 @@
 """Unit tests for src/api/routers/activities.py — /api/v1/activities endpoints."""
 import pytest
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from models.response import ResponseStatus
-from api.routers.activities import (
-    activities_router,
-    _http_status,
-    _activity_to_data,
-)
+from api.routers.activities import activities_router
 from internal.middleware.fastapi_auth import AuthContext
-from db.connection import get_db
+from pkg.errors.app_exceptions import (
+    AppException,
+    NotFoundException,
+    ValidationException,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -22,16 +22,8 @@ def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
 
 
-def _make_service_response(status=ResponseStatus.SUCCESS, data=None, message="OK"):
-    resp = MagicMock()
-    resp.status = status
-    resp.data = data
-    resp.message = message
-    return resp
-
-
 # ---------------------------------------------------------------------------
-# Mock activity object
+# Mock activity object with to_dict()
 # ---------------------------------------------------------------------------
 
 class MockActivity:
@@ -55,10 +47,6 @@ class MockActivity:
             self.created_by = 99
         if not hasattr(self, 'created_at'):
             self.created_at = None
-        if not hasattr(self, 'page_size'):
-            self.page_size = 20
-        if not hasattr(self, 'total'):
-            self.total = 1
 
     def to_dict(self):
         return {
@@ -86,51 +74,40 @@ ACTIVITY_ROW = {
 
 
 # ---------------------------------------------------------------------------
-# _http_status
-# ---------------------------------------------------------------------------
-
-class TestHttpStatus:
-    def test_success_returns_200(self):
-        assert _http_status(ResponseStatus.SUCCESS) == 200
-
-    def test_not_found_returns_404(self):
-        assert _http_status(ResponseStatus.NOT_FOUND) == 404
-
-    def test_validation_error_returns_400(self):
-        assert _http_status(ResponseStatus.VALIDATION_ERROR) == 400
-
-    def test_unauthorized_returns_401(self):
-        assert _http_status(ResponseStatus.UNAUTHORIZED) == 401
-
-    def test_server_error_returns_500(self):
-        assert _http_status(ResponseStatus.SERVER_ERROR) == 500
-
-    def test_error_returns_400(self):
-        assert _http_status(ResponseStatus.ERROR) == 400
-
-    def test_unknown_status_returns_400(self):
-        unknown = MagicMock()
-        assert _http_status(unknown) == 400
-
-
-# ---------------------------------------------------------------------------
 # Test fixture
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
 def client_with_service(monkeypatch):
     from internal.middleware.fastapi_auth import require_auth
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
 
     mock_service = MagicMock()
+    mock_session = MagicMock()
+
     monkeypatch.setattr(
         "api.routers.activities.ActivityService",
         lambda session: mock_service,
     )
 
+    # Routers use `async with get_db() as session:` — provide async context manager
+    @asynccontextmanager
+    async def fake_get_db():
+        yield mock_session
+
+    monkeypatch.setattr("api.routers.activities.get_db", fake_get_db)
+
     app = FastAPI()
     app.include_router(activities_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail, "code": exc.code},
+        )
 
     client = TestClient(app, raise_server_exceptions=False)
     return client, mock_service
@@ -144,9 +121,7 @@ class TestCreateActivityEndpoint:
     def test_success_returns_201(self, client_with_service):
         client, svc = client_with_service
         mock_activity = MockActivity(ACTIVITY_ROW)
-        svc.create_activity = AsyncMock(
-            return_value=_make_service_response(data=mock_activity, message="活动创建成功")
-        )
+        svc.create_activity = AsyncMock(return_value=mock_activity)
         resp = client.post(
             "/api/v1/activities",
             json={
@@ -165,10 +140,7 @@ class TestCreateActivityEndpoint:
     def test_service_error_returns_4xx(self, client_with_service):
         client, svc = client_with_service
         svc.create_activity = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.VALIDATION_ERROR,
-                message="客户不存在",
-            )
+            side_effect=ValidationException("客户不存在")
         )
         resp = client.post(
             "/api/v1/activities",
@@ -179,7 +151,7 @@ class TestCreateActivityEndpoint:
                 "created_by": 99,
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_empty_content_rejected(self, client_with_service):
         client, _ = client_with_service
@@ -216,9 +188,7 @@ class TestGetActivityEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         mock_activity = MockActivity(ACTIVITY_ROW)
-        svc.get_activity = AsyncMock(
-            return_value=_make_service_response(data=mock_activity)
-        )
+        svc.get_activity = AsyncMock(return_value=mock_activity)
         resp = client.get("/api/v1/activities/1")
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == 1
@@ -226,9 +196,7 @@ class TestGetActivityEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.get_activity = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="活动不存在"
-            )
+            side_effect=NotFoundException("Activity")
         )
         resp = client.get("/api/v1/activities/9999")
         assert resp.status_code == 404
@@ -243,9 +211,7 @@ class TestUpdateActivityEndpoint:
         client, svc = client_with_service
         updated_row = {**ACTIVITY_ROW, "content": "Updated content"}
         mock_activity = MockActivity(updated_row)
-        svc.update_activity = AsyncMock(
-            return_value=_make_service_response(data=mock_activity, message="活动更新成功")
-        )
+        svc.update_activity = AsyncMock(return_value=mock_activity)
         resp = client.put("/api/v1/activities/1", json={"content": "Updated content"})
         assert resp.status_code == 200
         assert resp.json()["data"]["content"] == "Updated content"
@@ -253,9 +219,7 @@ class TestUpdateActivityEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.update_activity = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="活动不存在"
-            )
+            side_effect=NotFoundException("Activity")
         )
         resp = client.put("/api/v1/activities/9999", json={"content": "X"})
         assert resp.status_code == 404
@@ -268,9 +232,7 @@ class TestUpdateActivityEndpoint:
 class TestDeleteActivityEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.delete_activity = AsyncMock(
-            return_value=_make_service_response(message="活动删除成功")
-        )
+        svc.delete_activity = AsyncMock(return_value=None)
         resp = client.delete("/api/v1/activities/1")
         assert resp.status_code == 200
         assert resp.json()["success"] is True
@@ -278,9 +240,7 @@ class TestDeleteActivityEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.delete_activity = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="活动不存在"
-            )
+            side_effect=NotFoundException("Activity")
         )
         resp = client.delete("/api/v1/activities/9999")
         assert resp.status_code == 404
@@ -294,29 +254,12 @@ class TestListActivitiesEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         mock_activity = MockActivity(ACTIVITY_ROW)
-        mock_list = MagicMock()
-        mock_list.items = [mock_activity]
-        mock_list.total = 1
-        mock_list.page = 1
-        mock_list.page_size = 20
-        svc.list_activities = AsyncMock(
-            return_value=_make_service_response(data=mock_list)
-        )
+        svc.list_activities = AsyncMock(return_value=([mock_activity], 1))
         resp = client.get("/api/v1/activities")
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["total"] == 1
-
-    def test_service_error_propagates(self, client_with_service):
-        client, svc = client_with_service
-        svc.list_activities = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.SERVER_ERROR, message="Server error"
-            )
-        )
-        resp = client.get("/api/v1/activities")
-        assert resp.status_code == 500
 
     def test_page_size_over_100_rejected(self, client_with_service):
         client, _ = client_with_service
@@ -332,25 +275,11 @@ class TestGetCustomerActivitiesEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         mock_activity = MockActivity(ACTIVITY_ROW)
-        mock_paginated = MagicMock()
-        mock_paginated.items = [mock_activity]
-        svc.get_customer_activities = AsyncMock(
-            return_value=_make_service_response(data=mock_paginated)
-        )
+        svc.get_customer_activities = AsyncMock(return_value=[mock_activity])
         resp = client.get("/api/v1/activities/customer/1")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["data"]["total"] == 1
-
-    def test_service_error_propagates(self, client_with_service):
-        client, svc = client_with_service
-        svc.get_customer_activities = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.SERVER_ERROR, message="Server error"
-            )
-        )
-        resp = client.get("/api/v1/activities/customer/1")
-        assert resp.status_code == 500
+        assert len(body["data"]) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -361,23 +290,11 @@ class TestGetOpportunityActivitiesEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         mock_activity = MockActivity(ACTIVITY_ROW)
-        svc.get_opportunity_activities = AsyncMock(
-            return_value=_make_service_response(data=[mock_activity])
-        )
+        svc.get_opportunity_activities = AsyncMock(return_value=[mock_activity])
         resp = client.get("/api/v1/activities/opportunity/1")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["data"]["total"] == 1
-
-    def test_service_error_propagates(self, client_with_service):
-        client, svc = client_with_service
-        svc.get_opportunity_activities = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.SERVER_ERROR, message="Server error"
-            )
-        )
-        resp = client.get("/api/v1/activities/opportunity/1")
-        assert resp.status_code == 500
+        assert len(body["data"]) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -388,9 +305,7 @@ class TestSearchActivitiesEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         mock_activity = MockActivity(ACTIVITY_ROW)
-        svc.search_activities = AsyncMock(
-            return_value=_make_service_response(data=[mock_activity])
-        )
+        svc.search_activities = AsyncMock(return_value=[mock_activity])
         resp = client.post(
             "/api/v1/activities/search",
             json={"keyword": "discussed"},
@@ -398,7 +313,7 @@ class TestSearchActivitiesEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
-        assert len(body["data"]["items"]) == 1
+        assert len(body["data"]) == 1
 
     def test_empty_keyword_rejected(self, client_with_service):
         client, _ = client_with_service
@@ -407,19 +322,6 @@ class TestSearchActivitiesEndpoint:
             json={"keyword": ""},
         )
         assert resp.status_code == 422
-
-    def test_service_error_propagates(self, client_with_service):
-        client, svc = client_with_service
-        svc.search_activities = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.SERVER_ERROR, message="Server error"
-            )
-        )
-        resp = client.post(
-            "/api/v1/activities/search",
-            json={"keyword": "test"},
-        )
-        assert resp.status_code == 500
 
 
 # ---------------------------------------------------------------------------
@@ -434,9 +336,7 @@ class TestActivitySummaryEndpoint:
             "by_type": {"call": 3, "meeting": 2},
             "recent_activities": [],
         }
-        svc.get_activity_summary = AsyncMock(
-            return_value=_make_service_response(data=summary_data)
-        )
+        svc.get_activity_summary = AsyncMock(return_value=summary_data)
         resp = client.get("/api/v1/activities/summary?customer_id=1")
         assert resp.status_code == 200
         body = resp.json()
@@ -446,13 +346,3 @@ class TestActivitySummaryEndpoint:
         client, _ = client_with_service
         resp = client.get("/api/v1/activities/summary")
         assert resp.status_code in (422, 400)
-
-    def test_service_error_propagates(self, client_with_service):
-        client, svc = client_with_service
-        svc.get_activity_summary = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.SERVER_ERROR, message="Server error"
-            )
-        )
-        resp = client.get("/api/v1/activities/summary?customer_id=1")
-        assert resp.status_code == 500
