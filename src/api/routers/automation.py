@@ -1,29 +1,32 @@
-"""Automation rules router — /api/v1/automation/rules endpoints."""
+"""Automation rules router — /api/v1/automation/rules endpoints.
+
+Services raise AppException on errors (caught by global handler in main.py).
+Router serializes ORM objects via .to_dict().
+"""
 
 from fastapi import APIRouter, Depends, Path, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from models.response import ResponseStatus
 from services.automation_service import AutomationService
 
 automation_router = APIRouter(prefix="/api/v1/automation", tags=["automation"])
 
 
-def _http_status(status: ResponseStatus) -> int:
-    m = {
-        ResponseStatus.SUCCESS: 200,
-        ResponseStatus.CREATED: 201,
-        ResponseStatus.NOT_FOUND: 404,
-        ResponseStatus.VALIDATION_ERROR: 400,
-        ResponseStatus.UNAUTHORIZED: 401,
-        ResponseStatus.FORBIDDEN: 403,
-        ResponseStatus.SERVER_ERROR: 500,
-        ResponseStatus.ERROR: 400,
-        ResponseStatus.WARNING: 200,
+def _paginated(items, total, page, page_size):
+    total_pages = (total + page_size - 1) // page_size
+    return {
+        "success": True,
+        "data": {
+            "items": [i.to_dict() for i in items],
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        },
     }
-    return m.get(status, 400)
 
 
 # ---------------------------------------------------------------------------
@@ -59,63 +62,9 @@ class AutomationRuleUpdate(BaseModel):
     enabled: bool | None = Field(None)
 
 
-class AutomationRuleData(BaseModel):
-    id: int
-    tenant_id: int
-    name: str
-    description: str | None
-    trigger_event: str
-    conditions: list[dict]
-    actions: list[dict]
-    enabled: bool
-    created_by: int
-    created_at: str | None
-    updated_at: str | None
-
-
-class AutomationRuleResponse(BaseModel):
-    success: bool
-    data: AutomationRuleData | None = None
-    message: str | None = None
-
-
-class AutomationRuleListData(BaseModel):
-    items: list[AutomationRuleData]
-    total: int
-    page: int
-    page_size: int
-
-
-class AutomationRuleListResponse(BaseModel):
-    success: bool
-    data: AutomationRuleListData | None = None
-    message: str | None = None
-
-
-class AutomationLogData(BaseModel):
-    id: int
-    rule_id: int
-    tenant_id: int
-    trigger_event: str
-    trigger_context: dict
-    actions_executed: list[dict]
-    status: str
-    error_message: str | None
-    executed_by: int
-    executed_at: str | None
-
-
-class AutomationLogListData(BaseModel):
-    items: list[AutomationLogData]
-    total: int
-    page: int
-    page_size: int
-
-
-class AutomationLogListResponse(BaseModel):
-    success: bool
-    data: AutomationLogListData | None = None
-    message: str | None = None
+class TriggerEventRequest(BaseModel):
+    event_type: str = Field(..., min_length=1, max_length=100)
+    context: dict = Field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------
@@ -126,22 +75,21 @@ class AutomationLogListResponse(BaseModel):
 async def create_automation_rule(
     rule: AutomationRuleCreate,
     ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
 ):
     """Create a new automation rule."""
-    async with get_db() as session:
-        service = AutomationService(session)
-        result = await service.create_rule(
-            tenant_id=ctx.tenant_id,
-            name=rule.name,
-            description=rule.description,
-            trigger_event=rule.trigger_event,
-            conditions=[c.model_dump() for c in rule.conditions],
-            actions=[a.model_dump() for a in rule.actions],
-            enabled=rule.enabled,
-            created_by=ctx.user_id,
-        )
-        status_code = _http_status(result.status)
-        return result.to_dict(status_code=status_code)
+    service = AutomationService(session)
+    result = await service.create_rule(
+        tenant_id=ctx.tenant_id,
+        name=rule.name,
+        description=rule.description,
+        trigger_event=rule.trigger_event,
+        conditions=[c.model_dump() for c in rule.conditions],
+        actions=[a.model_dump() for a in rule.actions],
+        enabled=rule.enabled,
+        created_by=ctx.user_id,
+    )
+    return {"success": True, "data": result.to_dict(), "message": "自动化规则创建成功"}
 
 
 @automation_router.get("/rules")
@@ -151,31 +99,30 @@ async def list_automation_rules(
     trigger_event: str | None = Query(None),
     enabled: bool | None = Query(None),
     ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
 ):
     """List automation rules for the tenant."""
-    async with get_db() as session:
-        service = AutomationService(session)
-        result = await service.list_rules(
-            tenant_id=ctx.tenant_id,
-            page=page,
-            page_size=page_size,
-            trigger_event=trigger_event,
-            enabled=enabled,
-        )
-        return result.to_dict()
+    service = AutomationService(session)
+    items, total = await service.list_rules(
+        tenant_id=ctx.tenant_id,
+        page=page,
+        page_size=page_size,
+        trigger_event=trigger_event,
+        enabled=enabled,
+    )
+    return _paginated(items, total, page, page_size)
 
 
 @automation_router.get("/rules/{rule_id}")
 async def get_automation_rule(
     rule_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
 ):
     """Get a specific automation rule."""
-    async with get_db() as session:
-        service = AutomationService(session)
-        result = await service.get_rule(rule_id=rule_id, tenant_id=ctx.tenant_id)
-        status_code = _http_status(result.status)
-        return result.to_dict(status_code=status_code)
+    service = AutomationService(session)
+    rule = await service.get_rule(rule_id=rule_id, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": rule.to_dict()}
 
 
 @automation_router.put("/rules/{rule_id}")
@@ -183,48 +130,61 @@ async def update_automation_rule(
     rule_id: int,
     rule: AutomationRuleUpdate,
     ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
 ):
     """Update an automation rule."""
-    async with get_db() as session:
-        service = AutomationService(session)
-        update_data = rule.model_dump(exclude_unset=True)
-        if "conditions" in update_data and update_data["conditions"] is not None:
-            update_data["conditions"] = [dict(c) if hasattr(c, "model_dump") else c for c in update_data["conditions"]]
-        if "actions" in update_data and update_data["actions"] is not None:
-            update_data["actions"] = [dict(a) if hasattr(a, "model_dump") else a for a in update_data["actions"]]
-        result = await service.update_rule(
-            rule_id=rule_id,
-            tenant_id=ctx.tenant_id,
-            **update_data,
-        )
-        status_code = _http_status(result.status)
-        return result.to_dict(status_code=status_code)
+    service = AutomationService(session)
+    update_data = rule.model_dump(exclude_unset=True)
+    if "conditions" in update_data and update_data["conditions"] is not None:
+        update_data["conditions"] = [dict(c) if hasattr(c, "model_dump") else c for c in update_data["conditions"]]
+    if "actions" in update_data and update_data["actions"] is not None:
+        update_data["actions"] = [dict(a) if hasattr(a, "model_dump") else a for a in update_data["actions"]]
+    result = await service.update_rule(
+        rule_id=rule_id,
+        tenant_id=ctx.tenant_id,
+        **update_data,
+    )
+    return {"success": True, "data": result.to_dict(), "message": "自动化规则更新成功"}
 
 
 @automation_router.delete("/rules/{rule_id}")
 async def delete_automation_rule(
     rule_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
 ):
     """Delete an automation rule."""
-    async with get_db() as session:
-        service = AutomationService(session)
-        result = await service.delete_rule(rule_id=rule_id, tenant_id=ctx.tenant_id)
-        status_code = _http_status(result.status)
-        return result.to_dict(status_code=status_code)
+    service = AutomationService(session)
+    deleted_id = await service.delete_rule(rule_id=rule_id, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": {"id": deleted_id}, "message": "自动化规则删除成功"}
 
 
 @automation_router.post("/rules/{rule_id}/toggle")
 async def toggle_automation_rule(
     rule_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
 ):
     """Enable or disable an automation rule."""
-    async with get_db() as session:
-        service = AutomationService(session)
-        result = await service.toggle_rule(rule_id=rule_id, tenant_id=ctx.tenant_id)
-        status_code = _http_status(result.status)
-        return result.to_dict(status_code=status_code)
+    service = AutomationService(session)
+    rule = await service.toggle_rule(rule_id=rule_id, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": rule.to_dict(), "message": "自动化规则状态已切换"}
+
+
+@automation_router.post("/trigger")
+async def trigger_event(
+    body: TriggerEventRequest,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Trigger an automation event and execute matching rules."""
+    service = AutomationService(session)
+    results = await service.trigger_event(
+        tenant_id=ctx.tenant_id,
+        event_type=body.event_type,
+        context=body.context,
+    )
+    return {"success": True, "data": results}
 
 
 @automation_router.get("/logs")
@@ -234,15 +194,15 @@ async def list_automation_logs(
     rule_id: int | None = Query(None),
     status: str | None = Query(None),
     ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
 ):
     """List automation execution logs."""
-    async with get_db() as session:
-        service = AutomationService(session)
-        result = await service.list_logs(
-            tenant_id=ctx.tenant_id,
-            page=page,
-            page_size=page_size,
-            rule_id=rule_id,
-            status=status,
-        )
-        return result.to_dict()
+    service = AutomationService(session)
+    items, total = await service.list_logs(
+        tenant_id=ctx.tenant_id,
+        page=page,
+        page_size=page_size,
+        rule_id=rule_id,
+        status=status,
+    )
+    return _paginated(items, total, page, page_size)

@@ -1,16 +1,17 @@
-"""Unit tests for src/api/routers/sales.py — typed response schemas and _http_status."""
+"""Unit tests for src/api/routers/sales.py — router endpoint tests."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from models.response import ResponseStatus
-from api.routers.sales import (
-    sales_router,
-    _http_status,
-)
-from internal.middleware.fastapi_auth import AuthContext
+from api.routers.sales import sales_router
 from db.connection import get_db
+from internal.middleware.fastapi_auth import AuthContext
+from pkg.errors.app_exceptions import (
+    AppException,
+    NotFoundException,
+    ValidationException,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -19,14 +20,6 @@ from db.connection import get_db
 
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
-
-
-def _make_service_response(status=ResponseStatus.SUCCESS, data=None, message="OK"):
-    resp = MagicMock()
-    resp.status = status
-    resp.data = data
-    resp.message = message
-    return resp
 
 
 PIPELINE_ROW = {
@@ -54,25 +47,13 @@ OPPORTUNITY_ROW = {
     "updated_at": None,
 }
 
-LIST_DATA_PIPELINE = {
-    "items": [PIPELINE_ROW],
-}
-
-LIST_DATA_OPP = {
-    "items": [OPPORTUNITY_ROW],
-    "total": 1,
-    "page": 1,
-    "page_size": 20,
-    "total_pages": 1,
-    "has_next": False,
-    "has_prev": False,
-}
-
 
 @pytest.fixture
 def client_with_service(monkeypatch):
     """Return a TestClient with SalesService fully mocked."""
     from internal.middleware.fastapi_auth import require_auth
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
 
     mock_service = MagicMock()
 
@@ -86,42 +67,15 @@ def client_with_service(monkeypatch):
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
     app.dependency_overrides[get_db] = lambda: MagicMock()
 
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
     client = TestClient(app, raise_server_exceptions=False)
     return client, mock_service
-
-
-# ---------------------------------------------------------------------------
-# _http_status (sales router version)
-# ---------------------------------------------------------------------------
-
-class TestSalesHttpStatus:
-    def test_success_returns_200(self):
-        assert _http_status(ResponseStatus.SUCCESS) == 200
-
-    def test_warning_returns_200(self):
-        assert _http_status(ResponseStatus.WARNING) == 200
-
-    def test_not_found_returns_404(self):
-        assert _http_status(ResponseStatus.NOT_FOUND) == 404
-
-    def test_validation_error_returns_400(self):
-        assert _http_status(ResponseStatus.VALIDATION_ERROR) == 400
-
-    def test_unauthorized_returns_401(self):
-        assert _http_status(ResponseStatus.UNAUTHORIZED) == 401
-
-    def test_forbidden_returns_403(self):
-        assert _http_status(ResponseStatus.FORBIDDEN) == 403
-
-    def test_server_error_returns_500(self):
-        assert _http_status(ResponseStatus.SERVER_ERROR) == 500
-
-    def test_error_returns_400(self):
-        assert _http_status(ResponseStatus.ERROR) == 400
-
-    def test_unknown_status_returns_400(self):
-        unknown = MagicMock()
-        assert _http_status(unknown) == 400
 
 
 # ---------------------------------------------------------------------------
@@ -131,9 +85,7 @@ class TestSalesHttpStatus:
 class TestCreatePipelineEndpoint:
     def test_success_returns_201(self, client_with_service):
         client, svc = client_with_service
-        svc.create_pipeline = AsyncMock(
-            return_value=_make_service_response(data=PIPELINE_ROW, message="Pipeline created")
-        )
+        svc.create_pipeline = AsyncMock(return_value=PIPELINE_ROW)
         resp = client.post(
             "/api/v1/sales/pipelines",
             json={"name": "Sales Pipeline", "is_default": True, "stages": ["lead"]},
@@ -146,15 +98,13 @@ class TestCreatePipelineEndpoint:
     def test_service_error_returns_4xx(self, client_with_service):
         client, svc = client_with_service
         svc.create_pipeline = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.VALIDATION_ERROR, message="Invalid"
-            )
+            side_effect=ValidationException("Invalid")
         )
         resp = client.post(
             "/api/v1/sales/pipelines",
             json={"name": "X", "is_default": False},
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_empty_name_rejected(self, client_with_service):
         client, _ = client_with_service
@@ -176,9 +126,7 @@ class TestCreatePipelineEndpoint:
 class TestListPipelinesEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.list_pipelines = AsyncMock(
-            return_value=_make_service_response(data=LIST_DATA_PIPELINE, message="OK")
-        )
+        svc.list_pipelines = AsyncMock(return_value=[PIPELINE_ROW])
         resp = client.get("/api/v1/sales/pipelines")
         assert resp.status_code == 200
         body = resp.json()
@@ -188,9 +136,7 @@ class TestListPipelinesEndpoint:
 
     def test_empty_list(self, client_with_service):
         client, svc = client_with_service
-        svc.list_pipelines = AsyncMock(
-            return_value=_make_service_response(data={"items": []}, message="OK")
-        )
+        svc.list_pipelines = AsyncMock(return_value=[])
         resp = client.get("/api/v1/sales/pipelines")
         assert resp.status_code == 200
         assert resp.json()["data"]["total"] == 0
@@ -199,9 +145,7 @@ class TestListPipelinesEndpoint:
 class TestGetPipelineEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.get_pipeline = AsyncMock(
-            return_value=_make_service_response(data=PIPELINE_ROW, message="OK")
-        )
+        svc.get_pipeline = AsyncMock(return_value=PIPELINE_ROW)
         resp = client.get("/api/v1/sales/pipelines/1")
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == 1
@@ -209,9 +153,7 @@ class TestGetPipelineEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.get_pipeline = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="Not found"
-            )
+            side_effect=NotFoundException("Pipeline")
         )
         resp = client.get("/api/v1/sales/pipelines/9999")
         assert resp.status_code == 404
@@ -221,9 +163,7 @@ class TestGetPipelineStatsEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         stats_data = {"pipeline_id": 1, "total": 10, "won": 3, "lost": 2}
-        svc.get_pipeline_stats = AsyncMock(
-            return_value=_make_service_response(data=stats_data, message="OK")
-        )
+        svc.get_pipeline_stats = AsyncMock(return_value=stats_data)
         resp = client.get("/api/v1/sales/pipelines/1/stats")
         assert resp.status_code == 200
         body = resp.json()
@@ -233,9 +173,7 @@ class TestGetPipelineStatsEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.get_pipeline_stats = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="Not found"
-            )
+            side_effect=NotFoundException("Pipeline")
         )
         resp = client.get("/api/v1/sales/pipelines/9999/stats")
         assert resp.status_code == 404
@@ -245,9 +183,7 @@ class TestGetPipelineFunnelEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         funnel_data = {"pipeline_id": 1, "stages": [{"name": "lead", "count": 5}]}
-        svc.get_pipeline_funnel = AsyncMock(
-            return_value=_make_service_response(data=funnel_data, message="OK")
-        )
+        svc.get_pipeline_funnel = AsyncMock(return_value=funnel_data)
         resp = client.get("/api/v1/sales/pipelines/1/funnel")
         assert resp.status_code == 200
         body = resp.json()
@@ -256,9 +192,7 @@ class TestGetPipelineFunnelEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.get_pipeline_funnel = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="Not found"
-            )
+            side_effect=NotFoundException("Pipeline")
         )
         resp = client.get("/api/v1/sales/pipelines/9999/funnel")
         assert resp.status_code == 404
@@ -271,9 +205,7 @@ class TestGetPipelineFunnelEndpoint:
 class TestCreateOpportunityEndpoint:
     def test_success_returns_201(self, client_with_service):
         client, svc = client_with_service
-        svc.create_opportunity = AsyncMock(
-            return_value=_make_service_response(data=OPPORTUNITY_ROW, message="Opp created")
-        )
+        svc.create_opportunity = AsyncMock(return_value=OPPORTUNITY_ROW)
         resp = client.post(
             "/api/v1/sales/opportunities",
             json={
@@ -291,13 +223,13 @@ class TestCreateOpportunityEndpoint:
         assert body["data"]["name"] == "Big Deal"
 
     def test_close_date_remapped_to_expected_close_date(self, client_with_service):
-        """Verify the close_date → expected_close_date remapping happens in the endpoint."""
+        """Verify the close_date -> expected_close_date remapping happens in the endpoint."""
         client, svc = client_with_service
         captured = {}
 
         async def capture_create(tenant_id, data):
             captured["data"] = data
-            return _make_service_response(data=OPPORTUNITY_ROW)
+            return OPPORTUNITY_ROW
 
         svc.create_opportunity = capture_create
         resp = client.post(
@@ -342,9 +274,7 @@ class TestCreateOpportunityEndpoint:
     def test_service_error_returns_4xx(self, client_with_service):
         client, svc = client_with_service
         svc.create_opportunity = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.VALIDATION_ERROR, message="Invalid"
-            )
+            side_effect=ValidationException("Invalid")
         )
         resp = client.post(
             "/api/v1/sales/opportunities",
@@ -357,15 +287,13 @@ class TestCreateOpportunityEndpoint:
                 "owner_id": 1,
             },
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
 
 class TestListOpportunitiesEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.list_opportunities = AsyncMock(
-            return_value=_make_service_response(data=LIST_DATA_OPP, message="OK")
-        )
+        svc.list_opportunities = AsyncMock(return_value=[OPPORTUNITY_ROW])
         resp = client.get("/api/v1/sales/opportunities")
         assert resp.status_code == 200
         body = resp.json()
@@ -373,9 +301,7 @@ class TestListOpportunitiesEndpoint:
 
     def test_with_filters(self, client_with_service):
         client, svc = client_with_service
-        svc.list_opportunities = AsyncMock(
-            return_value=_make_service_response(data=LIST_DATA_OPP, message="OK")
-        )
+        svc.list_opportunities = AsyncMock(return_value=[OPPORTUNITY_ROW])
         resp = client.get("/api/v1/sales/opportunities?pipeline_id=1&stage=lead&owner_id=1")
         assert resp.status_code == 200
 
@@ -388,9 +314,7 @@ class TestListOpportunitiesEndpoint:
 class TestGetOpportunityEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.get_opportunity = AsyncMock(
-            return_value=_make_service_response(data=OPPORTUNITY_ROW, message="OK")
-        )
+        svc.get_opportunity = AsyncMock(return_value=OPPORTUNITY_ROW)
         resp = client.get("/api/v1/sales/opportunities/1")
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == 1
@@ -398,9 +322,7 @@ class TestGetOpportunityEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.get_opportunity = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="Not found"
-            )
+            side_effect=NotFoundException("Opportunity")
         )
         resp = client.get("/api/v1/sales/opportunities/9999")
         assert resp.status_code == 404
@@ -410,9 +332,7 @@ class TestUpdateOpportunityEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         svc.update_opportunity = AsyncMock(
-            return_value=_make_service_response(
-                data={**OPPORTUNITY_ROW, "name": "Updated"}, message="Updated"
-            )
+            return_value={**OPPORTUNITY_ROW, "name": "Updated"}
         )
         resp = client.put("/api/v1/sales/opportunities/1", json={"name": "Updated"})
         assert resp.status_code == 200
@@ -424,7 +344,7 @@ class TestUpdateOpportunityEndpoint:
 
         async def capture_update(tenant_id, opp_id, data):
             captured["data"] = data
-            return _make_service_response(data=OPPORTUNITY_ROW)
+            return OPPORTUNITY_ROW
 
         svc.update_opportunity = capture_update
         resp = client.put(
@@ -438,9 +358,7 @@ class TestUpdateOpportunityEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.update_opportunity = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="Not found"
-            )
+            side_effect=NotFoundException("Opportunity")
         )
         resp = client.put("/api/v1/sales/opportunities/9999", json={"name": "X"})
         assert resp.status_code == 404
@@ -450,9 +368,7 @@ class TestChangeStageEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         svc.change_stage = AsyncMock(
-            return_value=_make_service_response(
-                data={"id": 1, "stage": "closed"}, message="Stage changed"
-            )
+            return_value={"id": 1, "stage": "closed"}
         )
         resp = client.put(
             "/api/v1/sales/opportunities/1/stage",
@@ -477,9 +393,7 @@ class TestChangeStageEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.change_stage = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="Not found"
-            )
+            side_effect=NotFoundException("Opportunity")
         )
         resp = client.put(
             "/api/v1/sales/opportunities/9999/stage",
@@ -496,9 +410,7 @@ class TestGetForecastEndpoint:
     def test_success_no_owner(self, client_with_service):
         client, svc = client_with_service
         svc.get_forecast = AsyncMock(
-            return_value=_make_service_response(
-                data={"owner_id": None, "forecast": {"total": 9000}}, message="OK"
-            )
+            return_value={"owner_id": None, "forecast": {"total": 9000}}
         )
         resp = client.get("/api/v1/sales/forecast")
         assert resp.status_code == 200
@@ -509,9 +421,7 @@ class TestGetForecastEndpoint:
     def test_success_with_owner_id(self, client_with_service):
         client, svc = client_with_service
         svc.get_forecast = AsyncMock(
-            return_value=_make_service_response(
-                data={"owner_id": 3, "forecast": {"q1": 5000}}, message="OK"
-            )
+            return_value={"owner_id": 3, "forecast": {"q1": 5000}}
         )
         resp = client.get("/api/v1/sales/forecast?owner_id=3")
         assert resp.status_code == 200

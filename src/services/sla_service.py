@@ -1,5 +1,7 @@
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Literal
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from models.ticket import SLA_CONFIGS, Ticket
 
@@ -7,7 +9,7 @@ from models.ticket import SLA_CONFIGS, Ticket
 class SLAService:
     """SLA管理"""
 
-    def __init__(self, session, ticket_service=None):
+    def __init__(self, session: AsyncSession, ticket_service=None):
         self._session = session
         self._ticket_service = ticket_service
 
@@ -53,5 +55,5 @@ class SLAService:
         if ticket.resolved_at:
             return timedelta(0)
 
-        remaining = ticket.response_deadline - datetime.now()
+        remaining = ticket.response_deadline - datetime.now(UTC)
         return remaining if remaining.total_seconds() > 0 else timedelta(0)

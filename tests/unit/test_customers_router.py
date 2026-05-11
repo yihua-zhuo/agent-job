@@ -1,18 +1,17 @@
-"""Unit tests for src/api/routers/customers.py — typed response schemas and _http_status."""
+"""Unit tests for src/api/routers/customers.py — router endpoint tests."""
 import pytest
 from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
 
-from models.response import ResponseStatus
 from api.routers.customers import (
     customers_router,
-    _http_status,
     _sanitize,
     _is_valid_email,
 )
 from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 # ---------------------------------------------------------------------------
@@ -21,56 +20,6 @@ from db.connection import get_db
 
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
-
-
-def _make_app(service_mock) -> tuple[FastAPI, TestClient]:
-    """Create a test FastAPI app that injects service_mock responses."""
-    from internal.middleware.fastapi_auth import require_auth
-
-    app = FastAPI()
-    app.include_router(customers_router)
-
-    # Override auth
-    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    # Override DB session
-    app.dependency_overrides[get_db] = lambda: MagicMock()
-
-    return app, TestClient(app, raise_server_exceptions=False)
-
-
-# ---------------------------------------------------------------------------
-# _http_status
-# ---------------------------------------------------------------------------
-
-class TestHttpStatus:
-    def test_success_returns_200(self):
-        assert _http_status(ResponseStatus.SUCCESS) == 200
-
-    def test_warning_returns_200(self):
-        assert _http_status(ResponseStatus.WARNING) == 200
-
-    def test_not_found_returns_404(self):
-        assert _http_status(ResponseStatus.NOT_FOUND) == 404
-
-    def test_validation_error_returns_400(self):
-        assert _http_status(ResponseStatus.VALIDATION_ERROR) == 400
-
-    def test_unauthorized_returns_401(self):
-        assert _http_status(ResponseStatus.UNAUTHORIZED) == 401
-
-    def test_forbidden_returns_403(self):
-        assert _http_status(ResponseStatus.FORBIDDEN) == 403
-
-    def test_server_error_returns_500(self):
-        assert _http_status(ResponseStatus.SERVER_ERROR) == 500
-
-    def test_error_returns_400(self):
-        assert _http_status(ResponseStatus.ERROR) == 400
-
-    def test_unknown_status_returns_400(self):
-        # Test fallback: pass a value not in the mapping
-        unknown = MagicMock()
-        assert _http_status(unknown) == 400
 
 
 # ---------------------------------------------------------------------------
@@ -129,14 +78,6 @@ class TestIsValidEmail:
 # Router endpoint tests using TestClient with mocked CustomerService
 # ---------------------------------------------------------------------------
 
-def _make_service_response(status=ResponseStatus.SUCCESS, data=None, message="OK"):
-    resp = MagicMock()
-    resp.status = status
-    resp.data = data
-    resp.message = message
-    return resp
-
-
 CUSTOMER_ROW = {
     "id": 1,
     "tenant_id": 1,
@@ -151,21 +92,14 @@ CUSTOMER_ROW = {
     "updated_at": None,
 }
 
-LIST_DATA = {
-    "items": [CUSTOMER_ROW],
-    "total": 1,
-    "page": 1,
-    "page_size": 20,
-    "total_pages": 1,
-    "has_next": False,
-    "has_prev": False,
-}
-
 
 @pytest.fixture
 def client_with_service(monkeypatch):
     """Return a TestClient with CustomerService fully mocked."""
     from internal.middleware.fastapi_auth import require_auth
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+    from pkg.errors.app_exceptions import AppException
 
     mock_service = MagicMock()
 
@@ -180,6 +114,13 @@ def client_with_service(monkeypatch):
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
     app.dependency_overrides[get_db] = lambda: MagicMock()
 
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
     client = TestClient(app, raise_server_exceptions=False)
     return client, mock_service
 
@@ -187,9 +128,7 @@ def client_with_service(monkeypatch):
 class TestCreateCustomerEndpoint:
     def test_success_returns_201(self, client_with_service):
         client, svc = client_with_service
-        svc.create_customer = AsyncMock(
-            return_value=_make_service_response(data=CUSTOMER_ROW, message="客户创建成功")
-        )
+        svc.create_customer = AsyncMock(return_value=CUSTOMER_ROW)
         resp = client.post(
             "/api/v1/customers",
             json={"name": "Alice", "email": "alice@example.com", "owner_id": 1},
@@ -202,16 +141,13 @@ class TestCreateCustomerEndpoint:
     def test_service_error_returns_4xx(self, client_with_service):
         client, svc = client_with_service
         svc.create_customer = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.VALIDATION_ERROR,
-                message="Invalid data",
-            )
+            side_effect=ValidationException("Invalid data")
         )
         resp = client.post(
             "/api/v1/customers",
             json={"name": "Alice", "owner_id": 1},
         )
-        assert resp.status_code == 400
+        assert resp.status_code == 422
 
     def test_invalid_email_rejected_by_validator(self, client_with_service):
         client, svc = client_with_service
@@ -241,9 +177,7 @@ class TestCreateCustomerEndpoint:
 class TestListCustomersEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.list_customers = AsyncMock(
-            return_value=_make_service_response(data=LIST_DATA, message="OK")
-        )
+        svc.list_customers = AsyncMock(return_value=([CUSTOMER_ROW], 1))
         resp = client.get("/api/v1/customers")
         assert resp.status_code == 200
         body = resp.json()
@@ -253,10 +187,7 @@ class TestListCustomersEndpoint:
 
     def test_with_pagination_params(self, client_with_service):
         client, svc = client_with_service
-        paginated = {**LIST_DATA, "page": 2, "page_size": 5, "total": 10, "total_pages": 2, "has_prev": True}
-        svc.list_customers = AsyncMock(
-            return_value=_make_service_response(data=paginated)
-        )
+        svc.list_customers = AsyncMock(return_value=([CUSTOMER_ROW], 10))
         resp = client.get("/api/v1/customers?page=2&page_size=5")
         assert resp.status_code == 200
         assert resp.json()["data"]["page"] == 2
@@ -266,26 +197,11 @@ class TestListCustomersEndpoint:
         resp = client.get("/api/v1/customers?page_size=101")
         assert resp.status_code == 422
 
-    def test_service_error_propagates(self, client_with_service):
-        client, svc = client_with_service
-        svc.list_customers = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.UNAUTHORIZED, message="Unauthorized"
-            )
-        )
-        resp = client.get("/api/v1/customers")
-        assert resp.status_code == 401
-
 
 class TestSearchCustomersEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.search_customers = AsyncMock(
-            return_value=_make_service_response(
-                data={"keyword": "alice", "items": [CUSTOMER_ROW]},
-                message="",
-            )
-        )
+        svc.search_customers = AsyncMock(return_value=[CUSTOMER_ROW])
         resp = client.get("/api/v1/customers/search?keyword=alice")
         assert resp.status_code == 200
         body = resp.json()
@@ -294,12 +210,7 @@ class TestSearchCustomersEndpoint:
 
     def test_empty_keyword(self, client_with_service):
         client, svc = client_with_service
-        svc.search_customers = AsyncMock(
-            return_value=_make_service_response(
-                data={"keyword": "", "items": []},
-                message="",
-            )
-        )
+        svc.search_customers = AsyncMock(return_value=[])
         resp = client.get("/api/v1/customers/search")
         assert resp.status_code == 200
         assert resp.json()["data"]["items"] == []
@@ -313,9 +224,7 @@ class TestSearchCustomersEndpoint:
 class TestGetCustomerEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.get_customer = AsyncMock(
-            return_value=_make_service_response(data=CUSTOMER_ROW, message="OK")
-        )
+        svc.get_customer = AsyncMock(return_value=CUSTOMER_ROW)
         resp = client.get("/api/v1/customers/1")
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == 1
@@ -323,9 +232,7 @@ class TestGetCustomerEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.get_customer = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="客户不存在"
-            )
+            side_effect=NotFoundException("Customer")
         )
         resp = client.get("/api/v1/customers/9999")
         assert resp.status_code == 404
@@ -335,9 +242,7 @@ class TestUpdateCustomerEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         svc.update_customer = AsyncMock(
-            return_value=_make_service_response(
-                data={**CUSTOMER_ROW, "name": "Updated"}, message="客户更新成功"
-            )
+            return_value={**CUSTOMER_ROW, "name": "Updated"}
         )
         resp = client.put("/api/v1/customers/1", json={"name": "Updated"})
         assert resp.status_code == 200
@@ -346,9 +251,7 @@ class TestUpdateCustomerEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.update_customer = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="客户不存在"
-            )
+            side_effect=NotFoundException("Customer")
         )
         resp = client.put("/api/v1/customers/9999", json={"name": "X"})
         assert resp.status_code == 404
@@ -357,21 +260,16 @@ class TestUpdateCustomerEndpoint:
 class TestDeleteCustomerEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.delete_customer = AsyncMock(
-            return_value=_make_service_response(message="客户删除成功")
-        )
+        svc.delete_customer = AsyncMock(return_value=CUSTOMER_ROW)
         resp = client.delete("/api/v1/customers/1")
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
-        assert body["data"] is None
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.delete_customer = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="客户不存在"
-            )
+            side_effect=NotFoundException("Customer")
         )
         resp = client.delete("/api/v1/customers/9999")
         assert resp.status_code == 404
@@ -380,11 +278,7 @@ class TestDeleteCustomerEndpoint:
 class TestAddTagEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.add_tag = AsyncMock(
-            return_value=_make_service_response(
-                data={"id": 1, "tag": "vip"}, message="Tag added"
-            )
-        )
+        svc.add_tag = AsyncMock(return_value={"id": 1, "tag": "vip"})
         resp = client.post("/api/v1/customers/1/tags", json={"tag": "vip"})
         assert resp.status_code == 200
         assert resp.json()["data"]["tag"] == "vip"
@@ -392,9 +286,7 @@ class TestAddTagEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.add_tag = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="客户不存在"
-            )
+            side_effect=NotFoundException("Customer")
         )
         resp = client.post("/api/v1/customers/9999/tags", json={"tag": "vip"})
         assert resp.status_code == 404
@@ -408,20 +300,14 @@ class TestAddTagEndpoint:
 class TestRemoveTagEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.remove_tag = AsyncMock(
-            return_value=_make_service_response(
-                data={"id": 1, "tag": "vip"}, message="Tag removed"
-            )
-        )
+        svc.remove_tag = AsyncMock(return_value={"id": 1, "tag": "vip"})
         resp = client.delete("/api/v1/customers/1/tags/vip")
         assert resp.status_code == 200
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.remove_tag = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="客户不存在"
-            )
+            side_effect=NotFoundException("Customer")
         )
         resp = client.delete("/api/v1/customers/9999/tags/vip")
         assert resp.status_code == 404
@@ -430,11 +316,7 @@ class TestRemoveTagEndpoint:
 class TestChangeStatusEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.change_status = AsyncMock(
-            return_value=_make_service_response(
-                data={"id": 1, "status": "active"}, message="Status changed"
-            )
-        )
+        svc.change_status = AsyncMock(return_value={"id": 1, "status": "active"})
         resp = client.put("/api/v1/customers/1/status", json={"status": "active"})
         assert resp.status_code == 200
         assert resp.json()["data"]["status"] == "active"
@@ -447,9 +329,7 @@ class TestChangeStatusEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.change_status = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="客户不存在"
-            )
+            side_effect=NotFoundException("Customer")
         )
         resp = client.put("/api/v1/customers/9999/status", json={"status": "active"})
         assert resp.status_code == 404
@@ -458,11 +338,7 @@ class TestChangeStatusEndpoint:
 class TestAssignOwnerEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.assign_owner = AsyncMock(
-            return_value=_make_service_response(
-                data={"id": 1, "owner_id": 5}, message="Owner assigned"
-            )
-        )
+        svc.assign_owner = AsyncMock(return_value={"id": 1, "owner_id": 5})
         resp = client.put("/api/v1/customers/1/owner", json={"owner_id": 5})
         assert resp.status_code == 200
         assert resp.json()["data"]["owner_id"] == 5
@@ -475,9 +351,7 @@ class TestAssignOwnerEndpoint:
     def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.assign_owner = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.NOT_FOUND, message="客户不存在"
-            )
+            side_effect=NotFoundException("Customer")
         )
         resp = client.put("/api/v1/customers/9999/owner", json={"owner_id": 1})
         assert resp.status_code == 404
@@ -486,11 +360,7 @@ class TestAssignOwnerEndpoint:
 class TestBulkImportEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.bulk_import = AsyncMock(
-            return_value=_make_service_response(
-                data={"imported": 2, "errors": []}, message="Imported"
-            )
-        )
+        svc.bulk_import = AsyncMock(return_value=2)
         resp = client.post(
             "/api/v1/customers/import",
             json={"customers": [{"name": "A"}, {"name": "B"}]},
@@ -500,23 +370,6 @@ class TestBulkImportEndpoint:
 
     def test_empty_customers_allowed(self, client_with_service):
         client, svc = client_with_service
-        svc.bulk_import = AsyncMock(
-            return_value=_make_service_response(
-                data={"imported": 0, "errors": []}, message="Imported"
-            )
-        )
+        svc.bulk_import = AsyncMock(return_value=0)
         resp = client.post("/api/v1/customers/import", json={"customers": []})
         assert resp.status_code == 200
-
-    def test_service_error_propagates(self, client_with_service):
-        client, svc = client_with_service
-        svc.bulk_import = AsyncMock(
-            return_value=_make_service_response(
-                status=ResponseStatus.SERVER_ERROR, message="Server error"
-            )
-        )
-        resp = client.post(
-            "/api/v1/customers/import",
-            json={"customers": [{"name": "A"}]},
-        )
-        assert resp.status_code == 500

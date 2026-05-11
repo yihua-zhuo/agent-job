@@ -4,9 +4,15 @@ from datetime import UTC, datetime, timedelta
 
 import bcrypt
 import jwt
-from sqlalchemy import text
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from models.response import ApiResponse
+from db.models.user import UserModel
+from pkg.errors.app_exceptions import (
+    NotFoundException,
+    UnauthorizedException,
+    ValidationException,
+)
 
 
 def is_valid_email(email: str) -> bool:
@@ -21,11 +27,16 @@ def sanitize_string(value: str) -> str | None:
     """Remove HTML tags, control characters, and SQL comment patterns."""
     if value is None:
         return None
-    s = re.sub(r"<[^>]+>", "", value)
+    # Strip HTML tags (keep content inside)
+    s = re.sub(r"<[^>]*>", "", value)
+    # Strip block comments
+    s = re.sub(r"/\*.*?\*/", "", s, flags=re.DOTALL)
+    # Strip control chars
     s = re.sub(r"[\x00-\x1f\x7f]", "", s)
-    s = s.replace("--", "  ")
-    s = re.sub(r"/\*.*?\*/", "  ", s)
-    return " ".join(s.split())
+    # Strip SQL comment marker
+    s = s.replace("--", "")
+    # Trim leading/trailing whitespace (but preserve internal spaces)
+    return s.strip()
 
 
 def validate_id(value, field_name: str = "id") -> None:
@@ -39,21 +50,30 @@ class AuthService:
 
     TOKEN_EXPIRY_HOURS = 24
 
-    def __init__(self, session, secret_key: str = "dev-secret"):
+    def __init__(self, session: AsyncSession, secret_key: str | None = None):
         """Initialize AuthService.
 
         Args:
             session: DB session.
-            secret_key: Secret key for JWT encoding.
+            secret_key: Secret key for JWT encoding. Falls back to JWT_SECRET_KEY env var.
+
+        Raises:
+            ValueError: If neither secret_key nor JWT_SECRET_KEY env var is set.
         """
-        self.secret_key = secret_key
+        import os
+        key = secret_key if secret_key is not None else os.environ.get("JWT_SECRET_KEY")
+        if not key:
+            raise ValueError("JWT_SECRET_KEY must be set")
+        self.secret_key = key
         self.session = session
 
-    def hash_password(self, password: str) -> str:
+    @staticmethod
+    def hash_password(password: str) -> str:
         """Hash a password using bcrypt."""
         return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
-    def verify_password(self, password: str, hashed: str) -> bool:
+    @staticmethod
+    def verify_password(password: str, hashed: str) -> bool:
         """Verify a password against a bcrypt hash."""
         if not hashed:
             return False
@@ -107,41 +127,38 @@ class AuthService:
         """Async alias for generate_token."""
         return self.generate_token(user_id, username, role, tenant_id=tenant_id)
 
-    async def authenticate_user(self, username: str, password: str) -> dict | None:
+    async def authenticate_user(self, username: str, password: str) -> UserModel:
         """Authenticate a user by username and password.
 
-        Args:
-            username: The username.
-            password: The plain-text password.
-
         Returns:
-            User dict if credentials are valid, None otherwise.
-        """
-        if not self.session:
-            return None
-        sql = text("SELECT id, tenant_id, username, email, password_hash, role, status, full_name, bio, created_at, updated_at FROM users WHERE username = :username")
-        row = await self.session.execute(sql, {"username": username})
-        user = row.fetchone()
-        if not user:
-            return None
-        user_dict = {c: getattr(user, c) for c in user._fields}
-        if not self.verify_password(password, user_dict["password_hash"]):
-            return None
-        return {
-            "id": user_dict["id"],
-            "tenant_id": user_dict["tenant_id"],
-            "username": user_dict["username"],
-            "email": user_dict["email"],
-            "role": user_dict["role"],
-            "status": user_dict["status"],
-            "full_name": user_dict["full_name"],
-        }
+            UserModel if credentials are valid.
 
-    async def create_user(self, username: str, email: str, password: str, role: str = "user", tenant_id: int = 0, full_name: str = None) -> ApiResponse:
+        Raises:
+            UnauthorizedException: If credentials are invalid.
+        """
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.username == username)
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise UnauthorizedException("Invalid credentials")
+        if not self.verify_password(password, user.password_hash or ""):
+            raise UnauthorizedException("Invalid credentials")
+        return user
+
+    async def create_user(
+        self,
+        username: str,
+        email: str,
+        password: str,
+        role: str = "user",
+        tenant_id: int = 0,
+        full_name: str | None = None,
+    ) -> UserModel:
         """Register a new user via UserService."""
         from services.user_service import UserService
         svc = UserService(self.session)
-        result = await svc.create_user(
+        return await svc.create_user(
             username=username,
             email=email,
             password=password,
@@ -149,39 +166,37 @@ class AuthService:
             role=role,
             full_name=full_name,
         )
-        return result
 
-    async def get_current_user(self, token: str) -> dict | None:
-        """Return user dict for a valid token, or None."""
+    async def get_current_user(self, token: str) -> UserModel:
+        """Return UserModel for a valid token.
+
+        Raises:
+            UnauthorizedException: If token is invalid.
+            NotFoundException: If user not found.
+        """
         payload = self.verify_token(token)
         if not payload:
-            return None
+            raise UnauthorizedException("Invalid or expired token")
         user_id = payload.get("user_id")
         if not user_id:
-            return None
-        if not self.session:
-            return None
-        sql = text("SELECT id, tenant_id, username, email, role, status, full_name, bio, created_at, updated_at FROM users WHERE id = :id")
-        row = await self.session.execute(sql, {"id": user_id})
-        user = row.fetchone()
-        if not user:
-            return None
-        user_dict = {c: getattr(user, c) for c in user._fields}
-        return {
-            "id": user_dict["id"],
-            "tenant_id": user_dict["tenant_id"],
-            "username": user_dict["username"],
-            "email": user_dict["email"],
-            "role": user_dict["role"],
-            "status": user_dict["status"],
-            "full_name": user_dict["full_name"],
-        }
+            raise UnauthorizedException("Invalid token payload")
+        result = await self.session.execute(
+            select(UserModel).where(UserModel.id == user_id)
+        )
+        user = result.scalar_one_or_none()
+        if user is None:
+            raise NotFoundException("用户")
+        return user
 
     async def revoke_token(self, token: str) -> bool:
-        """Revoke a token by inserting it into the revoked tokens table."""
+        """Revoke a token by inserting it into the revoked tokens table.
+
+        Raises:
+            UnauthorizedException: If token is invalid.
+        """
         payload = self.verify_token(token)
         if not payload:
-            return False
+            raise UnauthorizedException("Invalid or expired token")
         if not self.session:
             return True
         jti = payload.get("jti") or f"{payload.get('user_id')}-{payload.get('exp')}"
@@ -192,22 +207,25 @@ class AuthService:
         await self.session.commit()
         return True
 
-    async def refresh_token(self, old_token: str) -> str | None:
+    async def refresh_token(self, old_token: str) -> str:
         """Refresh an existing token with a new expiry time.
 
         Args:
             old_token: The current JWT token to refresh.
 
         Returns:
-            New JWT token if old token is valid, None otherwise.
+            New JWT token string.
+
+        Raises:
+            UnauthorizedException: If old token is invalid or missing required fields.
         """
         payload = self.verify_token(old_token)
         if not payload:
-            return None
+            raise UnauthorizedException("Invalid or expired token")
         user_id = payload.get("user_id")
         username = payload.get("username")
         role = payload.get("role")
         tenant_id = payload.get("tenant_id")
         if not all([user_id, username, role]):
-            return None
+            raise UnauthorizedException("Invalid token payload")
         return self.generate_token(user_id, username, role, tenant_id=tenant_id)

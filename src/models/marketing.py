@@ -45,15 +45,18 @@ class Campaign:
     click_count: int = 0
 
     def to_dict(self) -> dict:
+        def _enum_val(x):
+            return x.value if hasattr(x, "value") else x
+
         return {
             "id": self.id,
             "name": self.name,
-            "type": self.type.value,
-            "status": self.status.value,
+            "type": _enum_val(self.type),
+            "status": _enum_val(self.status),
             "subject": self.subject,
             "content": self.content,
             "target_audience": self.target_audience,
-            "trigger_type": self.trigger_type.value if self.trigger_type else None,
+            "trigger_type": _enum_val(self.trigger_type) if self.trigger_type else None,
             "trigger_days": self.trigger_days,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,

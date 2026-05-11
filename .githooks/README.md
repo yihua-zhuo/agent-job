@@ -11,8 +11,8 @@ git config core.hooksPath .githooks
 
 ## Available Hooks
 
-- `pre-commit` — runs flake8 and mypy checks before commit (non-blocking)
-- `pre-push` — runs flake8 and mypy before push (strict, will block on errors)
+- `pre-commit` — runs ruff check/format and mypy before commit (non-blocking)
+- `pre-push` — runs ruff, unit tests, and mypy before push (strict, will block on errors)
 
 ## Hooks are tracked
 

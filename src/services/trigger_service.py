@@ -1,9 +1,10 @@
 """自动化触发器"""
-from src.models.marketing import TriggerType
+from models.marketing import TriggerType
+from pkg.errors.app_exceptions import NotFoundException
 
 
 class TriggerService:
-    """自动化触发器"""
+    """自动化触发器 — orchestrates MarketingService (real DB)."""
 
     TRIGGERS = {
         TriggerType.USER_REGISTER: "欢迎邮件",
@@ -14,11 +15,8 @@ class TriggerService:
     def __init__(self, marketing_service=None):
         self._marketing_service = marketing_service
 
-    def check_triggers(self, event_type: str, customer_data: dict) -> list[int]:
+    async def check_triggers(self, event_type: str, customer_data: dict, tenant_id: int = 0) -> list[int]:
         """检查触发的活动"""
-        triggered_campaign_ids = []
-
-        # 映射事件类型到触发器类型
         event_to_trigger = {
             "user_register": TriggerType.USER_REGISTER,
             "user_inactive": TriggerType.USER_INACTIVE,
@@ -29,38 +27,37 @@ class TriggerService:
         if not trigger_type:
             return []
 
-        # 检查所有活动，找到匹配触发类型的活动
-        if self._marketing_service:
-            campaigns = self._marketing_service.list_campaigns(
-                page=1, page_size=1000
-            ).get("items", [])
+        if not self._marketing_service:
+            return []
 
-            for campaign_data in campaigns:
-                if campaign_data.get("trigger_type") == trigger_type.value:
-                    triggered_campaign_ids.append(campaign_data["id"])
+        campaigns, _ = await self._marketing_service.list_campaigns(
+            tenant_id=tenant_id, page=1, page_size=10000,
+        )
+        return [c.id for c in campaigns if c.trigger_type == trigger_type.value]
 
-        return triggered_campaign_ids
-
-    def execute_trigger(self, campaign_id: int, customer_ids: list[int]) -> dict:
+    async def execute_trigger(self, campaign_id: int, customer_ids: list[int], tenant_id: int = 0) -> dict:
         """执行触发"""
         if not self._marketing_service:
             return {"success": False, "message": "Marketing service not configured"}
 
-        campaign = self._marketing_service.get_campaign(campaign_id)
-        if not campaign:
+        try:
+            campaign = await self._marketing_service.get_campaign(campaign_id, tenant_id=tenant_id)
+        except NotFoundException:
             return {"success": False, "message": "Campaign not found"}
 
         if campaign.trigger_type is None:
             return {"success": False, "message": "No trigger configured"}
 
-        trigger_name = self.TRIGGERS.get(campaign.trigger_type, "未知触发")
+        trigger_enum = TriggerType(campaign.trigger_type) if isinstance(campaign.trigger_type, str) else campaign.trigger_type
+        trigger_name = self.TRIGGERS.get(trigger_enum, "未知触发")
         sent_count = 0
 
         for customer_id in customer_ids:
-            event = self._marketing_service.record_event(
+            event = await self._marketing_service.record_event(
                 campaign_id=campaign_id,
                 customer_id=customer_id,
                 event_type="sent",
+                tenant_id=tenant_id,
             )
             if event:
                 sent_count += 1
@@ -68,7 +65,7 @@ class TriggerService:
         return {
             "success": True,
             "campaign_id": campaign_id,
-            "trigger_type": campaign.trigger_type.value,
+            "trigger_type": campaign.trigger_type if isinstance(campaign.trigger_type, str) else campaign.trigger_type.value,
             "trigger_name": trigger_name,
             "target_customer_count": len(customer_ids),
             "sent_count": sent_count,

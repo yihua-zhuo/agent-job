@@ -5,12 +5,12 @@ Mark: @pytest.mark.integration_docker
 """
 
 import pytest
-import requests
+
 
 @pytest.mark.integration
 class TestAPIMock:
     """Mock API integration tests"""
-    
+
     def test_api_health_check(self):
         """Test API health endpoint"""
         # Simulated test - would connect to real service in production
@@ -36,7 +36,7 @@ class TestAPIMock:
 @pytest.mark.integration
 class TestSystemIntegration:
     """Full system integration tests"""
-    
+
     def test_ci_pipeline_simulation(self):
         """Simulate CI pipeline execution"""
         pipeline_stages = ["checkout", "build", "test", "deploy"]

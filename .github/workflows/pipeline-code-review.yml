@@ -1,10 +1,11 @@
 name: Pipeline · Code Review
 
 on:
-  schedule:
-    - cron: "5 * * * *"          # hourly at :05
+
+  pull_request:
+    branches: ['*']
   push:
-    branches: [develop]
+    branches: ['*']
   workflow_dispatch:
 
 env:
@@ -102,7 +103,7 @@ jobs:
 
             Only set verdict=pass if there are ZERO critical-severity issues." \
             --model claude-sonnet-4-6 \
-            --max-turns 20 \
+            --max-turns 100 \
             --output-format json \
             2>&1 | tee /tmp/claude-output.txt || true
 

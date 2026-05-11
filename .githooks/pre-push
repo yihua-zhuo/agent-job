@@ -1,45 +1,42 @@
 #!/bin/bash
-# Pre-push hook: lint checks + unit tests before push
+# Pre-push hook: ruff + unit tests before push
 
 set -e
 
-echo "🔍 Running pre-push checks (lint + unit tests)..."
+echo "Running pre-push checks (lint + unit tests)..."
 
 cd "$(git rev-parse --show-toplevel)"
 
-FLAKE8="python3 -m flake8"
 PYTEST="python3 -m pytest"
-MYPY="python3 -m mypy"
 
-# ── flake8 (critical errors only) ──────────────────────────────────────────
-echo "=== flake8 ==="
-$FLAKE8 src/ --count --select=E9,F63,F77,F82 --show-source --statistics 2>&1 | tail -5
-echo "✅ flake8 check done"
+# ── ruff (lint) ──────────────────────────────────────────────────────────
+echo "=== ruff check ==="
+python3 -m ruff check src/ 2>&1 | tail -5
+echo "ruff check done"
 
-# ── unit tests ─────────────────────────────────────────────────────────────
+# ── unit tests ───────────────────────────────────────────────────────────
 echo "=== unit tests ==="
 if $PYTEST --version &>/dev/null 2>&1; then
-    # Run unit tests with timeout (max 60s for all tests)
     timeout 90 $PYTEST tests/unit/ -v --tb=short -x 2>&1 | tail -30
     TEST_RC=$?
     if [ $TEST_RC -eq 0 ]; then
-        echo "✅ unit tests passed"
+        echo "unit tests passed"
     elif [ $TEST_RC -eq 124 ]; then
-        echo "⚠️  unit tests timed out (90s limit)"
+        echo "unit tests timed out (90s limit)"
     else
-        echo "⚠️  unit tests had failures (review above)"
+        echo "unit tests had failures (review above)"
     fi
 else
-    echo "⚠️  pytest not found, skipping tests"
+    echo "pytest not found, skipping tests"
 fi
 
 # ── mypy (non-blocking, just show summary) ───────────────────────────────
 echo "=== mypy ==="
-if $MYPY --version &>/dev/null 2>&1; then
-    timeout 60 $MYPY src/ --ignore-missing-imports --no-error-summary 2>&1 | grep -c "^src/.*error:" || echo "0 type errors"
+if python3 -m mypy --version &>/dev/null 2>&1; then
+    timeout 60 python3 -m mypy src/ --ignore-missing-imports --no-error-summary 2>&1 | grep -c "^src/.*error:" || echo "0 type errors"
 else
-    echo "⚠️  mypy not found, skipping"
+    echo "mypy not found, skipping"
 fi
-echo "✅ mypy check done"
+echo "mypy check done"
 
-echo "✅ Pre-push checks complete"
+echo "Pre-push checks complete"

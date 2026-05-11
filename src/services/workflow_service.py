@@ -1,142 +1,170 @@
-from datetime import datetime
+"""Workflow service — DB-backed via SQLAlchemy async ORM."""
+from datetime import UTC, datetime
 
-from src.models.workflow import Workflow, WorkflowExecution, WorkflowStatus
+from sqlalchemy import and_, delete, func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models.workflow import WorkflowExecutionModel, WorkflowModel
+from pkg.errors.app_exceptions import NotFoundException
+
+
+def _enum_val(v):
+    """Coerce enum-or-string to string."""
+    if v is None:
+        return None
+    return v.value if hasattr(v, "value") else str(v)
 
 
 class WorkflowService:
-    """工作流自动化引擎"""
+    """工作流自动化引擎 — backed by PostgreSQL via SQLAlchemy async ORM."""
 
-    def __init__(self):
-        self._workflows: dict[int, Workflow] = {}
-        self._executions: dict[int, list[WorkflowExecution]] = {}
-        self._next_id = 1
+    def __init__(self, session: AsyncSession):
+        self.session = session
 
-    def create_workflow(self, name, trigger_type, created_by, **kwargs) -> Workflow:
+    async def create_workflow(
+        self,
+        name: str,
+        trigger_type,
+        created_by: int,
+        tenant_id: int = 0,
+        **kwargs,
+    ) -> WorkflowModel:
         """创建工作流"""
-        workflow = Workflow(
-            id=self._next_id,
+        now = datetime.now(UTC)
+        workflow = WorkflowModel(
+            tenant_id=tenant_id,
             name=name,
             description=kwargs.get("description"),
-            trigger_type=trigger_type,
+            trigger_type=_enum_val(trigger_type) or "manual",
             trigger_config=kwargs.get("trigger_config", {}),
             actions=kwargs.get("actions", []),
             conditions=kwargs.get("conditions", []),
-            status=WorkflowStatus.DRAFT,
+            status="draft",
             created_by=created_by,
-            created_at=datetime.now(),
-            updated_at=datetime.now(),
+            created_at=now,
+            updated_at=now,
         )
-        self._workflows[self._next_id] = workflow
-        self._executions[self._next_id] = []
-        self._next_id += 1
+        self.session.add(workflow)
+        await self.session.flush()
+        await self.session.refresh(workflow)
+        await self.session.commit()
         return workflow
 
-    def get_workflow(self, workflow_id: int) -> Workflow | None:
+    async def get_workflow(self, workflow_id: int, tenant_id: int = 0) -> WorkflowModel:
         """获取工作流详情"""
-        return self._workflows.get(workflow_id)
-
-    def update_workflow(self, workflow_id: int, **kwargs) -> Workflow | None:
-        """更新工作流"""
-        workflow = self._workflows.get(workflow_id)
-        if not workflow:
-            return None
-        if "name" in kwargs:
-            workflow.name = kwargs["name"]
-        if "description" in kwargs:
-            workflow.description = kwargs["description"]
-        if "trigger_type" in kwargs:
-            workflow.trigger_type = kwargs["trigger_type"]
-        if "trigger_config" in kwargs:
-            workflow.trigger_config = kwargs["trigger_config"]
-        if "actions" in kwargs:
-            workflow.actions = kwargs["actions"]
-        if "conditions" in kwargs:
-            workflow.conditions = kwargs["conditions"]
-        workflow.updated_at = datetime.now()
-        return workflow
-
-    def activate_workflow(self, workflow_id: int) -> Workflow | None:
-        """激活工作流"""
-        workflow = self._workflows.get(workflow_id)
-        if not workflow:
-            return None
-        workflow.status = WorkflowStatus.ACTIVE
-        workflow.updated_at = datetime.now()
-        return workflow
-
-    def pause_workflow(self, workflow_id: int) -> Workflow | None:
-        """暂停工作流"""
-        workflow = self._workflows.get(workflow_id)
-        if not workflow:
-            return None
-        workflow.status = WorkflowStatus.PAUSED
-        workflow.updated_at = datetime.now()
-        return workflow
-
-    def delete_workflow(self, workflow_id: int) -> bool:
-        """删除工作流"""
-        if workflow_id in self._workflows:
-            del self._workflows[workflow_id]
-            if workflow_id in self._executions:
-                del self._executions[workflow_id]
-            return True
-        return False
-
-    def list_workflows(self, page: int = 1, page_size: int = 20, status: WorkflowStatus = None) -> dict:
-        """工作流列表"""
-        workflows = list(self._workflows.values())
-        if status:
-            workflows = [w for w in workflows if w.status == status]
-        total = len(workflows)
-        start = (page - 1) * page_size
-        end = start + page_size
-        return {
-            "total": total,
-            "page": page,
-            "page_size": page_size,
-            "items": workflows[start:end],
-        }
-
-    def execute_workflow(self, workflow_id: int, context: dict) -> WorkflowExecution:
-        """手动执行工作流"""
-        workflow = self._workflows.get(workflow_id)
-        if not workflow:
-            raise ValueError(f"Workflow {workflow_id} not found")
-
-        execution = WorkflowExecution(
-            id=len(self._executions.get(workflow_id, [])) + 1,
-            workflow_id=workflow_id,
-            trigger_type=workflow.trigger_type.value,
-            triggered_by=context.get("user_id", 0),
-            started_at=datetime.now(),
-            completed_at=None,
-            status="running",
-            result=None,
+        result = await self.session.execute(
+            select(WorkflowModel).where(
+                and_(WorkflowModel.id == workflow_id, WorkflowModel.tenant_id == tenant_id)
+            )
         )
+        workflow = result.scalar_one_or_none()
+        if workflow is None:
+            raise NotFoundException("Workflow")
+        return workflow
 
-        if workflow.conditions and not self.evaluate_conditions(workflow_id, context):
+    async def update_workflow(self, workflow_id: int, tenant_id: int = 0, **kwargs) -> WorkflowModel:
+        """更新工作流"""
+        workflow = await self.get_workflow(workflow_id, tenant_id)
+        allowed = {"name", "description", "trigger_type", "trigger_config", "actions", "conditions", "status"}
+        for key, value in kwargs.items():
+            if key in allowed:
+                if key in ("trigger_type", "status"):
+                    value = _enum_val(value)
+                setattr(workflow, key, value)
+        workflow.updated_at = datetime.now(UTC)
+        await self.session.commit()
+        await self.session.refresh(workflow)
+        return workflow
+
+    async def activate_workflow(self, workflow_id: int, tenant_id: int = 0) -> WorkflowModel:
+        """激活工作流"""
+        return await self.update_workflow(workflow_id, tenant_id, status="active")
+
+    async def pause_workflow(self, workflow_id: int, tenant_id: int = 0) -> WorkflowModel:
+        """暂停工作流"""
+        return await self.update_workflow(workflow_id, tenant_id, status="paused")
+
+    async def delete_workflow(self, workflow_id: int, tenant_id: int = 0) -> int:
+        """删除工作流"""
+        result = await self.session.execute(
+            delete(WorkflowModel).where(
+                and_(WorkflowModel.id == workflow_id, WorkflowModel.tenant_id == tenant_id)
+            )
+        )
+        if (result.rowcount or 0) == 0:
+            raise NotFoundException("Workflow")
+        await self.session.commit()
+        return workflow_id
+
+    async def list_workflows(
+        self,
+        tenant_id: int = 0,
+        page: int = 1,
+        page_size: int = 20,
+        status=None,
+    ) -> tuple[list[WorkflowModel], int]:
+        """工作流列表"""
+        conditions = [WorkflowModel.tenant_id == tenant_id]
+        if status is not None:
+            conditions.append(WorkflowModel.status == _enum_val(status))
+
+        count_result = await self.session.execute(
+            select(func.count(WorkflowModel.id)).where(and_(*conditions))
+        )
+        total = count_result.scalar_one()
+
+        offset = (page - 1) * page_size
+        result = await self.session.execute(
+            select(WorkflowModel)
+            .where(and_(*conditions))
+            .order_by(WorkflowModel.id)
+            .offset(offset)
+            .limit(page_size)
+        )
+        return result.scalars().all(), total
+
+    async def execute_workflow(
+        self, workflow_id: int, context: dict, tenant_id: int = 0,
+    ) -> WorkflowExecutionModel:
+        """手动执行工作流"""
+        workflow = await self.get_workflow(workflow_id, tenant_id)
+
+        execution = WorkflowExecutionModel(
+            workflow_id=workflow_id,
+            trigger_type=workflow.trigger_type,
+            triggered_by=context.get("user_id", 0),
+            started_at=datetime.now(UTC),
+            status="running",
+        )
+        self.session.add(execution)
+        await self.session.flush()
+
+        if workflow.conditions and not self._evaluate_conditions(workflow, context):
             execution.status = "failed"
             execution.result = {"error": "Conditions not met"}
-            execution.completed_at = datetime.now()
+            execution.completed_at = datetime.now(UTC)
         else:
             try:
-                result = self.execute_actions(workflow_id, context)
+                result = self._execute_actions(workflow)
                 execution.status = "success"
                 execution.result = result
             except Exception as e:
                 execution.status = "failed"
                 execution.result = {"error": str(e)}
+            execution.completed_at = datetime.now(UTC)
 
-        self._executions.setdefault(workflow_id, []).append(execution)
+        await self.session.commit()
+        await self.session.refresh(execution)
         return execution
 
-    def evaluate_conditions(self, workflow_id: int, context: dict) -> bool:
+    async def evaluate_conditions(self, workflow_id: int, context: dict, tenant_id: int = 0) -> bool:
         """评估条件是否满足"""
-        workflow = self._workflows.get(workflow_id)
-        if not workflow:
-            return False
+        workflow = await self.get_workflow(workflow_id, tenant_id)
+        return self._evaluate_conditions(workflow, context)
 
-        for condition in workflow.conditions:
+    @staticmethod
+    def _evaluate_conditions(workflow: WorkflowModel, context: dict) -> bool:
+        for condition in workflow.conditions or []:
             field = condition.get("field")
             operator = condition.get("operator")
             value = condition.get("value")
@@ -163,56 +191,41 @@ class WorkflowService:
             elif operator == "contains":
                 if value not in str(context_value):
                     return False
-
         return True
 
-    def execute_actions(self, workflow_id: int, context: dict) -> dict:
+    async def execute_actions(self, workflow_id: int, context: dict, tenant_id: int = 0) -> dict:
         """执行动作列表"""
-        workflow = self._workflows.get(workflow_id)
-        if not workflow:
-            raise ValueError(f"Workflow {workflow_id} not found")
+        workflow = await self.get_workflow(workflow_id, tenant_id)
+        return self._execute_actions(workflow)
 
+    @staticmethod
+    def _execute_actions(workflow: WorkflowModel) -> dict:
         results = []
-        for action in workflow.actions:
+        for action in workflow.actions or []:
             action_type = action.get("type")
             if action_type == "email.send":
-                results.append({
-                    "type": "email.send",
-                    "status": "sent",
-                    "template": action.get("template"),
-                })
+                results.append({"type": "email.send", "status": "sent", "template": action.get("template")})
             elif action_type == "notification.send":
-                results.append({
-                    "type": "notification.send",
-                    "status": "sent",
-                    "to": action.get("to"),
-                })
+                results.append({"type": "notification.send", "status": "sent", "to": action.get("to")})
             elif action_type == "tag.add":
-                results.append({
-                    "type": "tag.add",
-                    "status": "added",
-                    "tag": action.get("tag"),
-                })
+                results.append({"type": "tag.add", "status": "added", "tag": action.get("tag")})
             elif action_type == "task.create":
-                results.append({
-                    "type": "task.create",
-                    "status": "created",
-                    "title": action.get("title"),
-                })
+                results.append({"type": "task.create", "status": "created", "title": action.get("title")})
             elif action_type == "activity.log":
-                results.append({
-                    "type": "activity.log",
-                    "status": "logged",
-                    "content": action.get("content"),
-                })
+                results.append({"type": "activity.log", "status": "logged", "content": action.get("content")})
             else:
-                results.append({
-                    "type": action_type,
-                    "status": "unknown",
-                })
-
+                results.append({"type": action_type, "status": "unknown"})
         return {"actions_executed": results}
 
-    def get_execution_history(self, workflow_id: int) -> list[WorkflowExecution]:
+    async def get_execution_history(
+        self, workflow_id: int, tenant_id: int = 0,
+    ) -> list[WorkflowExecutionModel]:
         """获取执行历史"""
-        return self._executions.get(workflow_id, [])
+        # Verify ownership
+        await self.get_workflow(workflow_id, tenant_id)
+        result = await self.session.execute(
+            select(WorkflowExecutionModel)
+            .where(WorkflowExecutionModel.workflow_id == workflow_id)
+            .order_by(WorkflowExecutionModel.started_at.desc())
+        )
+        return result.scalars().all()

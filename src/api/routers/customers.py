@@ -1,4 +1,9 @@
-"""Customer router — all /api/v1/customers endpoints."""
+"""Customer router — all /api/v1/customers endpoints.
+
+Services raise AppException subclasses on errors (caught by global handler in main.py).
+Router wraps successful returns in {"success": True, "data": ...} dicts.
+"""
+import math
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -6,20 +11,6 @@ from pydantic import BaseModel, Field, field_validator
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from models.response import ResponseStatus
-from pkg.response.schemas import (
-    BulkImportResponse,
-    CustomerData,
-    CustomerListData,
-    CustomerListResponse,
-    CustomerResponse,
-    CustomerSearchData,
-    CustomerSearchResponse,
-    ErrorEnvelope,
-    OwnerChangeResponse,
-    StatusChangeResponse,
-    TagResponse,
-)
 from services.customer_service import CustomerService
 
 customers_router = APIRouter(prefix='/api/v1/customers', tags=['customers'])
@@ -32,7 +23,8 @@ def _is_valid_email(email: str) -> bool:
 def _sanitize(s: str) -> str:
     if not s:
         return s
-    # Remove matched tag pairs with their content first (e.g. <script>...)</n    # Use case-insensitive flag so <SCRIPT> is also stripped
+    # Remove matched tag pairs with their content first (e.g. <script>...)
+    # Use case-insensitive flag so <SCRIPT> is also stripped
     s = re.sub(r'<(script)[^>]*>.*?</\1>', '', s, flags=re.DOTALL | re.IGNORECASE)
     # Now remove any remaining tags
     s = re.sub(r'<[^>]*>', '', s)
@@ -40,18 +32,18 @@ def _sanitize(s: str) -> str:
     return s.strip()
 
 
-def _http_status(status: ResponseStatus) -> int:
-    m = {
-        ResponseStatus.SUCCESS: 200,
-        ResponseStatus.NOT_FOUND: 404,
-        ResponseStatus.VALIDATION_ERROR: 400,
-        ResponseStatus.UNAUTHORIZED: 401,
-        ResponseStatus.FORBIDDEN: 403,
-        ResponseStatus.SERVER_ERROR: 500,
-        ResponseStatus.ERROR: 400,
-        ResponseStatus.WARNING: 200,
+def _paginated(items, total, page, page_size):
+    total_pages = math.ceil(total / page_size) if page_size else 0
+    return {
+        "success": True,
+        "data": {
+            "items": items,
+            "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total_pages": total_pages,
+        },
     }
-    return m.get(status, 400)
 
 
 # ---------------------------------------------------------------------------
@@ -107,30 +99,18 @@ class PaginationQuery(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@customers_router.post(
-    '',
-    status_code=201,
-    response_model=CustomerResponse,
-    responses={400: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
-)
+@customers_router.post('', status_code=201)
 async def create_customer(
     body: CustomerCreate,
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.create_customer(body.model_dump(), tenant_id=ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status != 200:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
+    result = await service.create_customer(body.model_dump(), tenant_id=ctx.tenant_id)
+    return {"success": True, "data": result, "message": "客户创建成功"}
 
 
-@customers_router.get(
-    '',
-    response_model=CustomerListResponse,
-    responses={401: {"model": ErrorEnvelope}},
-)
+@customers_router.get('')
 async def list_customers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -141,96 +121,36 @@ async def list_customers(
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.list_customers(
+    items, total = await service.list_customers(
         page=page, page_size=page_size, status=status,
         owner_id=owner_id, tags=tags, tenant_id=ctx.tenant_id,
     )
-    status_code = _http_status(resp.status)
-    if status_code != 200:
-        raise HTTPException(status_code=status_code, detail=resp.message)
-    _is_dict = isinstance(resp.data, dict)
-    if _is_dict:
-        _items = resp.data["items"]
-        _total = resp.data["total"]
-        _page = resp.data["page"]
-        _page_size = resp.data["page_size"]
-        _total_pages = resp.data["total_pages"]
-        _has_next = resp.data["has_next"]
-        _has_prev = resp.data["has_prev"]
-    else:
-        _items = resp.data.items
-        _total = resp.data.total
-        _page = resp.data.page
-        _page_size = resp.data.page_size
-        _total_pages = resp.data.total_pages
-        _has_next = resp.data.has_next
-        _has_prev = resp.data.has_prev
-    items = [CustomerData.model_validate({**c, "tags": c.get("tags") or []}) for c in _items]
-    return CustomerListResponse(
-        message=resp.message,
-        data=CustomerListData(
-            items=items,
-            total=_total,
-            page=_page,
-            page_size=_page_size,
-            total_pages=_total_pages,
-            has_next=_has_next,
-            has_prev=_has_prev,
-        ),
-    )
+    return _paginated(items, total, page, page_size)
 
 
-@customers_router.get(
-    '/search',
-    response_model=CustomerSearchResponse,
-    responses={401: {"model": ErrorEnvelope}},
-)
+@customers_router.get('/search')
 async def search_customers(
     keyword: str = Query('', max_length=200),
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
-    status_code = _http_status(resp.status)
-    if status_code != 200:
-        raise HTTPException(status_code=status_code, detail=resp.message)
-    _items = getattr(resp.data, "items", None)
-    if _items is None or callable(_items):
-        _items = resp.data["items"]
-    items = [CustomerData.model_validate({**c, "tags": c.get("tags") or []}) for c in _items]
-    return CustomerSearchResponse(
-        message=resp.message,
-        data=CustomerSearchData(
-            keyword=resp.data["keyword"],
-            items=items,
-        ),
-    )
+    items = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
+    return {"success": True, "data": {"keyword": keyword, "items": items}}
 
 
-@customers_router.get(
-    '/{customer_id}',
-    response_model=CustomerResponse,
-    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
-)
+@customers_router.get('/{customer_id}')
 async def get_customer(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status != 200:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
+    result = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": result}
 
 
-@customers_router.put(
-    '/{customer_id}',
-    response_model=CustomerResponse,
-    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
-)
+@customers_router.put('/{customer_id}')
 async def update_customer(
     customer_id: int,
     body: dict,
@@ -238,38 +158,22 @@ async def update_customer(
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.update_customer(customer_id, body, tenant_id=ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status != 200:
-        raise HTTPException(status_code=status, detail=resp.message)
-    if resp.data:
-        return CustomerResponse(message=resp.message, data=CustomerData.model_validate(resp.data))
-    return CustomerResponse(message=resp.message, data=None)
+    result = await service.update_customer(customer_id, body, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": result, "message": "客户更新成功"}
 
 
-@customers_router.delete(
-    '/{customer_id}',
-    response_model=CustomerResponse,
-    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
-)
+@customers_router.delete('/{customer_id}')
 async def delete_customer(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.delete_customer(customer_id, tenant_id=ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status != 200:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return CustomerResponse(message=resp.message, data=None)
+    result = await service.delete_customer(customer_id, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": result, "message": "客户删除成功"}
 
 
-@customers_router.post(
-    '/{customer_id}/tags',
-    response_model=TagResponse,
-    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
-)
+@customers_router.post('/{customer_id}/tags')
 async def add_tag(
     customer_id: int,
     body: TagOp,
@@ -277,21 +181,11 @@ async def add_tag(
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.add_tag(customer_id, _sanitize(body.tag), tenant_id=ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status != 200:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return TagResponse(
-        message=resp.message,
-        data={"id": customer_id, "tag": body.tag},
-    )
+    result = await service.add_tag(customer_id, _sanitize(body.tag), tenant_id=ctx.tenant_id)
+    return {"success": True, "data": result, "message": "标签添加成功"}
 
 
-@customers_router.delete(
-    '/{customer_id}/tags/{tag}',
-    response_model=TagResponse,
-    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
-)
+@customers_router.delete('/{customer_id}/tags/{tag}')
 async def remove_tag(
     customer_id: int,
     tag: str,
@@ -299,21 +193,11 @@ async def remove_tag(
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.remove_tag(customer_id, _sanitize(tag), tenant_id=ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status != 200:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return TagResponse(
-        message=resp.message,
-        data={"id": customer_id, "tag": tag},
-    )
+    result = await service.remove_tag(customer_id, _sanitize(tag), tenant_id=ctx.tenant_id)
+    return {"success": True, "data": result, "message": "标签移除成功"}
 
 
-@customers_router.put(
-    '/{customer_id}/status',
-    response_model=StatusChangeResponse,
-    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
-)
+@customers_router.put('/{customer_id}/status')
 async def change_status(
     customer_id: int,
     body: StatusChange,
@@ -321,18 +205,11 @@ async def change_status(
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.change_status(customer_id, body.status, tenant_id=ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status != 200:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return StatusChangeResponse(message=resp.message, data=resp.data)
+    result = await service.change_status(customer_id, body.status, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": result, "message": "状态更新成功"}
 
 
-@customers_router.put(
-    '/{customer_id}/owner',
-    response_model=OwnerChangeResponse,
-    responses={404: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
-)
+@customers_router.put('/{customer_id}/owner')
 async def assign_owner(
     customer_id: int,
     body: OwnerChange,
@@ -340,18 +217,11 @@ async def assign_owner(
     session=Depends(get_db),
 ):
     service = CustomerService(session)
-    resp = await service.assign_owner(customer_id, body.owner_id, tenant_id=ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status != 200:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return OwnerChangeResponse(message=resp.message, data=resp.data)
+    result = await service.assign_owner(customer_id, body.owner_id, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": result, "message": "负责人更新成功"}
 
 
-@customers_router.post(
-    '/import',
-    response_model=BulkImportResponse,
-    responses={400: {"model": ErrorEnvelope}, 401: {"model": ErrorEnvelope}},
-)
+@customers_router.post('/import')
 async def bulk_import(
     body: BulkImport,
     ctx: AuthContext = Depends(require_auth),
@@ -360,8 +230,5 @@ async def bulk_import(
     if len(body.customers) > 1000:
         raise HTTPException(status_code=400, detail='Maximum 1000 customers per import')
     service = CustomerService(session)
-    resp = await service.bulk_import(body.customers, tenant_id=ctx.tenant_id)
-    status = _http_status(resp.status)
-    if status != 200:
-        raise HTTPException(status_code=status, detail=resp.message)
-    return BulkImportResponse(message=resp.message, data=resp.data)
+    imported_count = await service.bulk_import(body.customers, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": {"imported": imported_count}, "message": "批量导入成功"}

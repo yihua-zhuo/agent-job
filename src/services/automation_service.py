@@ -5,7 +5,7 @@ from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.automation import AutomationLogModel, AutomationRuleModel
-from models.response import ApiResponse, PaginatedData
+from pkg.errors.app_exceptions import NotFoundException
 
 # Supported trigger events
 TRIGGER_EVENTS = [
@@ -24,7 +24,6 @@ ACTION_TYPES = [
 
 
 def _eval_condition(condition: dict, context: dict) -> bool:
-    """Evaluate a single condition against trigger context."""
     field = condition.get("field")
     operator = condition.get("operator")
     expected = condition.get("value")
@@ -55,7 +54,6 @@ def _eval_condition(condition: dict, context: dict) -> bool:
 
 
 def _match_conditions(conditions: list, context: dict) -> bool:
-    """Evaluate all conditions (AND logic). Returns True if no conditions."""
     if not conditions:
         return True
     return all(_eval_condition(c, context) for c in conditions)
@@ -68,12 +66,10 @@ async def _execute_action(
     tenant_id: int,
     executed_by: int,
 ) -> dict:
-    """Execute a single action and return result."""
     action_type = action.get("type")
     params = action.get("params", {})
 
     if action_type == "notification.send":
-        # Delegate to NotificationService if available
         from services.notification_service import NotificationService
         svc = NotificationService(session)
         result = await svc.send_notification(
@@ -85,7 +81,7 @@ async def _execute_action(
             related_type=context.get("entity_type"),
             related_id=context.get("entity_id"),
         )
-        return {"type": action_type, "status": "sent" if result.status.value == "success" else "failed"}
+        return {"type": action_type, "status": "sent" if result else "failed"}
 
     elif action_type == "task.create":
         from services.task_service import TaskService
@@ -97,27 +93,20 @@ async def _execute_action(
             assigned_to=params.get("assignee_id"),
             created_by=executed_by,
         )
-        return {"type": action_type, "status": "created" if task_result.status.value == "success" else "failed"}
+        return {"type": action_type, "status": "created" if task_result else "failed"}
 
     elif action_type == "email.send":
-        # Placeholder: record that email would be sent
         return {"type": action_type, "status": "queued", "template": params.get("template")}
-
     elif action_type == "webhook.call":
         return {"type": action_type, "status": "queued", "url": params.get("url")}
-
     elif action_type == "tag.add":
         return {"type": action_type, "status": "added", "tag": params.get("tag")}
-
     elif action_type == "ticket.assign":
         return {"type": action_type, "status": "assigned", "assignee_id": params.get("assignee_id")}
-
     elif action_type == "ticket.update_priority":
         return {"type": action_type, "status": "updated", "priority": params.get("priority")}
-
     elif action_type == "opportunity.add_note":
         return {"type": action_type, "status": "added", "note": params.get("note")}
-
     else:
         return {"type": action_type, "status": "unknown_action"}
 
@@ -142,8 +131,7 @@ class AutomationService:
         conditions: list[dict] | None = None,
         enabled: bool = True,
         created_by: int = 0,
-    ) -> ApiResponse[AutomationRuleModel]:
-        """Create a new automation rule."""
+    ) -> AutomationRuleModel:
         now = datetime.now(UTC)
         model = AutomationRuleModel(
             tenant_id=tenant_id,
@@ -160,7 +148,7 @@ class AutomationService:
         self.session.add(model)
         await self.session.flush()
         await self.session.refresh(model)
-        return ApiResponse.success(data=model.to_dict(), message="规则创建成功")
+        return model
 
     async def list_rules(
         self,
@@ -169,8 +157,7 @@ class AutomationService:
         page_size: int = 20,
         trigger_event: str | None = None,
         enabled: bool | None = None,
-    ) -> ApiResponse[PaginatedData[dict]]:
-        """List automation rules with pagination and filters."""
+    ) -> tuple[list[AutomationRuleModel], int]:
         base_stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id
         )
@@ -189,41 +176,31 @@ class AutomationService:
         total = total_result.scalar_one()
 
         offset = (page - 1) * page_size
-        paginated_stmt = (
+        result = await self.session.execute(
             base_stmt.order_by(AutomationRuleModel.created_at.desc())
             .offset(offset)
             .limit(page_size)
         )
-        result = await self.session.execute(paginated_stmt)
-        rows = result.scalars().all()
+        return result.scalars().all(), total
 
-        items = [row.to_dict() for row in rows]
-        return ApiResponse.paginated(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
+    async def get_rule(self, rule_id: int, tenant_id: int) -> AutomationRuleModel:
+        result = await self.session.execute(
+            select(AutomationRuleModel).where(
+                AutomationRuleModel.id == rule_id,
+                AutomationRuleModel.tenant_id == tenant_id,
+            )
         )
-
-    async def get_rule(self, rule_id: int, tenant_id: int) -> ApiResponse[dict]:
-        """Get a single automation rule."""
-        stmt = select(AutomationRuleModel).where(
-            AutomationRuleModel.id == rule_id,
-            AutomationRuleModel.tenant_id == tenant_id,
-        )
-        result = await self.session.execute(stmt)
         row = result.scalar_one_or_none()
         if row is None:
-            return ApiResponse.error(message="规则不存在", code=404)
-        return ApiResponse.success(data=row.to_dict())
+            raise NotFoundException("规则")
+        return row
 
     async def update_rule(
         self,
         rule_id: int,
         tenant_id: int,
         **kwargs,
-    ) -> ApiResponse[dict]:
-        """Update an automation rule."""
+    ) -> AutomationRuleModel:
         kwargs["updated_at"] = datetime.now(UTC)
         stmt = (
             update(AutomationRuleModel)
@@ -237,31 +214,21 @@ class AutomationService:
         result = await self.session.execute(stmt)
         row = result.scalar_one_or_none()
         if row is None:
-            return ApiResponse.error(message="规则不存在", code=404)
-        return ApiResponse.success(data=row.to_dict(), message="规则更新成功")
+            raise NotFoundException("规则")
+        return row
 
-    async def delete_rule(self, rule_id: int, tenant_id: int) -> ApiResponse[dict]:
-        """Delete an automation rule and its logs."""
+    async def delete_rule(self, rule_id: int, tenant_id: int) -> int:
         stmt = delete(AutomationRuleModel).where(
             AutomationRuleModel.id == rule_id,
             AutomationRuleModel.tenant_id == tenant_id,
         )
         result = await self.session.execute(stmt)
         if (result.rowcount or 0) <= 0:
-            return ApiResponse.error(message="规则不存在", code=404)
-        return ApiResponse.success(data={"id": rule_id}, message="规则删除成功")
+            raise NotFoundException("规则")
+        return rule_id
 
-    async def toggle_rule(self, rule_id: int, tenant_id: int) -> ApiResponse[dict]:
-        """Toggle enabled status of a rule."""
-        stmt = select(AutomationRuleModel).where(
-            AutomationRuleModel.id == rule_id,
-            AutomationRuleModel.tenant_id == tenant_id,
-        )
-        result = await self.session.execute(stmt)
-        row = result.scalar_one_or_none()
-        if row is None:
-            return ApiResponse.error(message="规则不存在", code=404)
-
+    async def toggle_rule(self, rule_id: int, tenant_id: int) -> AutomationRuleModel:
+        row = await self.get_rule(rule_id, tenant_id)
         new_enabled = not row.enabled
         update_stmt = (
             update(AutomationRuleModel)
@@ -269,12 +236,8 @@ class AutomationService:
             .values(enabled=new_enabled, updated_at=datetime.now(UTC))
             .returning(AutomationRuleModel)
         )
-        result2 = await self.session.execute(update_stmt)
-        updated = result2.scalar_one()
-        return ApiResponse.success(
-            data=updated.to_dict(),
-            message=f"规则{'启用' if new_enabled else '禁用'}成功",
-        )
+        result = await self.session.execute(update_stmt)
+        return result.scalar_one()
 
     # -------------------------------------------------------------------------
     # Rule execution (triggered by events)
@@ -287,14 +250,10 @@ class AutomationService:
         context: dict,
         executed_by: int = 0,
     ) -> list[dict]:
-        """Find and execute all matching enabled rules for a trigger event.
-        
-        Returns list of execution results for each matched rule.
-        """
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id,
             AutomationRuleModel.trigger_event == trigger_event,
-            AutomationRuleModel.enabled == True,
+            AutomationRuleModel.enabled == True,  # noqa: E712
         )
         result = await self.session.execute(stmt)
         rules = result.scalars().all()
@@ -357,8 +316,7 @@ class AutomationService:
         page_size: int = 20,
         rule_id: int | None = None,
         status: str | None = None,
-    ) -> ApiResponse[PaginatedData[dict]]:
-        """List automation execution logs."""
+    ) -> tuple[list[AutomationLogModel], int]:
         base_stmt = select(AutomationLogModel).where(
             AutomationLogModel.tenant_id == tenant_id
         )
@@ -377,13 +335,9 @@ class AutomationService:
         total = total_result.scalar_one()
 
         offset = (page - 1) * page_size
-        paginated_stmt = (
+        result = await self.session.execute(
             base_stmt.order_by(AutomationLogModel.executed_at.desc())
             .offset(offset)
             .limit(page_size)
         )
-        result = await self.session.execute(paginated_stmt)
-        rows = result.scalars().all()
-
-        items = [row.to_dict() for row in rows]
-        return ApiResponse.paginated(data=items, total=total, page=page, page_size=page_size)
+        return result.scalars().all(), total

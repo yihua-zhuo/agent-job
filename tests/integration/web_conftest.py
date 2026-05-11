@@ -9,52 +9,34 @@ Requires TEST_DATABASE_URL (same as other integration tests).
 from __future__ import annotations
 
 import os
-import random
 import sys
 from pathlib import Path
 
 # Load .env so DATABASE_URL is available at module load time.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
 from dotenv import load_dotenv
+
 load_dotenv(_dotenv_path)
 
 _src_root = Path(__file__).resolve().parents[2] / "src"
 if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 
-import asyncio
-import contextlib
-import importlib
-import pkgutil
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import pytest
 import pytest_asyncio
-from httpx import AsyncClient, ASGITransport
-from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import NullPool
+from httpx import ASGITransport, AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Import the app factory and fixtures from the main integration conftest
 # so we share the same test database and schema setup.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from integration.conftest import (
-    _resolve_test_db_url,
-    _install_test_db_session,
-    _TABLES,
-    _get_test_sync_engine,
+    _get_test_async_session_factory,
     db_schema,
     fresh_schema,
-    tenant_id as raw_tenant_id,
-    tenant_id_2 as raw_tenant_id_2,
-    async_session as raw_async_session,
 )
-from integration.conftest import (
-    _get_test_async_engine,
-    _get_test_async_session_factory,
-)
-
 
 # ── Web test client factory ───────────────────────────────────────────────────────
 

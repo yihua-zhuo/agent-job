@@ -10,12 +10,10 @@ Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta
 
 import pytest
 
-from models.marketing import TriggerType, CampaignType
-from models.response import ResponseStatus
+from models.marketing import CampaignType, TriggerType
 from services.activity_service import ActivityService
 from services.customer_service import CustomerService
 from services.marketing_service import MarketingService
@@ -43,32 +41,29 @@ class TestWorkflowIntegration:
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        return reg.data.id
+        return reg.id
 
     async def test_create_and_get_workflow(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
-        svc = WorkflowService()
+        svc = WorkflowService(async_session)
         result = await svc.create_workflow(
             name="Lead Follow-up",
             trigger_type="lead_created",
             created_by=uid,
             tenant_id=tenant_id,
             description="Auto-follow-up on new leads",
-            conditions=[{"field": "status", "operator": "equals", "value": "new"}],
-            actions=[{"type": "send_email", "params": {"template": "welcome"}}],
+            conditions=[{"field": "status", "operator": "==", "value": "new"}],
+            actions=[{"type": "email.send", "template": "welcome"}],
         )
-        assert result.status == ResponseStatus.SUCCESS, f"Got: {result.status}, {result.message}"
-        data = result.data
-        assert data["name"] == "Lead Follow-up"
-        assert data["status"] == "draft"
+        assert result.name == "Lead Follow-up"
+        assert result.status == "draft"
 
-        fetched = await svc.get_workflow(data["id"])
-        assert fetched.status == ResponseStatus.SUCCESS
-        assert fetched.data["name"] == "Lead Follow-up"
+        fetched = await svc.get_workflow(result.id, tenant_id=tenant_id)
+        assert fetched.name == "Lead Follow-up"
 
     async def test_workflow_activate_and_pause(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
-        svc = WorkflowService()
+        svc = WorkflowService(async_session)
         created = await svc.create_workflow(
             name="Activation Test",
             trigger_type="deal_created",
@@ -77,52 +72,48 @@ class TestWorkflowIntegration:
             conditions=[],
             actions=[],
         )
-        wid = created.data["id"]
 
-        activated = await svc.activate_workflow(wid)
-        assert activated.status == ResponseStatus.SUCCESS
-        assert activated.data["status"] == "active"
+        activated = await svc.activate_workflow(created.id, tenant_id=tenant_id)
+        assert activated.status == "active"
 
-        paused = await svc.pause_workflow(wid)
-        assert paused.status == ResponseStatus.SUCCESS
-        assert paused.data["status"] == "paused"
+        paused = await svc.pause_workflow(created.id, tenant_id=tenant_id)
+        assert paused.status == "paused"
 
     async def test_workflow_evaluate_conditions(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(tenant_id, async_session)
-        svc = WorkflowService()
+        svc = WorkflowService(async_session)
         created = await svc.create_workflow(
             name="Condition Test",
             trigger_type="deal_created",
             created_by=uid,
             tenant_id=tenant_id,
             conditions=[
-                {"field": "amount", "operator": "gte", "value": 10000},
+                {"field": "amount", "operator": ">=", "value": 10000},
                 {"field": "stage", "operator": "contains", "value": "qualified"},
             ],
             actions=[],
         )
-        wid = created.data["id"]
 
-        # Matching context
         match = await svc.evaluate_conditions(
-            wid, {"amount": 50000, "stage": "qualified"}
+            created.id, {"amount": 50000, "stage": "qualified"}, tenant_id=tenant_id,
         )
         assert match is True
 
-        # Non-matching context
         no_match = await svc.evaluate_conditions(
-            wid, {"amount": 500, "stage": "new"}
+            created.id, {"amount": 500, "stage": "new"}, tenant_id=tenant_id,
         )
         assert no_match is False
 
     async def test_workflow_execute_not_found(self, db_schema, tenant_id, async_session):
-        """execute_workflow with a non-existent id returns NOT_FOUND."""
-        svc = WorkflowService()
-        executed = await svc.execute_workflow(
-            workflow_id=999_999_999,
-            context={"amount": 1000},
-        )
-        assert executed.status == ResponseStatus.NOT_FOUND
+        """execute_workflow with a non-existent id raises NotFoundException."""
+        from pkg.errors.app_exceptions import NotFoundException
+        svc = WorkflowService(async_session)
+        with pytest.raises(NotFoundException):
+            await svc.execute_workflow(
+                workflow_id=999_999_999,
+                context={"amount": 1000},
+                tenant_id=tenant_id,
+            )
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -132,16 +123,19 @@ class TestWorkflowIntegration:
 class TestMarketingIntegration:
     """Full campaign lifecycle via the real DB."""
 
-    async def test_create_and_get_campaign(self, db_schema, tenant_id, async_session):
+    async def _seed_user(self, async_session, tenant_id):
         user_svc = UserService(async_session)
         suffix = uuid.uuid4().hex[:8]
-        user_reg = await user_svc.create_user(
+        reg = await user_svc.create_user(
             username=f"mktuser_{suffix}",
             email=f"mkt_{suffix}@example.com",
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        uid = user_reg.data.id
+        return reg.id
+
+    async def test_create_and_get_campaign(self, db_schema, tenant_id, async_session):
+        uid = await self._seed_user(async_session, tenant_id)
         svc = MarketingService(async_session)
         result = await svc.create_campaign(
             name="Summer Sale 2026",
@@ -152,25 +146,14 @@ class TestMarketingIntegration:
             subject="Summer deals inside!",
             trigger_type=TriggerType.CUSTOM,
         )
-        assert result.status == ResponseStatus.SUCCESS, f"Got: {result.status}, {result.message}"
-        data = result.data
-        assert data.name == "Summer Sale 2026"
-        assert data.status.value == "draft"
+        assert result.name == "Summer Sale 2026"
+        assert result.status == "draft"
 
-        fetched = await svc.get_campaign(data.id, tenant_id=tenant_id)
-        assert fetched.status == ResponseStatus.SUCCESS
-        assert fetched.data.name == "Summer Sale 2026"
+        fetched = await svc.get_campaign(result.id, tenant_id=tenant_id)
+        assert fetched.name == "Summer Sale 2026"
 
     async def test_launch_and_pause_campaign(self, db_schema, tenant_id, async_session):
-        user_svc = UserService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        user_reg = await user_svc.create_user(
-            username=f"mktuser_{suffix}",
-            email=f"mkt_{suffix}@example.com",
-            password="Test@Pass1234",
-            tenant_id=tenant_id,
-        )
-        uid = user_reg.data.id
+        uid = await self._seed_user(async_session, tenant_id)
         svc = MarketingService(async_session)
         created = await svc.create_campaign(
             name="Launch Test",
@@ -181,26 +164,16 @@ class TestMarketingIntegration:
             subject="Test",
             trigger_type=TriggerType.CUSTOM,
         )
-        cid = created.data.id
+        cid = created.id
 
         launched = await svc.launch_campaign(cid, tenant_id=tenant_id)
-        assert launched.status == ResponseStatus.SUCCESS
-        assert launched.data.status.value == "active"
+        assert launched.status == "active"
 
         paused = await svc.pause_campaign(cid, tenant_id=tenant_id)
-        assert paused.status == ResponseStatus.SUCCESS
-        assert paused.data.status.value == "paused"
+        assert paused.status == "paused"
 
     async def test_campaign_stats(self, db_schema, tenant_id, async_session):
-        user_svc = UserService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        user_reg = await user_svc.create_user(
-            username=f"mktuser_{suffix}",
-            email=f"mkt_{suffix}@example.com",
-            password="Test@Pass1234",
-            tenant_id=tenant_id,
-        )
-        uid = user_reg.data.id
+        uid = await self._seed_user(async_session, tenant_id)
         svc = MarketingService(async_session)
         created = await svc.create_campaign(
             name="Stats Test",
@@ -211,25 +184,17 @@ class TestMarketingIntegration:
             subject="Stats",
             trigger_type=TriggerType.CUSTOM,
         )
-        cid = created.data.id
+        cid = created.id
 
-        stats = await svc.get_campaign_stats(cid)
-        assert stats.status == ResponseStatus.SUCCESS
-        assert stats.data.get("sent_count", stats.data.get("sent")) == 0
-        assert "opened" in stats.data or "open_count" in stats.data
-        assert "clicked" in stats.data or "click_count" in stats.data
+        stats = await svc.get_campaign_stats(cid, tenant_id=tenant_id)
+        assert stats["sent_count"] == 0
+        assert "open_count" in stats
+        assert "click_count" in stats
 
     async def test_list_campaigns(self, db_schema, tenant_id, async_session):
-        user_svc = UserService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        user_reg = await user_svc.create_user(
-            username=f"mktuser_{suffix}",
-            email=f"mkt_{suffix}@example.com",
-            password="Test@Pass1234",
-            tenant_id=tenant_id,
-        )
-        uid = user_reg.data.id
+        uid = await self._seed_user(async_session, tenant_id)
         svc = MarketingService(async_session)
+        suffix = uuid.uuid4().hex[:8]
         await svc.create_campaign(
             name=f"List Test A {suffix}",
             campaign_type="email",
@@ -249,9 +214,8 @@ class TestMarketingIntegration:
             trigger_type=TriggerType.CUSTOM,
         )
 
-        result = await svc.list_campaigns(tenant_id=tenant_id)
-        assert result.status == ResponseStatus.SUCCESS
-        names = [c.name for c in result.data.items]
+        items, total = await svc.list_campaigns(tenant_id=tenant_id)
+        names = [c.name for c in items]
         assert any(f"List Test A {suffix}" in n for n in names)
         assert any(f"List Test B {suffix}" in n for n in names)
 
@@ -272,19 +236,19 @@ class TestTaskIntegration:
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        return reg.data.id  # User is a dataclass, not a dict
+        return reg.id
 
     async def test_create_and_get_task(self, db_schema, tenant_id, async_session):
         from datetime import date
         svc = TaskService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.create_task(
-            tenant_id=tenant_id,
             title="Review PR #42",
             description="Review the new feature PR",
             assigned_to=uid,
             priority="high",
             due_date=date(2026, 12, 31),
+            tenant_id=tenant_id,
         )
         task = result["data"]
         assert task["title"] == "Review PR #42"
@@ -298,10 +262,11 @@ class TestTaskIntegration:
         svc = TaskService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         created = await svc.create_task(
-            tenant_id=tenant_id,
             title="Original Task",
+            description="",
             assigned_to=uid,
             priority="low",
+            tenant_id=tenant_id,
         )
         tid = created["data"]["id"]
 
@@ -315,7 +280,12 @@ class TestTaskIntegration:
     async def test_delete_task(self, db_schema, tenant_id, async_session):
         svc = TaskService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
-        created = await svc.create_task(tenant_id=tenant_id, title="To Delete", assigned_to=uid)
+        created = await svc.create_task(
+            title="To Delete",
+            description="",
+            assigned_to=uid,
+            tenant_id=tenant_id,
+        )
         tid = created["data"]["id"]
 
         await svc.delete_task(tid)
@@ -326,10 +296,20 @@ class TestTaskIntegration:
         svc = TaskService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
-        await svc.create_task(tenant_id=tenant_id, title=f"List Task 1 {suffix}", assigned_to=uid)
-        await svc.create_task(tenant_id=tenant_id, title=f"List Task 2 {suffix}", assigned_to=uid)
+        await svc.create_task(
+            title=f"List Task 1 {suffix}",
+            description="",
+            assigned_to=uid,
+            tenant_id=tenant_id,
+        )
+        await svc.create_task(
+            title=f"List Task 2 {suffix}",
+            description="",
+            assigned_to=uid,
+            tenant_id=tenant_id,
+        )
 
-        result = await svc.list_tasks(tenant_id=tenant_id)
+        result = await svc.list_tasks()
         titles = [t["title"] for t in result["data"]["items"]]
         assert any(f"List Task 1 {suffix}" in t for t in titles)
         assert any(f"List Task 2 {suffix}" in t for t in titles)
@@ -351,7 +331,7 @@ class TestActivityIntegration:
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        return reg.data.id
+        return reg.id
 
     async def _seed_customer(self, tenant_id: int, async_session) -> int:
         cust_svc = CustomerService(async_session)
@@ -360,7 +340,7 @@ class TestActivityIntegration:
             data={"name": f"Activity Cust {suffix}", "email": f"act_{suffix}@example.com"},
             tenant_id=tenant_id,
         )
-        return result.data["id"]
+        return result.id
 
     async def test_create_and_get_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
@@ -373,13 +353,13 @@ class TestActivityIntegration:
             created_by=uid,
             tenant_id=tenant_id,
         )
-        assert result.status == ResponseStatus.SUCCESS
-        assert result.data.type.value == "call"
-        assert result.data.content == "Follow-up call - Discussed pricing"
+        assert result is not None
+        assert result.type.value == "call"
+        assert result.content == "Follow-up call - Discussed pricing"
 
-        fetched = await svc.get_activity(result.data.id, tenant_id=tenant_id)
-        assert fetched.status == ResponseStatus.SUCCESS
-        assert fetched.data.content == "Follow-up call - Discussed pricing"
+        fetched = await svc.get_activity(result.id, tenant_id=tenant_id)
+        assert fetched is not None
+        assert fetched.content == "Follow-up call - Discussed pricing"
 
     async def test_update_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
@@ -392,11 +372,11 @@ class TestActivityIntegration:
             created_by=uid,
             tenant_id=tenant_id,
         )
-        aid = created.data.id
+        aid = created.id
 
         updated = await svc.update_activity(aid, tenant_id=tenant_id, content="Updated Subject")
-        assert updated.status == ResponseStatus.SUCCESS
-        assert updated.data.content == "Updated Subject"
+        assert updated is not None
+        assert updated.content == "Updated Subject"
 
     async def test_list_activities(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
@@ -412,9 +392,8 @@ class TestActivityIntegration:
             content=f"Email {suffix}", created_by=uid, tenant_id=tenant_id
         )
 
-        result = await svc.list_activities(tenant_id=tenant_id)
-        assert result.status == ResponseStatus.SUCCESS
-        contents = [a.content for a in result.data.items]
+        items, total = await svc.list_activities(tenant_id=tenant_id)
+        contents = [a.content for a in items]
         assert any(f"Call {suffix}" in c for c in contents)
         assert any(f"Email {suffix}" in c for c in contents)
 
@@ -422,12 +401,17 @@ class TestActivityIntegration:
         svc = ActivityService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         cid = await self._seed_customer(tenant_id, async_session)
-        await svc.create_activity(customer_id=cid, activity_type="call", content="Call 1", created_by=uid, tenant_id=tenant_id)
-        await svc.create_activity(customer_id=cid, activity_type="call", content="Call 2", created_by=uid, tenant_id=tenant_id)
+        await svc.create_activity(
+            customer_id=cid, activity_type="call", content="Call 1",
+            created_by=uid, tenant_id=tenant_id,
+        )
+        await svc.create_activity(
+            customer_id=cid, activity_type="call", content="Call 2",
+            created_by=uid, tenant_id=tenant_id,
+        )
 
         result = await svc.get_customer_activities(customer_id=cid, tenant_id=tenant_id)
-        assert result.status == ResponseStatus.SUCCESS
-        assert len(result.data) >= 2
+        assert len(result) >= 2
 
     async def test_delete_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
@@ -436,10 +420,10 @@ class TestActivityIntegration:
         created = await svc.create_activity(
             customer_id=cid, activity_type="note", content="To Delete", created_by=uid, tenant_id=tenant_id
         )
-        aid = created.data.id
+        aid = created.id
 
         deleted = await svc.delete_activity(aid, tenant_id=tenant_id)
-        assert deleted.status == ResponseStatus.SUCCESS
+        assert deleted is not None
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -458,7 +442,7 @@ class TestNotificationIntegration:
             password="Test@Pass1234",
             tenant_id=tenant_id,
         )
-        return reg.data.id
+        return reg.id
 
     async def test_send_and_get_notification(self, db_schema, tenant_id, async_session):
         svc = NotificationService(async_session)
@@ -470,12 +454,10 @@ class TestNotificationIntegration:
             content="Your deal moved to closed_won!",
             tenant_id=tenant_id,
         )
-        assert result.status == ResponseStatus.SUCCESS
-        nid = result.data["id"]
+        nid = result.id
 
-        fetched = await svc.get_user_notifications(user_id=uid, tenant_id=tenant_id)
-        assert fetched.status == ResponseStatus.SUCCESS
-        ids = [n["id"] for n in fetched.data.items]
+        items, total = await svc.get_user_notifications(user_id=uid, tenant_id=tenant_id)
+        ids = [n.id for n in items]
         assert nid in ids
 
     async def test_mark_notification_as_read(self, db_schema, tenant_id, async_session):
@@ -484,10 +466,9 @@ class TestNotificationIntegration:
         sent = await svc.send_notification(
             user_id=uid, notification_type="info", title="Test", content="Body", tenant_id=tenant_id
         )
-        nid = sent.data["id"]
 
-        marked = await svc.mark_as_read(nid, tenant_id=tenant_id)
-        assert marked.status == ResponseStatus.SUCCESS
+        marked = await svc.mark_as_read(sent.id, tenant_id=tenant_id)
+        assert marked.is_read is True
 
         unread = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert unread == 0
@@ -509,13 +490,11 @@ class TestNotificationIntegration:
             tenant_id=tenant_id,
             title="Team standup",
             content="Daily standup meeting",
-            remind_at="2026-12-31T10:00:00",
+            remind_at="2099-12-31T10:00:00+00:00",
         )
-        assert result.status == ResponseStatus.SUCCESS
-        rid = result.data["id"]
 
-        cancelled = await svc.cancel_reminder(rid, tenant_id=tenant_id)
-        assert cancelled.status == ResponseStatus.SUCCESS
+        cancelled = await svc.cancel_reminder(result.id, tenant_id=tenant_id)
+        assert cancelled["id"] == result.id
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -533,14 +512,13 @@ class TestTenantIntegration:
             plan="pro",
             admin_email=f"admin_{suffix}@example.com",
         )
-        assert result.status == ResponseStatus.SUCCESS
-        data = result.data
-        assert data["name"] == f"Acme Corp {suffix}"
-        assert data["plan"] == "pro"
+        assert result is not None
+        assert result["name"] == f"Acme Corp {suffix}"
+        assert result["plan"] == "pro"
 
-        fetched = await svc.get_tenant(data["id"])
-        assert fetched.status == ResponseStatus.SUCCESS
-        assert fetched.data["name"] == f"Acme Corp {suffix}"
+        fetched = await svc.get_tenant(result["id"])
+        assert fetched is not None
+        assert fetched["name"] == f"Acme Corp {suffix}"
 
     async def test_update_tenant(self, db_schema, async_session):
         svc = TenantService(async_session)
@@ -548,12 +526,12 @@ class TestTenantIntegration:
         created = await svc.create_tenant(
             name=f"Original {suffix}", plan="free", admin_email=f"admin_{suffix}@example.com"
         )
-        tid = created.data["id"]
+        tid = created["id"]
 
         updated = await svc.update_tenant(tid, plan="enterprise", name=f"Updated {suffix}")
-        assert updated.status == ResponseStatus.SUCCESS
-        assert updated.data["plan"] == "enterprise"
-        assert updated.data["name"] == f"Updated {suffix}"
+        assert updated is not None
+        assert updated["plan"] == "enterprise"
+        assert updated["name"] == f"Updated {suffix}"
 
     async def test_list_tenants(self, db_schema, async_session):
         svc = TenantService(async_session)
@@ -561,9 +539,8 @@ class TestTenantIntegration:
         await svc.create_tenant(name=f"List Tenant A {suffix}", plan="free", admin_email=f"a_{suffix}@x.com")
         await svc.create_tenant(name=f"List Tenant B {suffix}", plan="pro", admin_email=f"b_{suffix}@x.com")
 
-        result = await svc.list_tenants()
-        assert result.status == ResponseStatus.SUCCESS
-        names = [t["name"] for t in result.data.items]
+        items, total = await svc.list_tenants()
+        names = [t["name"] for t in items]
         assert any(f"List Tenant A {suffix}" in n for n in names)
         assert any(f"List Tenant B {suffix}" in n for n in names)
 
@@ -571,9 +548,9 @@ class TestTenantIntegration:
         svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await svc.create_tenant(name=f"Stats Tenant {suffix}", plan="pro", admin_email=f"s_{suffix}@x.com")
-        tid = created.data["id"]
+        tid = created["id"]
 
         stats = await svc.get_tenant_stats(tid)
-        assert stats.status == ResponseStatus.SUCCESS
-        assert "user_count" in stats.data
-        assert "api_calls" in stats.data
+        assert stats is not None
+        assert "user_count" in stats
+        assert "api_calls" in stats

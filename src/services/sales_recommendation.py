@@ -3,6 +3,7 @@
 使用协同过滤 + 规则进行销售推荐
 """
 
+import hashlib
 import random
 from dataclasses import dataclass
 
