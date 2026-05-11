@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useCallback, Suspense } from "react";
+import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useCustomers, useCreateCustomer, useDeleteCustomer } from "@/lib/api/queries";
 import { Input } from "@/components/ui/input";
