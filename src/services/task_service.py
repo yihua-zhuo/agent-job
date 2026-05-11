@@ -1,4 +1,5 @@
 """Task service — CRUD via SQLAlchemy ORM."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, delete, func, select, update
@@ -18,8 +19,13 @@ class TaskService:
         return {"success": True, "data": task.to_dict(), "message": message}
 
     async def create_task(
-        self, title: str, description: str = "", assigned_to: int = 0,
-        due_date: datetime | None = None, tenant_id: int = 0, **kwargs,
+        self,
+        title: str,
+        description: str = "",
+        assigned_to: int = 0,
+        due_date: datetime | None = None,
+        tenant_id: int = 0,
+        **kwargs,
     ) -> dict:
         now = datetime.now(UTC)
         task = TaskModel(
@@ -43,9 +49,7 @@ class TaskService:
         return self._ok(task, "任务创建成功")
 
     async def _fetch(self, task_id: int) -> TaskModel | None:
-        result = await self.session.execute(
-            select(TaskModel).where(TaskModel.id == task_id)
-        )
+        result = await self.session.execute(select(TaskModel).where(TaskModel.id == task_id))
         return result.scalar_one_or_none()
 
     async def get_task(self, task_id: int) -> dict:
@@ -72,9 +76,7 @@ class TaskService:
             else:
                 update_values["due_date"] = datetime.combine(due, datetime.min.time(), tzinfo=UTC)
 
-        await self.session.execute(
-            update(TaskModel).where(TaskModel.id == task_id).values(**update_values)
-        )
+        await self.session.execute(update(TaskModel).where(TaskModel.id == task_id).values(**update_values))
         await self.session.commit()
 
         refreshed = await self._fetch(task_id)
@@ -103,8 +105,11 @@ class TaskService:
         return {"success": True, "data": {"id": task_id}, "message": "任务删除成功"}
 
     async def list_tasks(
-        self, assigned_to: int | None = None, status: str | None = None,
-        page: int = 1, page_size: int = 20,
+        self,
+        assigned_to: int | None = None,
+        status: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
     ) -> dict:
         conditions = []
         if assigned_to is not None:
@@ -134,8 +139,6 @@ class TaskService:
         if status:
             conditions.append(TaskModel.status == status)
         result = await self.session.execute(
-            select(TaskModel)
-            .where(and_(*conditions))
-            .order_by(TaskModel.due_date.asc().nullslast())
+            select(TaskModel).where(and_(*conditions)).order_by(TaskModel.due_date.asc().nullslast())
         )
         return [t.to_dict() for t in result.scalars().all()]

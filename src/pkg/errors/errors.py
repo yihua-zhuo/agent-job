@@ -1,5 +1,6 @@
 class ErrorCode:
     """统一错误码"""
+
     # 通用错误 (1000-1999)
     UNKNOWN = 1000
     INVALID_PARAMS = 1001

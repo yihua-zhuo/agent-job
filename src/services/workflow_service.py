@@ -1,4 +1,5 @@
 """Workflow service — DB-backed via SQLAlchemy async ORM."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, delete, func, select
@@ -53,9 +54,7 @@ class WorkflowService:
     async def get_workflow(self, workflow_id: int, tenant_id: int = 0) -> WorkflowModel:
         """获取工作流详情"""
         result = await self.session.execute(
-            select(WorkflowModel).where(
-                and_(WorkflowModel.id == workflow_id, WorkflowModel.tenant_id == tenant_id)
-            )
+            select(WorkflowModel).where(and_(WorkflowModel.id == workflow_id, WorkflowModel.tenant_id == tenant_id))
         )
         workflow = result.scalar_one_or_none()
         if workflow is None:
@@ -87,9 +86,7 @@ class WorkflowService:
     async def delete_workflow(self, workflow_id: int, tenant_id: int = 0) -> int:
         """删除工作流"""
         result = await self.session.execute(
-            delete(WorkflowModel).where(
-                and_(WorkflowModel.id == workflow_id, WorkflowModel.tenant_id == tenant_id)
-            )
+            delete(WorkflowModel).where(and_(WorkflowModel.id == workflow_id, WorkflowModel.tenant_id == tenant_id))
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("Workflow")
@@ -108,23 +105,20 @@ class WorkflowService:
         if status is not None:
             conditions.append(WorkflowModel.status == _enum_val(status))
 
-        count_result = await self.session.execute(
-            select(func.count(WorkflowModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(WorkflowModel.id)).where(and_(*conditions)))
         total = count_result.scalar_one()
 
         offset = (page - 1) * page_size
         result = await self.session.execute(
-            select(WorkflowModel)
-            .where(and_(*conditions))
-            .order_by(WorkflowModel.id)
-            .offset(offset)
-            .limit(page_size)
+            select(WorkflowModel).where(and_(*conditions)).order_by(WorkflowModel.id).offset(offset).limit(page_size)
         )
         return result.scalars().all(), total
 
     async def execute_workflow(
-        self, workflow_id: int, context: dict, tenant_id: int = 0,
+        self,
+        workflow_id: int,
+        context: dict,
+        tenant_id: int = 0,
     ) -> WorkflowExecutionModel:
         """手动执行工作流"""
         workflow = await self.get_workflow(workflow_id, tenant_id)
@@ -218,7 +212,9 @@ class WorkflowService:
         return {"actions_executed": results}
 
     async def get_execution_history(
-        self, workflow_id: int, tenant_id: int = 0,
+        self,
+        workflow_id: int,
+        tenant_id: int = 0,
     ) -> list[WorkflowExecutionModel]:
         """获取执行历史"""
         # Verify ownership

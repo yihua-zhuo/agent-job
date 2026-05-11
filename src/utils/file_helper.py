@@ -1,6 +1,7 @@
 """
 文件处理辅助工具
 """
+
 import csv
 from io import BytesIO, StringIO
 
@@ -13,19 +14,19 @@ class FileHelper:
     @staticmethod
     def read_csv(content: bytes) -> list[dict]:
         """读取CSV文件
-        
+
         Args:
             content: CSV文件字节内容
-            
+
         Returns:
             List[Dict]: CSV数据列表，每项为字典
         """
         result = []
         try:
             # 将bytes转换为字符串
-            text = content.decode('utf-8')
-            if content.startswith(b'\xef\xbb\xbf'):  # BOM处理
-                text = content.decode('utf-8-sig')
+            text = content.decode("utf-8")
+            if content.startswith(b"\xef\xbb\xbf"):  # BOM处理
+                text = content.decode("utf-8-sig")
 
             reader = csv.DictReader(StringIO(text))
             for row in reader:
@@ -35,13 +36,13 @@ class FileHelper:
         except UnicodeDecodeError:
             # 尝试其他编码
             try:
-                text = content.decode('gbk')
+                text = content.decode("gbk")
                 reader = csv.DictReader(StringIO(text))
                 for row in reader:
                     cleaned_row = {k: v for k, v in row.items() if v is not None}
                     result.append(cleaned_row)
             except UnicodeDecodeError:
-                text = content.decode('latin-1', errors='ignore')
+                text = content.decode("latin-1", errors="ignore")
                 reader = csv.DictReader(StringIO(text))
                 for row in reader:
                     cleaned_row = {k: v for k, v in row.items() if v is not None}
@@ -52,11 +53,11 @@ class FileHelper:
     @staticmethod
     def write_csv(data: list[dict], columns: list[str]) -> bytes:
         """写入CSV文件
-        
+
         Args:
             data: 数据列表
             columns: 列名列表
-            
+
         Returns:
             bytes: CSV文件内容
         """
@@ -64,19 +65,19 @@ class FileHelper:
             return b""
 
         output = StringIO()
-        writer = csv.DictWriter(output, fieldnames=columns, extrasaction='ignore')
+        writer = csv.DictWriter(output, fieldnames=columns, extrasaction="ignore")
         writer.writeheader()
         writer.writerows(data)
 
-        return output.getvalue().encode('utf-8-sig')  # 添加BOM以便Excel正确识别中文
+        return output.getvalue().encode("utf-8-sig")  # 添加BOM以便Excel正确识别中文
 
     @staticmethod
     def read_excel(content: bytes) -> list[dict]:
         """读取Excel文件
-        
+
         Args:
             content: Excel文件字节内容
-            
+
         Returns:
             List[Dict]: Excel数据列表
         """
@@ -112,11 +113,11 @@ class FileHelper:
     @staticmethod
     def write_excel(data: list[dict], sheet_name: str = "Sheet1") -> bytes:
         """写入Excel文件
-        
+
         Args:
             data: 数据列表
             sheet_name: 工作表名称
-            
+
         Returns:
             bytes: Excel文件内容
         """
@@ -163,10 +164,10 @@ class FileHelper:
     @staticmethod
     def detect_file_format(filename: str) -> str:
         """根据文件名检测格式
-        
+
         Args:
             filename: 文件名
-            
+
         Returns:
             str: 文件格式 (csv, excel, json, pdf)
         """
@@ -175,13 +176,13 @@ class FileHelper:
 
         filename_lower = filename.lower()
 
-        if filename_lower.endswith('.csv'):
+        if filename_lower.endswith(".csv"):
             return "csv"
-        elif filename_lower.endswith(('.xlsx', '.xls')):
+        elif filename_lower.endswith((".xlsx", ".xls")):
             return "excel"
-        elif filename_lower.endswith('.json'):
+        elif filename_lower.endswith(".json"):
             return "json"
-        elif filename_lower.endswith('.pdf'):
+        elif filename_lower.endswith(".pdf"):
             return "pdf"
         else:
             return ""

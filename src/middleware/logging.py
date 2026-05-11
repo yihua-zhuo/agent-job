@@ -1,4 +1,5 @@
 """Structured JSON logging middleware with per-request correlation ID."""
+
 import json
 import logging
 import sys

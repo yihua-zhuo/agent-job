@@ -1,4 +1,5 @@
 """Notification ORM model."""
+
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
@@ -21,9 +22,7 @@ class NotificationModel(Base):
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     related_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     related_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def to_dict(self) -> dict:
         return {

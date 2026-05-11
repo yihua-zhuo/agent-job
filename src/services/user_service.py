@@ -1,4 +1,5 @@
 """User service — CRUD + auth + password management via SQLAlchemy ORM."""
+
 import re
 from datetime import UTC, datetime
 
@@ -17,6 +18,7 @@ from pkg.errors.app_exceptions import (
 
 class ValidationError(Exception):
     """验证错误异常"""
+
     def __init__(self, message: str, field: str = None):
         self.message = message
         self.field = field
@@ -121,9 +123,7 @@ class UserService:
     async def get_user_by_id(self, user_id: int, tenant_id: int = 0) -> UserModel:
         """Fetch a user by id (tenant-scoped)."""
         result = await self.session.execute(
-            select(UserModel).where(
-                and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id)
-            )
+            select(UserModel).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
         user = result.scalar_one_or_none()
         if user is None:
@@ -132,16 +132,12 @@ class UserService:
 
     async def get_user_by_username(self, username: str) -> UserModel | None:
         """Fetch a user by username (across all tenants)."""
-        result = await self.session.execute(
-            select(UserModel).where(UserModel.username == username)
-        )
+        result = await self.session.execute(select(UserModel).where(UserModel.username == username))
         return result.scalar_one_or_none()
 
     async def get_user_by_email(self, email: str) -> UserModel | None:
         """Fetch a user by email (across all tenants)."""
-        result = await self.session.execute(
-            select(UserModel).where(UserModel.email == email)
-        )
+        result = await self.session.execute(select(UserModel).where(UserModel.email == email))
         return result.scalar_one_or_none()
 
     async def list_users(
@@ -161,15 +157,15 @@ class UserService:
             conditions.append(UserModel.status == status)
         if q:
             kw = f"%{q}%"
-            conditions.append(or_(
-                UserModel.username.ilike(kw),
-                UserModel.email.ilike(kw),
-                UserModel.full_name.ilike(kw),
-            ))
+            conditions.append(
+                or_(
+                    UserModel.username.ilike(kw),
+                    UserModel.email.ilike(kw),
+                    UserModel.full_name.ilike(kw),
+                )
+            )
 
-        count_result = await self.session.execute(
-            select(func.count(UserModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(UserModel.id)).where(and_(*conditions)))
         total = count_result.scalar() or 0
 
         offset = (page - 1) * page_size
@@ -191,7 +187,10 @@ class UserService:
     ) -> tuple[list[UserModel], int]:
         """Search users by username/email/full_name."""
         return await self.list_users(
-            page=page, page_size=page_size, q=keyword, tenant_id=tenant_id,
+            page=page,
+            page_size=page_size,
+            q=keyword,
+            tenant_id=tenant_id,
         )
 
     async def update_user(self, user_id: int, **kwargs) -> UserModel | None:
@@ -219,9 +218,7 @@ class UserService:
     async def delete_user(self, user_id: int, tenant_id: int = 0) -> None:
         """Delete a user (tenant-scoped)."""
         result = await self.session.execute(
-            delete(UserModel).where(
-                and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id)
-            )
+            delete(UserModel).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("用户")

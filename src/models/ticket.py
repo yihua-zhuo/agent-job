@@ -26,9 +26,9 @@ class TicketChannel(Enum):
 
 
 class SLALevel(Enum):
-    BASIC = "basic"      # 24h response
+    BASIC = "basic"  # 24h response
     STANDARD = "standard"  # 8h response
-    PREMIUM = "premium"    # 4h response
+    PREMIUM = "premium"  # 4h response
     ENTERPRISE = "enterprise"  # 1h response
 
 
@@ -74,6 +74,7 @@ class TicketReply:
 @dataclass
 class SLAConfig:
     """SLA配置"""
+
     level: SLALevel
     first_response_hours: int
     resolution_hours: int

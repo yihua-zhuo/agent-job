@@ -1,4 +1,5 @@
 """Ticket service — CRUD + replies + auto-assignment via SQLAlchemy ORM."""
+
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, func, select, update
@@ -28,9 +29,7 @@ class TicketService:
 
     async def _fetch(self, ticket_id: int, tenant_id: int) -> TicketModel:
         result = await self.session.execute(
-            select(TicketModel).where(
-                and_(TicketModel.id == ticket_id, TicketModel.tenant_id == tenant_id)
-            )
+            select(TicketModel).where(and_(TicketModel.id == ticket_id, TicketModel.tenant_id == tenant_id))
         )
         ticket = result.scalar_one_or_none()
         if ticket is None:
@@ -101,20 +100,25 @@ class TicketService:
             if enum_key in kwargs:
                 update_values[enum_key] = _to_str(kwargs[enum_key])
 
-        await self.session.execute(
-            update(TicketModel).where(TicketModel.id == ticket_id).values(**update_values)
-        )
+        await self.session.execute(update(TicketModel).where(TicketModel.id == ticket_id).values(**update_values))
         await self.session.commit()
         return await self._fetch(ticket_id, tenant_id)
 
     async def assign_ticket(
-        self, ticket_id: int, assigned_to: int, tenant_id: int = 0,
+        self,
+        ticket_id: int,
+        assigned_to: int,
+        tenant_id: int = 0,
     ) -> TicketModel:
         return await self.update_ticket(ticket_id, tenant_id=tenant_id, assigned_to=assigned_to)
 
     async def add_reply(
-        self, ticket_id: int, content: str, created_by: int,
-        is_internal: bool = False, tenant_id: int = 0,
+        self,
+        ticket_id: int,
+        content: str,
+        created_by: int,
+        is_internal: bool = False,
+        tenant_id: int = 0,
     ) -> TicketReplyModel:
         ticket = await self._fetch(ticket_id, tenant_id)
         now = datetime.now(UTC)
@@ -131,9 +135,7 @@ class TicketService:
 
         if not ticket.first_response_at and not is_internal:
             await self.session.execute(
-                update(TicketModel)
-                .where(TicketModel.id == ticket_id)
-                .values(first_response_at=now, updated_at=now)
+                update(TicketModel).where(TicketModel.id == ticket_id).values(first_response_at=now, updated_at=now)
             )
 
         await self.session.flush()
@@ -142,24 +144,28 @@ class TicketService:
         return reply
 
     async def change_status(
-        self, ticket_id: int, new_status: TicketStatus, tenant_id: int = 0,
+        self,
+        ticket_id: int,
+        new_status: TicketStatus,
+        tenant_id: int = 0,
     ) -> TicketModel:
         await self._fetch(ticket_id, tenant_id)
         now = datetime.now(UTC)
         update_values: dict = {"status": _to_str(new_status), "updated_at": now}
         if new_status == TicketStatus.RESOLVED:
             update_values["resolved_at"] = now
-        await self.session.execute(
-            update(TicketModel).where(TicketModel.id == ticket_id).values(**update_values)
-        )
+        await self.session.execute(update(TicketModel).where(TicketModel.id == ticket_id).values(**update_values))
         await self.session.commit()
         return await self._fetch(ticket_id, tenant_id)
 
     async def get_customer_tickets(
-        self, customer_id: int, tenant_id: int = 0,
+        self,
+        customer_id: int,
+        tenant_id: int = 0,
     ) -> list[TicketModel]:
         result = await self.session.execute(
-            select(TicketModel).where(
+            select(TicketModel)
+            .where(
                 and_(
                     TicketModel.tenant_id == tenant_id,
                     TicketModel.customer_id == customer_id,
@@ -186,9 +192,7 @@ class TicketService:
         if assigned_to is not None:
             conditions.append(TicketModel.assigned_to == assigned_to)
 
-        count_result = await self.session.execute(
-            select(func.count(TicketModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(TicketModel.id)).where(and_(*conditions)))
         total = count_result.scalar() or 0
 
         offset = (page - 1) * page_size

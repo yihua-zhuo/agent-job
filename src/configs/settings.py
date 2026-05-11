@@ -1,4 +1,5 @@
 """Application configuration via pydantic-settings — no raw os.getenv() in business logic."""
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 

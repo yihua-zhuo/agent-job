@@ -1,4 +1,5 @@
 """Pipeline stage ORM model."""
+
 from datetime import datetime
 from typing import TYPE_CHECKING
 
@@ -22,12 +23,12 @@ class PipelineStageModel(Base):
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     display_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     pipeline: Mapped["PipelineModel"] = relationship(
-        "PipelineModel", back_populates="stages", lazy="raise",
+        "PipelineModel",
+        back_populates="stages",
+        lazy="raise",
     )
 
     def to_dict(self) -> dict:

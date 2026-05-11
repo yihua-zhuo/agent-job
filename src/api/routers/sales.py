@@ -12,7 +12,7 @@ from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from services.sales_service import SalesService
 
-sales_router = APIRouter(prefix='/api/v1/sales', tags=['sales'])
+sales_router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
 
 
 def _paginated(items, total, page, page_size):
@@ -32,6 +32,7 @@ def _paginated(items, total, page, page_size):
 # ---------------------------------------------------------------------------
 # Request schemas (requirement 9 — Field constraints)
 # ---------------------------------------------------------------------------
+
 
 class OpportunityCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="商机名称")
@@ -74,7 +75,8 @@ class PaginationQuery(BaseModel):
 # Pipeline endpoints
 # ---------------------------------------------------------------------------
 
-@sales_router.post('/pipelines', status_code=201)
+
+@sales_router.post("/pipelines", status_code=201)
 async def create_pipeline(
     body: PipelineCreate,
     ctx: AuthContext = Depends(require_auth),
@@ -85,7 +87,7 @@ async def create_pipeline(
     return {"success": True, "data": data, "message": "管道创建成功"}
 
 
-@sales_router.get('/pipelines')
+@sales_router.get("/pipelines")
 async def list_pipelines(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
@@ -95,7 +97,7 @@ async def list_pipelines(
     return {"success": True, "data": {"items": items, "total": len(items)}}
 
 
-@sales_router.get('/pipelines/{pipeline_id}')
+@sales_router.get("/pipelines/{pipeline_id}")
 async def get_pipeline(
     pipeline_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -106,7 +108,7 @@ async def get_pipeline(
     return {"success": True, "data": data}
 
 
-@sales_router.get('/pipelines/{pipeline_id}/stats')
+@sales_router.get("/pipelines/{pipeline_id}/stats")
 async def get_pipeline_stats(
     pipeline_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -117,7 +119,7 @@ async def get_pipeline_stats(
     return {"success": True, "data": data}
 
 
-@sales_router.get('/pipelines/{pipeline_id}/funnel')
+@sales_router.get("/pipelines/{pipeline_id}/funnel")
 async def get_pipeline_funnel(
     pipeline_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -132,7 +134,8 @@ async def get_pipeline_funnel(
 # Opportunity endpoints
 # ---------------------------------------------------------------------------
 
-@sales_router.post('/opportunities', status_code=201)
+
+@sales_router.post("/opportunities", status_code=201)
 async def create_opportunity(
     body: OpportunityCreate,
     ctx: AuthContext = Depends(require_auth),
@@ -140,12 +143,12 @@ async def create_opportunity(
 ):
     service = SalesService(session)
     data = body.model_dump()
-    data['expected_close_date'] = data.pop('close_date', None)
+    data["expected_close_date"] = data.pop("close_date", None)
     result = await service.create_opportunity(ctx.tenant_id, data)
     return {"success": True, "data": result, "message": "商机创建成功"}
 
 
-@sales_router.get('/opportunities')
+@sales_router.get("/opportunities")
 async def list_opportunities(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -157,8 +160,12 @@ async def list_opportunities(
 ):
     service = SalesService(session)
     items = await service.list_opportunities(
-        ctx.tenant_id, page=page, page_size=page_size,
-        pipeline_id=pipeline_id, stage=stage, owner_id=owner_id,
+        ctx.tenant_id,
+        page=page,
+        page_size=page_size,
+        pipeline_id=pipeline_id,
+        stage=stage,
+        owner_id=owner_id,
     )
     # Service returns a list for list methods
     return {
@@ -172,7 +179,7 @@ async def list_opportunities(
     }
 
 
-@sales_router.get('/opportunities/{opp_id}')
+@sales_router.get("/opportunities/{opp_id}")
 async def get_opportunity(
     opp_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -183,7 +190,7 @@ async def get_opportunity(
     return {"success": True, "data": data}
 
 
-@sales_router.put('/opportunities/{opp_id}')
+@sales_router.put("/opportunities/{opp_id}")
 async def update_opportunity(
     opp_id: int,
     body: OpportunityUpdate,
@@ -192,13 +199,13 @@ async def update_opportunity(
 ):
     service = SalesService(session)
     data = body.model_dump(exclude_none=True)
-    if 'close_date' in data:
-        data['expected_close_date'] = data.pop('close_date')
+    if "close_date" in data:
+        data["expected_close_date"] = data.pop("close_date")
     result = await service.update_opportunity(ctx.tenant_id, opp_id, data)
     return {"success": True, "data": result, "message": "商机更新成功"}
 
 
-@sales_router.put('/opportunities/{opp_id}/stage')
+@sales_router.put("/opportunities/{opp_id}/stage")
 async def change_stage(
     opp_id: int,
     body: StageChange,
@@ -210,7 +217,7 @@ async def change_stage(
     return {"success": True, "data": data, "message": "阶段变更成功"}
 
 
-@sales_router.get('/forecast')
+@sales_router.get("/forecast")
 async def get_forecast(
     owner_id: int | None = Query(None, ge=0),
     ctx: AuthContext = Depends(require_auth),

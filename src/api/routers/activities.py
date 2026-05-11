@@ -33,6 +33,7 @@ def _paginated(items, total, page, page_size):
 # Request schemas
 # ---------------------------------------------------------------------------
 
+
 class ActivityCreate(BaseModel):
     customer_id: int = Field(..., ge=1)
     activity_type: str = Field(..., min_length=1, max_length=50)
@@ -54,6 +55,7 @@ class ActivitySearchRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @activities_router.post("", status_code=201)
 async def create_activity(

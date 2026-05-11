@@ -8,6 +8,7 @@ Usage:
     # All roles:
     @router.get("/", dependencies=[Depends(require_role("admin", "editor"))])
 """
+
 import os
 from collections.abc import Callable
 
@@ -20,7 +21,9 @@ from internal.middleware.fastapi_auth import AuthContext
 security = HTTPBearer(auto_error=False)
 
 JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET") or "dev-jwt-secret"
-if os.environ.get('FLASK_ENV') == 'production' and not (os.environ.get('JWT_SECRET') or os.environ.get('JWT_SECRET_KEY')):
+if os.environ.get("FLASK_ENV") == "production" and not (
+    os.environ.get("JWT_SECRET") or os.environ.get("JWT_SECRET_KEY")
+):
     raise ValueError("JWT_SECRET environment variable is required in production")
 JWT_ALGORITHM = "HS256"
 
@@ -63,6 +66,7 @@ def require_role(*allowed_roles: str) -> Callable:
         async def delete_user(current_user: AuthContext = Depends(get_current_user)):
             ...
     """
+
     def guard(current_user: AuthContext = Depends(get_current_user)) -> AuthContext:
         user_roles = set(current_user.roles) if current_user.roles else set()
         allowed = set(allowed_roles)

@@ -34,6 +34,7 @@ class Workflow:
 @dataclass
 class WorkflowExecution:
     """工作流执行记录"""
+
     id: int | None
     workflow_id: int
     trigger_type: str

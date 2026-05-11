@@ -1,4 +1,5 @@
 """Analytics service — DB-backed dashboards & reports + aggregated query reports."""
+
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import and_, func, select
@@ -21,7 +22,11 @@ class AnalyticsService:
     # -------------------------------------------------------------------------
 
     async def create_dashboard(
-        self, name: str, owner_id: int, tenant_id: int = 0, description: str | None = None,
+        self,
+        name: str,
+        owner_id: int,
+        tenant_id: int = 0,
+        description: str | None = None,
     ) -> DashboardModel:
         now = datetime.now(UTC)
         dashboard = DashboardModel(
@@ -42,9 +47,7 @@ class AnalyticsService:
 
     async def get_dashboard(self, dashboard_id: int, tenant_id: int = 0) -> DashboardModel:
         result = await self.session.execute(
-            select(DashboardModel).where(
-                and_(DashboardModel.id == dashboard_id, DashboardModel.tenant_id == tenant_id)
-            )
+            select(DashboardModel).where(and_(DashboardModel.id == dashboard_id, DashboardModel.tenant_id == tenant_id))
         )
         dashboard = result.scalar_one_or_none()
         if dashboard is None:
@@ -63,14 +66,14 @@ class AnalyticsService:
         return dashboard
 
     async def list_dashboards(
-        self, tenant_id: int = 0, owner_id: int | None = None,
+        self,
+        tenant_id: int = 0,
+        owner_id: int | None = None,
     ) -> list[DashboardModel]:
         conditions = [DashboardModel.tenant_id == tenant_id]
         if owner_id is not None:
             conditions.append(DashboardModel.owner_id == owner_id)
-        result = await self.session.execute(
-            select(DashboardModel).where(and_(*conditions)).order_by(DashboardModel.id)
-        )
+        result = await self.session.execute(select(DashboardModel).where(and_(*conditions)).order_by(DashboardModel.id))
         return result.scalars().all()
 
     async def add_widget(self, dashboard_id: int, widget_config: dict, tenant_id: int = 0) -> dict:
@@ -96,7 +99,12 @@ class AnalyticsService:
     # -------------------------------------------------------------------------
 
     async def create_report(
-        self, name: str, report_type: str, config: dict, created_by: int, tenant_id: int = 0,
+        self,
+        name: str,
+        report_type: str,
+        config: dict,
+        created_by: int,
+        tenant_id: int = 0,
     ) -> ReportModel:
         report = ReportModel(
             tenant_id=tenant_id,
@@ -115,9 +123,7 @@ class AnalyticsService:
 
     async def get_report(self, report_id: int, tenant_id: int = 0) -> ReportModel:
         result = await self.session.execute(
-            select(ReportModel).where(
-                and_(ReportModel.id == report_id, ReportModel.tenant_id == tenant_id)
-            )
+            select(ReportModel).where(and_(ReportModel.id == report_id, ReportModel.tenant_id == tenant_id))
         )
         report = result.scalar_one_or_none()
         if report is None:
@@ -158,7 +164,11 @@ class AnalyticsService:
         return d
 
     async def get_sales_revenue_report(
-        self, start_date, end_date, group_by: str = "day", tenant_id: int = 0,
+        self,
+        start_date,
+        end_date,
+        group_by: str = "day",
+        tenant_id: int = 0,
     ) -> dict:
         """Sum opportunity amount per period within [start, end]."""
         start = self._parse_date(start_date)
@@ -247,9 +257,7 @@ class AnalyticsService:
         if end:
             conditions.append(CustomerModel.created_at <= end)
 
-        new_result = await self.session.execute(
-            select(func.count(CustomerModel.id)).where(and_(*conditions))
-        )
+        new_result = await self.session.execute(select(func.count(CustomerModel.id)).where(and_(*conditions)))
         new_count = new_result.scalar() or 0
 
         churned_result = await self.session.execute(
@@ -264,11 +272,13 @@ class AnalyticsService:
 
         return {
             "labels": ["New Customers", "Churned", "Net Growth"],
-            "datasets": [{
-                "label": "Customer Growth",
-                "data": [new_count, churned, new_count - churned],
-                "color": "#F59E0B",
-            }],
+            "datasets": [
+                {
+                    "label": "Customer Growth",
+                    "data": [new_count, churned, new_count - churned],
+                    "color": "#F59E0B",
+                }
+            ],
             "chart_type": "bar",
         }
 
@@ -282,7 +292,8 @@ class AnalyticsService:
             select(
                 OpportunityModel.stage,
                 func.coalesce(
-                    func.sum(OpportunityModel.amount * OpportunityModel.probability / 100), 0,
+                    func.sum(OpportunityModel.amount * OpportunityModel.probability / 100),
+                    0,
                 ),
             )
             .where(and_(*conditions))

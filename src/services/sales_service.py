@@ -3,6 +3,7 @@
 Returns dicts (not ORM objects) because routers and existing tests rely on
 the dict shape with stages embedded.
 """
+
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from typing import Any
@@ -66,9 +67,7 @@ class SalesService:
         name = d.get("name", "Pipeline")
 
         existing = await self.session.execute(
-            select(PipelineModel).where(
-                and_(PipelineModel.tenant_id == tenant_id, PipelineModel.name == name)
-            )
+            select(PipelineModel).where(and_(PipelineModel.tenant_id == tenant_id, PipelineModel.name == name))
         )
         if existing.scalar_one_or_none():
             raise ConflictException("管道名称已存在")
@@ -86,21 +85,21 @@ class SalesService:
 
         stage_names = d.get("stages") or DEFAULT_STAGES
         for idx, stage_name in enumerate(stage_names):
-            self.session.add(PipelineStageModel(
-                pipeline_id=pipeline.id,
-                name=stage_name,
-                display_order=idx,
-                created_at=now,
-            ))
+            self.session.add(
+                PipelineStageModel(
+                    pipeline_id=pipeline.id,
+                    name=stage_name,
+                    display_order=idx,
+                    created_at=now,
+                )
+            )
         await self.session.flush()
         await self.session.commit()
         return await self._pipeline_to_dict(pipeline)
 
     async def list_pipelines(self, tenant_id: int = 0) -> dict:
         result = await self.session.execute(
-            select(PipelineModel)
-            .where(PipelineModel.tenant_id == tenant_id)
-            .order_by(PipelineModel.id)
+            select(PipelineModel).where(PipelineModel.tenant_id == tenant_id).order_by(PipelineModel.id)
         )
         pipelines = result.scalars().all()
         items = [await self._pipeline_to_dict(p) for p in pipelines]
@@ -108,9 +107,7 @@ class SalesService:
 
     async def get_pipeline(self, tenant_id: int = 0, pipeline_id: int = 0) -> dict:
         result = await self.session.execute(
-            select(PipelineModel).where(
-                and_(PipelineModel.id == pipeline_id, PipelineModel.tenant_id == tenant_id)
-            )
+            select(PipelineModel).where(and_(PipelineModel.id == pipeline_id, PipelineModel.tenant_id == tenant_id))
         )
         pipeline = result.scalar_one_or_none()
         if pipeline is None:
@@ -120,11 +117,17 @@ class SalesService:
     async def get_pipeline_stats(self, tenant_id: int = 0, pipeline_id: int = 0) -> dict:
         stage_names = await self._get_pipeline_stages(pipeline_id)
         result = await self.session.execute(
-            select(OpportunityModel.stage, func.count(OpportunityModel.id), func.coalesce(func.sum(OpportunityModel.amount), 0))
-            .where(and_(
-                OpportunityModel.tenant_id == tenant_id,
-                OpportunityModel.pipeline_id == pipeline_id,
-            ))
+            select(
+                OpportunityModel.stage,
+                func.count(OpportunityModel.id),
+                func.coalesce(func.sum(OpportunityModel.amount), 0),
+            )
+            .where(
+                and_(
+                    OpportunityModel.tenant_id == tenant_id,
+                    OpportunityModel.pipeline_id == pipeline_id,
+                )
+            )
             .group_by(OpportunityModel.stage)
         )
         per_stage = {stage: {"count": count, "amount": float(amount)} for stage, count, amount in result.all()}
@@ -134,8 +137,11 @@ class SalesService:
         lost = per_stage.get("closed_lost", per_stage.get("lost", {"count": 0}))["count"]
 
         stages = [
-            {"stage": name, "count": per_stage.get(name, {"count": 0})["count"],
-             "amount": per_stage.get(name, {"amount": 0.0})["amount"]}
+            {
+                "stage": name,
+                "count": per_stage.get(name, {"count": 0})["count"],
+                "amount": per_stage.get(name, {"amount": 0.0})["amount"],
+            }
             for name in stage_names
         ]
         return {
@@ -152,10 +158,12 @@ class SalesService:
         stage_names = await self._get_pipeline_stages(pipeline_id)
         result = await self.session.execute(
             select(OpportunityModel.stage, func.count(OpportunityModel.id))
-            .where(and_(
-                OpportunityModel.tenant_id == tenant_id,
-                OpportunityModel.pipeline_id == pipeline_id,
-            ))
+            .where(
+                and_(
+                    OpportunityModel.tenant_id == tenant_id,
+                    OpportunityModel.pipeline_id == pipeline_id,
+                )
+            )
             .group_by(OpportunityModel.stage)
         )
         counts = {stage: count for stage, count in result.all()}
@@ -190,8 +198,13 @@ class SalesService:
         return _opp_to_dict(opp)
 
     async def list_opportunities(
-        self, tenant_id: int = 0, page: int = 1, page_size: int = 20,
-        pipeline_id: int | None = None, stage: str | None = None, owner_id: int | None = None,
+        self,
+        tenant_id: int = 0,
+        page: int = 1,
+        page_size: int = 20,
+        pipeline_id: int | None = None,
+        stage: str | None = None,
+        owner_id: int | None = None,
     ) -> dict:
         conditions = [OpportunityModel.tenant_id == tenant_id]
         if pipeline_id is not None:
@@ -201,9 +214,7 @@ class SalesService:
         if owner_id is not None:
             conditions.append(OpportunityModel.owner_id == owner_id)
 
-        count_result = await self.session.execute(
-            select(func.count(OpportunityModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(OpportunityModel.id)).where(and_(*conditions)))
         total = count_result.scalar() or 0
 
         offset = (page - 1) * page_size
@@ -218,7 +229,9 @@ class SalesService:
 
         total_pages = (total + page_size - 1) // page_size if total else 0
         return {
-            "page": page, "page_size": page_size, "total": total,
+            "page": page,
+            "page_size": page_size,
+            "total": total,
             "total_pages": total_pages,
             "has_next": offset + page_size < total,
             "has_prev": page > 1,
@@ -227,9 +240,7 @@ class SalesService:
 
     async def _fetch_opportunity(self, tenant_id: int, opp_id: int) -> OpportunityModel:
         result = await self.session.execute(
-            select(OpportunityModel).where(
-                and_(OpportunityModel.id == opp_id, OpportunityModel.tenant_id == tenant_id)
-            )
+            select(OpportunityModel).where(and_(OpportunityModel.id == opp_id, OpportunityModel.tenant_id == tenant_id))
         )
         opp = result.scalar_one_or_none()
         if opp is None:
@@ -240,7 +251,10 @@ class SalesService:
         return _opp_to_dict(await self._fetch_opportunity(tenant_id, opp_id))
 
     async def update_opportunity(
-        self, tenant_id: int = 0, opp_id: int = 0, data: dict | None = None,
+        self,
+        tenant_id: int = 0,
+        opp_id: int = 0,
+        data: dict | None = None,
     ) -> dict:
         await self._fetch_opportunity(tenant_id, opp_id)
         d = data or {}
@@ -256,9 +270,7 @@ class SalesService:
             update_values["expected_close_date"] = close_date
 
         await self.session.execute(
-            update(OpportunityModel)
-            .where(OpportunityModel.id == opp_id)
-            .values(**update_values)
+            update(OpportunityModel).where(OpportunityModel.id == opp_id).values(**update_values)
         )
         await self.session.commit()
 
@@ -286,9 +298,7 @@ class SalesService:
                 OpportunityModel.stage,
                 func.count(OpportunityModel.id),
                 func.coalesce(func.sum(OpportunityModel.amount), 0),
-                func.coalesce(
-                    func.sum(OpportunityModel.amount * OpportunityModel.probability / 100), 0
-                ),
+                func.coalesce(func.sum(OpportunityModel.amount * OpportunityModel.probability / 100), 0),
             )
             .where(and_(*conditions))
             .group_by(OpportunityModel.stage)

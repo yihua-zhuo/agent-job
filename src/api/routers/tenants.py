@@ -12,7 +12,7 @@ from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from services.tenant_service import TenantService
 
-tenants_router = APIRouter(prefix='/api/v1/tenants', tags=['tenants'])
+tenants_router = APIRouter(prefix="/api/v1/tenants", tags=["tenants"])
 
 
 def _paginated(items, total, page, page_size):
@@ -33,6 +33,7 @@ def _paginated(items, total, page, page_size):
 # Request schemas
 # ---------------------------------------------------------------------------
 
+
 class TenantCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200)
     plan: str = Field(..., min_length=1, max_length=50)
@@ -51,7 +52,8 @@ class TenantUpdate(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@tenants_router.post('', status_code=201)
+
+@tenants_router.post("", status_code=201)
 async def create_tenant(
     body: TenantCreate,
     ctx: AuthContext = Depends(require_auth),
@@ -67,7 +69,7 @@ async def create_tenant(
     return {"success": True, "data": data, "message": "租户创建成功"}
 
 
-@tenants_router.get('/stats')
+@tenants_router.get("/stats")
 async def get_tenant_stats(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
@@ -77,7 +79,7 @@ async def get_tenant_stats(
     return {"success": True, "data": data}
 
 
-@tenants_router.get('/usage')
+@tenants_router.get("/usage")
 async def get_tenant_usage(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
@@ -87,7 +89,7 @@ async def get_tenant_usage(
     return {"success": True, "data": data}
 
 
-@tenants_router.get('/{tenant_id}')
+@tenants_router.get("/{tenant_id}")
 async def get_tenant(
     tenant_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -98,7 +100,7 @@ async def get_tenant(
     return {"success": True, "data": data}
 
 
-@tenants_router.get('')
+@tenants_router.get("")
 async def list_tenants(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -111,7 +113,7 @@ async def list_tenants(
     return _paginated(items, total, page, page_size)
 
 
-@tenants_router.put('/{tenant_id}')
+@tenants_router.put("/{tenant_id}")
 async def update_tenant(
     tenant_id: int,
     body: TenantUpdate,
@@ -124,7 +126,7 @@ async def update_tenant(
     return {"success": True, "data": data, "message": "租户更新成功"}
 
 
-@tenants_router.delete('/{tenant_id}')
+@tenants_router.delete("/{tenant_id}")
 async def delete_tenant(
     tenant_id: int,
     ctx: AuthContext = Depends(require_auth),

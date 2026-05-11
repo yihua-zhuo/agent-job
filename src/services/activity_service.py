@@ -1,4 +1,5 @@
 """Activity service — CRUD + search via SQLAlchemy ORM."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, delete, func, select, update
@@ -30,9 +31,7 @@ class ActivityService:
 
     async def _fetch(self, activity_id: int, tenant_id: int) -> ActivityModel:
         result = await self.session.execute(
-            select(ActivityModel).where(
-                and_(ActivityModel.id == activity_id, ActivityModel.tenant_id == tenant_id)
-            )
+            select(ActivityModel).where(and_(ActivityModel.id == activity_id, ActivityModel.tenant_id == tenant_id))
         )
         row = result.scalar_one_or_none()
         if row is None:
@@ -40,8 +39,13 @@ class ActivityService:
         return row
 
     async def create_activity(
-        self, customer_id: int, activity_type: str, content: str, created_by: int,
-        tenant_id: int = 0, **kwargs,
+        self,
+        customer_id: int,
+        activity_type: str,
+        content: str,
+        created_by: int,
+        tenant_id: int = 0,
+        **kwargs,
     ) -> Activity:
         try:
             activity_type_enum = ActivityType(activity_type)
@@ -83,9 +87,7 @@ class ActivityService:
 
         if update_values:
             await self.session.execute(
-                update(ActivityModel)
-                .where(ActivityModel.id == activity_id)
-                .values(**update_values)
+                update(ActivityModel).where(ActivityModel.id == activity_id).values(**update_values)
             )
             await self.session.commit()
 
@@ -105,8 +107,12 @@ class ActivityService:
         return {"id": activity_id}
 
     async def list_activities(
-        self, customer_id: int | None = None, activity_type: str | None = None,
-        page: int = 1, page_size: int = 20, tenant_id: int = 0,
+        self,
+        customer_id: int | None = None,
+        activity_type: str | None = None,
+        page: int = 1,
+        page_size: int = 20,
+        tenant_id: int = 0,
     ) -> tuple[list[Activity], int]:
         conditions = [ActivityModel.tenant_id == tenant_id]
         if customer_id is not None:
@@ -114,9 +120,7 @@ class ActivityService:
         if activity_type:
             conditions.append(ActivityModel.type == activity_type)
 
-        count_result = await self.session.execute(
-            select(func.count(ActivityModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(ActivityModel.id)).where(and_(*conditions)))
         total = count_result.scalar() or 0
 
         offset = (page - 1) * page_size
@@ -131,33 +135,44 @@ class ActivityService:
         return items, total
 
     async def get_customer_activities(
-        self, customer_id: int, tenant_id: int = 0,
+        self,
+        customer_id: int,
+        tenant_id: int = 0,
     ) -> list[Activity]:
         result = await self.session.execute(
             select(ActivityModel)
-            .where(and_(
-                ActivityModel.tenant_id == tenant_id,
-                ActivityModel.customer_id == customer_id,
-            ))
+            .where(
+                and_(
+                    ActivityModel.tenant_id == tenant_id,
+                    ActivityModel.customer_id == customer_id,
+                )
+            )
             .order_by(ActivityModel.created_at.desc())
         )
         return [_to_activity(row) for row in result.scalars().all()]
 
     async def get_opportunity_activities(
-        self, opportunity_id: int, tenant_id: int = 0,
+        self,
+        opportunity_id: int,
+        tenant_id: int = 0,
     ) -> list[Activity]:
         result = await self.session.execute(
             select(ActivityModel)
-            .where(and_(
-                ActivityModel.tenant_id == tenant_id,
-                ActivityModel.opportunity_id == opportunity_id,
-            ))
+            .where(
+                and_(
+                    ActivityModel.tenant_id == tenant_id,
+                    ActivityModel.opportunity_id == opportunity_id,
+                )
+            )
             .order_by(ActivityModel.created_at.desc())
         )
         return [_to_activity(row) for row in result.scalars().all()]
 
     async def search_activities(
-        self, keyword: str, tenant_id: int = 0, filters: dict | None = None,
+        self,
+        keyword: str,
+        tenant_id: int = 0,
+        filters: dict | None = None,
     ) -> list[Activity]:
         conditions = [ActivityModel.tenant_id == tenant_id]
         if keyword:
@@ -174,15 +189,16 @@ class ActivityService:
                 conditions.append(ActivityModel.created_at <= filters["end_date"])
 
         result = await self.session.execute(
-            select(ActivityModel)
-            .where(and_(*conditions))
-            .order_by(ActivityModel.created_at.desc())
+            select(ActivityModel).where(and_(*conditions)).order_by(ActivityModel.created_at.desc())
         )
         return [_to_activity(row) for row in result.scalars().all()]
 
     async def get_activity_summary(
-        self, customer_id: int, tenant_id: int = 0,
-        start_date: datetime | None = None, end_date: datetime | None = None,
+        self,
+        customer_id: int,
+        tenant_id: int = 0,
+        start_date: datetime | None = None,
+        end_date: datetime | None = None,
     ) -> dict:
         conditions = [
             ActivityModel.tenant_id == tenant_id,
@@ -193,9 +209,7 @@ class ActivityService:
         if end_date is not None:
             conditions.append(ActivityModel.created_at <= end_date)
 
-        total_result = await self.session.execute(
-            select(func.count(ActivityModel.id)).where(and_(*conditions))
-        )
+        total_result = await self.session.execute(select(func.count(ActivityModel.id)).where(and_(*conditions)))
         total = total_result.scalar() or 0
 
         by_type_result = await self.session.execute(
@@ -206,10 +220,7 @@ class ActivityService:
         by_type = {t: count for t, count in by_type_result.all()}
 
         recent_result = await self.session.execute(
-            select(ActivityModel)
-            .where(and_(*conditions))
-            .order_by(ActivityModel.created_at.desc())
-            .limit(5)
+            select(ActivityModel).where(and_(*conditions)).order_by(ActivityModel.created_at.desc()).limit(5)
         )
         recent = [_to_activity(row) for row in recent_result.scalars().all()]
 

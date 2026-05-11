@@ -33,6 +33,7 @@ def _paginated(items, total, page, page_size):
 # Request/Response schemas
 # ---------------------------------------------------------------------------
 
+
 class ConditionItem(BaseModel):
     field: str = Field(..., min_length=1, max_length=100)
     operator: str = Field(..., min_length=1, max_length=20)
@@ -70,6 +71,7 @@ class TriggerEventRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @automation_router.post("/rules", status_code=201)
 async def create_automation_rule(

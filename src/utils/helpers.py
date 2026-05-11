@@ -1,6 +1,7 @@
 """
 通用工具函数
 """
+
 import hashlib
 import json
 import re
@@ -17,16 +18,16 @@ def generate_id(*parts: str) -> str:
 def sanitize_filename(filename: str) -> str:
     """清理文件名，移除不安全字符"""
     filename = filename.replace("..", "")
-    filename = re.sub(r'[^\w\s.-]', '', filename)
-    filename = re.sub(r'[-\s]+', '-', filename)
-    return filename.strip('- .')
+    filename = re.sub(r"[^\w\s.-]", "", filename)
+    filename = re.sub(r"[-\s]+", "-", filename)
+    return filename.strip("- .")
 
 
 def truncate_string(s: str, max_length: int, suffix: str = "...") -> str:
     """截断字符串"""
     if len(s) <= max_length:
         return s
-    return s[:max_length - len(suffix)] + suffix
+    return s[: max_length - len(suffix)] + suffix
 
 
 def parse_datetime(date_string: str) -> datetime | None:
@@ -38,7 +39,7 @@ def parse_datetime(date_string: str) -> datetime | None:
         "%Y-%m-%dT%H:%M:%S.%f",
         "%Y/%m/%d",
         "%d/%m/%Y",
-        "%m/%d/%Y"
+        "%m/%d/%Y",
     ]
     for fmt in formats:
         try:
@@ -73,22 +74,22 @@ def calculate_age(birth_date: datetime) -> int:
 
 def is_valid_phone(phone: str) -> bool:
     """验证手机号"""
-    pattern = r'^1[3-9]\d{9}$'
+    pattern = r"^1[3-9]\d{9}$"
     return bool(re.match(pattern, phone))
 
 
 def is_valid_url(url: str) -> bool:
     """验证URL"""
-    pattern = r'^https?://[^\s/$.?#].[^\s]*$'
+    pattern = r"^https?://[^\s/$.?#].[^\s]*$"
     return bool(re.match(pattern, url))
 
 
 def is_valid_ip(ip: str) -> bool:
     """验证IP地址"""
-    pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
+    pattern = r"^(\d{1,3}\.){3}\d{1,3}$"
     if not re.match(pattern, ip):
         return False
-    parts = ip.split('.')
+    parts = ip.split(".")
     return all(0 <= int(part) <= 255 for part in parts)
 
 
@@ -107,7 +108,7 @@ def deep_get(dictionary: dict, *keys, default=None) -> Any:
     return result if result is not None else default
 
 
-def flatten_dict(d: dict, parent_key: str = '', sep: str = '.') -> dict:
+def flatten_dict(d: dict, parent_key: str = "", sep: str = ".") -> dict:
     """扁平化嵌套字典"""
     items = []
     for k, v in d.items():
@@ -127,7 +128,7 @@ def flatten_dict(d: dict, parent_key: str = '', sep: str = '.') -> dict:
 
 def chunk_list(lst: list, chunk_size: int) -> list[list]:
     """将列表分块"""
-    return [lst[i:i + chunk_size] for i in range(0, len(lst), chunk_size)]
+    return [lst[i : i + chunk_size] for i in range(0, len(lst), chunk_size)]
 
 
 def remove_duplicates(items: list, key=None) -> list:
@@ -184,7 +185,7 @@ class Pagination:
         return self.page > 1
 
     def get_page_items(self) -> list:
-        return self.items[self.start_index:self.end_index]
+        return self.items[self.start_index : self.end_index]
 
     def to_dict(self) -> dict:
         return {
@@ -194,5 +195,5 @@ class Pagination:
             "page_size": self.page_size,
             "total_pages": self.total_pages,
             "has_next": self.has_next,
-            "has_prev": self.has_prev
+            "has_prev": self.has_prev,
         }

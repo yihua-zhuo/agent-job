@@ -1,4 +1,5 @@
 """Pipeline model for CRM system."""
+
 from dataclasses import dataclass
 
 # Import Stage from opportunity module to avoid duplication
@@ -8,6 +9,7 @@ from .opportunity import Stage
 @dataclass
 class Pipeline:
     """Pipeline entity representing a sales pipeline with stages."""
+
     name: str
     stages: list[Stage]
     id: int | None = None
@@ -26,17 +28,17 @@ class Pipeline:
     def to_dict(self) -> dict:
         """Convert pipeline to dictionary representation."""
         return {
-            'id': self.id,
-            'tenant_id': self.tenant_id,
-            'name': self.name,
-            'stages': [s.value if isinstance(s, Stage) else s for s in self.stages],
-            'is_default': self.is_default,
+            "id": self.id,
+            "tenant_id": self.tenant_id,
+            "name": self.name,
+            "stages": [s.value if isinstance(s, Stage) else s for s in self.stages],
+            "is_default": self.is_default,
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'Pipeline':
+    def from_dict(cls, data: dict) -> "Pipeline":
         """Create pipeline instance from dictionary."""
-        stages_data = data.get('stages', [])
+        stages_data = data.get("stages", [])
         stages = []
         for s in stages_data:
             if isinstance(s, Stage):
@@ -45,8 +47,8 @@ class Pipeline:
                 stages.append(Stage(s))
 
         return cls(
-            id=data.get('id'),
-            name=data['name'],
+            id=data.get("id"),
+            name=data["name"],
             stages=stages,
-            is_default=data.get('is_default', False),
+            is_default=data.get("is_default", False),
         )

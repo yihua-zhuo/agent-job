@@ -1,4 +1,5 @@
 """Async repository base with SQLAlchemy 2.0 async sessions."""
+
 from typing import Any, TypeVar, cast
 
 from sqlalchemy import delete, func, select, update
@@ -29,9 +30,7 @@ class BaseRepository:
         result = await self.session.execute(query)
         return result.scalar_one_or_none()
 
-    async def get_by_id(
-        self, model: type[T], id_val: int, tenant_id: int
-    ) -> T | None:
+    async def get_by_id(self, model: type[T], id_val: int, tenant_id: int) -> T | None:
         """Fetch a row by primary key with tenant isolation."""
         query = select(model).where(
             cast(Any, model).__table__.columns["id"] == id_val,
@@ -39,9 +38,7 @@ class BaseRepository:
         )
         return await self.execute_one(query)
 
-    async def list_by_tenant(
-        self, model: type[T], tenant_id: int, limit: int = 100, offset: int = 0
-    ) -> list[T]:
+    async def list_by_tenant(self, model: type[T], tenant_id: int, limit: int = 100, offset: int = 0) -> list[T]:
         """List all rows for a tenant with pagination."""
         query = (
             select(model)
@@ -53,21 +50,19 @@ class BaseRepository:
 
     async def count_by_tenant(self, model: type[T], tenant_id: int) -> int:
         """Count rows for a tenant."""
-        query = select(func.count()).select_from(model).where(
-            cast(Any, model).__table__.columns["tenant_id"] == tenant_id
+        query = (
+            select(func.count()).select_from(model).where(cast(Any, model).__table__.columns["tenant_id"] == tenant_id)
         )
         result = await self.execute_scalar(query)
         return int(result) if result is not None else 0
 
-    async def update_by_id(
-        self, model: type[T], id_val: int, tenant_id: int, **kwargs: Any
-    ) -> T | None:
+    async def update_by_id(self, model: type[T], id_val: int, tenant_id: int, **kwargs: Any) -> T | None:
         """Update a row by id + tenant, return the updated row."""
         stmt = (
             update(model)
             .where(
-            cast(Any, model).__table__.columns["id"] == id_val,
-            cast(Any, model).__table__.columns["tenant_id"] == tenant_id,
+                cast(Any, model).__table__.columns["id"] == id_val,
+                cast(Any, model).__table__.columns["tenant_id"] == tenant_id,
             )
             .values(**kwargs)
             .returning(model)
@@ -76,9 +71,7 @@ class BaseRepository:
         await self.session.commit()
         return result.scalar_one_or_none()
 
-    async def delete_by_id(
-        self, model: type[T], id_val: int, tenant_id: int
-    ) -> bool:
+    async def delete_by_id(self, model: type[T], id_val: int, tenant_id: int) -> bool:
         """Delete a row by id + tenant. Returns True if a row was deleted."""
         stmt = delete(model).where(
             cast(Any, model).__table__.columns["id"] == id_val,

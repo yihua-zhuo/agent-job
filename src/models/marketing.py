@@ -1,4 +1,5 @@
 """营销模型"""
+
 from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
@@ -90,6 +91,7 @@ class Campaign:
 @dataclass
 class CampaignEvent:
     """用户行为事件"""
+
     id: int | None
     campaign_id: int
     customer_id: int

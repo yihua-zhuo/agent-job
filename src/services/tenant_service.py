@@ -1,4 +1,5 @@
 """Tenant service — CRUD via SQLAlchemy ORM (TenantModel)."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, func, select, update
@@ -24,7 +25,11 @@ class TenantService:
         return d
 
     async def create_tenant(
-        self, name: str, plan: str, admin_email: str | None = None, settings: dict | None = None,
+        self,
+        name: str,
+        plan: str,
+        admin_email: str | None = None,
+        settings: dict | None = None,
         tenant_id: int = 0,
     ) -> dict:
         merged: dict = dict(settings or {})
@@ -46,9 +51,7 @@ class TenantService:
         return self._to_dict(tenant)
 
     async def _fetch(self, tenant_id: int) -> TenantModel:
-        result = await self.session.execute(
-            select(TenantModel).where(TenantModel.id == tenant_id)
-        )
+        result = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
         tenant = result.scalar_one_or_none()
         if tenant is None or tenant.status == "deleted":
             raise NotFoundException(f"Tenant {tenant_id}")
@@ -78,14 +81,10 @@ class TenantService:
         if settings_changed:
             update_values["settings"] = new_settings
 
-        await self.session.execute(
-            update(TenantModel).where(TenantModel.id == tenant_id).values(**update_values)
-        )
+        await self.session.execute(update(TenantModel).where(TenantModel.id == tenant_id).values(**update_values))
         await self.session.commit()
 
-        refreshed = await self.session.execute(
-            select(TenantModel).where(TenantModel.id == tenant_id)
-        )
+        refreshed = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
         return self._to_dict(refreshed.scalar_one())
 
     async def suspend_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
@@ -105,24 +104,22 @@ class TenantService:
         return {"id": tenant_id}
 
     async def list_tenants(
-        self, page: int = 1, page_size: int = 20, status: str | None = None, _tenant_id: int = 0,
+        self,
+        page: int = 1,
+        page_size: int = 20,
+        status: str | None = None,
+        _tenant_id: int = 0,
     ) -> tuple[list[dict], int]:
         conditions = [TenantModel.status != "deleted"]
         if status:
             conditions = [TenantModel.status == status]
 
-        count_result = await self.session.execute(
-            select(func.count(TenantModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(TenantModel.id)).where(and_(*conditions)))
         total = count_result.scalar() or 0
 
         offset = (page - 1) * page_size
         result = await self.session.execute(
-            select(TenantModel)
-            .where(and_(*conditions))
-            .order_by(TenantModel.id)
-            .offset(offset)
-            .limit(page_size)
+            select(TenantModel).where(and_(*conditions)).order_by(TenantModel.id).offset(offset).limit(page_size)
         )
         items = [self._to_dict(t) for t in result.scalars().all()]
         return items, total

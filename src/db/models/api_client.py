@@ -1,4 +1,5 @@
 """API Client model for multi-algorithm JWT authentication."""
+
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
@@ -26,9 +27,7 @@ class ApiClientModel(Base):
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )

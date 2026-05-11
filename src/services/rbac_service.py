@@ -1,4 +1,5 @@
 """Role-Based Access Control (RBAC) service — DB-backed with SQLAlchemy ORM."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, delete, func, or_, select
@@ -14,11 +15,41 @@ from pkg.errors.app_exceptions import (
 
 # Default system roles
 DEFAULT_ROLES = [
-    {"name": "admin", "display_name": "Administrator", "description": "Full system access with all permissions", "is_system": True, "priority": 100},
-    {"name": "manager", "display_name": "Manager", "description": "Manage team and view reports", "is_system": True, "priority": 80},
-    {"name": "sales", "display_name": "Sales Representative", "description": "Manage customers and opportunities", "is_system": True, "priority": 60},
-    {"name": "support", "display_name": "Support Agent", "description": "View customers and tickets, manage support tasks", "is_system": True, "priority": 50},
-    {"name": "viewer", "display_name": "Viewer", "description": "Read-only access to assigned resources", "is_system": True, "priority": 10},
+    {
+        "name": "admin",
+        "display_name": "Administrator",
+        "description": "Full system access with all permissions",
+        "is_system": True,
+        "priority": 100,
+    },
+    {
+        "name": "manager",
+        "display_name": "Manager",
+        "description": "Manage team and view reports",
+        "is_system": True,
+        "priority": 80,
+    },
+    {
+        "name": "sales",
+        "display_name": "Sales Representative",
+        "description": "Manage customers and opportunities",
+        "is_system": True,
+        "priority": 60,
+    },
+    {
+        "name": "support",
+        "display_name": "Support Agent",
+        "description": "View customers and tickets, manage support tasks",
+        "is_system": True,
+        "priority": 50,
+    },
+    {
+        "name": "viewer",
+        "display_name": "Viewer",
+        "description": "Read-only access to assigned resources",
+        "is_system": True,
+        "priority": 10,
+    },
 ]
 
 # Default permissions
@@ -44,18 +75,30 @@ DEFAULT_PERMISSIONS = [
 DEFAULT_ROLE_PERMISSIONS: dict[str, list[str]] = {
     "admin": [p[0] for p in DEFAULT_PERMISSIONS],
     "manager": [
-        "customer:read", "customer:update",
-        "opportunity:read", "opportunity:create", "opportunity:update",
-        "ticket:read", "ticket:create", "ticket:update",
+        "customer:read",
+        "customer:update",
+        "opportunity:read",
+        "opportunity:create",
+        "opportunity:update",
+        "ticket:read",
+        "ticket:create",
+        "ticket:update",
         "user:read",
     ],
     "sales": [
-        "customer:read", "customer:create", "customer:update",
-        "opportunity:read", "opportunity:create", "opportunity:update",
+        "customer:read",
+        "customer:create",
+        "customer:update",
+        "opportunity:read",
+        "opportunity:create",
+        "opportunity:update",
     ],
     "support": [
-        "customer:read", "opportunity:read",
-        "ticket:read", "ticket:create", "ticket:update",
+        "customer:read",
+        "opportunity:read",
+        "ticket:read",
+        "ticket:create",
+        "ticket:update",
     ],
     "viewer": [
         "customer:read",
@@ -72,6 +115,7 @@ class Permission:
 
         Permission("customer:create")  # → Permission.CUSTOMER_CREATE
     """
+
     __slots__ = ("value",)
 
     def __init__(self, value: str):
@@ -113,9 +157,7 @@ async def init_defaults(session: AsyncSession) -> None:
             perm_names = DEFAULT_ROLE_PERMISSIONS.get(role_def["name"], [])
             if not perm_names:
                 continue
-            result = await session.execute(
-                select(PermissionModel).where(PermissionModel.name.in_(perm_names))
-            )
+            result = await session.execute(select(PermissionModel).where(PermissionModel.name.in_(perm_names)))
             for perm in result.scalars().all():
                 session.add(RolePermissionModel(role_id=role.id, permission_id=perm.id))
 
@@ -165,12 +207,11 @@ class RBACService:
         include_system: bool = True,
     ) -> tuple[list[RoleModel], int]:
         conditions = [
-            or_(RoleModel.tenant_id == tenant_id, RoleModel.tenant_id == 0) if include_system
+            or_(RoleModel.tenant_id == tenant_id, RoleModel.tenant_id == 0)
+            if include_system
             else RoleModel.tenant_id == tenant_id
         ]
-        count_result = await self.session.execute(
-            select(func.count()).select_from(RoleModel).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count()).select_from(RoleModel).where(and_(*conditions)))
         total = count_result.scalar_one()
 
         offset = (page - 1) * page_size
@@ -204,9 +245,7 @@ class RBACService:
             raise ValidationException("没有需要更新的字段")
 
         result = await self.session.execute(
-            select(RoleModel).where(
-                and_(RoleModel.id == role_id, RoleModel.tenant_id == tenant_id)
-            )
+            select(RoleModel).where(and_(RoleModel.id == role_id, RoleModel.tenant_id == tenant_id))
         )
         role = result.scalar_one_or_none()
         if role is None:
@@ -243,16 +282,12 @@ class RBACService:
         if category:
             base = base.where(PermissionModel.category == category)
 
-        count_result = await self.session.execute(
-            select(func.count()).select_from(base.subquery())
-        )
+        count_result = await self.session.execute(select(func.count()).select_from(base.subquery()))
         total = count_result.scalar_one()
 
         offset = (page - 1) * page_size
         result = await self.session.execute(
-            base.order_by(PermissionModel.category, PermissionModel.id)
-            .offset(offset)
-            .limit(page_size)
+            base.order_by(PermissionModel.category, PermissionModel.id).offset(offset).limit(page_size)
         )
         return result.scalars().all(), total
 
@@ -276,12 +311,13 @@ class RBACService:
         return result.scalars().all()
 
     async def set_role_permissions(
-        self, role_id: int, permission_names: list[str], tenant_id: int,
+        self,
+        role_id: int,
+        permission_names: list[str],
+        tenant_id: int,
     ) -> list[PermissionModel]:
         role_result = await self.session.execute(
-            select(RoleModel).where(
-                and_(RoleModel.id == role_id, RoleModel.tenant_id == tenant_id)
-            )
+            select(RoleModel).where(and_(RoleModel.id == role_id, RoleModel.tenant_id == tenant_id))
         )
         if role_result.scalar_one_or_none() is None:
             raise NotFoundException("角色")
@@ -297,9 +333,7 @@ class RBACService:
         if missing:
             raise ValidationException(f"不存在的权限: {', '.join(sorted(missing))}")
 
-        await self.session.execute(
-            delete(RolePermissionModel).where(RolePermissionModel.role_id == role_id)
-        )
+        await self.session.execute(delete(RolePermissionModel).where(RolePermissionModel.role_id == role_id))
         for perm in perms:
             self.session.add(RolePermissionModel(role_id=role_id, permission_id=perm.id))
         await self.session.flush()
@@ -345,13 +379,15 @@ class RBACService:
         if existing.scalar_one_or_none() is not None:
             return {"user_id": user_id, "role_id": role_id, "already_assigned": True}
 
-        self.session.add(UserRoleModel(
-            user_id=user_id,
-            role_id=role_id,
-            tenant_id=tenant_id,
-            granted_by=granted_by,
-            granted_at=datetime.now(UTC),
-        ))
+        self.session.add(
+            UserRoleModel(
+                user_id=user_id,
+                role_id=role_id,
+                tenant_id=tenant_id,
+                granted_by=granted_by,
+                granted_at=datetime.now(UTC),
+            )
+        )
         await self.session.flush()
         return {"user_id": user_id, "role_id": role_id}
 
@@ -469,18 +505,18 @@ class RBACService:
             raise ValidationException(f"不存在的角色ID: {invalid}")
 
         await self.session.execute(
-            delete(UserRoleModel).where(
-                and_(UserRoleModel.user_id == user_id, UserRoleModel.tenant_id == tenant_id)
-            )
+            delete(UserRoleModel).where(and_(UserRoleModel.user_id == user_id, UserRoleModel.tenant_id == tenant_id))
         )
         for role_id in role_ids:
-            self.session.add(UserRoleModel(
-                user_id=user_id,
-                role_id=role_id,
-                tenant_id=tenant_id,
-                granted_by=granted_by,
-                granted_at=datetime.now(UTC),
-            ))
+            self.session.add(
+                UserRoleModel(
+                    user_id=user_id,
+                    role_id=role_id,
+                    tenant_id=tenant_id,
+                    granted_by=granted_by,
+                    granted_at=datetime.now(UTC),
+                )
+            )
         await self.session.flush()
         return role_ids
 

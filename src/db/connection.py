@@ -1,4 +1,5 @@
 """Async SQLAlchemy session management for PostgreSQL."""
+
 from __future__ import annotations
 
 from collections.abc import AsyncGenerator
@@ -65,6 +66,7 @@ def _lazy_init():
     global engine, async_session_maker
     if engine is None:
         from configs.settings import settings
+
         url = settings.database_url
         if not url:
             raise ValueError("DATABASE_URL environment variable is required")
@@ -104,6 +106,7 @@ def dispose_engine():
     global engine, async_session_maker
     if engine is not None:
         import asyncio
+
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:

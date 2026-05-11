@@ -3,6 +3,7 @@
 Services raise AppException subclasses on errors (caught by global handler in main.py).
 Router wraps successful returns in {"success": True, "data": ...} dicts.
 """
+
 import math
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -15,7 +16,7 @@ from internal.middleware.fastapi_auth import AuthContext, require_auth
 from services.auth_service import AuthService
 from services.user_service import UserService
 
-users_router = APIRouter(prefix='/api/v1', tags=['users'])
+users_router = APIRouter(prefix="/api/v1", tags=["users"])
 
 
 def _paginated(items, total, page, page_size):
@@ -35,6 +36,7 @@ def _paginated(items, total, page, page_size):
 # ---------------------------------------------------------------------------
 # Request schemas
 # ---------------------------------------------------------------------------
+
 
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=32)
@@ -63,6 +65,7 @@ class LoginRequest(BaseModel):
 
 class Token(BaseModel):
     """Standard OAuth2 token response for Swagger UI Authorize button."""
+
     access_token: str
     token_type: str = "bearer"
 
@@ -87,7 +90,8 @@ class PasswordChangeRequest(BaseModel):
 # User CRUD endpoints (requires auth)
 # ---------------------------------------------------------------------------
 
-@users_router.post('/users', status_code=201)
+
+@users_router.post("/users", status_code=201)
 async def create_user(
     body: UserCreate,
     ctx: AuthContext = Depends(require_auth),
@@ -105,7 +109,7 @@ async def create_user(
     return {"success": True, "data": result, "message": "用户创建成功"}
 
 
-@users_router.get('/users')
+@users_router.get("/users")
 async def list_users(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -126,7 +130,7 @@ async def list_users(
 
 
 @users_router.get(
-    '/users/me',
+    "/users/me",
     summary="Get current authenticated user",
 )
 async def get_current_active_user(
@@ -143,7 +147,7 @@ async def get_current_active_user(
     return {"success": True, "data": result, "message": "查询成功"}
 
 
-@users_router.get('/users/{user_id}')
+@users_router.get("/users/{user_id}")
 async def get_user(
     user_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -154,7 +158,7 @@ async def get_user(
     return {"success": True, "data": result, "message": "查询成功"}
 
 
-@users_router.put('/users/{user_id}')
+@users_router.put("/users/{user_id}")
 async def update_user(
     user_id: int,
     body: UserUpdate,
@@ -167,7 +171,7 @@ async def update_user(
     return {"success": True, "data": result, "message": "用户更新成功"}
 
 
-@users_router.delete('/users/{user_id}')
+@users_router.delete("/users/{user_id}")
 async def delete_user(
     user_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -178,7 +182,7 @@ async def delete_user(
     return {"success": True, "data": None, "message": "用户删除成功"}
 
 
-@users_router.post('/users/search')
+@users_router.post("/users/search")
 async def search_users(
     keyword: str = Query(..., min_length=1, max_length=200),
     ctx: AuthContext = Depends(require_auth),
@@ -189,7 +193,7 @@ async def search_users(
     return _paginated(items, total, 1, total or 20)
 
 
-@users_router.post('/users/{user_id}/password')
+@users_router.post("/users/{user_id}/password")
 async def change_password(
     user_id: int,
     body: PasswordChange,
@@ -205,7 +209,8 @@ async def change_password(
 # PATCH /users/me — update current user's profile
 # ---------------------------------------------------------------------------
 
-@users_router.patch('/users/me')
+
+@users_router.patch("/users/me")
 async def update_my_profile(
     body: ProfileUpdate,
     current_user: AuthContext = Depends(get_current_user),
@@ -226,7 +231,8 @@ async def update_my_profile(
 # POST /auth/change-password — change own password
 # ---------------------------------------------------------------------------
 
-@users_router.post('/auth/change-password')
+
+@users_router.post("/auth/change-password")
 async def change_my_password(
     body: PasswordChangeRequest,
     current_user: AuthContext = Depends(get_current_user),
@@ -244,12 +250,14 @@ async def change_my_password(
 # Auth endpoints (no JWT required for register/login)
 # ---------------------------------------------------------------------------
 
-@users_router.post('/auth/register', status_code=201)
+
+@users_router.post("/auth/register", status_code=201)
 async def register(
     body: UserCreate,
     session=Depends(get_db),
 ):
     from configs.settings import settings
+
     service = AuthService(session, secret_key=settings.jwt_secret)
     result = await service.create_user(
         username=body.username,
@@ -262,7 +270,7 @@ async def register(
     return {"success": True, "data": result, "message": "注册成功"}
 
 
-@users_router.post('/auth/login', response_model=Token)
+@users_router.post("/auth/login", response_model=Token)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     session=Depends(get_db),
@@ -271,6 +279,7 @@ async def login(
     Swagger UI 'Authorize' button sends credentials here as form-encoded.
     """
     from configs.settings import settings
+
     auth_svc = AuthService(session, secret_key=settings.jwt_secret)
     user = await auth_svc.authenticate_user(form_data.username, form_data.password)
     token = auth_svc.generate_token(

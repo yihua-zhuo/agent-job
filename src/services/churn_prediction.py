@@ -3,6 +3,7 @@
 
 Computes risk scores from real customer/activity/ticket/opportunity data.
 """
+
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
@@ -19,6 +20,7 @@ from pkg.errors.app_exceptions import NotFoundException
 @dataclass
 class ChurnRiskFactor:
     """流失风险因素"""
+
     factor: str
     weight: float
     current_value: float
@@ -51,9 +53,7 @@ class ChurnPredictionService:
 
     async def _verify_customer(self, customer_id: int, tenant_id: int) -> CustomerModel:
         result = await self.session.execute(
-            select(CustomerModel).where(
-                and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
-            )
+            select(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
         )
         customer = result.scalar_one_or_none()
         if customer is None:
@@ -163,10 +163,7 @@ class ChurnPredictionService:
         """计算流失风险分数 (0-100)"""
         data = await self._get_customer_metrics(customer_id, tenant_id)
         scores = self._compute_scores(data)
-        total_score = sum(
-            scores[factor] * self.FACTOR_WEIGHTS[factor]
-            for factor in self.RISK_FACTORS
-        )
+        total_score = sum(scores[factor] * self.FACTOR_WEIGHTS[factor] for factor in self.RISK_FACTORS)
         return round(total_score, 2)
 
     @staticmethod
@@ -181,7 +178,9 @@ class ChurnPredictionService:
         return scores
 
     async def predict_churn(
-        self, customer_ids: list[int] | None = None, tenant_id: int = 0,
+        self,
+        customer_ids: list[int] | None = None,
+        tenant_id: int = 0,
     ) -> list[dict]:
         """批量预测流失风险"""
         if customer_ids is None:
@@ -197,12 +196,14 @@ class ChurnPredictionService:
                 factors = await self.get_churn_risk_factors(cid, tenant_id)
             except NotFoundException:
                 continue
-            results.append({
-                "customer_id": cid,
-                "score": score,
-                "risk_level": self._get_risk_level(score),
-                "factors": factors,
-            })
+            results.append(
+                {
+                    "customer_id": cid,
+                    "score": score,
+                    "risk_level": self._get_risk_level(score),
+                    "factors": factors,
+                }
+            )
         return results
 
     @staticmethod
@@ -236,7 +237,9 @@ class ChurnPredictionService:
         ]
 
     async def get_high_risk_customers(
-        self, threshold: float = 70.0, tenant_id: int = 0,
+        self,
+        threshold: float = 70.0,
+        tenant_id: int = 0,
     ) -> list[dict]:
         """获取高风险客户列表"""
         all_results = await self.predict_churn(customer_ids=None, tenant_id=tenant_id)
@@ -252,35 +255,45 @@ class ChurnPredictionService:
 
         actions = []
         if data["days_since_last_activity"] > 30:
-            actions.append({
-                "action": "主动联系客户",
-                "priority": "high" if risk_level == "high" else "medium",
-                "reason": f"客户已 {data['days_since_last_activity']} 天无活动",
-            })
+            actions.append(
+                {
+                    "action": "主动联系客户",
+                    "priority": "high" if risk_level == "high" else "medium",
+                    "reason": f"客户已 {data['days_since_last_activity']} 天无活动",
+                }
+            )
         if data["activity_trend"] < 0.3:
-            actions.append({
-                "action": "发送个性化优惠",
-                "priority": "high" if risk_level == "high" else "medium",
-                "reason": "活动频率显著下降，需要激活",
-            })
+            actions.append(
+                {
+                    "action": "发送个性化优惠",
+                    "priority": "high" if risk_level == "high" else "medium",
+                    "reason": "活动频率显著下降，需要激活",
+                }
+            )
         if data["revenue_trend"] < -0.2:
-            actions.append({
-                "action": "提供升级方案",
-                "priority": "medium",
-                "reason": "收入呈下降趋势",
-            })
+            actions.append(
+                {
+                    "action": "提供升级方案",
+                    "priority": "medium",
+                    "reason": "收入呈下降趋势",
+                }
+            )
         if data["support_tickets_count"] > 5:
-            actions.append({
-                "action": "优先处理客户问题",
-                "priority": "high",
-                "reason": f"客户有 {data['support_tickets_count']} 个未解决工单",
-            })
+            actions.append(
+                {
+                    "action": "优先处理客户问题",
+                    "priority": "high",
+                    "reason": f"客户有 {data['support_tickets_count']} 个未解决工单",
+                }
+            )
 
         if not actions:
-            actions.append({
-                "action": "定期维护关系",
-                "priority": "low",
-                "reason": "客户状态正常，保持常规维护",
-            })
+            actions.append(
+                {
+                    "action": "定期维护关系",
+                    "priority": "low",
+                    "reason": "客户状态正常，保持常规维护",
+                }
+            )
 
         return actions

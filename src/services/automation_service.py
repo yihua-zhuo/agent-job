@@ -1,4 +1,5 @@
 """Automation rules service — DB-backed rule engine with execution logging."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
@@ -9,17 +10,27 @@ from pkg.errors.app_exceptions import NotFoundException
 
 # Supported trigger events
 TRIGGER_EVENTS = [
-    "ticket.created", "ticket.updated", "ticket.assigned",
-    "opportunity.stage_changed", "opportunity.created",
-    "customer.created", "customer.updated",
-    "user.login", "lead.created",
+    "ticket.created",
+    "ticket.updated",
+    "ticket.assigned",
+    "opportunity.stage_changed",
+    "opportunity.created",
+    "customer.created",
+    "customer.updated",
+    "user.login",
+    "lead.created",
 ]
 
 # Supported action types
 ACTION_TYPES = [
-    "notification.send", "ticket.assign", "ticket.update_priority",
-    "opportunity.add_note", "task.create", "email.send",
-    "webhook.call", "tag.add",
+    "notification.send",
+    "ticket.assign",
+    "ticket.update_priority",
+    "opportunity.add_note",
+    "task.create",
+    "email.send",
+    "webhook.call",
+    "tag.add",
 ]
 
 
@@ -71,6 +82,7 @@ async def _execute_action(
 
     if action_type == "notification.send":
         from services.notification_service import NotificationService
+
         svc = NotificationService(session)
         result = await svc.send_notification(
             user_id=params.get("user_id", context.get("user_id", 0)),
@@ -85,6 +97,7 @@ async def _execute_action(
 
     elif action_type == "task.create":
         from services.task_service import TaskService
+
         svc = TaskService(session)
         task_result = await svc.create_task(
             tenant_id=tenant_id,
@@ -158,12 +171,8 @@ class AutomationService:
         trigger_event: str | None = None,
         enabled: bool | None = None,
     ) -> tuple[list[AutomationRuleModel], int]:
-        base_stmt = select(AutomationRuleModel).where(
-            AutomationRuleModel.tenant_id == tenant_id
-        )
-        count_stmt = select(func.count(AutomationRuleModel.id)).where(
-            AutomationRuleModel.tenant_id == tenant_id
-        )
+        base_stmt = select(AutomationRuleModel).where(AutomationRuleModel.tenant_id == tenant_id)
+        count_stmt = select(func.count(AutomationRuleModel.id)).where(AutomationRuleModel.tenant_id == tenant_id)
 
         if trigger_event is not None:
             base_stmt = base_stmt.where(AutomationRuleModel.trigger_event == trigger_event)
@@ -177,9 +186,7 @@ class AutomationService:
 
         offset = (page - 1) * page_size
         result = await self.session.execute(
-            base_stmt.order_by(AutomationRuleModel.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
+            base_stmt.order_by(AutomationRuleModel.created_at.desc()).offset(offset).limit(page_size)
         )
         return result.scalars().all(), total
 
@@ -268,16 +275,21 @@ class AutomationService:
             for action in rule.actions:
                 try:
                     action_result = await _execute_action(
-                        action, {**context, "rule_name": rule.name},
-                        self.session, tenant_id, executed_by,
+                        action,
+                        {**context, "rule_name": rule.name},
+                        self.session,
+                        tenant_id,
+                        executed_by,
                     )
                     executed_actions.append(action_result)
                 except Exception as e:
-                    executed_actions.append({
-                        "type": action.get("type"),
-                        "status": "error",
-                        "error": str(e),
-                    })
+                    executed_actions.append(
+                        {
+                            "type": action.get("type"),
+                            "status": "error",
+                            "error": str(e),
+                        }
+                    )
                     errors.append(str(e))
 
             log_status = "success" if not errors else "failed"
@@ -295,13 +307,15 @@ class AutomationService:
             self.session.add(log)
             await self.session.flush()
 
-            results.append({
-                "rule_id": rule.id,
-                "rule_name": rule.name,
-                "status": log_status,
-                "actions_executed": executed_actions,
-                "log_id": log.id,
-            })
+            results.append(
+                {
+                    "rule_id": rule.id,
+                    "rule_name": rule.name,
+                    "status": log_status,
+                    "actions_executed": executed_actions,
+                    "log_id": log.id,
+                }
+            )
 
         return results
 
@@ -317,12 +331,8 @@ class AutomationService:
         rule_id: int | None = None,
         status: str | None = None,
     ) -> tuple[list[AutomationLogModel], int]:
-        base_stmt = select(AutomationLogModel).where(
-            AutomationLogModel.tenant_id == tenant_id
-        )
-        count_stmt = select(func.count(AutomationLogModel.id)).where(
-            AutomationLogModel.tenant_id == tenant_id
-        )
+        base_stmt = select(AutomationLogModel).where(AutomationLogModel.tenant_id == tenant_id)
+        count_stmt = select(func.count(AutomationLogModel.id)).where(AutomationLogModel.tenant_id == tenant_id)
 
         if rule_id is not None:
             base_stmt = base_stmt.where(AutomationLogModel.rule_id == rule_id)
@@ -336,8 +346,6 @@ class AutomationService:
 
         offset = (page - 1) * page_size
         result = await self.session.execute(
-            base_stmt.order_by(AutomationLogModel.executed_at.desc())
-            .offset(offset)
-            .limit(page_size)
+            base_stmt.order_by(AutomationLogModel.executed_at.desc()).offset(offset).limit(page_size)
         )
         return result.scalars().all(), total
