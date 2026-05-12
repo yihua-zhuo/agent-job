@@ -3,6 +3,11 @@ name: Dev Agent CI
 on:
   pull_request:
     branches: [master, develop]
+  # Re-validate on master after merges. Scoped narrowly to avoid the
+  # push+pull_request duplication we hit before — feature branches still
+  # only run via the PR trigger.
+  push:
+    branches: [master]
 
 env:
   MODEL: MiniMax-M2.7

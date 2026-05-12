@@ -20,7 +20,11 @@ jobs:
 
       - name: Create or skip PR
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Must be a PAT (or App token) — PRs created via GITHUB_TOKEN do
+          # NOT fire pull_request events, so downstream workflows (CI,
+          # code review, etc.) silently skip the auto-opened PR. Falling
+          # back to GITHUB_TOKEN still creates the PR but won't trigger CI.
+          GH_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
         run: |
           set -e
 

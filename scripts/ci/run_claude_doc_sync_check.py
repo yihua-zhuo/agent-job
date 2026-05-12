@@ -191,7 +191,10 @@ def main() -> int:
     with open(raw_output_path, "w") as f:
         f.write(raw_output)
 
-    return 1 if result.get("status") == "fail" else 0
+    # Always exit 0 — drift is reported via a GitHub Issue (see create_doc_sync_issue.py),
+    # not by failing the pipeline. The result file's "status" field still records
+    # pass/fail so downstream consumers can branch on it.
+    return 0
 
 
 if __name__ == "__main__":
