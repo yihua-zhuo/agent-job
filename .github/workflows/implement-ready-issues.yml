@@ -1,0 +1,171 @@
+name: Implement · Ready Issues
+
+on:
+  schedule:
+    - cron: '*/30 * * * *'
+  workflow_dispatch:
+
+# Implementation runs are long (≤60 min) and stateful (claim → plan → build →
+# test → commit). Serialise so two ticks can't both grab the same issue or
+# both push the same branch.
+concurrency:
+  group: implement-ready-issues
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  implement:
+    name: Implement next ready issue
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      issues: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Use the PAT so the auto-opened PR fires downstream workflows
+          # (Dev Agent CI, code review). GITHUB_TOKEN-triggered events don't.
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up claude
+        run: |
+          if ! command -v claude &>/dev/null; then
+            npm install -g @anthropic-ai/claude-code
+          fi
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Stage 1 — claim & plan
+        id: plan
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: python3 scripts/ci/claim_and_plan_issue.py
+
+      - name: Skip if no issue claimed
+        if: steps.plan.outputs.issue_number == ''
+        run: |
+          echo "No ready issue to implement — done."
+
+      - name: Create implementation branch
+        if: steps.plan.outputs.issue_number != ''
+        run: |
+          git checkout -b "${{ steps.plan.outputs.branch }}"
+          mkdir -p "$(dirname "${{ steps.plan.outputs.plan_path }}")"
+          git add "${{ steps.plan.outputs.plan_path }}"
+          git commit -m "plan: implementation plan for issue #${{ steps.plan.outputs.issue_number }}"
+
+      - name: Install Python dependencies
+        if: steps.plan.outputs.issue_number != ''
+        run: |
+          set -e
+          python -m pip install --upgrade pip
+          # Fallback chain — succeeds on the first one that works. If ALL fail,
+          # set -e propagates the error so the job stops here instead of
+          # silently moving on to a doomed test stage.
+          pip install -e ".[dev]" 2>/dev/null || pip install -e . || pip install -r requirements.txt
+          pip install pytest pytest-asyncio ruff sqlalchemy asyncpg fastapi
+
+      - name: Start docker compose (test DB)
+        if: steps.plan.outputs.issue_number != ''
+        run: |
+          docker compose -f configs/docker-compose.test.yml up -d test-db
+          # Wait for postgres to accept connections
+          for i in {1..30}; do
+            if docker compose -f configs/docker-compose.test.yml exec -T test-db pg_isready -U test_user > /dev/null 2>&1; then
+              echo "test-db ready after ${i} polls"
+              break
+            fi
+            sleep 2
+          done
+          # Final gate: if the loop exhausted without success, fail loudly here
+          # instead of letting integration tests blow up with an opaque error.
+          if ! docker compose -f configs/docker-compose.test.yml exec -T test-db pg_isready -U test_user > /dev/null 2>&1; then
+            echo "test-db did not become ready within timeout" >&2
+            docker compose -f configs/docker-compose.test.yml logs test-db || true
+            exit 1
+          fi
+
+      - name: Stage 2 — execute implementation
+        if: steps.plan.outputs.issue_number != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          ISSUE_NUMBER: ${{ steps.plan.outputs.issue_number }}
+          PLAN_PATH: ${{ steps.plan.outputs.plan_path }}
+          DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
+          PYTHONPATH: src
+        run: python3 scripts/ci/execute_implementation.py
+
+      - name: Test gate — unit + integration + lint
+        if: steps.plan.outputs.issue_number != ''
+        env:
+          DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
+          PYTHONPATH: src
+        run: |
+          ruff check src/
+          pytest tests/unit/ -v
+          pytest tests/integration/ -v
+
+      - name: Commit changes and open PR
+        if: steps.plan.outputs.issue_number != '' && success()
+        env:
+          GH_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          BRANCH="${{ steps.plan.outputs.branch }}"
+          ISSUE_NUMBER="${{ steps.plan.outputs.issue_number }}"
+          PLAN_PATH="${{ steps.plan.outputs.plan_path }}"
+          git add -A
+          # Early-exit if Claude produced no implementation changes — otherwise
+          # we'd push a plan-only branch and open a spurious PR with nothing
+          # but the .plans/ file in it.
+          if git diff --cached --quiet; then
+            echo "No implementation changes beyond the plan commit — not opening a PR."
+            exit 0
+          fi
+          # Multi-paragraph commit message via repeated -m, so every line of
+          # this YAML block scalar stays inside its indent (multi-line strings
+          # with column-0 lines would otherwise terminate the | block early).
+          git commit \
+            -m "feat: implement issue #${ISSUE_NUMBER}" \
+            -m "Closes #${ISSUE_NUMBER}" \
+            -m "Auto-implemented by Claude Code following ${PLAN_PATH}. All unit and integration tests passed in CI before this commit."
+          git push -u origin "$BRANCH"
+          PR_BODY=$(printf 'Closes #%s\n\nPlan: `%s`\n\nThis PR was auto-implemented by Claude Code. The workflow ran `ruff check src/`, the unit test suite, and the integration test suite — all passed before this PR was opened.\n\nPlease review before merging.' "$ISSUE_NUMBER" "$PLAN_PATH")
+          gh pr create \
+            --title "Auto: implement issue #${ISSUE_NUMBER}" \
+            --body "$PR_BODY" \
+            --base master \
+            --head "$BRANCH" \
+            --label "automated" || echo "PR may already exist for $BRANCH"
+
+      - name: Report failure on issue
+        if: steps.plan.outputs.issue_number != '' && failure()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_NUMBER="${{ steps.plan.outputs.issue_number }}"
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          BODY=$(printf '⚠️ Auto-implementation failed. Workflow run: %s\n\nThe `wip` label remains on this issue so it is not re-attempted automatically. Remove the `wip` label to allow the next cron tick to retry.' "$RUN_URL")
+          gh issue comment "$ISSUE_NUMBER" --body "$BODY"
+
+      - name: Stop docker compose
+        if: always()
+        run: docker compose -f configs/docker-compose.test.yml down -v || true
