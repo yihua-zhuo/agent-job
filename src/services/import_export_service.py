@@ -116,7 +116,7 @@ class ImportExportService:
                     updated_at=now,
                 )
             )
-        await self.session.commit()
+        await self.session.flush()
         return {"success_count": len(data), "error_count": 0, "errors": [], "data": data}
 
     async def import_opportunities(
@@ -159,7 +159,7 @@ class ImportExportService:
                     updated_at=now,
                 )
             )
-        await self.session.commit()
+        await self.session.flush()
         return {"success_count": len(data), "error_count": 0, "errors": [], "data": data}
 
     async def import_leads(
@@ -199,7 +199,7 @@ class ImportExportService:
                     updated_at=now,
                 )
             )
-        await self.session.commit()
+        await self.session.flush()
         return {"success_count": len(data), "error_count": 0, "errors": [], "data": data}
 
     # -------------------------------------------------------------------------

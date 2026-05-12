@@ -47,7 +47,7 @@ class TenantService:
         self.session.add(tenant)
         await self.session.flush()
         await self.session.refresh(tenant)
-        await self.session.commit()
+        await self.session.flush()
         return self._to_dict(tenant)
 
     async def _fetch(self, tenant_id: int) -> TenantModel:
@@ -82,7 +82,7 @@ class TenantService:
             update_values["settings"] = new_settings
 
         await self.session.execute(update(TenantModel).where(TenantModel.id == tenant_id).values(**update_values))
-        await self.session.commit()
+        await self.session.flush()
 
         refreshed = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
         return self._to_dict(refreshed.scalar_one())
@@ -100,7 +100,7 @@ class TenantService:
             .where(TenantModel.id == tenant_id)
             .values(status="deleted", settings=new_settings, updated_at=now)
         )
-        await self.session.commit()
+        await self.session.flush()
         return {"id": tenant_id}
 
     async def list_tenants(

@@ -83,7 +83,7 @@ class TicketService:
         self.session.add(ticket)
         await self.session.flush()
         await self.session.refresh(ticket)
-        await self.session.commit()
+        await self.session.flush()
         return ticket
 
     async def get_ticket(self, ticket_id: int, tenant_id: int = 0) -> TicketModel:
@@ -101,7 +101,7 @@ class TicketService:
                 update_values[enum_key] = _to_str(kwargs[enum_key])
 
         await self.session.execute(update(TicketModel).where(TicketModel.id == ticket_id).values(**update_values))
-        await self.session.commit()
+        await self.session.flush()
         return await self._fetch(ticket_id, tenant_id)
 
     async def assign_ticket(
@@ -140,7 +140,7 @@ class TicketService:
 
         await self.session.flush()
         await self.session.refresh(reply)
-        await self.session.commit()
+        await self.session.flush()
         return reply
 
     async def change_status(
@@ -155,7 +155,7 @@ class TicketService:
         if new_status == TicketStatus.RESOLVED:
             update_values["resolved_at"] = now
         await self.session.execute(update(TicketModel).where(TicketModel.id == ticket_id).values(**update_values))
-        await self.session.commit()
+        await self.session.flush()
         return await self._fetch(ticket_id, tenant_id)
 
     async def get_customer_tickets(

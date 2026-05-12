@@ -44,7 +44,7 @@ class NotificationService:
         self.session.add(notification)
         await self.session.flush()
         await self.session.refresh(notification)
-        await self.session.commit()
+        await self.session.flush()
         return notification
 
     async def get_user_notifications(
@@ -90,7 +90,7 @@ class NotificationService:
         if notification is None:
             raise NotFoundException("通知")
         notification.is_read = True
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(notification)
         return notification
 
@@ -108,7 +108,7 @@ class NotificationService:
         unread = result.scalars().all()
         for n in unread:
             n.is_read = True
-        await self.session.commit()
+        await self.session.flush()
         return {"marked_count": len(unread)}
 
     async def delete_notification(self, notification_id: int, tenant_id: int = 0) -> dict:
@@ -123,7 +123,7 @@ class NotificationService:
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("通知")
-        await self.session.commit()
+        await self.session.flush()
         return {"id": notification_id}
 
     async def get_unread_count(self, user_id: int, tenant_id: int = 0) -> int:
@@ -170,7 +170,7 @@ class NotificationService:
         self.session.add(reminder)
         await self.session.flush()
         await self.session.refresh(reminder)
-        await self.session.commit()
+        await self.session.flush()
         return reminder
 
     async def cancel_reminder(self, reminder_id: int, tenant_id: int = 0) -> dict:
@@ -185,7 +185,7 @@ class NotificationService:
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("提醒")
-        await self.session.commit()
+        await self.session.flush()
         return {"id": reminder_id}
 
     async def get_reminders(

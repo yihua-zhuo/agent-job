@@ -96,7 +96,7 @@ class SalesService:
                 )
             )
         await self.session.flush()
-        await self.session.commit()
+        await self.session.flush()
         return await self._pipeline_to_dict(pipeline)
 
     async def list_pipelines(self, tenant_id: int = 0) -> dict:
@@ -196,7 +196,7 @@ class SalesService:
         self.session.add(opp)
         await self.session.flush()
         await self.session.refresh(opp)
-        await self.session.commit()
+        await self.session.flush()
         return _opp_to_dict(opp)
 
     async def list_opportunities(
@@ -274,7 +274,7 @@ class SalesService:
         await self.session.execute(
             update(OpportunityModel).where(OpportunityModel.id == opp_id).values(**update_values)
         )
-        await self.session.commit()
+        await self.session.flush()
 
         refreshed = await self._fetch_opportunity(tenant_id, opp_id)
         return _opp_to_dict(refreshed)
@@ -290,7 +290,7 @@ class SalesService:
             .where(and_(OpportunityModel.id == opp_id, OpportunityModel.tenant_id == tenant_id))
             .values(stage=stage, updated_at=datetime.now(UTC))
         )
-        await self.session.commit()
+        await self.session.flush()
         refreshed = await self._fetch_opportunity(tenant_id, opp_id)
         return refreshed
 

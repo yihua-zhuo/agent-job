@@ -159,7 +159,7 @@ class ReportService:
             existing.schedule = schedule
             existing.active = True
             existing.updated_at = datetime.now(UTC)
-            await self.session.commit()
+            await self.session.flush()
             await self.session.refresh(existing)
             return existing
 
@@ -174,5 +174,5 @@ class ReportService:
         self.session.add(entry)
         await self.session.flush()
         await self.session.refresh(entry)
-        await self.session.commit()
+        await self.session.flush()
         return entry

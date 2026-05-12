@@ -42,7 +42,7 @@ class TaskService:
         self.session.add(task)
         await self.session.flush()
         await self.session.refresh(task)
-        await self.session.commit()
+        await self.session.flush()
         return task
 
     async def _fetch(self, task_id: int, tenant_id: int) -> TaskModel | None:
@@ -80,7 +80,7 @@ class TaskService:
             .where(and_(TaskModel.id == task_id, TaskModel.tenant_id == tenant_id))
             .values(**update_values)
         )
-        await self.session.commit()
+        await self.session.flush()
 
         refreshed = await self._fetch(task_id, tenant_id)
         return refreshed
@@ -95,7 +95,7 @@ class TaskService:
             .where(and_(TaskModel.id == task_id, TaskModel.tenant_id == tenant_id))
             .values(status="completed", completed_at=now, updated_at=now)
         )
-        await self.session.commit()
+        await self.session.flush()
         refreshed = await self._fetch(task_id, tenant_id)
         return refreshed
 
@@ -106,7 +106,7 @@ class TaskService:
         await self.session.execute(
             delete(TaskModel).where(and_(TaskModel.id == task_id, TaskModel.tenant_id == tenant_id))
         )
-        await self.session.commit()
+        await self.session.flush()
         return task
 
     async def list_tasks(
