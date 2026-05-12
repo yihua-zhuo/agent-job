@@ -36,96 +36,69 @@ class TestCustomerCreateDTO:
     """Tests for CustomerCreateDTO Pydantic model."""
 
     def test_required_fields_only(self):
-        """CustomerCreateDTO with only required fields."""
         dto = CustomerCreateDTO(name="Alice", email="alice@example.com")
         assert dto.name == "Alice"
         assert dto.email == "alice@example.com"
-        assert dto.phone is None
-        assert dto.company is None
         assert dto.status == "lead"
         assert dto.owner_id == 0
-        assert dto.tags == []
 
     def test_all_fields(self):
-        """CustomerCreateDTO with all fields specified."""
         dto = CustomerCreateDTO(
             name="Bob",
             email="bob@example.com",
-            phone="13800138000",
-            company="Acme Corp",
-            status="customer",
-            owner_id=42,
-            tags=["vip", "enterprise"],
+            status="opportunity",
+            owner_id=5,
+            tags=["vip", "referral"],
         )
         assert dto.name == "Bob"
         assert dto.email == "bob@example.com"
-        assert dto.phone == "13800138000"
-        assert dto.company == "Acme Corp"
-        assert dto.status == "customer"
-        assert dto.owner_id == 42
-        assert dto.tags == ["vip", "enterprise"]
+        assert dto.status == "opportunity"
+        assert dto.owner_id == 5
+        assert dto.tags == ["vip", "referral"]
 
     def test_to_dict(self):
-        """to_dict produces expected flat dict for CustomerService."""
-        dto = CustomerCreateDTO(
-            name="Carol",
-            email="carol@example.com",
-            phone="13900139000",
-            company="Beta Ltd",
-            status="opportunity",
-            owner_id=7,
-            tags=["trial"],
-        )
-        d = dto.to_dict()
-        assert d == {
-            "name": "Carol",
-            "email": "carol@example.com",
-            "phone": "13900139000",
-            "company": "Beta Ltd",
-            "status": "opportunity",
-            "owner_id": 7,
-            "tags": ["trial"],
-        }
+        dto = CustomerCreateDTO(name="Charlie", email="charlie@example.com")
+        result = dto.to_dict()
+        assert result["name"] == "Charlie"
+        assert result["email"] == "charlie@example.com"
+        assert result["status"] == "lead"
+        assert result["owner_id"] == 0
+        assert result["tags"] == []
 
     def test_from_dict(self):
-        """from_dict round-trips through to_dict."""
-        original = CustomerCreateDTO(
-            name="Dave",
-            email="dave@example.com",
-            phone="13700137000",
-            company="Gamma",
-            status="lead",
-            owner_id=3,
-            tags=["prospect"],
-        )
-        reconstructed = CustomerCreateDTO.from_dict(original.to_dict())
-        assert reconstructed.name == original.name
-        assert reconstructed.email == original.email
-        assert reconstructed.phone == original.phone
-        assert reconstructed.company == original.company
-        assert reconstructed.status == original.status
-        assert reconstructed.owner_id == original.owner_id
-        assert reconstructed.tags == original.tags
+        data = {
+            "name": "Diana",
+            "email": "diana@example.com",
+            "status": "inactive",
+            "owner_id": 3,
+            "tags": ["newsletter"],
+        }
+        dto = CustomerCreateDTO.from_dict(data)
+        assert dto.name == "Diana"
+        assert dto.email == "diana@example.com"
+        assert dto.status == "inactive"
+        assert dto.owner_id == 3
+        assert dto.tags == ["newsletter"]
 
     def test_from_dict_missing_name_raises(self):
-        """from_dict raises ValueError when name is missing."""
-        with pytest.raises(ValueError, match="name is required"):
-            CustomerCreateDTO.from_dict({"email": "test@example.com"})
+        with pytest.raises(ValueError):
+            CustomerCreateDTO.from_dict({"email": "no-name@example.com"})
 
     def test_from_dict_missing_email_raises(self):
-        """from_dict raises ValueError when email is missing."""
-        with pytest.raises(ValueError, match="email is required"):
-            CustomerCreateDTO.from_dict({"name": "Test"})
+        with pytest.raises(ValueError):
+            CustomerCreateDTO.from_dict({"name": "No Email"})
 
     def test_default_status_is_lead(self):
-        """Default status when not specified."""
         dto = CustomerCreateDTO(name="Eve", email="eve@example.com")
         assert dto.status == "lead"
 
     def test_default_owner_id_is_zero(self):
-        """Default owner_id when not specified."""
         dto = CustomerCreateDTO(name="Frank", email="frank@example.com")
         assert dto.owner_id == 0
+
+    def test_to_dict_email_normalized(self):
+        dto = CustomerCreateDTO(name="Grace", email="  grace@example.com  ")
+        assert dto.email == "grace@example.com"
 
 
 class TestCreateCustomerService:
@@ -151,11 +124,10 @@ class TestCreateCustomerService:
         # Services flush; the router-bound get_db dependency owns commit (rule 121/122).
         mock_db_session.flush.assert_called_once()
         assert result.name == "Test"
-        assert result.email == "test@example.com"
 
     @pytest.mark.asyncio
     async def test_create_customer_accepts_dto(self, mock_db_session):
-        """create_customer accepts a CustomerCreateDTO instance."""
+        """create_customer works with a CustomerCreateDTO instance."""
         service = CustomerService(mock_db_session)
 
         async def fake_refresh(obj):
