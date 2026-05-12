@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
@@ -142,7 +142,7 @@ class CustomerService:
             .where(CustomerModel.tenant_id == tenant_id)
             .group_by(CustomerModel.status)
         )
-        return {row[0]: row[1] for row in await result.all()}
+        return {row[0]: row[1] for row in result.all()}
 
     async def search_customers(self, keyword: str, tenant_id: int) -> list[CustomerModel]:
         """Search customers by name or email (case-insensitive)."""
