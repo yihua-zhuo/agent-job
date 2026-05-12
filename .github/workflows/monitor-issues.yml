@@ -2,7 +2,10 @@ name: Monitor · Open Issues
 
 on:
   schedule:
-    - cron: '*/10 * * * *'
+    # Offset by 3 minutes to avoid the heavily-contended :00/:10/:20/...
+    # slots on GitHub's scheduler — runs at minutes 3, 13, 23, 33, 43, 53.
+    # GitHub silently drops ticks at the top-of-hour slots under load.
+    - cron: '3-59/10 * * * *'
   workflow_dispatch:
 
 # Prevent overlapping runs if a previous tick is still processing issues —
