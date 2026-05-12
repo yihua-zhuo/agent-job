@@ -5,8 +5,9 @@ Reads the plan written by claim_and_plan_issue.py and invokes Claude Code
 with full Bash/Edit/Read/Write tools to implement it. Claude is required
 to run unit tests AND integration tests AND ruff before declaring done.
 
-Does NOT commit — the surrounding workflow handles git operations after
-running its own gating test pass.
+Does NOT commit — the surrounding workflow handles git operations. There
+is no separate test gate after this step; Claude owns the test pass, and
+PR-time CI (ci.yml) re-verifies independently before merge.
 """
 
 import os
