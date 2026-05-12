@@ -135,34 +135,49 @@ def extract_json(text: str) -> dict[str, Any] | None:
 def call_claude(prompt: str) -> tuple[dict[str, Any] | None, str]:
     model = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
     timeout = int(os.environ.get("CLAUDE_TIMEOUT_SECONDS", "300"))
+    max_attempts = max(1, int(os.environ.get("CLAUDE_MAX_ATTEMPTS", "2")))
     cmd = [
         "claude",
         "-p",
         "--model", model,
-        "--max-turns", "5",
+        "--max-turns", "15",
         "--output-format", "json",
     ]
-    try:
-        result = subprocess.run(
-            cmd,
-            input=prompt,
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        return None, "claude_timed_out"
-    except OSError as e:
-        return None, f"claude_not_runnable: {e}"
 
-    if result.returncode != 0:
-        return None, f"claude_rc={result.returncode} stderr={result.stderr.strip()[:200]}"
+    last_err = ""
+    for attempt in range(1, max_attempts + 1):
+        try:
+            result = subprocess.run(
+                cmd,
+                input=prompt,
+                capture_output=True,
+                text=True,
+                check=False,
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired:
+            return None, "claude_timed_out"
+        except OSError as e:
+            return None, f"claude_not_runnable: {e}"
 
-    parsed = extract_json(result.stdout or "")
-    if not isinstance(parsed, dict) or "valid" not in parsed:
-        return None, "parse_failed"
-    return parsed, ""
+        if result.returncode != 0:
+            stdout_tail = (result.stdout or "").strip()[-300:]
+            stderr_tail = (result.stderr or "").strip()[-200:]
+            last_err = (
+                f"claude_rc={result.returncode} stderr={stderr_tail!r} "
+                f"stdout_tail={stdout_tail!r}"
+            )
+        else:
+            parsed = extract_json(result.stdout or "")
+            if isinstance(parsed, dict) and "valid" in parsed:
+                return parsed, ""
+            stdout_head = (result.stdout or "").strip()[:300]
+            last_err = f"parse_failed stdout_head={stdout_head!r}"
+
+        if attempt < max_attempts:
+            log(f"claude_retry attempt={attempt}/{max_attempts} err={last_err}")
+
+    return None, last_err
 
 
 def comment_and_label(number: int, body: str, label: str) -> bool:

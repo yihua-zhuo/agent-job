@@ -57,6 +57,22 @@ def list_ready_issues() -> list[dict[str, Any]]:
         return []
 
 
+def fetch_issue(number: int) -> dict[str, Any] | None:
+    r = run_gh(
+        [
+            "issue", "view", str(number),
+            "--json", "number,title,body,labels,state",
+        ]
+    )
+    if r.returncode != 0:
+        log(f"fetch_failed issue=#{number} stderr={r.stderr.strip()}")
+        return None
+    try:
+        return json.loads(r.stdout or "{}")
+    except json.JSONDecodeError:
+        return None
+
+
 def has_label(issue: dict[str, Any], name: str) -> bool:
     return any((lbl.get("name") or "") == name for lbl in (issue.get("labels") or []))
 
@@ -177,23 +193,54 @@ def write_outputs(**kwargs: str) -> None:
             f.write(f"{k}={v}\n")
 
 
-def main() -> int:
-    ensure_label()
+def select_issue() -> dict[str, Any] | None:
+    # workflow_dispatch can target a specific issue via ISSUE_NUMBER. Validate
+    # it's open, ready, and not already claimed before we proceed.
+    targeted = (os.environ.get("ISSUE_NUMBER") or "").strip()
+    if targeted:
+        try:
+            n = int(targeted)
+        except ValueError:
+            log(f"invalid_issue_number env_value={targeted!r}")
+            return None
+        issue = fetch_issue(n)
+        if not issue:
+            return None
+        if (issue.get("state") or "").lower() != "open":
+            log(f"targeted_issue_not_open issue=#{n} state={issue.get('state')!r}")
+            return None
+        if not has_label(issue, LABEL_READY):
+            log(f"targeted_issue_not_ready issue=#{n}")
+            return None
+        if has_label(issue, LABEL_WIP):
+            log(f"targeted_issue_already_wip issue=#{n}")
+            return None
+        log(f"selected_targeted issue=#{n}")
+        return issue
+
     issues = list_ready_issues()
     log(f"ready_issues_total={len(issues)}")
 
-    # Skip anything already claimed.
     candidates = [i for i in issues if not has_label(i, LABEL_WIP)]
     log(f"candidates_after_filter={len(candidates)}")
 
     if not candidates:
         log("nothing_to_do")
-        write_outputs(issue_number="", plan_path="", branch="")
-        return 0
+        return None
 
     # gh issue list default sort is newest-first. Process oldest first (FIFO)
     # so issues don't starve waiting for a slot.
-    issue = candidates[-1]
+    return candidates[-1]
+
+
+def main() -> int:
+    ensure_label()
+
+    issue = select_issue()
+    if issue is None:
+        write_outputs(issue_number="", plan_path="", branch="")
+        return 0
+
     number = issue["number"]
     title = issue.get("title") or ""
     log(f"selected issue=#{number} title={title!r}")
