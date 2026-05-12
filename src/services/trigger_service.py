@@ -1,7 +1,7 @@
 """自动化触发器"""
 
 from models.marketing import TriggerType
-from pkg.errors.app_exceptions import NotFoundException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 class TriggerService:
@@ -51,9 +51,15 @@ class TriggerService:
         if campaign.trigger_type is None:
             return {"success": False, "message": "No trigger configured"}
 
-        trigger_enum = (
-            TriggerType(campaign.trigger_type) if isinstance(campaign.trigger_type, str) else campaign.trigger_type
-        )
+        try:
+            if isinstance(campaign.trigger_type, TriggerType):
+                trigger_enum = campaign.trigger_type
+            elif isinstance(campaign.trigger_type, (str, int)):
+                trigger_enum = TriggerType(campaign.trigger_type)
+            else:
+                raise TypeError(f"unsupported trigger_type type: {type(campaign.trigger_type).__name__}")
+        except (TypeError, ValueError) as exc:
+            raise ValidationException(f"Invalid campaign trigger_type: {campaign.trigger_type}") from exc
         trigger_name = self.TRIGGERS.get(trigger_enum, "未知触发")
         sent_count = 0
 
@@ -70,9 +76,7 @@ class TriggerService:
         return {
             "success": True,
             "campaign_id": campaign_id,
-            "trigger_type": campaign.trigger_type
-            if isinstance(campaign.trigger_type, str)
-            else campaign.trigger_type.value,
+            "trigger_type": trigger_enum.value,
             "trigger_name": trigger_name,
             "target_customer_count": len(customer_ids),
             "sent_count": sent_count,

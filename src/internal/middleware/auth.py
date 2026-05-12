@@ -6,10 +6,12 @@ from functools import wraps
 import jwt
 from flask import g, request
 
-from ..pkg.errors import AppError, ErrorCode
+from pkg.errors.errors import AppError, ErrorCode
 
 # 配置（建议从 config.yaml 加载）
-JWT_SECRET = os.environ.get("JWT_SECRET", "your-secret-key")
+JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET")
+if not JWT_SECRET:
+    raise RuntimeError("JWT_SECRET_KEY or JWT_SECRET environment variable is required")
 JWT_ALGORITHM = "HS256"
 
 

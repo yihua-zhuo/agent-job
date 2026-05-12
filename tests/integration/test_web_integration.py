@@ -459,13 +459,24 @@ class TestTicketEndpoints:
             },
         )
         ticket_id = create_resp.json()["data"]["id"]
+        user_resp = await api_client.post(
+            "/api/v1/users",
+            json={
+                "username": f"assignee_{suffix}",
+                "email": f"assignee-{suffix}@e.com",
+                "password": "TestPass123!",
+            },
+        )
+        assert user_resp.status_code == 201, f"Body: {user_resp.text}"
+        assert user_resp.json().get("data")
+        assignee_id = user_resp.json()["data"]["id"]
 
         resp = await api_client.put(
             f"/api/v1/tickets/{ticket_id}/assign",
-            json={"assignee_id": 1},
+            json={"assignee_id": assignee_id},
         )
-        # xfail: router bug — resp.data is ORM Ticket object, not dict
-        assert resp.status_code in (200, 500), f"Body: {resp.text}"
+        assert resp.status_code == 200, f"Body: {resp.text}"
+        assert resp.json()["data"]["assigned_to"] == assignee_id
 
     async def test_add_reply(
         self, api_client: AsyncClient, tenant_id_web: int
@@ -1054,7 +1065,7 @@ class TestEdgeCases:
     async def test_assign_ticket_to_nonexistent_user(
         self, api_client: AsyncClient, tenant_id_web: int
     ):
-        """assign_ticket does not verify the user exists — the id is stored as-is."""
+        """assign_ticket rejects missing users."""
         suffix = uuid.uuid4().hex[:6]
         customer_resp = await api_client.post(
             "/api/v1/customers",
@@ -1077,9 +1088,7 @@ class TestEdgeCases:
             f"/api/v1/tickets/{tid}/assign",
             json={"assignee_id": 999999999},
         )
-        # Service doesn't validate user existence; accepts the id as-is.
-        assert resp.status_code == 200
-        assert resp.json()["data"]["assigned_to"] == 999999999
+        assert resp.status_code == 404
 
     async def test_reply_to_nonexistent_ticket(
         self, api_client: AsyncClient
@@ -1368,7 +1377,7 @@ class TestEdgeCases:
     async def test_change_opportunity_stage_to_arbitrary_string(
         self, api_client: AsyncClient, tenant_id_web: int
     ):
-        """change_stage does not validate against pipeline stages — any string is accepted."""
+        """change_stage rejects stages outside the opportunity pipeline."""
         suffix = uuid.uuid4().hex[:6]
         customer_resp = await api_client.post(
             "/api/v1/customers",
@@ -1400,10 +1409,9 @@ class TestEdgeCases:
 
         resp = await api_client.put(
             f"/api/v1/sales/opportunities/{oid}/stage",
-            json={"stage": "Zeta"},  # not in Alpha, Beta — currently still accepted
+            json={"stage": "Zeta"},
         )
-        assert resp.status_code == 200
-        assert resp.json()["data"]["stage"] == "Zeta"
+        assert resp.status_code == 422
 
     async def test_list_opportunities_for_nonexistent_pipeline(
         self, api_client: AsyncClient
@@ -1830,4 +1838,3 @@ class TestEdgeCases:
         resp = await client.get("/health")
         # May be 404 if not configured, but not 401
         assert resp.status_code in (200, 404), f"Body: {resp.text}"
-

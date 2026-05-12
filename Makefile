@@ -48,7 +48,7 @@ db-down: ## Stop the docker test-db container
 	$(COMPOSE) down
 
 db-shell: ## Open a psql shell against the test-db
-	docker exec -it configs-test-db-1 psql -U test_user -d test_db
+	$(COMPOSE) exec test-db psql -U test_user -d test_db
 
 # ── Alembic ────────────────────────────────────────────────────────────────
 migrate: ## Apply all alembic migrations to the test-db

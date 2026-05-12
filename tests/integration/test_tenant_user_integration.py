@@ -167,7 +167,7 @@ class TestUserServiceIntegration:
             tenant_id=tenant_id,
         )
 
-        fetched = await user_svc.get_user_by_username(f"un_{suffix}")
+        fetched = await user_svc.get_user_by_username(tenant_id, f"un_{suffix}")
         assert fetched is not None
         assert fetched.username == f"un_{suffix}"
 

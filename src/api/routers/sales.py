@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from services.sales_service import SalesService
+from services.sales_service import SalesService, _opp_to_dict
 
 sales_router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
 
@@ -27,6 +27,12 @@ def _paginated(items, total, page, page_size):
             "total_pages": total_pages,
         },
     }
+
+
+def _serialize_opportunity(opportunity):
+    if isinstance(opportunity, dict):
+        return opportunity
+    return _opp_to_dict(opportunity)
 
 
 # ---------------------------------------------------------------------------
@@ -213,8 +219,8 @@ async def change_stage(
     session: AsyncSession = Depends(get_db),
 ):
     service = SalesService(session)
-    data = await service.change_stage(ctx.tenant_id, opp_id, body.stage)
-    return {"success": True, "data": data, "message": "阶段变更成功"}
+    opportunity = await service.change_stage(ctx.tenant_id, opp_id, body.stage)
+    return {"success": True, "data": _serialize_opportunity(opportunity), "message": "阶段变更成功"}
 
 
 @sales_router.get("/forecast")

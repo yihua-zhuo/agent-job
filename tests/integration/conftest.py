@@ -354,7 +354,7 @@ async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
     )
     await async_session.commit()
     # Retrieve the actual DB-assigned user id (not hardcoded 999).
-    created_user = await user_svc.get_user_by_username("webtest")
+    created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
     actual_user_id = created_user.id if created_user else 999
 
     auth_svc = AuthService(async_session, secret_key="integration-test-jwt-secret-key")

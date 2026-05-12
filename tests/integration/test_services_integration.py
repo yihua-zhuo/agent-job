@@ -14,6 +14,7 @@ import uuid
 import pytest
 
 from models.marketing import CampaignType, TriggerType
+from pkg.errors.app_exceptions import NotFoundException
 from services.activity_service import ActivityService
 from services.customer_service import CustomerService
 from services.marketing_service import MarketingService
@@ -250,13 +251,13 @@ class TestTaskIntegration:
             due_date=date(2026, 12, 31),
             tenant_id=tenant_id,
         )
-        task = result["data"]
-        assert task["title"] == "Review PR #42"
-        assert task["status"] == "pending"
-        assert task["priority"] == "high"
+        task = result
+        assert task.title == "Review PR #42"
+        assert task.status == "pending"
+        assert task.priority == "high"
 
-        fetched = await svc.get_task(task["id"])
-        assert fetched["data"]["title"] == "Review PR #42"
+        fetched = await svc.get_task(tenant_id, task.id)
+        assert fetched.title == "Review PR #42"
 
     async def test_update_and_complete_task(self, db_schema, tenant_id, async_session):
         svc = TaskService(async_session)
@@ -268,14 +269,14 @@ class TestTaskIntegration:
             priority="low",
             tenant_id=tenant_id,
         )
-        tid = created["data"]["id"]
+        tid = created.id
 
-        updated = await svc.update_task(tid, title="Updated Task", priority="high")
-        assert updated["data"]["title"] == "Updated Task"
-        assert updated["data"]["priority"] == "high"
+        updated = await svc.update_task(tenant_id, tid, title="Updated Task", priority="high")
+        assert updated.title == "Updated Task"
+        assert updated.priority == "high"
 
-        completed = await svc.complete_task(tid)
-        assert completed["data"]["status"] == "completed"
+        completed = await svc.complete_task(tenant_id, tid)
+        assert completed.status == "completed"
 
     async def test_delete_task(self, db_schema, tenant_id, async_session):
         svc = TaskService(async_session)
@@ -286,11 +287,11 @@ class TestTaskIntegration:
             assigned_to=uid,
             tenant_id=tenant_id,
         )
-        tid = created["data"]["id"]
+        tid = created.id
 
-        await svc.delete_task(tid)
-        fetched = await svc.get_task(tid)
-        assert fetched["data"] is None
+        await svc.delete_task(tenant_id, tid)
+        with pytest.raises(NotFoundException):
+            await svc.get_task(tenant_id, tid)
 
     async def test_list_tasks(self, db_schema, tenant_id, async_session):
         svc = TaskService(async_session)
@@ -309,8 +310,8 @@ class TestTaskIntegration:
             tenant_id=tenant_id,
         )
 
-        result = await svc.list_tasks()
-        titles = [t["title"] for t in result["data"]["items"]]
+        result = await svc.list_tasks(tenant_id)
+        titles = [t.title for t in result]
         assert any(f"List Task 1 {suffix}" in t for t in titles)
         assert any(f"List Task 2 {suffix}" in t for t in titles)
 

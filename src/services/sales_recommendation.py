@@ -16,6 +16,28 @@ class ProductRecommendation:
     product_name: str
     score: float
     reason: str
+    price_increase: int | None = None
+
+
+@dataclass
+class SalesActionRecommendation:
+    """下一步销售行动推荐"""
+
+    action: str
+    target: str
+    reason: str
+    confidence: float
+
+
+@dataclass
+class SimilarCustomer:
+    """相似客户摘要"""
+
+    customer_id: int
+    current_tier: str
+    monthly_revenue: int
+    usage_rate: float
+    satisfaction_score: float
 
 
 class SalesRecommendationService:
@@ -41,11 +63,11 @@ class SalesRecommendationService:
         """初始化服务"""
         self._customer_cache: dict[int, dict] = {}
 
-    def _get_mock_customer_data(self, customer_id: int) -> dict:
+    def _get_mock_customer_data(self, tenant_id: int, customer_id: int) -> dict:
         """获取模拟客户数据"""
         import hashlib
 
-        seed = int(hashlib.md5(str(customer_id).encode()).hexdigest()[:8], 16)
+        seed = int(hashlib.sha256(f"{tenant_id}:{customer_id}".encode()).hexdigest()[:8], 16)
 
         tier_index = seed % 4
         tiers = list(self.PRODUCTS.keys())
@@ -61,21 +83,23 @@ class SalesRecommendationService:
             "satisfaction_score": (seed % 100) / 100.0,
         }
 
-    def _get_similar_customers_by_tier(self, tier: str, limit: int = 5) -> list[int]:
+    def _get_similar_customers_by_tier(self, tenant_id: int, tier: str, limit: int = 5) -> list[int]:
         """基于层级获取相似客户ID"""
         random.seed(42)  # 固定随机种子保证一致性
         tier_index = list(self.PRODUCTS.keys()).index(tier)
         similar = [
-            i for i in range(1, 1000) if int(hashlib.md5(str(i).encode()).hexdigest()[:8], 16) % 4 == tier_index
+            i
+            for i in range(1, 1000)
+            if int(hashlib.sha256(f"{tenant_id}:{i}".encode()).hexdigest()[:8], 16) % 4 == tier_index
         ][:limit]
         random.seed()  # 重置随机种子
         return similar
 
-    def get_next_best_action(self, customer_id: int) -> dict:
+    def get_next_best_action(self, tenant_id: int, customer_id: int) -> SalesActionRecommendation:
         """
         获取最佳下一步行动
         """
-        data = self._get_mock_customer_data(customer_id)
+        data = self._get_mock_customer_data(tenant_id, customer_id)
         current_tier = data["current_tier"]
         usage_rate = data["usage_rate"]
         satisfaction = data["satisfaction_score"]
@@ -102,14 +126,19 @@ class SalesRecommendationService:
             target = current_tier
             reason = "保持当前状态"
 
-        return {"action": action, "target": target, "reason": reason, "confidence": round(random.uniform(0.6, 0.95), 2)}
+        return SalesActionRecommendation(
+            action=action,
+            target=target,
+            reason=reason,
+            confidence=round(random.uniform(0.6, 0.95), 2),  # noqa: S311 - non-security recommendation scoring
+        )
 
-    def recommend_cross_sell(self, customer_id: int) -> list[dict]:
+    def recommend_cross_sell(self, tenant_id: int, customer_id: int) -> list[ProductRecommendation]:
         """
         推荐交叉销售产品
         基于：购买历史、浏览历史、相似客户
         """
-        data = self._get_mock_customer_data(customer_id)
+        data = self._get_mock_customer_data(tenant_id, customer_id)
         current_tier = data["current_tier"]
 
         # 获取推荐产品
@@ -127,9 +156,9 @@ class SalesRecommendationService:
                     browsing_scores[related] = browsing_scores.get(related, 0) + 0.2
 
         # 3. 基于相似客户的推荐
-        similar_customers = self._get_similar_customers_by_tier(current_tier, limit=10)
+        similar_customers = self._get_similar_customers_by_tier(tenant_id, current_tier, limit=10)
         for sim_cid in similar_customers:
-            sim_data = self._get_mock_customer_data(sim_cid)
+            sim_data = self._get_mock_customer_data(tenant_id, sim_cid)
             for product in sim_data["purchase_history"]:
                 if product != current_tier:
                     browsing_scores[product] = browsing_scores.get(product, 0) + 0.15
@@ -139,19 +168,18 @@ class SalesRecommendationService:
             if product_id != current_tier and score > 0:
                 product_info = self.PRODUCTS[product_id]
                 recommendations.append(
-                    {
-                        "product_id": product_id,
-                        "product_name": product_info["name"],
-                        "score": round(min(score, 1.0), 2),
-                        "reason": self._get_cross_sell_reason(product_id, data),
-                    }
+                    ProductRecommendation(
+                        product_id=product_id,
+                        product_name=product_info["name"],
+                        score=round(min(score, 1.0), 2),
+                        reason=self._get_cross_sell_reason(product_id, data),
+                    )
                 )
 
         return recommendations[:5]  # 最多返回5个推荐
 
     def _get_cross_sell_reason(self, product_id: str, data: dict) -> str:
         """生成推荐理由"""
-        product_info = self.PRODUCTS[product_id]
         reasons = []
 
         if product_id in data["browsing_history"]:
@@ -162,12 +190,12 @@ class SalesRecommendationService:
 
         return "; ".join(reasons) if reasons else "提升用户体验"
 
-    def recommend_up_sell(self, customer_id: int) -> list[dict]:
+    def recommend_up_sell(self, tenant_id: int, customer_id: int) -> list[ProductRecommendation]:
         """
         推荐升级销售
         基于：当前套餐、使用量
         """
-        data = self._get_mock_customer_data(customer_id)
+        data = self._get_mock_customer_data(tenant_id, customer_id)
         current_tier = data["current_tier"]
         usage_rate = data["usage_rate"]
 
@@ -182,38 +210,38 @@ class SalesRecommendationService:
             score = usage_rate * 0.7 + data["satisfaction_score"] * 0.3
 
             recommendations.append(
-                {
-                    "product_id": next_tier,
-                    "product_name": next_product["name"],
-                    "score": round(min(score, 1.0), 2),
-                    "reason": f"使用率 {int(usage_rate * 100)}%，推荐升级到{next_product['name']}",
-                    "price_increase": next_product["price"] - self.PRODUCTS[current_tier]["price"],
-                }
+                ProductRecommendation(
+                    product_id=next_tier,
+                    product_name=next_product["name"],
+                    score=round(min(score, 1.0), 2),
+                    reason=f"使用率 {int(usage_rate * 100)}%，推荐升级到{next_product['name']}",
+                    price_increase=next_product["price"] - self.PRODUCTS[current_tier]["price"],
+                )
             )
 
         return recommendations
 
-    def get_similar_customers(self, customer_id: int, limit: int = 5) -> list[dict]:
+    def get_similar_customers(self, tenant_id: int, customer_id: int, limit: int = 5) -> list[SimilarCustomer]:
         """
         获取相似客户
         用于：成功案例推荐
         """
-        data = self._get_mock_customer_data(customer_id)
+        data = self._get_mock_customer_data(tenant_id, customer_id)
         current_tier = data["current_tier"]
 
-        similar_ids = self._get_similar_customers_by_tier(current_tier, limit)
+        similar_ids = self._get_similar_customers_by_tier(tenant_id, current_tier, limit)
 
         similar_customers = []
         for cid in similar_ids:
-            cid_data = self._get_mock_customer_data(cid)
+            cid_data = self._get_mock_customer_data(tenant_id, cid)
             similar_customers.append(
-                {
-                    "customer_id": cid,
-                    "current_tier": cid_data["current_tier"],
-                    "monthly_revenue": cid_data["monthly_revenue"],
-                    "usage_rate": cid_data["usage_rate"],
-                    "satisfaction_score": cid_data["satisfaction_score"],
-                }
+                SimilarCustomer(
+                    customer_id=cid,
+                    current_tier=cid_data["current_tier"],
+                    monthly_revenue=cid_data["monthly_revenue"],
+                    usage_rate=cid_data["usage_rate"],
+                    satisfaction_score=cid_data["satisfaction_score"],
+                )
             )
 
         return similar_customers
@@ -225,7 +253,7 @@ class SalesRecommendationService:
         """
         import hashlib
 
-        seed = int(hashlib.md5(str(opportunity_id).encode()).hexdigest()[:8], 16)
+        seed = int(hashlib.sha256(str(opportunity_id).encode()).hexdigest()[:8], 16)
 
         # 基础概率 (历史数据)
         base_prob = 0.3 + (seed % 50) / 100.0

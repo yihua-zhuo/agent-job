@@ -1,19 +1,19 @@
 """Unit tests for src/api/routers/tickets.py — /api/v1/tickets and /api/v1/sla endpoints."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI
 
-from models.ticket import TicketStatus, TicketPriority, TicketChannel, SLALevel
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
 from api.routers.tickets import tickets_router
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext
+from models.ticket import SLALevel, TicketChannel, TicketPriority, TicketStatus
 from pkg.errors.app_exceptions import (
     AppException,
     NotFoundException,
     ValidationException,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -109,12 +109,15 @@ REPLY_ROW = {
 
 @pytest.fixture
 def client_with_service(monkeypatch):
-    from internal.middleware.fastapi_auth import require_auth
     from starlette.requests import Request
     from starlette.responses import JSONResponse
 
+    from internal.middleware.fastapi_auth import require_auth
+
     mock_service = MagicMock()
     mock_sla_service = MagicMock()
+    mock_user_service = MagicMock()
+    mock_user_service.get_user_by_id = AsyncMock(return_value=object())
 
     monkeypatch.setattr(
         "api.routers.tickets.TicketService",
@@ -123,6 +126,10 @@ def client_with_service(monkeypatch):
     monkeypatch.setattr(
         "api.routers.tickets.SLAService",
         lambda session, ticket_service=None: mock_sla_service,
+    )
+    monkeypatch.setattr(
+        "api.routers.tickets.UserService",
+        lambda session: mock_user_service,
     )
 
     app = FastAPI()

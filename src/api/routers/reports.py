@@ -4,6 +4,8 @@ Services raise AppException on errors (caught by global handler in main.py).
 Router wraps service return values in success envelopes.
 """
 
+import base64
+
 from fastapi import APIRouter, Depends, Path, Query
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
@@ -148,9 +150,7 @@ async def generate_pdf(
         config=req.config,
         date_range=req.date_range,
     )
-    import binascii
-
-    content = binascii.unhexlify(data["content_base64"])
+    content = base64.b64decode(data["content_base64"])
     return Response(
         content=content,
         media_type="application/pdf",
@@ -175,9 +175,7 @@ async def generate_excel(
         config=req.config,
         date_range=req.date_range,
     )
-    import binascii
-
-    content = binascii.unhexlify(data["content_base64"])
+    content = base64.b64decode(data["content_base64"])
     return Response(
         content=content,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -202,9 +200,7 @@ async def export_csv(
         filename=req.filename,
         date_range=req.date_range,
     )
-    import binascii
-
-    content = binascii.unhexlify(data["content_base64"])
+    content = base64.b64decode(data["content_base64"])
     return Response(
         content=content,
         media_type="text/csv",

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from contextlib import contextmanager
 
 from dotenv import load_dotenv
@@ -12,6 +13,8 @@ from sqlalchemy.orm import Session, declarative_base, sessionmaker
 load_dotenv()
 
 _engine = None
+_engine_lock = threading.Lock()
+_session_factory = None
 
 
 def create_engine_from_env():
@@ -30,16 +33,21 @@ def get_engine():
     """Get or create the singleton Engine instance."""
     global _engine
     if _engine is None:
-        _engine = create_engine_from_env()
+        with _engine_lock:
+            if _engine is None:
+                _engine = create_engine_from_env()
     return _engine
 
 
-# Eagerly initialise the engine on module load so SessionLocal binds correctly.
-_engine = create_engine_from_env()
-
-SessionLocal = sessionmaker(bind=_engine, autoflush=False, autocommit=False)
-
 Base = declarative_base()
+
+
+def get_session() -> Session:
+    """Create a Session bound to the lazily initialized Engine."""
+    global _session_factory
+    if _session_factory is None:
+        _session_factory = sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
+    return _session_factory()
 
 
 @contextmanager
@@ -49,7 +57,7 @@ def session_scope():
     Yields a Session. Commits on normal exit, rolls back on exception,
     and always closes the session.
     """
-    session: Session = SessionLocal()
+    session = get_session()
     try:
         yield session
         session.commit()
