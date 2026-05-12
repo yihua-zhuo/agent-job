@@ -123,15 +123,10 @@ jobs:
           PYTHONPATH: src
         run: python3 scripts/ci/execute_implementation.py
 
-      - name: Test gate — unit + integration + lint
-        if: steps.plan.outputs.issue_number != ''
-        env:
-          DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
-          PYTHONPATH: src
-        run: |
-          ruff check src/
-          pytest tests/unit/ -v
-          pytest tests/integration/ -v
+      # Note: no separate test gate here. The execute step instructs Claude to
+      # run ruff + unit + integration tests itself and iterate until green,
+      # and the PR opened below is re-tested by `ci.yml` on pull_request before
+      # it can be merged. A duplicate gate just doubles CI minutes.
 
       - name: Commit changes and open PR
         if: steps.plan.outputs.issue_number != '' && success()
@@ -155,9 +150,9 @@ jobs:
           git commit \
             -m "feat: implement issue #${ISSUE_NUMBER}" \
             -m "Closes #${ISSUE_NUMBER}" \
-            -m "Auto-implemented by Claude Code following ${PLAN_PATH}. All unit and integration tests passed in CI before this commit."
+            -m "Auto-implemented by Claude Code following ${PLAN_PATH}. Claude was instructed to run ruff + unit + integration tests until green before declaring done; PR-time CI re-verifies."
           git push -u origin "$BRANCH"
-          PR_BODY=$(printf 'Closes #%s\n\nPlan: `%s`\n\nThis PR was auto-implemented by Claude Code. The workflow ran `ruff check src/`, the unit test suite, and the integration test suite — all passed before this PR was opened.\n\nPlease review before merging.' "$ISSUE_NUMBER" "$PLAN_PATH")
+          PR_BODY=$(printf 'Closes #%s\n\nPlan: `%s`\n\nThis PR was auto-implemented by Claude Code. Claude was instructed to run `ruff check src/`, the unit test suite, and the integration test suite itself and iterate until all green. PR-time CI (`Dev Agent CI`) re-verifies independently before this PR is mergeable.\n\nPlease review before merging.' "$ISSUE_NUMBER" "$PLAN_PATH")
           gh pr create \
             --title "Auto: implement issue #${ISSUE_NUMBER}" \
             --body "$PR_BODY" \
