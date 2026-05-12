@@ -1,11 +1,13 @@
 """Customer service — CRUD + tagging + status management via SQLAlchemy ORM."""
 
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
+from models.customer_create_dto import CustomerCreateDTO
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
@@ -17,9 +19,29 @@ class CustomerService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_customer(self, data: dict, tenant_id: int = 0) -> CustomerModel:
-        """Insert a customer row."""
-        d = data or {}
+    async def create_customer(
+        self,
+        data: dict[str, Any] | CustomerCreateDTO,
+        tenant_id: int,
+    ) -> CustomerModel:
+        """Insert a customer row.
+
+        Args:
+            data: Either a raw dict or a CustomerCreateDTO instance.
+            tenant_id: Tenant scope for the new customer.
+        """
+        if isinstance(data, CustomerCreateDTO):
+            d = {
+                "name": data.name,
+                "email": data.email,
+                "phone": data.phone,
+                "company": data.company,
+                "status": data.status,
+                "owner_id": data.owner_id,
+                "tags": data.tags,
+            }
+        else:
+            d = data or {}
         now = datetime.now(UTC)
         customer = CustomerModel(
             tenant_id=tenant_id,
@@ -34,19 +56,18 @@ class CustomerService:
             updated_at=now,
         )
         self.session.add(customer)
-        await self.session.flush()
-        await self.session.refresh(customer)
         await self.session.commit()
+        await self.session.refresh(customer)
         return customer
 
     async def list_customers(
         self,
+        tenant_id: int,
         page: int = 1,
         page_size: int = 20,
         status: str | None = None,
         owner_id: int | None = None,
         tags: str | None = None,
-        tenant_id: int = 0,
     ) -> tuple[list[CustomerModel], int]:
         """List customers for tenant with optional filters."""
         conditions = [CustomerModel.tenant_id == tenant_id]
@@ -68,7 +89,7 @@ class CustomerService:
         )
         return result.scalars().all(), total
 
-    async def get_customer(self, customer_id: int, tenant_id: int = 0) -> CustomerModel:
+    async def get_customer(self, customer_id: int, tenant_id: int) -> CustomerModel:
         """Get a customer by id (tenant-scoped)."""
         result = await self.session.execute(
             select(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
@@ -82,7 +103,7 @@ class CustomerService:
         self,
         customer_id: int,
         data: dict,
-        tenant_id: int = 0,
+        tenant_id: int,
     ) -> CustomerModel | None:
         """Update a customer (tenant-scoped)."""
         if "status" in data and data["status"] not in self.VALID_STATUSES:
@@ -104,7 +125,7 @@ class CustomerService:
         await self.session.refresh(customer)
         return customer
 
-    async def delete_customer(self, customer_id: int, tenant_id: int = 0) -> dict:
+    async def delete_customer(self, customer_id: int, tenant_id: int) -> dict:
         """Delete a customer (tenant-scoped)."""
         result = await self.session.execute(
             delete(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
@@ -114,16 +135,16 @@ class CustomerService:
         await self.session.commit()
         return {"id": customer_id}
 
-    async def count_by_status(self, tenant_id: int = 0) -> dict:
+    async def count_by_status(self, tenant_id: int) -> dict:
         """Count customers grouped by status."""
         result = await self.session.execute(
             select(CustomerModel.status, func.count(CustomerModel.id))
             .where(CustomerModel.tenant_id == tenant_id)
             .group_by(CustomerModel.status)
         )
-        return {row[0]: row[1] for row in result.fetchall()}
+        return {row[0]: row[1] for row in await result.all()}
 
-    async def search_customers(self, keyword: str, tenant_id: int = 0) -> list[CustomerModel]:
+    async def search_customers(self, keyword: str, tenant_id: int) -> list[CustomerModel]:
         """Search customers by name or email (case-insensitive)."""
         kw = f"%{keyword}%"
         result = await self.session.execute(
@@ -139,7 +160,7 @@ class CustomerService:
         )
         return result.scalars().all()
 
-    async def add_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> CustomerModel:
+    async def add_tag(self, customer_id: int, tag: str, tenant_id: int) -> CustomerModel:
         """Add a tag to a customer."""
         customer = await self.get_customer(customer_id, tenant_id)
         tags = list(customer.tags or [])
@@ -151,7 +172,7 @@ class CustomerService:
         await self.session.refresh(customer)
         return customer
 
-    async def remove_tag(self, customer_id: int, tag: str, tenant_id: int = 0) -> CustomerModel:
+    async def remove_tag(self, customer_id: int, tag: str, tenant_id: int) -> CustomerModel:
         """Remove a tag from a customer."""
         customer = await self.get_customer(customer_id, tenant_id)
         customer.tags = [t for t in (customer.tags or []) if t != tag]
@@ -164,7 +185,7 @@ class CustomerService:
         self,
         customer_id: int,
         status: str,
-        tenant_id: int = 0,
+        tenant_id: int,
     ) -> CustomerModel:
         """Change a customer's status."""
         if status not in self.VALID_STATUSES:
@@ -180,7 +201,7 @@ class CustomerService:
         self,
         customer_id: int,
         owner_id: int,
-        tenant_id: int = 0,
+        tenant_id: int,
     ) -> CustomerModel:
         """Assign an owner to a customer."""
         customer = await self.get_customer(customer_id, tenant_id)
@@ -190,7 +211,7 @@ class CustomerService:
         await self.session.refresh(customer)
         return customer
 
-    async def bulk_import(self, customers: list[dict], tenant_id: int = 0) -> int:
+    async def bulk_import(self, customers: list[dict], tenant_id: int) -> int:
         """Bulk insert customers, returns imported count."""
         if not customers:
             return 0
