@@ -44,7 +44,6 @@ class NotificationService:
         self.session.add(notification)
         await self.session.flush()
         await self.session.refresh(notification)
-        await self.session.flush()
         return notification
 
     async def get_user_notifications(
@@ -170,7 +169,6 @@ class NotificationService:
         self.session.add(reminder)
         await self.session.flush()
         await self.session.refresh(reminder)
-        await self.session.flush()
         return reminder
 
     async def cancel_reminder(self, reminder_id: int, tenant_id: int = 0) -> dict:

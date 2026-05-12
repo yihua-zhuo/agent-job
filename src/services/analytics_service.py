@@ -42,7 +42,6 @@ class AnalyticsService:
         self.session.add(dashboard)
         await self.session.flush()
         await self.session.refresh(dashboard)
-        await self.session.flush()
         return dashboard
 
     async def get_dashboard(self, dashboard_id: int, tenant_id: int = 0) -> DashboardModel:
@@ -118,7 +117,6 @@ class AnalyticsService:
         self.session.add(report)
         await self.session.flush()
         await self.session.refresh(report)
-        await self.session.flush()
         return report
 
     async def get_report(self, report_id: int, tenant_id: int = 0) -> ReportModel:

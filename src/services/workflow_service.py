@@ -48,7 +48,6 @@ class WorkflowService:
         self.session.add(workflow)
         await self.session.flush()
         await self.session.refresh(workflow)
-        await self.session.flush()
         return workflow
 
     async def get_workflow(self, workflow_id: int, tenant_id: int = 0) -> WorkflowModel:

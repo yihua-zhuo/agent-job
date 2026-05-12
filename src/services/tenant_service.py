@@ -47,7 +47,6 @@ class TenantService:
         self.session.add(tenant)
         await self.session.flush()
         await self.session.refresh(tenant)
-        await self.session.flush()
         return self._to_dict(tenant)
 
     async def _fetch(self, tenant_id: int) -> TenantModel:

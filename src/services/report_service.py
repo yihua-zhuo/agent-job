@@ -174,5 +174,4 @@ class ReportService:
         self.session.add(entry)
         await self.session.flush()
         await self.session.refresh(entry)
-        await self.session.flush()
         return entry

@@ -52,7 +52,6 @@ class MarketingService:
         self.session.add(campaign)
         await self.session.flush()
         await self.session.refresh(campaign)
-        await self.session.flush()
         return campaign
 
     async def get_campaign(self, campaign_id: int, tenant_id: int = 0) -> CampaignModel:

@@ -196,7 +196,6 @@ class SalesService:
         self.session.add(opp)
         await self.session.flush()
         await self.session.refresh(opp)
-        await self.session.flush()
         return _opp_to_dict(opp)
 
     async def list_opportunities(

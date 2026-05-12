@@ -42,7 +42,6 @@ class TaskService:
         self.session.add(task)
         await self.session.flush()
         await self.session.refresh(task)
-        await self.session.flush()
         return task
 
     async def _fetch(self, task_id: int, tenant_id: int) -> TaskModel | None:
