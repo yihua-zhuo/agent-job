@@ -1,7 +1,7 @@
 """Customer model for CRM system."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
@@ -68,25 +68,8 @@ class Customer:
     company: str | None = None
     status: CustomerStatus = CustomerStatus.LEAD
     tags: list[str] = field(default_factory=list)
-    created_at: datetime = field(default_factory=datetime.utcnow)
-    updated_at: datetime = field(default_factory=datetime.utcnow)
-
-    def __post_init__(self) -> None:
-        """Initialize default values after dataclass initialization."""
-        if self.id is None:
-            self.id = None
-        if self.phone is None:
-            self.phone = None
-        if self.company is None:
-            self.company = None
-        if self.status is None:
-            self.status = CustomerStatus.LEAD
-        if not self.tags:
-            self.tags = []
-        if self.created_at is None:
-            self.created_at = datetime.utcnow()
-        if self.updated_at is None:
-            self.updated_at = datetime.utcnow()
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict:
         """Convert customer to dictionary representation."""
@@ -116,13 +99,13 @@ class Customer:
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
-            created_at = datetime.utcnow()
+            created_at = datetime.now(UTC)
 
         updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at)
         elif updated_at is None:
-            updated_at = datetime.utcnow()
+            updated_at = datetime.now(UTC)
 
         return cls(
             id=data.get("id"),

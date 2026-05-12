@@ -134,7 +134,7 @@ class CustomerService:
             .where(CustomerModel.tenant_id == tenant_id)
             .group_by(CustomerModel.status)
         )
-        return {row[0]: row[1] for row in result.fetchall()}
+        return {row[0]: row[1] for row in await result.all()}
 
     async def search_customers(self, keyword: str, tenant_id: int = 0) -> list[CustomerModel]:
         """Search customers by name or email (case-insensitive)."""
