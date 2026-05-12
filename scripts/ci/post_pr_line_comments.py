@@ -74,6 +74,83 @@ def github_api_paged(
     return items
 
 
+def github_graphql(token: str, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+    """POST a GraphQL request to api.github.com/graphql."""
+    body = json.dumps({"query": query, "variables": variables}).encode()
+    request = Request(
+        "https://api.github.com/graphql",
+        data=body,
+        method="POST",
+        headers={
+            "Accept": "application/vnd.github+json",
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json",
+            "X-GitHub-Api-Version": "2022-11-28",
+        },
+    )
+    with urlopen(request, timeout=20) as response:
+        text = response.read().decode()
+    payload = json.loads(text) if text else {}
+    if isinstance(payload, dict) and payload.get("errors"):
+        raise RuntimeError(f"graphql_errors: {payload['errors']}")
+    return payload
+
+
+REVIEW_THREADS_QUERY = """
+query($owner: String!, $repo: String!, $number: Int!, $cursor: String) {
+  repository(owner: $owner, name: $repo) {
+    pullRequest(number: $number) {
+      reviewThreads(first: 100, after: $cursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          isResolved
+          isOutdated
+          path
+          line
+          originalLine
+          comments(first: 5) {
+            nodes { id body }
+          }
+        }
+      }
+    }
+  }
+}
+"""
+
+RESOLVE_THREAD_MUTATION = """
+mutation($threadId: ID!) {
+  resolveReviewThread(input: {threadId: $threadId}) {
+    thread { id isResolved }
+  }
+}
+"""
+
+
+def fetch_review_threads(repo: str, token: str, pr_number: int) -> list[dict[str, Any]]:
+    """Return all review threads on the PR (paginated, includes resolved ones)."""
+    owner, name = repo.split("/", 1)
+    threads: list[dict[str, Any]] = []
+    cursor: str | None = None
+    while True:
+        result = github_graphql(
+            token,
+            REVIEW_THREADS_QUERY,
+            {"owner": owner, "repo": name, "number": pr_number, "cursor": cursor},
+        )
+        page = result["data"]["repository"]["pullRequest"]["reviewThreads"]
+        threads.extend(page["nodes"])
+        if not page["pageInfo"]["hasNextPage"]:
+            break
+        cursor = page["pageInfo"]["endCursor"]
+    return threads
+
+
+def resolve_thread(token: str, thread_id: str) -> None:
+    github_graphql(token, RESOLVE_THREAD_MUTATION, {"threadId": thread_id})
+
+
 def infer_repo(remote: str = "origin") -> str | None:
     try:
         url = subprocess.run(
@@ -268,35 +345,76 @@ def upsert_summary_comment(
         return False
 
 
-def dismiss_previous_inline_comments(
+def reconcile_review_threads(
     repo: str,
     token: str,
     pr_number: int,
-) -> int:
-    """Delete prior inline review comments marked with INLINE_MARKER.
+    current_findings: set[tuple[str, int]],
+) -> set[tuple[str, int]]:
+    """Resolve bot-authored threads that no longer match current findings.
 
-    Paginates through ALL PR review comments — without this, stale inline
-    comments from earlier runs accumulate on every push (the 30-per-page
-    default hides anything that drifted onto page 2+).
+    Returns the set of (path, line) pairs that still have an OPEN bot-authored
+    thread — callers should skip posting duplicates for those.
 
-    Returns the number of comments deleted.
+    A thread is resolved (via GraphQL `resolveReviewThread`) when:
+      - it carries our INLINE_MARKER in any of its comments, AND
+      - it is not already resolved, AND
+      - either it's `isOutdated` (the line was rewritten by a later commit), or
+        its (path, line) is no longer in `current_findings` (issue was fixed).
+
+    Using "resolve" instead of "delete" preserves the review history in the PR
+    UI — the comment stays visible but marked as resolved, so reviewers can
+    trace which findings were addressed.
     """
     try:
-        comments = github_api_paged(repo, token, f"/pulls/{pr_number}/comments")
-    except (HTTPError, URLError, TimeoutError, OSError) as e:
-        log(f"dismiss_list_failed={type(e).__name__}: {e}")
-        return 0
+        threads = fetch_review_threads(repo, token, pr_number)
+    except (HTTPError, URLError, TimeoutError, OSError, RuntimeError, KeyError) as e:
+        log(f"reconcile_list_failed={type(e).__name__}: {e}")
+        return set()
 
-    stale = [c for c in comments if INLINE_MARKER in (c.get("body") or "")]
-    deleted = 0
-    for c in stale:
+    kept_open: set[tuple[str, int]] = set()
+    resolved_count = 0
+    skipped_non_bot = 0
+
+    for thread in threads:
+        if thread.get("isResolved"):
+            continue
+        is_bot = any(
+            INLINE_MARKER in (c.get("body") or "")
+            for c in (thread.get("comments", {}).get("nodes") or [])
+        )
+        if not is_bot:
+            skipped_non_bot += 1
+            continue
+
+        path = thread.get("path") or ""
+        line = thread.get("line") or thread.get("originalLine") or 0
         try:
-            github_api(repo, token, "DELETE", f"/pulls/comments/{c['id']}")
-            deleted += 1
-        except (HTTPError, URLError, TimeoutError, OSError) as e:
-            log(f"dismiss_delete_failed id={c.get('id')} err={type(e).__name__}: {e}")
-    log(f"dismissed_inline_comments scanned={len(comments)} stale={len(stale)} deleted={deleted}")
-    return deleted
+            line_int = int(line)
+        except (TypeError, ValueError):
+            line_int = 0
+
+        is_outdated = bool(thread.get("isOutdated"))
+        still_flagged = (path, line_int) in current_findings
+
+        if is_outdated or not still_flagged:
+            try:
+                resolve_thread(token, thread["id"])
+                resolved_count += 1
+                reason = "outdated" if is_outdated else "fixed"
+                log(f"resolved_thread path={path} line={line_int} reason={reason}")
+            except (HTTPError, URLError, TimeoutError, OSError, RuntimeError) as e:
+                log(f"resolve_failed thread={thread.get('id')} err={type(e).__name__}: {e}")
+        else:
+            kept_open.add((path, line_int))
+
+    log(
+        f"reconciled_threads scanned={len(threads)} "
+        f"non_bot_skipped={skipped_non_bot} "
+        f"resolved={resolved_count} "
+        f"kept_open={len(kept_open)}"
+    )
+    return kept_open
 
 
 def main() -> int:
@@ -335,13 +453,22 @@ def main() -> int:
     inline, leftover = build_comments(result)
     log(f"pr={pr_number} commit={commit_sha} inline={len(inline)} leftover={len(leftover)}")
 
-    # Clear prior bot-authored inline comments so a re-run on the same PR
-    # doesn't pile duplicates on top of (still-valid or now-stale) earlier comments.
-    dismiss_previous_inline_comments(repo, token, pr_number)
+    # Build the set of (path, line) findings still active this run. Pass it to
+    # reconcile_review_threads so it can resolve bot threads that were fixed
+    # (no longer in this set) or outdated (line rewritten by a later commit),
+    # while reporting back which (path, line) pairs already have an open bot
+    # thread — those we skip to avoid duplicate comments.
+    current_findings: set[tuple[str, int]] = {
+        (c["path"], c["line"]) for c in inline
+    }
+    already_open = reconcile_review_threads(repo, token, pr_number, current_findings)
+
+    to_post = [c for c in inline if (c["path"], c["line"]) not in already_open]
+    log(f"to_post={len(to_post)} skipped_duplicates={len(inline) - len(to_post)}")
 
     posted = 0
     failed: list[str] = []
-    for comment in inline:
+    for comment in to_post:
         ok, detail = post_inline_comment(repo, token, pr_number, commit_sha, comment)
         if ok:
             posted += 1
@@ -350,10 +477,14 @@ def main() -> int:
             failed.append(f"`{comment['path']}` L{comment['line']}: {comment['body']} — _{detail}_")
             log(f"inline_failed path={comment['path']} line={comment['line']} detail={detail}")
 
-    body = build_review_body(result, posted, leftover, failed)
+    active = posted + len(already_open)
+    body = build_review_body(result, active, leftover, failed)
     summary_ok = upsert_summary_comment(repo, token, pr_number, body)
-    log(f"done posted={posted} failed={len(failed)} leftover={len(leftover)} summary_ok={summary_ok}")
-    return 0 if summary_ok or posted else 1
+    log(
+        f"done active={active} posted={posted} reused={len(already_open)} "
+        f"failed={len(failed)} leftover={len(leftover)} summary_ok={summary_ok}"
+    )
+    return 0 if summary_ok or active else 1
 
 
 if __name__ == "__main__":
