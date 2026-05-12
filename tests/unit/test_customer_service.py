@@ -150,7 +150,8 @@ class TestCreateCustomerService:
             tenant_id=1,
         )
         mock_db_session.add.assert_called_once()
-        mock_db_session.commit.assert_called_once()
+        # Services flush; the router-bound get_db dependency owns commit (rule 121/122).
+        mock_db_session.flush.assert_called_once()
         assert result.name == "Test"
         assert result.email == "test@example.com"
 
@@ -178,7 +179,8 @@ class TestCreateCustomerService:
         result = await service.create_customer(dto, tenant_id=1)
 
         mock_db_session.add.assert_called_once()
-        mock_db_session.commit.assert_called_once()
+        # Services flush; the router-bound get_db dependency owns commit (rule 121/122).
+        mock_db_session.flush.assert_called_once()
 
         call_args = mock_db_session.add.call_args[0][0]
         assert call_args.name == "DTO Customer"

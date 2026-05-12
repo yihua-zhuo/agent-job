@@ -83,7 +83,6 @@ class TicketService:
         self.session.add(ticket)
         await self.session.flush()
         await self.session.refresh(ticket)
-        await self.session.flush()
         return ticket
 
     async def get_ticket(self, ticket_id: int, tenant_id: int = 0) -> TicketModel:
@@ -140,7 +139,6 @@ class TicketService:
 
         await self.session.flush()
         await self.session.refresh(reply)
-        await self.session.flush()
         return reply
 
     async def change_status(
