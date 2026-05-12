@@ -1,4 +1,5 @@
 """SQLAlchemy engine, session, and base infrastructure."""
+
 from __future__ import annotations
 
 import os

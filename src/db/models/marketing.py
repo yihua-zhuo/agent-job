@@ -1,4 +1,5 @@
 """Marketing (campaign) ORM models."""
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
@@ -26,16 +27,16 @@ class CampaignModel(Base):
     sent_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     open_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     click_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     events: Mapped[list["CampaignEventModel"]] = relationship(
-        "CampaignEventModel", back_populates="campaign",
-        cascade="all, delete-orphan", lazy="raise",
+        "CampaignEventModel",
+        back_populates="campaign",
+        cascade="all, delete-orphan",
+        lazy="raise",
     )
 
     def to_dict(self) -> dict:
@@ -70,12 +71,12 @@ class CampaignEventModel(Base):
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     campaign: Mapped["CampaignModel"] = relationship(
-        "CampaignModel", back_populates="events", lazy="raise",
+        "CampaignModel",
+        back_populates="events",
+        lazy="raise",
     )
 
     def to_dict(self) -> dict:

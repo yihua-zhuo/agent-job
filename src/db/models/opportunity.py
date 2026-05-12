@@ -1,4 +1,5 @@
 """Opportunity ORM model."""
+
 from datetime import datetime
 from decimal import Decimal
 
@@ -23,9 +24,7 @@ class OpportunityModel(Base):
     expected_close_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     owner_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     pipeline_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -39,9 +38,7 @@ class OpportunityModel(Base):
             "stage": self.stage,
             "amount": str(self.amount),
             "probability": self.probability,
-            "expected_close_date": (
-                self.expected_close_date.isoformat() if self.expected_close_date else None
-            ),
+            "expected_close_date": (self.expected_close_date.isoformat() if self.expected_close_date else None),
             "owner_id": self.owner_id,
             "pipeline_id": self.pipeline_id,
             "created_at": self.created_at.isoformat() if self.created_at else None,

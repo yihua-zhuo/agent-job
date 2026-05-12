@@ -1,4 +1,5 @@
 """Ticket reply ORM model."""
+
 from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, Text, func
@@ -20,9 +21,7 @@ class TicketReplyModel(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     is_internal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def to_dict(self) -> dict:
         return {

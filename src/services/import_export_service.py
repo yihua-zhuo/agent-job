@@ -1,4 +1,5 @@
 """CRM data import / export service — backed by real DB via SQLAlchemy ORM."""
+
 import json
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
@@ -45,11 +46,13 @@ class ImportExportService:
 
     def _is_valid_email(self, email: str) -> bool:
         import re
+
         pattern = r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
         return bool(re.match(pattern, str(email)))
 
     def _is_valid_phone(self, phone: str) -> bool:
         import re
+
         pattern = r"^1[3-9]\d{9}$"
         return bool(re.match(pattern, str(phone)))
 
@@ -77,7 +80,11 @@ class ImportExportService:
     # -------------------------------------------------------------------------
 
     async def import_customers(
-        self, file_data: bytes, file_format: str, tenant_id: int = 0, owner_id: int = 0,
+        self,
+        file_data: bytes,
+        file_format: str,
+        tenant_id: int = 0,
+        owner_id: int = 0,
     ) -> dict:
         try:
             data = self._parse_file(file_data, file_format, "customers")
@@ -95,23 +102,29 @@ class ImportExportService:
 
         now = datetime.now(UTC)
         for row in data:
-            self.session.add(CustomerModel(
-                tenant_id=tenant_id,
-                name=row.get("name"),
-                email=row.get("email"),
-                phone=row.get("phone"),
-                company=row.get("company"),
-                status="lead",
-                owner_id=owner_id,
-                tags=[],
-                created_at=now,
-                updated_at=now,
-            ))
+            self.session.add(
+                CustomerModel(
+                    tenant_id=tenant_id,
+                    name=row.get("name"),
+                    email=row.get("email"),
+                    phone=row.get("phone"),
+                    company=row.get("company"),
+                    status="lead",
+                    owner_id=owner_id,
+                    tags=[],
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
         await self.session.commit()
         return {"success_count": len(data), "error_count": 0, "errors": [], "data": data}
 
     async def import_opportunities(
-        self, file_data: bytes, file_format: str, tenant_id: int = 0, owner_id: int = 0,
+        self,
+        file_data: bytes,
+        file_format: str,
+        tenant_id: int = 0,
+        owner_id: int = 0,
     ) -> dict:
         try:
             data = self._parse_file(file_data, file_format, "opportunities")
@@ -133,22 +146,27 @@ class ImportExportService:
                 amount = Decimal(str(row.get("amount", 0)))
             except (InvalidOperation, TypeError, ValueError):
                 amount = Decimal("0")
-            self.session.add(OpportunityModel(
-                tenant_id=tenant_id,
-                customer_id=row.get("customer_id") or 0,
-                name=row.get("name") or row.get("title", "Opportunity"),
-                amount=amount,
-                stage=row.get("stage", "qualification"),
-                probability=20,
-                owner_id=owner_id,
-                created_at=now,
-                updated_at=now,
-            ))
+            self.session.add(
+                OpportunityModel(
+                    tenant_id=tenant_id,
+                    customer_id=row.get("customer_id") or 0,
+                    name=row.get("name") or row.get("title", "Opportunity"),
+                    amount=amount,
+                    stage=row.get("stage", "qualification"),
+                    probability=20,
+                    owner_id=owner_id,
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
         await self.session.commit()
         return {"success_count": len(data), "error_count": 0, "errors": [], "data": data}
 
     async def import_leads(
-        self, file_data: bytes, file_format: str, tenant_id: int = 0,
+        self,
+        file_data: bytes,
+        file_format: str,
+        tenant_id: int = 0,
     ) -> dict:
         try:
             data = self._parse_file(file_data, file_format, "leads")
@@ -167,18 +185,20 @@ class ImportExportService:
         # Leads are stored as customers with status='lead'.
         now = datetime.now(UTC)
         for row in data:
-            self.session.add(CustomerModel(
-                tenant_id=tenant_id,
-                name=row.get("name"),
-                email=row.get("email"),
-                phone=row.get("phone"),
-                company=None,
-                status="lead",
-                owner_id=0,
-                tags=[],
-                created_at=now,
-                updated_at=now,
-            ))
+            self.session.add(
+                CustomerModel(
+                    tenant_id=tenant_id,
+                    name=row.get("name"),
+                    email=row.get("email"),
+                    phone=row.get("phone"),
+                    company=None,
+                    status="lead",
+                    owner_id=0,
+                    tags=[],
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
         await self.session.commit()
         return {"success_count": len(data), "error_count": 0, "errors": [], "data": data}
 
@@ -187,8 +207,22 @@ class ImportExportService:
     # -------------------------------------------------------------------------
 
     _SAMPLE_CUSTOMERS = [
-        {"id": 1, "name": "张三", "email": "zhangsan@example.com", "phone": "13800138000", "company": "公司A", "status": "活跃"},
-        {"id": 2, "name": "李四", "email": "lisi@example.com", "phone": "13900139000", "company": "公司B", "status": "活跃"},
+        {
+            "id": 1,
+            "name": "张三",
+            "email": "zhangsan@example.com",
+            "phone": "13800138000",
+            "company": "公司A",
+            "status": "活跃",
+        },
+        {
+            "id": 2,
+            "name": "李四",
+            "email": "lisi@example.com",
+            "phone": "13900139000",
+            "company": "公司B",
+            "status": "活跃",
+        },
     ]
     _SAMPLE_OPPORTUNITIES = [
         {"id": 1, "name": "项目A", "customer_id": 1, "amount": 100000, "stage": "提案", "probability": 50},
@@ -199,14 +233,16 @@ class ImportExportService:
         rows: list[dict] = []
         if self.session is not None:
             result = await self.session.execute(
-                select(CustomerModel)
-                .where(CustomerModel.tenant_id == tenant_id)
-                .order_by(CustomerModel.id)
+                select(CustomerModel).where(CustomerModel.tenant_id == tenant_id).order_by(CustomerModel.id)
             )
             rows = [
                 {
-                    "id": c.id, "name": c.name, "email": c.email,
-                    "phone": c.phone, "company": c.company, "status": c.status,
+                    "id": c.id,
+                    "name": c.name,
+                    "email": c.email,
+                    "phone": c.phone,
+                    "company": c.company,
+                    "status": c.status,
                 }
                 for c in result.scalars().all()
             ]
@@ -218,14 +254,16 @@ class ImportExportService:
         rows: list[dict] = []
         if self.session is not None:
             result = await self.session.execute(
-                select(OpportunityModel)
-                .where(OpportunityModel.tenant_id == tenant_id)
-                .order_by(OpportunityModel.id)
+                select(OpportunityModel).where(OpportunityModel.tenant_id == tenant_id).order_by(OpportunityModel.id)
             )
             rows = [
                 {
-                    "id": o.id, "name": o.name, "customer_id": o.customer_id,
-                    "amount": float(o.amount), "stage": o.stage, "probability": o.probability,
+                    "id": o.id,
+                    "name": o.name,
+                    "customer_id": o.customer_id,
+                    "amount": float(o.amount),
+                    "stage": o.stage,
+                    "probability": o.probability,
                 }
                 for o in result.scalars().all()
             ]
@@ -238,9 +276,7 @@ class ImportExportService:
         if self.session is not None:
             cust_count = await self.session.execute(select(func.count(CustomerModel.id)))
             summary["total_customers"] = cust_count.scalar() or 0
-            opp_sum = await self.session.execute(
-                select(func.coalesce(func.sum(OpportunityModel.amount), 0))
-            )
+            opp_sum = await self.session.execute(select(func.coalesce(func.sum(OpportunityModel.amount), 0)))
             summary["total_revenue"] = float(opp_sum.scalar() or 0)
 
         report = {
@@ -297,16 +333,20 @@ class ImportExportService:
                 table_data.append([str(row.get(h, "")) for h in headers])
 
             table = Table(table_data)
-            table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
-                ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, 0), 12),
-                ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
-                ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
-                ("GRID", (0, 0), (-1, -1), 1, colors.black),
-            ]))
+            table.setStyle(
+                TableStyle(
+                    [
+                        ("BACKGROUND", (0, 0), (-1, 0), colors.grey),
+                        ("TEXTCOLOR", (0, 0), (-1, 0), colors.whitesmoke),
+                        ("ALIGN", (0, 0), (-1, -1), "CENTER"),
+                        ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
+                        ("FONTSIZE", (0, 0), (-1, 0), 12),
+                        ("BOTTOMPADDING", (0, 0), (-1, 0), 12),
+                        ("BACKGROUND", (0, 1), (-1, -1), colors.beige),
+                        ("GRID", (0, 0), (-1, -1), 1, colors.black),
+                    ]
+                )
+            )
             elements.append(table)
 
         doc.build(elements)

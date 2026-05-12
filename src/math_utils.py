@@ -27,11 +27,11 @@ def divide(a, b):
 
 def power(base, exponent):
     """幂运算"""
-    return base ** exponent
+    return base**exponent
 
 
 def sqrt(value):
     """平方根"""
     if value < 0:
         raise ValueError("不能对负数求平方根")
-    return value ** 0.5
+    return value**0.5

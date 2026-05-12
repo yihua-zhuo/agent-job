@@ -1,4 +1,5 @@
 """Customer service — CRUD + tagging + status management via SQLAlchemy ORM."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, delete, func, or_, select
@@ -54,9 +55,7 @@ class CustomerService:
         if owner_id is not None:
             conditions.append(CustomerModel.owner_id == owner_id)
 
-        count_result = await self.session.execute(
-            select(func.count(CustomerModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(CustomerModel.id)).where(and_(*conditions)))
         total = count_result.scalar() or 0
 
         offset = (page - 1) * page_size
@@ -72,9 +71,7 @@ class CustomerService:
     async def get_customer(self, customer_id: int, tenant_id: int = 0) -> CustomerModel:
         """Get a customer by id (tenant-scoped)."""
         result = await self.session.execute(
-            select(CustomerModel).where(
-                and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
-            )
+            select(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
         )
         customer = result.scalar_one_or_none()
         if customer is None:
@@ -82,7 +79,10 @@ class CustomerService:
         return customer
 
     async def update_customer(
-        self, customer_id: int, data: dict, tenant_id: int = 0,
+        self,
+        customer_id: int,
+        data: dict,
+        tenant_id: int = 0,
     ) -> CustomerModel | None:
         """Update a customer (tenant-scoped)."""
         if "status" in data and data["status"] not in self.VALID_STATUSES:
@@ -107,9 +107,7 @@ class CustomerService:
     async def delete_customer(self, customer_id: int, tenant_id: int = 0) -> dict:
         """Delete a customer (tenant-scoped)."""
         result = await self.session.execute(
-            delete(CustomerModel).where(
-                and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
-            )
+            delete(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("客户")
@@ -163,7 +161,10 @@ class CustomerService:
         return customer
 
     async def change_status(
-        self, customer_id: int, status: str, tenant_id: int = 0,
+        self,
+        customer_id: int,
+        status: str,
+        tenant_id: int = 0,
     ) -> CustomerModel:
         """Change a customer's status."""
         if status not in self.VALID_STATUSES:
@@ -176,7 +177,10 @@ class CustomerService:
         return customer
 
     async def assign_owner(
-        self, customer_id: int, owner_id: int, tenant_id: int = 0,
+        self,
+        customer_id: int,
+        owner_id: int,
+        tenant_id: int = 0,
     ) -> CustomerModel:
         """Assign an owner to a customer."""
         customer = await self.get_customer(customer_id, tenant_id)
@@ -192,17 +196,19 @@ class CustomerService:
             return 0
         now = datetime.now(UTC)
         for c in customers:
-            self.session.add(CustomerModel(
-                tenant_id=tenant_id,
-                name=c.get("name") or "Customer",
-                email=c.get("email"),
-                phone=c.get("phone"),
-                company=c.get("company"),
-                status=c.get("status", "lead"),
-                owner_id=c.get("owner_id", 0),
-                tags=c.get("tags", []),
-                created_at=now,
-                updated_at=now,
-            ))
+            self.session.add(
+                CustomerModel(
+                    tenant_id=tenant_id,
+                    name=c.get("name") or "Customer",
+                    email=c.get("email"),
+                    phone=c.get("phone"),
+                    company=c.get("company"),
+                    status=c.get("status", "lead"),
+                    owner_id=c.get("owner_id", 0),
+                    tags=c.get("tags", []),
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
         await self.session.commit()
         return len(customers)

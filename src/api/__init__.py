@@ -1,4 +1,5 @@
 """Central API router — aggregates all feature routers."""
+
 from api.routers.activities import activities_router
 from api.routers.automation import automation_router
 from api.routers.customers import customers_router

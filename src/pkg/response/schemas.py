@@ -3,6 +3,7 @@
 Concrete typed response schemas — one per endpoint shape.
 Each schema documents the exact data structure Swagger will display.
 """
+
 from datetime import datetime
 from typing import Generic, TypeVar
 
@@ -15,14 +16,17 @@ T = TypeVar("T")
 # Base envelope (used by all responses)
 # ---------------------------------------------------------------------------
 
+
 class SuccessEnvelope(BaseModel):
     """Shared envelope fields — all API responses inherit these."""
+
     success: bool = True
     message: str = "OK"
 
 
 class ErrorEnvelope(BaseModel):
     """Error envelope — used when the HTTP status code is >= 400."""
+
     success: bool = False
     message: str
 
@@ -31,8 +35,10 @@ class ErrorEnvelope(BaseModel):
 # Generic base (kept for generic helpers / internal use)
 # ---------------------------------------------------------------------------
 
+
 class APIResponse(BaseModel, Generic[T]):
     """Single-item response envelope."""
+
     success: bool = True
     message: str = "OK"
     data: T | None = None
@@ -50,8 +56,10 @@ class APIResponse(BaseModel, Generic[T]):
 # Customer schemas
 # ---------------------------------------------------------------------------
 
+
 class CustomerData(BaseModel):
     """Fields returned for a single customer."""
+
     id: int
     tenant_id: int
     name: str = Field(..., min_length=1, max_length=200)
@@ -67,17 +75,20 @@ class CustomerData(BaseModel):
 
 class CustomerSearchData(BaseModel):
     """Non-paginated search result data field."""
+
     keyword: str
     items: list[CustomerData]
 
 
 class CustomerSearchResponse(SuccessEnvelope):
     """GET /search — keyword search without pagination."""
+
     data: CustomerSearchData
 
 
 class CustomerListData(BaseModel):
     """Paginated customer list data field."""
+
     items: list[CustomerData]
     total: int = Field(..., ge=0)
     page: int = Field(..., ge=1)
@@ -89,11 +100,13 @@ class CustomerListData(BaseModel):
 
 class CustomerResponse(SuccessEnvelope):
     """POST /customers · GET /{id} — single customer."""
+
     data: CustomerData | None = None
 
 
 class CustomerListResponse(SuccessEnvelope):
     """GET /customers — paginated customer list."""
+
     data: CustomerListData
 
 
@@ -104,6 +117,7 @@ class TagData(BaseModel):
 
 class TagResponse(SuccessEnvelope):
     """POST /{id}/tags · DELETE /{id}/tags/{tag}."""
+
     data: TagData | None = None
 
 
@@ -115,11 +129,13 @@ class IdData(BaseModel):
 
 class StatusChangeResponse(SuccessEnvelope):
     """PUT /{id}/status."""
+
     data: IdData | None = None
 
 
 class OwnerChangeResponse(SuccessEnvelope):
     """PUT /{id}/owner."""
+
     data: IdData | None = None
 
 
@@ -130,6 +146,7 @@ class BulkImportData(BaseModel):
 
 class BulkImportResponse(SuccessEnvelope):
     """POST /import."""
+
     data: BulkImportData
 
 
@@ -137,8 +154,10 @@ class BulkImportResponse(SuccessEnvelope):
 # Pipeline schemas
 # ---------------------------------------------------------------------------
 
+
 class PipelineData(BaseModel):
     """Fields returned for a single pipeline."""
+
     id: int
     tenant_id: int
     name: str = Field(..., min_length=1, max_length=200)
@@ -167,21 +186,25 @@ class PipelineFunnelData(BaseModel):
 
 class PipelineResponse(SuccessEnvelope):
     """POST /pipelines · GET /pipelines/{id}."""
+
     data: PipelineData | None = None
 
 
 class PipelineListResponse(SuccessEnvelope):
     """GET /pipelines."""
+
     data: PipelineListData
 
 
 class PipelineStatsResponse(SuccessEnvelope):
     """GET /pipelines/{id}/stats."""
+
     data: PipelineStatsData
 
 
 class PipelineFunnelResponse(SuccessEnvelope):
     """GET /pipelines/{id}/funnel."""
+
     data: PipelineFunnelData
 
 
@@ -189,8 +212,10 @@ class PipelineFunnelResponse(SuccessEnvelope):
 # Opportunity schemas
 # ---------------------------------------------------------------------------
 
+
 class OpportunityData(BaseModel):
     """Fields returned for a single opportunity."""
+
     id: int
     tenant_id: int
     name: str
@@ -217,11 +242,13 @@ class OpportunityListData(BaseModel):
 
 class OpportunityResponse(SuccessEnvelope):
     """POST /opportunities · GET /{id}."""
+
     data: OpportunityData | None = None
 
 
 class OpportunityListResponse(SuccessEnvelope):
     """GET /opportunities."""
+
     data: OpportunityListData
 
 
@@ -232,12 +259,14 @@ class StageChangeData(BaseModel):
 
 class StageChangeResponse(SuccessEnvelope):
     """PUT /opportunities/{id}/stage."""
+
     data: StageChangeData
 
 
 # ---------------------------------------------------------------------------
 # Forecast schemas
 # ---------------------------------------------------------------------------
+
 
 class OwnerForecastData(BaseModel):
     owner_id: int
@@ -251,4 +280,5 @@ class ForecastData(BaseModel):
 
 class ForecastResponse(SuccessEnvelope):
     """GET /forecast."""
+
     data: ForecastData

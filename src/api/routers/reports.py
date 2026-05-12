@@ -20,6 +20,7 @@ reports_router = APIRouter(prefix="/api/v1/reports", tags=["reports"])
 # Schemas
 # ---------------------------------------------------------------------------
 
+
 class ReportCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     type: str = Field(..., min_length=1, max_length=50)
@@ -55,6 +56,7 @@ class ExportCsvRequest(BaseModel):
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
 
 @reports_router.post("")
 async def create_report(
@@ -147,6 +149,7 @@ async def generate_pdf(
         date_range=req.date_range,
     )
     import binascii
+
     content = binascii.unhexlify(data["content_base64"])
     return Response(
         content=content,
@@ -173,6 +176,7 @@ async def generate_excel(
         date_range=req.date_range,
     )
     import binascii
+
     content = binascii.unhexlify(data["content_base64"])
     return Response(
         content=content,
@@ -199,6 +203,7 @@ async def export_csv(
         date_range=req.date_range,
     )
     import binascii
+
     content = binascii.unhexlify(data["content_base64"])
     return Response(
         content=content,

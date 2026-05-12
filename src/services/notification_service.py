@@ -1,4 +1,5 @@
 """Notification service — DB-backed via SQLAlchemy async ORM."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, delete, func, select
@@ -62,9 +63,7 @@ class NotificationService:
         if unread_only:
             conditions.append(NotificationModel.is_read == False)  # noqa: E712
 
-        count_result = await self.session.execute(
-            select(func.count(NotificationModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(NotificationModel.id)).where(and_(*conditions)))
         total = count_result.scalar_one()
 
         offset = (page - 1) * page_size
@@ -190,7 +189,10 @@ class NotificationService:
         return {"id": reminder_id}
 
     async def get_reminders(
-        self, user_id: int, upcoming_only: bool = True, tenant_id: int = 0,
+        self,
+        user_id: int,
+        upcoming_only: bool = True,
+        tenant_id: int = 0,
     ) -> list[ReminderModel]:
         """获取用户的提醒列表"""
         conditions = [
@@ -202,8 +204,6 @@ class NotificationService:
             conditions.append(ReminderModel.remind_at > datetime.now(UTC))
 
         result = await self.session.execute(
-            select(ReminderModel)
-            .where(and_(*conditions))
-            .order_by(ReminderModel.remind_at)
+            select(ReminderModel).where(and_(*conditions)).order_by(ReminderModel.remind_at)
         )
         return result.scalars().all()

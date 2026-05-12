@@ -1,4 +1,5 @@
 """自动化触发器"""
+
 from models.marketing import TriggerType
 from pkg.errors.app_exceptions import NotFoundException
 
@@ -31,7 +32,9 @@ class TriggerService:
             return []
 
         campaigns, _ = await self._marketing_service.list_campaigns(
-            tenant_id=tenant_id, page=1, page_size=10000,
+            tenant_id=tenant_id,
+            page=1,
+            page_size=10000,
         )
         return [c.id for c in campaigns if c.trigger_type == trigger_type.value]
 
@@ -48,7 +51,9 @@ class TriggerService:
         if campaign.trigger_type is None:
             return {"success": False, "message": "No trigger configured"}
 
-        trigger_enum = TriggerType(campaign.trigger_type) if isinstance(campaign.trigger_type, str) else campaign.trigger_type
+        trigger_enum = (
+            TriggerType(campaign.trigger_type) if isinstance(campaign.trigger_type, str) else campaign.trigger_type
+        )
         trigger_name = self.TRIGGERS.get(trigger_enum, "未知触发")
         sent_count = 0
 
@@ -65,7 +70,9 @@ class TriggerService:
         return {
             "success": True,
             "campaign_id": campaign_id,
-            "trigger_type": campaign.trigger_type if isinstance(campaign.trigger_type, str) else campaign.trigger_type.value,
+            "trigger_type": campaign.trigger_type
+            if isinstance(campaign.trigger_type, str)
+            else campaign.trigger_type.value,
             "trigger_name": trigger_name,
             "target_customer_count": len(customer_ids),
             "sent_count": sent_count,

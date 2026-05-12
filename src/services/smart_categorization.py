@@ -10,6 +10,7 @@ from dataclasses import dataclass
 @dataclass
 class LeadCategory:
     """线索分类结果"""
+
     category: str
     score: float
     reasoning: str
@@ -20,9 +21,9 @@ class SmartCategorizationService:
 
     # 线索分类类别
     LEAD_CATEGORIES = [
-        "hot_lead",       # 高质量线索
-        "warm_lead",      # 中等质量线索
-        "cold_lead",      # 低质量线索
+        "hot_lead",  # 高质量线索
+        "warm_lead",  # 中等质量线索
+        "cold_lead",  # 低质量线索
         " disqualified",  # 不合格线索
     ]
 
@@ -55,11 +56,7 @@ class SmartCategorizationService:
             category = "disqualified"
             reasoning = "线索不合格或不符合目标客户画像"
 
-        return {
-            "category": category,
-            "score": score,
-            "reasoning": reasoning
-        }
+        return {"category": category, "score": score, "reasoning": reasoning}
 
     def score_lead(self, lead_data: dict) -> float:
         """
@@ -136,6 +133,7 @@ class SmartCategorizationService:
         基于：行为数据、交易数据
         """
         import hashlib
+
         seed = int(hashlib.md5(str(customer_id).encode()).hexdigest()[:8], 16)
 
         tags = []
@@ -203,15 +201,17 @@ class SmartCategorizationService:
             else:
                 segment = "AtRisk"
 
-            segments.append({
-                "customer_id": i,
-                "recency_score": r_score,
-                "frequency_score": f_score,
-                "monetary_score": m_score,
-                "rfm_total": rfm_total,
-                "segment": segment,
-                "description": self.RFM_SEGMENTS[segment]["description"],
-            })
+            segments.append(
+                {
+                    "customer_id": i,
+                    "recency_score": r_score,
+                    "frequency_score": f_score,
+                    "monetary_score": m_score,
+                    "rfm_total": rfm_total,
+                    "segment": segment,
+                    "description": self.RFM_SEGMENTS[segment]["description"],
+                }
+            )
 
         random.seed()
 

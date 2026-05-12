@@ -1,4 +1,5 @@
 """Re-export SQLAlchemy engine infrastructure from src.internal.db.engine."""
+
 from internal.db.engine import (
     Base,
     SessionLocal,

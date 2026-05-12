@@ -1,4 +1,5 @@
 """Workflow ORM models."""
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
@@ -23,9 +24,7 @@ class WorkflowModel(Base):
     conditions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)
     created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -58,12 +57,8 @@ class WorkflowExecutionModel(Base):
     )
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
     triggered_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    started_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
-    completed_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True
-    )
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="running", nullable=False)
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 

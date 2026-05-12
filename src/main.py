@@ -1,4 +1,5 @@
 """FastAPI application entry point — async-first, structured logging, centralized errors."""
+
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, HTTPException, Request

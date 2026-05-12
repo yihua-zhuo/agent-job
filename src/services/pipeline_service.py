@@ -1,4 +1,5 @@
 """Pipeline service layer - handles pipeline and stage CRUD via PostgreSQL/SQLAlchemy async."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
@@ -21,9 +22,7 @@ class PipelineService:
     # Pipeline CRUD
     # -------------------------------------------------------------------------
 
-    async def create_pipeline(
-        self, tenant_id: int, data: dict, created_by: int = 0
-    ) -> PipelineModel:
+    async def create_pipeline(self, tenant_id: int, data: dict, created_by: int = 0) -> PipelineModel:
         if not data.get("name"):
             raise ValidationException("管道名称不能为空")
 
@@ -49,17 +48,16 @@ class PipelineService:
 
         stage_names = data.get("stages", self.DEFAULT_STAGES)
         for idx, name in enumerate(stage_names):
-            self.session.add(PipelineStageModel(
-                pipeline_id=pipeline.id,
-                name=name,
-                display_order=idx,
-                created_at=now,
-            ))
-        
+            self.session.add(
+                PipelineStageModel(
+                    pipeline_id=pipeline.id,
+                    name=name,
+                    display_order=idx,
+                    created_at=now,
+                )
+            )
 
-        result = await self.session.execute(
-            select(PipelineModel).where(PipelineModel.id == pipeline.id)
-        )
+        result = await self.session.execute(select(PipelineModel).where(PipelineModel.id == pipeline.id))
         return result.scalar_one()
 
     async def get_pipeline(self, tenant_id: int, pipeline_id: int) -> PipelineModel:
@@ -86,9 +84,7 @@ class PipelineService:
         self, tenant_id: int, page: int = 1, page_size: int = 20
     ) -> tuple[list[PipelineModel], int]:
         count_result = await self.session.execute(
-            select(func.count(PipelineModel.id)).where(
-                PipelineModel.tenant_id == tenant_id
-            )
+            select(func.count(PipelineModel.id)).where(PipelineModel.tenant_id == tenant_id)
         )
         total = count_result.scalar() or 0
 
@@ -102,9 +98,7 @@ class PipelineService:
         )
         return result.scalars().all(), total
 
-    async def update_pipeline(
-        self, tenant_id: int, pipeline_id: int, data: dict
-    ) -> PipelineModel:
+    async def update_pipeline(self, tenant_id: int, pipeline_id: int, data: dict) -> PipelineModel:
         result = await self.session.execute(
             select(PipelineModel).where(
                 PipelineModel.id == pipeline_id,
@@ -131,16 +125,9 @@ class PipelineService:
             if dup.scalar_one_or_none():
                 raise ConflictException("管道名称已存在")
 
-        await self.session.execute(
-            update(PipelineModel)
-            .where(PipelineModel.id == pipeline_id)
-            .values(**update_values)
-        )
-        
+        await self.session.execute(update(PipelineModel).where(PipelineModel.id == pipeline_id).values(**update_values))
 
-        refreshed = await self.session.execute(
-            select(PipelineModel).where(PipelineModel.id == pipeline_id)
-        )
+        refreshed = await self.session.execute(select(PipelineModel).where(PipelineModel.id == pipeline_id))
         return refreshed.scalar_one()
 
     async def delete_pipeline(self, tenant_id: int, pipeline_id: int) -> int:
@@ -159,7 +146,7 @@ class PipelineService:
                 PipelineModel.tenant_id == tenant_id,
             )
         )
-        
+
         return pipeline_id
 
     # -------------------------------------------------------------------------
@@ -178,9 +165,7 @@ class PipelineService:
             raise NotFoundException("管道")
         return pipeline
 
-    async def add_stage(
-        self, tenant_id: int, pipeline_id: int, data: dict
-    ) -> PipelineStageModel:
+    async def add_stage(self, tenant_id: int, pipeline_id: int, data: dict) -> PipelineStageModel:
         await self._verify_pipeline(tenant_id, pipeline_id)
 
         stage_name = data.get("name")
@@ -188,9 +173,7 @@ class PipelineService:
             raise ValidationException("阶段名称不能为空")
 
         max_order_result = await self.session.execute(
-            select(func.max(PipelineStageModel.display_order)).where(
-                PipelineStageModel.pipeline_id == pipeline_id
-            )
+            select(func.max(PipelineStageModel.display_order)).where(PipelineStageModel.pipeline_id == pipeline_id)
         )
         max_order = max_order_result.scalar() or -1
 
@@ -204,9 +187,7 @@ class PipelineService:
         await self.session.flush()
         return stage
 
-    async def update_stage(
-        self, tenant_id: int, pipeline_id: int, stage_id: int, data: dict
-    ) -> PipelineStageModel:
+    async def update_stage(self, tenant_id: int, pipeline_id: int, stage_id: int, data: dict) -> PipelineStageModel:
         await self._verify_pipeline(tenant_id, pipeline_id)
 
         stage_result = await self.session.execute(
@@ -225,20 +206,13 @@ class PipelineService:
 
         if update_values:
             await self.session.execute(
-                update(PipelineStageModel)
-                .where(PipelineStageModel.id == stage_id)
-                .values(**update_values)
+                update(PipelineStageModel).where(PipelineStageModel.id == stage_id).values(**update_values)
             )
-            
 
-        refreshed = await self.session.execute(
-            select(PipelineStageModel).where(PipelineStageModel.id == stage_id)
-        )
+        refreshed = await self.session.execute(select(PipelineStageModel).where(PipelineStageModel.id == stage_id))
         return refreshed.scalar_one()
 
-    async def delete_stage(
-        self, tenant_id: int, pipeline_id: int, stage_id: int
-    ) -> int:
+    async def delete_stage(self, tenant_id: int, pipeline_id: int, stage_id: int) -> int:
         await self._verify_pipeline(tenant_id, pipeline_id)
 
         stage_result = await self.session.execute(
@@ -256,12 +230,10 @@ class PipelineService:
                 PipelineStageModel.pipeline_id == pipeline_id,
             )
         )
-        
+
         return stage_id
 
-    async def reorder_stages(
-        self, tenant_id: int, pipeline_id: int, stage_ids: list[int]
-    ) -> None:
+    async def reorder_stages(self, tenant_id: int, pipeline_id: int, stage_ids: list[int]) -> None:
         await self._verify_pipeline(tenant_id, pipeline_id)
 
         for idx, stage_id in enumerate(stage_ids):
@@ -273,4 +245,3 @@ class PipelineService:
                 )
                 .values(display_order=idx)
             )
-        

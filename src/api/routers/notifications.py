@@ -33,6 +33,7 @@ def _paginated_dicts(items, total, page, page_size):
 # Request schemas
 # ---------------------------------------------------------------------------
 
+
 class NotificationCreate(BaseModel):
     user_id: int = Field(..., ge=1)
     notification_type: str = Field(..., min_length=1, max_length=50)
@@ -60,6 +61,7 @@ class ReminderCreate(BaseModel):
 # ---------------------------------------------------------------------------
 # Notification endpoints
 # ---------------------------------------------------------------------------
+
 
 @notifications_router.get(
     "/notifications",
@@ -198,6 +200,7 @@ async def update_notification_preferences(
 # ---------------------------------------------------------------------------
 # Reminder endpoints
 # ---------------------------------------------------------------------------
+
 
 @notifications_router.post(
     "/reminders",

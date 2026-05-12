@@ -395,9 +395,15 @@ async def api_client(
 
 @pytest_asyncio.fixture(scope="function")
 async def api_client_tenant_2(
-    client: AsyncClient,
+    fastapi_app,
     auth_headers_tenant_2: dict[str, str],
-) -> AsyncClient:
-    """HTTP client authenticated as tenant 2."""
-    client.headers.update(auth_headers_tenant_2)
-    return client
+) -> AsyncGenerator[AsyncClient, None]:
+    """HTTP client authenticated as tenant 2.
+
+    Uses its own AsyncClient so headers don't leak across tenant boundaries —
+    sharing the `client` fixture would mutate the headers on `api_client` too.
+    """
+    transport = ASGITransport(app=fastapi_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        ac.headers.update(auth_headers_tenant_2)
+        yield ac

@@ -1,4 +1,5 @@
 """租户上下文（线程本地存储）"""
+
 import threading
 
 
@@ -13,7 +14,7 @@ class TenantContext:
 
     @classmethod
     def get_tenant_id(cls) -> int | None:
-        return getattr(cls._local, 'tenant_id', None)
+        return getattr(cls._local, "tenant_id", None)
 
     @classmethod
     def clear(cls):

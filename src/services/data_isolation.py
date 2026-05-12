@@ -1,4 +1,5 @@
 """数据隔离验证服务"""
+
 from collections.abc import Callable
 from functools import wraps
 from typing import Any
@@ -6,6 +7,7 @@ from typing import Any
 
 class DataIsolationError(Exception):
     """租户数据隔离错误"""
+
     pass
 
 
@@ -21,8 +23,7 @@ class DataIsolationService:
 
     def verify_tenant_isolation(self, tenant_id: int) -> dict:
         self._init_tenant_data(tenant_id)
-        return {"tenant_id": tenant_id, "isolated": True,
-                "message": f"Tenant {tenant_id} data is properly isolated"}
+        return {"tenant_id": tenant_id, "isolated": True, "message": f"Tenant {tenant_id} data is properly isolated"}
 
     def test_cross_tenant_access(self, tenant_a_id: int, tenant_b_id: int) -> bool:
         self._init_tenant_data(tenant_a_id)
@@ -58,6 +59,7 @@ class TenantScope:
 
 def require_tenant_id(func: Callable = None, *, field_name: str = "tenant_id") -> Callable:
     """装饰器：要求函数必须有有效的 tenant_id 参数"""
+
     def decorator(f: Callable) -> Callable:
         @wraps(f)
         def wrapper(*args, **kwargs):
@@ -65,6 +67,7 @@ def require_tenant_id(func: Callable = None, *, field_name: str = "tenant_id") -
             if tenant_id is None:
                 # Try positional
                 import inspect
+
                 sig = inspect.signature(f)
                 params = list(sig.parameters.keys())
                 if field_name in params:
@@ -74,6 +77,7 @@ def require_tenant_id(func: Callable = None, *, field_name: str = "tenant_id") -
             if tenant_id is None or not isinstance(tenant_id, int) or tenant_id <= 0:
                 raise DataIsolationError(f"valid tenant_id required, got: {tenant_id}")
             return f(*args, **kwargs)
+
         return wrapper
 
     if func is None:

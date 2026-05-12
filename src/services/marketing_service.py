@@ -1,4 +1,5 @@
 """营销服务 — DB-backed via SQLAlchemy async ORM."""
+
 from datetime import UTC, datetime
 from typing import Any
 
@@ -57,9 +58,7 @@ class MarketingService:
     async def get_campaign(self, campaign_id: int, tenant_id: int = 0) -> CampaignModel:
         """获取活动详情"""
         result = await self.session.execute(
-            select(CampaignModel).where(
-                and_(CampaignModel.id == campaign_id, CampaignModel.tenant_id == tenant_id)
-            )
+            select(CampaignModel).where(and_(CampaignModel.id == campaign_id, CampaignModel.tenant_id == tenant_id))
         )
         campaign = result.scalar_one_or_none()
         if campaign is None:
@@ -117,18 +116,12 @@ class MarketingService:
         if campaign_type is not None:
             conditions.append(CampaignModel.type == _enum_val(campaign_type))
 
-        count_result = await self.session.execute(
-            select(func.count(CampaignModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(CampaignModel.id)).where(and_(*conditions)))
         total = count_result.scalar_one()
 
         offset = (page - 1) * page_size
         result = await self.session.execute(
-            select(CampaignModel)
-            .where(and_(*conditions))
-            .order_by(CampaignModel.id)
-            .offset(offset)
-            .limit(page_size)
+            select(CampaignModel).where(and_(*conditions)).order_by(CampaignModel.id).offset(offset).limit(page_size)
         )
         return result.scalars().all(), total
 
@@ -186,6 +179,8 @@ class MarketingService:
     ) -> CampaignModel:
         """设置触发器"""
         return await self.update_campaign(
-            campaign_id, tenant_id,
-            trigger_type=trigger_type, trigger_days=trigger_days,
+            campaign_id,
+            tenant_id,
+            trigger_type=trigger_type,
+            trigger_days=trigger_days,
         )

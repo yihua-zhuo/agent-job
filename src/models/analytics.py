@@ -47,6 +47,7 @@ class Report:
 @dataclass
 class ChartData:
     """图表数据"""
+
     labels: list[str]
     datasets: list[dict]  # [{label, data, color}]
     chart_type: ChartType

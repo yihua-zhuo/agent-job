@@ -1,4 +1,5 @@
 """Ticket ORM model."""
+
 from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, Integer, String, Text, func
@@ -25,9 +26,7 @@ class TicketModel(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     first_response_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     response_deadline: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -54,9 +53,7 @@ class TicketModel(Base):
             "sla_level": self.sla_level,
             "resolved_at": self.resolved_at.isoformat() if self.resolved_at else None,
             "first_response_at": self.first_response_at.isoformat() if self.first_response_at else None,
-            "response_deadline": (
-                self.response_deadline.isoformat() if self.response_deadline else None
-            ),
+            "response_deadline": (self.response_deadline.isoformat() if self.response_deadline else None),
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

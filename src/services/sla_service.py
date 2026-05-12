@@ -13,9 +13,7 @@ class SLAService:
         self._session = session
         self._ticket_service = ticket_service
 
-    def check_sla_status(
-        self, ticket: Ticket
-    ) -> Literal["normal", "warning", "breached"]:
+    def check_sla_status(self, ticket: Ticket) -> Literal["normal", "warning", "breached"]:
         """检查SLA状态"""
         # 返回：正常、临近超时、已超时
         if ticket.resolved_at:

@@ -1,4 +1,5 @@
 """Authentication service for JWT token generation and verification."""
+
 import re
 from datetime import UTC, datetime, timedelta
 
@@ -61,6 +62,7 @@ class AuthService:
             ValueError: If neither secret_key nor JWT_SECRET_KEY env var is set.
         """
         import os
+
         key = secret_key if secret_key is not None else os.environ.get("JWT_SECRET_KEY")
         if not key:
             raise ValueError("JWT_SECRET_KEY must be set")
@@ -96,15 +98,15 @@ class AuthService:
         """
         now = datetime.now(UTC)
         payload = {
-            'user_id': user_id,
-            'username': username,
-            'role': role,
-            'iat': now,
-            'exp': now + timedelta(hours=self.TOKEN_EXPIRY_HOURS)
+            "user_id": user_id,
+            "username": username,
+            "role": role,
+            "iat": now,
+            "exp": now + timedelta(hours=self.TOKEN_EXPIRY_HOURS),
         }
         if tenant_id is not None:
-            payload['tenant_id'] = tenant_id
-        return jwt.encode(payload, self.secret_key, algorithm='HS256')
+            payload["tenant_id"] = tenant_id
+        return jwt.encode(payload, self.secret_key, algorithm="HS256")
 
     def verify_token(self, token: str) -> dict | None:
         """Verify and decode a JWT token.
@@ -116,7 +118,7 @@ class AuthService:
             Decoded payload dict if valid, None if invalid or expired.
         """
         try:
-            payload = jwt.decode(token, self.secret_key, algorithms=['HS256'])
+            payload = jwt.decode(token, self.secret_key, algorithms=["HS256"])
             return payload
         except jwt.ExpiredSignatureError:
             return None
@@ -136,9 +138,7 @@ class AuthService:
         Raises:
             UnauthorizedException: If credentials are invalid.
         """
-        result = await self.session.execute(
-            select(UserModel).where(UserModel.username == username)
-        )
+        result = await self.session.execute(select(UserModel).where(UserModel.username == username))
         user = result.scalar_one_or_none()
         if user is None:
             raise UnauthorizedException("Invalid credentials")
@@ -157,6 +157,7 @@ class AuthService:
     ) -> UserModel:
         """Register a new user via UserService."""
         from services.user_service import UserService
+
         svc = UserService(self.session)
         return await svc.create_user(
             username=username,
@@ -180,9 +181,7 @@ class AuthService:
         user_id = payload.get("user_id")
         if not user_id:
             raise UnauthorizedException("Invalid token payload")
-        result = await self.session.execute(
-            select(UserModel).where(UserModel.id == user_id)
-        )
+        result = await self.session.execute(select(UserModel).where(UserModel.id == user_id))
         user = result.scalar_one_or_none()
         if user is None:
             raise NotFoundException("用户")

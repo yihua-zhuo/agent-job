@@ -1,4 +1,5 @@
 """Analytics ORM models (dashboards and reports)."""
+
 from datetime import datetime
 
 from sqlalchemy import DateTime, Integer, String, Text, func
@@ -20,9 +21,7 @@ class DashboardModel(Base):
     widgets: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
     owner_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     is_default: Mapped[bool] = mapped_column(default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -54,9 +53,7 @@ class ReportModel(Base):
     date_range: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
     created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     last_run_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def to_dict(self) -> dict:
         return {

@@ -3,6 +3,7 @@
 Services raise AppException subclasses on errors (caught by global handler in main.py).
 Router wraps successful returns in {"success": True, "data": ...} dicts.
 """
+
 import math
 import re
 
@@ -13,11 +14,11 @@ from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from services.customer_service import CustomerService
 
-customers_router = APIRouter(prefix='/api/v1/customers', tags=['customers'])
+customers_router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
 
 
 def _is_valid_email(email: str) -> bool:
-    return bool(re.match(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$', email))
+    return bool(re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email))
 
 
 def _sanitize(s: str) -> str:
@@ -25,10 +26,10 @@ def _sanitize(s: str) -> str:
         return s
     # Remove matched tag pairs with their content first (e.g. <script>...)
     # Use case-insensitive flag so <SCRIPT> is also stripped
-    s = re.sub(r'<(script)[^>]*>.*?</\1>', '', s, flags=re.DOTALL | re.IGNORECASE)
+    s = re.sub(r"<(script)[^>]*>.*?</\1>", "", s, flags=re.DOTALL | re.IGNORECASE)
     # Now remove any remaining tags
-    s = re.sub(r'<[^>]*>', '', s)
-    s = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', s)
+    s = re.sub(r"<[^>]*>", "", s)
+    s = re.sub(r"[\x00-\x1f\x7f-\x9f]", "", s)
     return s.strip()
 
 
@@ -50,27 +51,28 @@ def _paginated(items, total, page, page_size):
 # Request schemas (requirement 9 — Field constraints)
 # ---------------------------------------------------------------------------
 
+
 class CustomerCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=200, description="客户名称")
     email: str | None = Field(None, max_length=255, description="邮箱")
     phone: str | None = Field(None, max_length=50, description="电话")
     company: str | None = Field(None, max_length=200, description="公司")
-    status: str | None = Field(default='lead', pattern="^(lead|customer|partner|prospect)$")
+    status: str | None = Field(default="lead", pattern="^(lead|customer|partner|prospect)$")
     owner_id: int | None = Field(default=0, ge=0, description="负责人 ID")
     tags: list[str] | None = Field(default_factory=list, description="标签列表")
 
-    @field_validator('name')
+    @field_validator("name")
     @classmethod
     def name_not_empty(cls, v):
         if not v or not v.strip():
-            raise ValueError('客户名称不能为空')
+            raise ValueError("客户名称不能为空")
         return v.strip()
 
-    @field_validator('email')
+    @field_validator("email")
     @classmethod
     def email_format(cls, v):
         if v and not _is_valid_email(v):
-            raise ValueError('邮箱格式不正确')
+            raise ValueError("邮箱格式不正确")
         return v
 
 
@@ -99,7 +101,8 @@ class PaginationQuery(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@customers_router.post('', status_code=201)
+
+@customers_router.post("", status_code=201)
 async def create_customer(
     body: CustomerCreate,
     ctx: AuthContext = Depends(require_auth),
@@ -110,7 +113,7 @@ async def create_customer(
     return {"success": True, "data": result, "message": "客户创建成功"}
 
 
-@customers_router.get('')
+@customers_router.get("")
 async def list_customers(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -122,15 +125,19 @@ async def list_customers(
 ):
     service = CustomerService(session)
     items, total = await service.list_customers(
-        page=page, page_size=page_size, status=status,
-        owner_id=owner_id, tags=tags, tenant_id=ctx.tenant_id,
+        page=page,
+        page_size=page_size,
+        status=status,
+        owner_id=owner_id,
+        tags=tags,
+        tenant_id=ctx.tenant_id,
     )
     return _paginated(items, total, page, page_size)
 
 
-@customers_router.get('/search')
+@customers_router.get("/search")
 async def search_customers(
-    keyword: str = Query('', max_length=200),
+    keyword: str = Query("", max_length=200),
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
@@ -139,7 +146,7 @@ async def search_customers(
     return {"success": True, "data": {"keyword": keyword, "items": items}}
 
 
-@customers_router.get('/{customer_id}')
+@customers_router.get("/{customer_id}")
 async def get_customer(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -150,7 +157,7 @@ async def get_customer(
     return {"success": True, "data": result}
 
 
-@customers_router.put('/{customer_id}')
+@customers_router.put("/{customer_id}")
 async def update_customer(
     customer_id: int,
     body: dict,
@@ -162,7 +169,7 @@ async def update_customer(
     return {"success": True, "data": result, "message": "客户更新成功"}
 
 
-@customers_router.delete('/{customer_id}')
+@customers_router.delete("/{customer_id}")
 async def delete_customer(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -173,7 +180,7 @@ async def delete_customer(
     return {"success": True, "data": result, "message": "客户删除成功"}
 
 
-@customers_router.post('/{customer_id}/tags')
+@customers_router.post("/{customer_id}/tags")
 async def add_tag(
     customer_id: int,
     body: TagOp,
@@ -185,7 +192,7 @@ async def add_tag(
     return {"success": True, "data": result, "message": "标签添加成功"}
 
 
-@customers_router.delete('/{customer_id}/tags/{tag}')
+@customers_router.delete("/{customer_id}/tags/{tag}")
 async def remove_tag(
     customer_id: int,
     tag: str,
@@ -197,7 +204,7 @@ async def remove_tag(
     return {"success": True, "data": result, "message": "标签移除成功"}
 
 
-@customers_router.put('/{customer_id}/status')
+@customers_router.put("/{customer_id}/status")
 async def change_status(
     customer_id: int,
     body: StatusChange,
@@ -209,7 +216,7 @@ async def change_status(
     return {"success": True, "data": result, "message": "状态更新成功"}
 
 
-@customers_router.put('/{customer_id}/owner')
+@customers_router.put("/{customer_id}/owner")
 async def assign_owner(
     customer_id: int,
     body: OwnerChange,
@@ -221,14 +228,14 @@ async def assign_owner(
     return {"success": True, "data": result, "message": "负责人更新成功"}
 
 
-@customers_router.post('/import')
+@customers_router.post("/import")
 async def bulk_import(
     body: BulkImport,
     ctx: AuthContext = Depends(require_auth),
     session=Depends(get_db),
 ):
     if len(body.customers) > 1000:
-        raise HTTPException(status_code=400, detail='Maximum 1000 customers per import')
+        raise HTTPException(status_code=400, detail="Maximum 1000 customers per import")
     service = CustomerService(session)
     imported_count = await service.bulk_import(body.customers, tenant_id=ctx.tenant_id)
     return {"success": True, "data": {"imported": imported_count}, "message": "批量导入成功"}

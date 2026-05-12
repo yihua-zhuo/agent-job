@@ -1,4 +1,5 @@
 """User model for CRM system."""
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -6,6 +7,7 @@ from enum import Enum
 
 class Role(Enum):
     """User role enumeration (alias for UserRole)."""
+
     ADMIN = "admin"
     MANAGER = "manager"
     SALES = "sales"
@@ -17,6 +19,7 @@ class Role(Enum):
 
 class UserRole(Enum):
     """User role enumeration."""
+
     ADMIN = "admin"
     MANAGER = "manager"
     SALES = "sales"
@@ -28,6 +31,7 @@ class UserRole(Enum):
 
 class UserStatus(Enum):
     """User status enumeration."""
+
     ACTIVE = "active"
     INACTIVE = "inactive"
     SUSPENDED = "suspended"
@@ -38,6 +42,7 @@ class UserStatus(Enum):
 @dataclass
 class User:
     """User entity representing a system user."""
+
     username: str
     email: str
     role: Role = Role.USER
@@ -74,12 +79,12 @@ class User:
         """Check if user has at least the required role permission."""
         role_hierarchy = [Role.VIEWER, Role.USER, Role.SUPPORT, Role.SALES, Role.MANAGER, Role.ADMIN]
         try:
-            user_val = self.role.value if hasattr(self.role, 'value') else self.role
+            user_val = self.role.value if hasattr(self.role, "value") else self.role
             user_level = next(i for i, r in enumerate(role_hierarchy) if r.value == user_val)
         except (AttributeError, StopIteration):
             return False
         try:
-            req_val = required_role.value if hasattr(required_role, 'value') else required_role
+            req_val = required_role.value if hasattr(required_role, "value") else required_role
             req_level = next(i for i, r in enumerate(role_hierarchy) if r.value == req_val)
         except (AttributeError, StopIteration):
             return False
@@ -87,57 +92,57 @@ class User:
 
     def to_dict(self) -> dict:
         """Convert user to dictionary representation."""
-        role_val = self.role.value if hasattr(self.role, 'value') else self.role
-        status_val = self.status.value if hasattr(self.status, 'value') else self.status
+        role_val = self.role.value if hasattr(self.role, "value") else self.role
+        status_val = self.status.value if hasattr(self.status, "value") else self.status
         return {
-            'id': self.id,
-            'username': self.username,
-            'email': self.email,
-            'role': role_val,
-            'tenant_id': self.tenant_id,
-            'full_name': self.full_name,
-            'status': status_val,
-            'bio': self.bio,
-            'is_active': self.is_active,
-            'tags': self.tags,
-            'created_at': self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
-            'updated_at': self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at,
+            "id": self.id,
+            "username": self.username,
+            "email": self.email,
+            "role": role_val,
+            "tenant_id": self.tenant_id,
+            "full_name": self.full_name,
+            "status": status_val,
+            "bio": self.bio,
+            "is_active": self.is_active,
+            "tags": self.tags,
+            "created_at": self.created_at.isoformat() if isinstance(self.created_at, datetime) else self.created_at,
+            "updated_at": self.updated_at.isoformat() if isinstance(self.updated_at, datetime) else self.updated_at,
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> 'User':
+    def from_dict(cls, data: dict) -> "User":
         """Create user instance from dictionary."""
-        role_value = data.get('role')
+        role_value = data.get("role")
         if isinstance(role_value, str):
             try:
                 role = UserRole(role_value)
             except ValueError:
                 role = UserRole.USER
-        elif hasattr(role_value, 'value'):
+        elif hasattr(role_value, "value"):
             role = UserRole(role_value.value)
         else:
             role = UserRole.USER
 
-        created_at = data.get('created_at')
+        created_at = data.get("created_at")
         if isinstance(created_at, str):
             created_at = datetime.fromisoformat(created_at)
         elif created_at is None:
             created_at = datetime.utcnow()
 
-        updated_at = data.get('updated_at')
+        updated_at = data.get("updated_at")
         if isinstance(updated_at, str):
             updated_at = datetime.fromisoformat(updated_at)
         elif updated_at is None:
             updated_at = datetime.utcnow()
 
         return cls(
-            id=data.get('id'),
-            username=data['username'],
-            email=data['email'],
+            id=data.get("id"),
+            username=data["username"],
+            email=data["email"],
             role=role,
-            status=UserStatus(data.get('status', 'pending')) if data.get('status') else UserStatus.PENDING,
-            full_name=data.get('full_name'),
-            is_active=data.get('is_active', True),
+            status=UserStatus(data.get("status", "pending")) if data.get("status") else UserStatus.PENDING,
+            full_name=data.get("full_name"),
+            is_active=data.get("is_active", True),
             created_at=created_at,
             updated_at=updated_at,
         )

@@ -14,7 +14,7 @@ from models.ticket import SLALevel, TicketChannel, TicketPriority, TicketStatus
 from services.sla_service import SLAService
 from services.ticket_service import TicketService
 
-tickets_router = APIRouter(prefix='/api/v1', tags=['tickets'])
+tickets_router = APIRouter(prefix="/api/v1", tags=["tickets"])
 
 
 def _paginated(items, total, page, page_size):
@@ -34,6 +34,7 @@ def _paginated(items, total, page, page_size):
 # ---------------------------------------------------------------------------
 # Request schemas
 # ---------------------------------------------------------------------------
+
 
 class TicketCreate(BaseModel):
     subject: str = Field(..., min_length=1, max_length=500)
@@ -81,7 +82,8 @@ def _status_str_to_enum(status_str: str) -> TicketStatus:
 # Ticket endpoints
 # ---------------------------------------------------------------------------
 
-@tickets_router.post('/tickets', status_code=201)
+
+@tickets_router.post("/tickets", status_code=201)
 async def create_ticket(
     body: TicketCreate,
     ctx: AuthContext = Depends(require_auth),
@@ -100,7 +102,7 @@ async def create_ticket(
     return {"success": True, "data": ticket.to_dict(), "message": "工单创建成功"}
 
 
-@tickets_router.get('/tickets')
+@tickets_router.get("/tickets")
 async def list_tickets(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -120,14 +122,17 @@ async def list_tickets(
         raise HTTPException(status_code=422, detail="Invalid priority value")
     service = TicketService(session)
     items, total = await service.list_tickets(
-        page=page, page_size=page_size,
-        status=status_enum, priority=priority_enum,
-        assigned_to=assignee_id, tenant_id=ctx.tenant_id or 0,
+        page=page,
+        page_size=page_size,
+        status=status_enum,
+        priority=priority_enum,
+        assigned_to=assignee_id,
+        tenant_id=ctx.tenant_id or 0,
     )
     return _paginated(items, total, page, page_size)
 
 
-@tickets_router.get('/tickets/{ticket_id}')
+@tickets_router.get("/tickets/{ticket_id}")
 async def get_ticket(
     ticket_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -138,7 +143,7 @@ async def get_ticket(
     return {"success": True, "data": ticket.to_dict()}
 
 
-@tickets_router.put('/tickets/{ticket_id}')
+@tickets_router.put("/tickets/{ticket_id}")
 async def update_ticket(
     ticket_id: int,
     body: TicketUpdate,
@@ -155,7 +160,7 @@ async def update_ticket(
     return {"success": True, "data": ticket.to_dict(), "message": "工单更新成功"}
 
 
-@tickets_router.put('/tickets/{ticket_id}/assign')
+@tickets_router.put("/tickets/{ticket_id}/assign")
 async def assign_ticket(
     ticket_id: int,
     body: TicketAssign,
@@ -167,7 +172,7 @@ async def assign_ticket(
     return {"success": True, "data": ticket.to_dict(), "message": "工单分配成功"}
 
 
-@tickets_router.post('/tickets/{ticket_id}/replies', status_code=201)
+@tickets_router.post("/tickets/{ticket_id}/replies", status_code=201)
 async def add_reply(
     ticket_id: int,
     body: TicketReplyCreate,
@@ -185,7 +190,7 @@ async def add_reply(
     return {"success": True, "data": reply.to_dict(), "message": "回复添加成功"}
 
 
-@tickets_router.put('/tickets/{ticket_id}/status')
+@tickets_router.put("/tickets/{ticket_id}/status")
 async def change_ticket_status(
     ticket_id: int,
     body: TicketStatusChange,
@@ -198,7 +203,7 @@ async def change_ticket_status(
     return {"success": True, "data": ticket.to_dict(), "message": "状态变更成功"}
 
 
-@tickets_router.get('/tickets/customer/{customer_id}')
+@tickets_router.get("/tickets/customer/{customer_id}")
 async def get_customer_tickets(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -213,7 +218,7 @@ async def get_customer_tickets(
     }
 
 
-@tickets_router.get('/tickets/sla/breaches')
+@tickets_router.get("/tickets/sla/breaches")
 async def get_sla_breaches(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
@@ -227,7 +232,7 @@ async def get_sla_breaches(
     }
 
 
-@tickets_router.post('/tickets/{ticket_id}/auto-assign')
+@tickets_router.post("/tickets/{ticket_id}/auto-assign")
 async def auto_assign_ticket(
     ticket_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -242,7 +247,8 @@ async def auto_assign_ticket(
 # SLA endpoints
 # ---------------------------------------------------------------------------
 
-@tickets_router.get('/sla/status/{ticket_id}')
+
+@tickets_router.get("/sla/status/{ticket_id}")
 async def check_sla_status(
     ticket_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -265,7 +271,7 @@ async def check_sla_status(
     }
 
 
-@tickets_router.get('/sla/breaches')
+@tickets_router.get("/sla/breaches")
 async def get_sla_breach_tickets(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),

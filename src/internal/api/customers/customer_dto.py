@@ -1,10 +1,12 @@
 """客户 DTO 定义"""
+
 from dataclasses import dataclass
 
 
 @dataclass
 class CreateCustomerDTO:
     """创建客户 DTO"""
+
     name: str
     email: str
     phone: str | None = None
@@ -18,6 +20,7 @@ class CreateCustomerDTO:
 @dataclass
 class UpdateCustomerDTO:
     """更新客户 DTO"""
+
     name: str | None = None
     email: str | None = None
     phone: str | None = None
@@ -28,6 +31,7 @@ class UpdateCustomerDTO:
 @dataclass
 class CustomerResponseDTO:
     """客户响应 DTO"""
+
     id: int
     name: str
     email: str

@@ -1,17 +1,19 @@
 """
 API 响应模型
 """
+
 import json
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Generic, TypeVar
 
-T = TypeVar('T')
+T = TypeVar("T")
 
 
 class ResponseStatus(Enum):
     """响应状态枚举"""
+
     SUCCESS = "success"
     ERROR = "error"
     WARNING = "warning"
@@ -24,6 +26,7 @@ class ResponseStatus(Enum):
 
 class ErrorCode(Enum):
     """错误码枚举"""
+
     # 通用错误 (1000-1999)
     UNKNOWN_ERROR = 1000
     INVALID_PARAMS = 1001
@@ -56,6 +59,7 @@ class ErrorCode(Enum):
 @dataclass
 class ApiError:
     """API错误详情"""
+
     code: int
     message: str
     field: str | None = None
@@ -65,6 +69,7 @@ class ApiError:
 @dataclass
 class PaginatedData(Generic[T]):
     """分页数据"""
+
     items: list[T]
     total: int
     page: int
@@ -83,6 +88,7 @@ class PaginatedData(Generic[T]):
 @dataclass
 class ApiResponse(Generic[T]):
     """通用API响应"""
+
     status: ResponseStatus
     message: str = ""
     data: T | None = None
@@ -98,7 +104,11 @@ class ApiResponse(Generic[T]):
             status=ResponseStatus.SUCCESS,
             message=message,
             data=data,
-            **{k: v for k, v in kwargs.items() if k not in ["status", "message", "data", "errors", "meta", "timestamp", "request_id"]}
+            **{
+                k: v
+                for k, v in kwargs.items()
+                if k not in ["status", "message", "data", "errors", "meta", "timestamp", "request_id"]
+            },
         )
 
     @classmethod
@@ -117,44 +127,39 @@ class ApiResponse(Generic[T]):
             status=status_map.get(code, ResponseStatus.ERROR),
             message=message,
             errors=errors or [],
-            **{k: v for k, v in kwargs.items() if k not in ["status", "message", "data", "errors", "meta", "timestamp", "request_id"]}
+            **{
+                k: v
+                for k, v in kwargs.items()
+                if k not in ["status", "message", "data", "errors", "meta", "timestamp", "request_id"]
+            },
         )
 
     @classmethod
-    def paginated(cls, items: list[T], total: int, page: int, page_size: int, message: str = "查询成功") -> "ApiResponse[PaginatedData[T]]":
+    def paginated(
+        cls, items: list[T], total: int, page: int, page_size: int, message: str = "查询成功"
+    ) -> "ApiResponse[PaginatedData[T]]":
         """创建分页响应"""
         total_pages = (total + page_size - 1) // page_size
         paginated_data = PaginatedData(
-            items=items,
-            total=total,
-            page=page,
-            page_size=page_size,
-            total_pages=total_pages
+            items=items, total=total, page=page, page_size=page_size, total_pages=total_pages
         )
         return cls(
             status=ResponseStatus.SUCCESS,
             message=message,
             data=paginated_data,
-            meta={"total": total, "page": page, "page_size": page_size}
+            meta={"total": total, "page": page, "page_size": page_size},
         )
 
     def to_dict(self) -> dict:
         """转换为字典"""
-        result = {
-            "status": self.status.value,
-            "message": self.message,
-            "timestamp": self.timestamp
-        }
+        result = {"status": self.status.value, "message": self.message, "timestamp": self.timestamp}
         if self.data is not None:
-            if hasattr(self.data, 'to_dict'):
+            if hasattr(self.data, "to_dict"):
                 result["data"] = self.data.to_dict()
             else:
                 result["data"] = self.data
         if self.errors:
-            result["errors"] = [
-                {"code": e.code, "message": e.message, "field": e.field}
-                for e in self.errors
-            ]
+            result["errors"] = [{"code": e.code, "message": e.message, "field": e.field} for e in self.errors]
         if self.meta:
             result["meta"] = self.meta
         if self.request_id:

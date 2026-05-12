@@ -40,35 +40,7 @@ jobs:
             "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
             shared-memory
 
-      - name: Check test gate
-        id: gate
-        run: |
-          python3 -c "
-          import json, os
-          from datetime import datetime, timezone
-          path = 'shared-memory/results/test-result.json'
-          if not os.path.exists(path):
-              print('TEST_GATE=skip')
-          else:
-              try:
-                  with open(path) as f:
-                      data = json.load(f)
-                  gen = datetime.fromisoformat(data['generated_at'].rstrip('Z')).replace(tzinfo=timezone.utc)
-                  age_h = (datetime.now(timezone.utc) - gen).total_seconds() / 3600
-                  if data.get('status') == 'pass' and age_h < 0.5:
-                      print('TEST_GATE=ok')
-                  else:
-                      print('TEST_GATE=skip')
-              except Exception:
-                  print('TEST_GATE=skip')
-          " >> $GITHUB_OUTPUT
-
-      - name: Skip if test not green
-        if: steps.gate.outputs.TEST_GATE == 'skip' && github.event_name != 'workflow_dispatch'
-        run: echo "Test gate not met — code-review deferred"
-
       - name: Fetch diff
-        if: steps.gate.outputs.TEST_GATE == 'ok' || github.event_name == 'workflow_dispatch'
         id: diff
         run: |
           git fetch --quiet --no-write-fetch-head origin master develop
@@ -78,7 +50,6 @@ jobs:
           echo "BASE=$(git log -1 --format=%H origin/master)" >> $GITHUB_OUTPUT
 
       - name: Run Claude Code Review
-        if: steps.gate.outputs.TEST_GATE == 'ok' || github.event_name == 'workflow_dispatch'
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
@@ -86,41 +57,8 @@ jobs:
           HEAD_INFO: ${{ steps.diff.outputs.HEAD }}
           BASE_INFO: ${{ steps.diff.outputs.BASE }}
         run: |
-          claude -p \
-            "You are a senior engineer. Review the following diff between origin/master and origin/develop.
-            The commit being reviewed: $HEAD_INFO (base: $BASE_INFO).
-
-            diff:
-            \$(cat $DIFF_FILE)
-
-            Respond with a JSON object:
-            {
-              \"verdict\": \"pass\" | \"fail\",
-              \"critical_issues\": [\"list of critical bugs, security issues, or regressions\"],
-              \"suggestions\": [\"minor improvements\"],
-              \"summary\": \"one sentence overall assessment\"
-            }
-
-            Only set verdict=pass if there are ZERO critical-severity issues." \
-            --model claude-sonnet-4-6 \
-            --max-turns 100 \
-            --output-format json \
-            2>&1 | tee /tmp/claude-output.txt || true
-
-          # Parse and save structured result
-          python3 -c "
-          import json, os
-          text = open('/tmp/claude-output.txt').read()
-          # Extract last JSON block
-          try:
-              idx = text.rfind('{')
-              data = json.loads(text[idx:])
-              with open('shared-memory/results/code-review-result.json', 'w') as f:
-                  json.dump(data, f, indent=2)
-          except Exception as e:
-              with open('shared-memory/results/code-review-result.json', 'w') as f:
-                  json.dump({'error': str(e), 'raw': text[-500:]}, f)
-          "
+          python3 scripts/ci/run_claude_code_review.py
+          python3 scripts/ci/save_code_review_result.py
 
       - name: Push shared-memory
         if: always()
@@ -149,7 +87,6 @@ jobs:
           retention-days: 3
 
       - name: Create GitHub Issue on critical issues
-        if: steps.gate.outputs.TEST_GATE == 'ok'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_RUN_ID: ${{ github.run_id }}
