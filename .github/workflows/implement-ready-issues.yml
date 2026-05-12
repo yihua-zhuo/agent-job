@@ -123,6 +123,18 @@ jobs:
           PYTHONPATH: src
         run: python3 scripts/ci/execute_implementation.py
 
+      - name: Post-Stage-2 diagnostics (working tree + branch state)
+        if: steps.plan.outputs.issue_number != ''
+        run: |
+          echo "=== git status -uall ==="
+          git status -uall
+          echo
+          echo "=== Commits on branch beyond origin/master ==="
+          git log --oneline origin/master..HEAD || echo "(unable to compare; origin/master may be missing)"
+          echo
+          echo "=== Files changed vs origin/master ==="
+          git diff --stat origin/master..HEAD || true
+
       # Note: no separate test gate here. The execute step instructs Claude to
       # run ruff + unit + integration tests itself and iterate until green,
       # and the PR opened below is re-tested by `ci.yml` on pull_request before
@@ -136,21 +148,31 @@ jobs:
           BRANCH="${{ steps.plan.outputs.branch }}"
           ISSUE_NUMBER="${{ steps.plan.outputs.issue_number }}"
           PLAN_PATH="${{ steps.plan.outputs.plan_path }}"
+
+          # Stage anything Claude left in the working tree, then commit it.
+          # Claude may also have committed during its own session, in which
+          # case the working tree is already clean — handle both cases.
           git add -A
-          # Early-exit if Claude produced no implementation changes — otherwise
-          # we'd push a plan-only branch and open a spurious PR with nothing
-          # but the .plans/ file in it.
-          if git diff --cached --quiet; then
-            echo "No implementation changes beyond the plan commit — not opening a PR."
+          if ! git diff --cached --quiet; then
+            git commit \
+              -m "feat: implement issue #${ISSUE_NUMBER}" \
+              -m "Closes #${ISSUE_NUMBER}" \
+              -m "Auto-implemented by Claude Code following ${PLAN_PATH}. Claude was instructed to run ruff + unit + integration tests until green before declaring done; PR-time CI re-verifies."
+          fi
+
+          # Decide whether to push by looking at the branch vs origin/master,
+          # NOT at the staging index. That way, commits Claude made during
+          # its own Stage 2 session still count — without this, a session
+          # where Claude self-committed would leave a clean working tree
+          # and we'd wrongly exit thinking nothing happened.
+          #
+          # The ':!.plans/*' pathspec excludes the plan file: a branch whose
+          # only diff vs master is the plan itself isn't worth a PR.
+          if git diff --quiet origin/master..HEAD -- . ':!.plans/*'; then
+            echo "No implementation changes vs origin/master (only the plan, if any) — not opening a PR."
             exit 0
           fi
-          # Multi-paragraph commit message via repeated -m, so every line of
-          # this YAML block scalar stays inside its indent (multi-line strings
-          # with column-0 lines would otherwise terminate the | block early).
-          git commit \
-            -m "feat: implement issue #${ISSUE_NUMBER}" \
-            -m "Closes #${ISSUE_NUMBER}" \
-            -m "Auto-implemented by Claude Code following ${PLAN_PATH}. Claude was instructed to run ruff + unit + integration tests until green before declaring done; PR-time CI re-verifies."
+
           git push -u origin "$BRANCH"
           PR_BODY=$(printf 'Closes #%s\n\nPlan: `%s`\n\nThis PR was auto-implemented by Claude Code. Claude was instructed to run `ruff check src/`, the unit test suite, and the integration test suite itself and iterate until all green. PR-time CI (`Dev Agent CI`) re-verifies independently before this PR is mergeable.\n\nPlease review before merging.' "$ISSUE_NUMBER" "$PLAN_PATH")
           gh pr create \
