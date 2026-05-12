@@ -10,6 +10,7 @@ import os
 import threading
 from contextlib import asynccontextmanager, contextmanager
 from typing import TYPE_CHECKING
+from urllib.parse import unquote
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
@@ -87,6 +88,7 @@ def session_scope():
 
 _async_engine: AsyncEngine | None = None
 _async_engine_lock = threading.Lock()
+_async_session_factory: async_sessionmaker[AsyncSession] | None = None
 _async_session_lock = threading.Lock()
 
 
@@ -99,6 +101,7 @@ def _build_async_engine(url: str) -> AsyncEngine:
         creds_end = url.rfind("@")
         credentials = url[creds_start:creds_end]
         user_part, password = credentials.rsplit(":", 1)
+        password = unquote(password)
         host_port = url[creds_end + 1:]
         last_colon = host_port.rfind(":")
         host = host_port[:last_colon]

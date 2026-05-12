@@ -5,7 +5,12 @@ Usage in services::
     from internal.db import session_scope
 
     async with session_scope() as session:
-        result = await session.execute(select(MyModel).where(...))
+        result = await session.execute(
+            select(MyModel).where(
+                MyModel.tenant_id == tenant_id,
+                MyModel.id == some_id,
+            )
+        )
         return result.scalar_one_or_none()
 
 Usage in FastAPI routes::
