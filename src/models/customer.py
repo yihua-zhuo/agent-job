@@ -5,6 +5,9 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
+from db.models.customer import CustomerModel
+from models.customer_create_dto import CustomerCreateDTO
+
 
 class CustomerStatus(Enum):
     """Customer status enumeration."""
@@ -13,47 +16,6 @@ class CustomerStatus(Enum):
     OPPORTUNITY = "opportunity"
     CUSTOMER = "customer"
     INACTIVE = "inactive"
-
-
-@dataclass
-class CustomerCreateDTO:
-    """Type-safe DTO for customer creation — maps to CustomerService.create_customer input.
-
-    Fields mirror the acceptance criteria: name, email, phone, company, status, owner_id, tags.
-    """
-
-    name: str
-    email: str
-    phone: str | None = None
-    company: str | None = None
-    status: str = "lead"
-    owner_id: int = 0
-    tags: list[str] = field(default_factory=list)
-
-    def to_dict(self) -> dict[str, Any]:
-        """Render as a plain dict for CustomerService.create_customer."""
-        return {
-            "name": self.name,
-            "email": self.email,
-            "phone": self.phone,
-            "company": self.company,
-            "status": self.status,
-            "owner_id": self.owner_id,
-            "tags": self.tags,
-        }
-
-    @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "CustomerCreateDTO":
-        """Reconstruct from a raw dict (e.g. from parsed JSON body)."""
-        return cls(
-            name=data.get("name", ""),
-            email=data.get("email", ""),
-            phone=data.get("phone"),
-            company=data.get("company"),
-            status=data.get("status", "lead"),
-            owner_id=data.get("owner_id", 0),
-            tags=data.get("tags", []),
-        )
 
 
 @dataclass
@@ -71,7 +33,7 @@ class Customer:
     created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert customer to dictionary representation."""
         return {
             "id": self.id,
@@ -87,7 +49,7 @@ class Customer:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "Customer":
+    def from_dict(cls, data: dict[str, Any]) -> "Customer":
         """Create customer instance from dictionary."""
         status_value = data.get("status")
         if isinstance(status_value, str):
@@ -107,15 +69,24 @@ class Customer:
         elif updated_at is None:
             updated_at = datetime.now(UTC)
 
+        name = data.get("name")
+        email = data.get("email")
+        owner_id = data.get("owner_id", 0)
+
+        if not name:
+            raise ValueError("name is required and must be non-empty")
+        if not email:
+            raise ValueError("email is required and must be non-empty")
+
         return cls(
             id=data.get("id"),
-            name=data["name"],
-            email=data["email"],
+            name=name,
+            email=email,
             phone=data.get("phone"),
             company=data.get("company"),
             status=status,
-            owner_id=data["owner_id"],
-            tags=data.get("tags", []),
+            owner_id=owner_id,
+            tags=data.get("tags") or [],
             created_at=created_at,
             updated_at=updated_at,
         )

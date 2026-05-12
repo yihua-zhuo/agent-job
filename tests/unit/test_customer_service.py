@@ -1,35 +1,41 @@
 """Unit tests for CustomerService — focus on CustomerCreateDTO integration."""
 
-from __future__ import annotations
-
 import sys
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from models.customer import CustomerCreateDTO
+from models.customer_create_dto import CustomerCreateDTO
 from services.customer_service import CustomerService
 
 
 @pytest.fixture
-def mock_session():
-    """Async mock session that tracks calls."""
-    session = MagicMock(spec=[
-        "add", "flush", "refresh", "commit",
-        "execute", "scalar_one_or_none", "scalars",
-    ])
+def mock_db_session():
+    """Async mock session that tracks calls and properly wires execute()."""
+    session = MagicMock()
     session.add = MagicMock()
     session.flush = AsyncMock()
     session.refresh = AsyncMock()
     session.commit = AsyncMock()
+
+    # Wire execute() to return a mock result object with the ORM methods tests use
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none = AsyncMock(return_value=None)
+    mock_result.scalar = AsyncMock(return_value=0)
+    mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+    mock_result.fetchall = MagicMock(return_value=[])
+    mock_result.all = AsyncMock(return_value=[])
+    mock_result.rowcount = 0
+    session.execute = AsyncMock(return_value=mock_result)
+
     return session
 
 
 class TestCustomerCreateDTO:
-    """Tests for CustomerCreateDTO dataclass."""
+    """Tests for CustomerCreateDTO Pydantic model."""
 
     def test_required_fields_only(self):
         """CustomerCreateDTO with only required fields."""
@@ -103,6 +109,16 @@ class TestCustomerCreateDTO:
         assert reconstructed.owner_id == original.owner_id
         assert reconstructed.tags == original.tags
 
+    def test_from_dict_missing_name_raises(self):
+        """from_dict raises ValueError when name is missing."""
+        with pytest.raises(ValueError, match="name is required"):
+            CustomerCreateDTO.from_dict({"email": "test@example.com"})
+
+    def test_from_dict_missing_email_raises(self):
+        """from_dict raises ValueError when email is missing."""
+        with pytest.raises(ValueError, match="email is required"):
+            CustomerCreateDTO.from_dict({"name": "Test"})
+
     def test_default_status_is_lead(self):
         """Default status when not specified."""
         dto = CustomerCreateDTO(name="Eve", email="eve@example.com")
@@ -118,32 +134,37 @@ class TestCreateCustomerService:
     """Tests for CustomerService.create_customer with DTO support."""
 
     @pytest.mark.asyncio
-    async def test_create_customer_accepts_dict(self, mock_session):
+    async def test_create_customer_accepts_dict(self, mock_db_session):
         """create_customer works with a plain dict (backward compat)."""
-        service = CustomerService(mock_session)
+        service = CustomerService(mock_db_session)
 
-        # Patch the refresh to set the committed object id
         async def fake_refresh(obj):
             obj.id = 1
+            obj.name = "Test"
+            obj.email = "test@example.com"
 
-        mock_session.refresh = fake_refresh
+        mock_db_session.refresh = fake_refresh
 
         result = await service.create_customer(
             {"name": "Test", "email": "test@example.com"},
             tenant_id=1,
         )
-        mock_session.add.assert_called_once()
-        mock_session.commit.assert_called_once()
+        mock_db_session.add.assert_called_once()
+        mock_db_session.commit.assert_called_once()
+        assert result.name == "Test"
+        assert result.email == "test@example.com"
 
     @pytest.mark.asyncio
-    async def test_create_customer_accepts_dto(self, mock_session):
+    async def test_create_customer_accepts_dto(self, mock_db_session):
         """create_customer accepts a CustomerCreateDTO instance."""
-        service = CustomerService(mock_session)
+        service = CustomerService(mock_db_session)
 
         async def fake_refresh(obj):
             obj.id = 2
+            obj.name = "DTO Customer"
+            obj.email = "dto@example.com"
 
-        mock_session.refresh = fake_refresh
+        mock_db_session.refresh = fake_refresh
 
         dto = CustomerCreateDTO(
             name="DTO Customer",
@@ -156,11 +177,10 @@ class TestCreateCustomerService:
         )
         result = await service.create_customer(dto, tenant_id=1)
 
-        mock_session.add.assert_called_once()
-        mock_session.commit.assert_called_once()
+        mock_db_session.add.assert_called_once()
+        mock_db_session.commit.assert_called_once()
 
-        # Verify the entity was built from dto.to_dict()
-        call_args = mock_session.add.call_args[0][0]
+        call_args = mock_db_session.add.call_args[0][0]
         assert call_args.name == "DTO Customer"
         assert call_args.email == "dto@example.com"
         assert call_args.phone == "13600136000"
@@ -168,22 +188,26 @@ class TestCreateCustomerService:
         assert call_args.status == "customer"
         assert call_args.owner_id == 99
         assert call_args.tags == ["key-account"]
+        assert result.name == "DTO Customer"
 
     @pytest.mark.asyncio
-    async def test_create_customer_empty_dict_uses_defaults(self, mock_session):
+    async def test_create_customer_empty_dict_uses_defaults(self, mock_db_session):
         """create_customer with empty dict falls back to default values."""
-        service = CustomerService(mock_session)
+        service = CustomerService(mock_db_session)
 
         async def fake_refresh(obj):
             obj.id = 3
+            obj.name = "Customer"
+            obj.email = None
 
-        mock_session.refresh = fake_refresh
+        mock_db_session.refresh = fake_refresh
 
         result = await service.create_customer({}, tenant_id=1)
 
-        call_args = mock_session.add.call_args[0][0]
-        assert call_args.name == "Customer"        # default from service
+        call_args = mock_db_session.add.call_args[0][0]
+        assert call_args.name == "Customer"  # default from service
         assert call_args.email is None
         assert call_args.status == "lead"
         assert call_args.owner_id == 0
         assert call_args.tags == []
+        assert result.name == "Customer"
