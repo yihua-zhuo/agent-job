@@ -17,3 +17,6 @@ all-code.txt
 cat_all.py
 code_review.py
 scripts/push-and-watch.sh
+.omc
+uv.lock
+code-review-result.json
