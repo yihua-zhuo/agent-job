@@ -1,11 +1,13 @@
 """Customer service — CRUD + tagging + status management via SQLAlchemy ORM."""
 
 from datetime import UTC, datetime
+from typing import Any
 
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
+from models.customer import CustomerCreateDTO
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
@@ -17,9 +19,21 @@ class CustomerService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def create_customer(self, data: dict, tenant_id: int = 0) -> CustomerModel:
-        """Insert a customer row."""
-        d = data or {}
+    async def create_customer(
+        self,
+        data: dict[str, Any] | CustomerCreateDTO,
+        tenant_id: int = 0,
+    ) -> CustomerModel:
+        """Insert a customer row.
+
+        Args:
+            data: Either a raw dict or a CustomerCreateDTO instance.
+            tenant_id: Tenant scope for the new customer.
+        """
+        if isinstance(data, CustomerCreateDTO):
+            d = data.to_dict()
+        else:
+            d = data or {}
         now = datetime.now(UTC)
         customer = CustomerModel(
             tenant_id=tenant_id,
