@@ -359,10 +359,11 @@ class TestChartHelpersIntegration:
         assert result["chart_type"] == "bar"
         assert len(result["datasets"]) == 2
 
-    def test_get_chart_data(self):
-        """Sync utility — no DB needed."""
-        from unittest.mock import MagicMock
-        svc = AnalyticsService(MagicMock())
+    async def test_get_chart_data(self, db_schema, tenant_id, async_session):
+        """Pure utility — service method doesn't touch the DB, but we still
+        construct with a real AsyncSession to avoid mocking in integration tests
+        (see codereview.md rule 124)."""
+        svc = AnalyticsService(async_session)
         result = svc.get_chart_data(
             chart_type="pie", data=[10, 20, 30],
             labels=["A", "B", "C"],

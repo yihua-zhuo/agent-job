@@ -200,13 +200,8 @@ class TestDataIsolationIntegration:
 class TestRBACServiceIntegration:
     """RBAC permission engine — no database needed."""
 
-    @pytest.fixture(autouse=True)
-    def _mock_session(self):
-        from unittest.mock import MagicMock
-        self._session = MagicMock()
-
-    def test_admin_has_all_customer_permissions(self):
-        svc = RBACService(self._session)
+    async def test_admin_has_all_customer_permissions(self, async_session):
+        svc = RBACService(async_session)
         for perm in [
             Permission.CUSTOMER_CREATE,
             Permission.CUSTOMER_READ,
@@ -215,8 +210,8 @@ class TestRBACServiceIntegration:
         ]:
             assert svc.has_permission("admin", perm) is True
 
-    def test_admin_has_all_opportunity_permissions(self):
-        svc = RBACService(self._session)
+    async def test_admin_has_all_opportunity_permissions(self, async_session):
+        svc = RBACService(async_session)
         for perm in [
             Permission.OPPORTUNITY_CREATE,
             Permission.OPPORTUNITY_READ,
@@ -225,83 +220,83 @@ class TestRBACServiceIntegration:
         ]:
             assert svc.has_permission("admin", perm) is True
 
-    def test_admin_has_admin_permissions(self):
-        svc = RBACService(self._session)
+    async def test_admin_has_admin_permissions(self, async_session):
+        svc = RBACService(async_session)
         assert svc.has_permission("admin", Permission.ADMIN_ALL) is True
         assert svc.has_permission("admin", Permission.USER_MANAGE) is True
 
-    def test_manager_can_read_but_not_delete_customers(self):
-        svc = RBACService(self._session)
+    async def test_manager_can_read_but_not_delete_customers(self, async_session):
+        svc = RBACService(async_session)
         assert svc.has_permission("manager", Permission.CUSTOMER_READ) is True
         assert svc.has_permission("manager", Permission.CUSTOMER_CREATE) is False
         assert svc.has_permission("manager", Permission.CUSTOMER_DELETE) is False
 
-    def test_manager_can_create_update_opportunities(self):
-        svc = RBACService(self._session)
+    async def test_manager_can_create_update_opportunities(self, async_session):
+        svc = RBACService(async_session)
         assert svc.has_permission("manager", Permission.OPPORTUNITY_CREATE) is True
         assert svc.has_permission("manager", Permission.OPPORTUNITY_UPDATE) is True
         assert svc.has_permission("manager", Permission.OPPORTUNITY_DELETE) is False
 
-    def test_sales_can_create_customers(self):
-        svc = RBACService(self._session)
+    async def test_sales_can_create_customers(self, async_session):
+        svc = RBACService(async_session)
         assert svc.has_permission("sales", Permission.CUSTOMER_CREATE) is True
         assert svc.has_permission("sales", Permission.CUSTOMER_READ) is True
         assert svc.has_permission("sales", Permission.CUSTOMER_UPDATE) is True
         assert svc.has_permission("sales", Permission.CUSTOMER_DELETE) is False
 
-    def test_sales_can_create_opportunities(self):
-        svc = RBACService(self._session)
+    async def test_sales_can_create_opportunities(self, async_session):
+        svc = RBACService(async_session)
         assert svc.has_permission("sales", Permission.OPPORTUNITY_CREATE) is True
         assert svc.has_permission("sales", Permission.OPPORTUNITY_READ) is True
         assert svc.has_permission("sales", Permission.OPPORTUNITY_UPDATE) is True
         assert svc.has_permission("sales", Permission.OPPORTUNITY_DELETE) is False
 
-    def test_support_read_only(self):
-        svc = RBACService(self._session)
+    async def test_support_read_only(self, async_session):
+        svc = RBACService(async_session)
         assert svc.has_permission("support", Permission.CUSTOMER_READ) is True
         assert svc.has_permission("support", Permission.OPPORTUNITY_READ) is True
         assert svc.has_permission("support", Permission.CUSTOMER_CREATE) is False
         assert svc.has_permission("support", Permission.OPPORTUNITY_CREATE) is False
 
-    def test_viewer_read_only(self):
-        svc = RBACService(self._session)
+    async def test_viewer_read_only(self, async_session):
+        svc = RBACService(async_session)
         assert svc.has_permission("viewer", Permission.CUSTOMER_READ) is True
         assert svc.has_permission("viewer", Permission.OPPORTUNITY_READ) is True
         assert svc.has_permission("viewer", Permission.CUSTOMER_CREATE) is False
 
-    def test_unknown_role_has_no_permissions(self):
-        svc = RBACService(self._session)
+    async def test_unknown_role_has_no_permissions(self, async_session):
+        svc = RBACService(async_session)
         assert svc.has_permission("ghost", Permission.CUSTOMER_READ) is False
         assert svc.has_permission("", Permission.CUSTOMER_READ) is False
 
-    def test_get_role_permissions_admin(self):
-        svc = RBACService(self._session)
+    async def test_get_role_permissions_admin(self, async_session):
+        svc = RBACService(async_session)
         perms = svc.get_role_permissions("admin")
         assert Permission.ADMIN_ALL in perms
         assert Permission.USER_MANAGE in perms
         assert Permission.CUSTOMER_READ in perms
 
-    def test_get_role_permissions_manager(self):
-        svc = RBACService(self._session)
+    async def test_get_role_permissions_manager(self, async_session):
+        svc = RBACService(async_session)
         perms = svc.get_role_permissions("manager")
         assert Permission.CUSTOMER_READ in perms
         assert Permission.CUSTOMER_DELETE not in perms
 
-    def test_get_role_permissions_unknown_returns_empty(self):
-        svc = RBACService(self._session)
+    async def test_get_role_permissions_unknown_returns_empty(self, async_session):
+        svc = RBACService(async_session)
         assert svc.get_role_permissions("unknown_role") == []
 
-    def test_check_permission_by_value_valid(self):
-        svc = RBACService(self._session)
+    async def test_check_permission_by_value_valid(self, async_session):
+        svc = RBACService(async_session)
         assert svc.check_permission_by_value("admin", "customer:read") is True
         assert svc.check_permission_by_value("sales", "customer:create") is True
 
-    def test_check_permission_by_value_invalid_role(self):
-        svc = RBACService(self._session)
+    async def test_check_permission_by_value_invalid_role(self, async_session):
+        svc = RBACService(async_session)
         assert svc.check_permission_by_value("ghost", "customer:read") is False
 
-    def test_check_permission_by_value_invalid_permission_string(self):
-        svc = RBACService(self._session)
+    async def test_check_permission_by_value_invalid_permission_string(self, async_session):
+        svc = RBACService(async_session)
         assert svc.check_permission_by_value("admin", "nonexistent:perm") is False
 
 

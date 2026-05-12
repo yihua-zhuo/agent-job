@@ -107,17 +107,17 @@ class UserService:
         )
         self.session.add(user)
         try:
+            # flush surfaces unique-constraint errors here so we can translate
+            # them; the router-bound get_db dependency owns commit/rollback.
             await self.session.flush()
             await self.session.refresh(user)
-            await self.session.commit()
             return user
         except IntegrityError as e:
-            await self.session.rollback()
             err = str(e).lower()
             if "username" in err:
-                raise ConflictException("用户名已存在")
+                raise ConflictException("用户名已存在") from e
             if "email" in err:
-                raise ConflictException("邮箱已被注册")
+                raise ConflictException("邮箱已被注册") from e
             raise
 
     async def get_user_by_id(self, user_id: int, tenant_id: int = 0) -> UserModel:
@@ -215,7 +215,7 @@ class UserService:
             return None
 
         user.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(user)
         return user
 
@@ -226,7 +226,7 @@ class UserService:
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("用户")
-        await self.session.commit()
+        await self.session.flush()
 
     async def change_password(
         self,
@@ -247,4 +247,4 @@ class UserService:
 
         user.password_hash = self._hash_password(new_password)
         user.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()

@@ -48,7 +48,7 @@ class WorkflowService:
         self.session.add(workflow)
         await self.session.flush()
         await self.session.refresh(workflow)
-        await self.session.commit()
+        await self.session.flush()
         return workflow
 
     async def get_workflow(self, workflow_id: int, tenant_id: int = 0) -> WorkflowModel:
@@ -71,7 +71,7 @@ class WorkflowService:
                     value = _enum_val(value)
                 setattr(workflow, key, value)
         workflow.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(workflow)
         return workflow
 
@@ -90,7 +90,7 @@ class WorkflowService:
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("Workflow")
-        await self.session.commit()
+        await self.session.flush()
         return workflow_id
 
     async def list_workflows(
@@ -147,7 +147,7 @@ class WorkflowService:
                 execution.result = {"error": str(e)}
             execution.completed_at = datetime.now(UTC)
 
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(execution)
         return execution
 

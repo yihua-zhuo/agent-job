@@ -203,7 +203,7 @@ class AuthService:
             text("INSERT INTO revoked_tokens (jti, expires_at) VALUES (:jti, :expires_at)"),
             {"jti": jti, "expires_at": datetime.fromtimestamp(payload.get("exp", 0), tz=UTC)},
         )
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     async def refresh_token(self, old_token: str) -> str:

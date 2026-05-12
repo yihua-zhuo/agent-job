@@ -56,8 +56,9 @@ class CustomerService:
             updated_at=now,
         )
         self.session.add(customer)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(customer)
+        await self.session.flush()
         return customer
 
     async def list_customers(
@@ -121,7 +122,7 @@ class CustomerService:
             return None
 
         customer.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(customer)
         return customer
 
@@ -132,7 +133,7 @@ class CustomerService:
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("客户")
-        await self.session.commit()
+        await self.session.flush()
         return {"id": customer_id}
 
     async def count_by_status(self, tenant_id: int) -> dict:
@@ -168,7 +169,7 @@ class CustomerService:
             tags.append(tag)
         customer.tags = tags
         customer.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(customer)
         return customer
 
@@ -177,7 +178,7 @@ class CustomerService:
         customer = await self.get_customer(customer_id, tenant_id)
         customer.tags = [t for t in (customer.tags or []) if t != tag]
         customer.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(customer)
         return customer
 
@@ -193,7 +194,7 @@ class CustomerService:
         customer = await self.get_customer(customer_id, tenant_id)
         customer.status = status
         customer.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(customer)
         return customer
 
@@ -207,7 +208,7 @@ class CustomerService:
         customer = await self.get_customer(customer_id, tenant_id)
         customer.owner_id = owner_id
         customer.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(customer)
         return customer
 
@@ -231,5 +232,5 @@ class CustomerService:
                     updated_at=now,
                 )
             )
-        await self.session.commit()
+        await self.session.flush()
         return len(customers)

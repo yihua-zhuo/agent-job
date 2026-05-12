@@ -42,7 +42,7 @@ class AnalyticsService:
         self.session.add(dashboard)
         await self.session.flush()
         await self.session.refresh(dashboard)
-        await self.session.commit()
+        await self.session.flush()
         return dashboard
 
     async def get_dashboard(self, dashboard_id: int, tenant_id: int = 0) -> DashboardModel:
@@ -61,7 +61,7 @@ class AnalyticsService:
             if key in allowed:
                 setattr(dashboard, key, value)
         dashboard.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(dashboard)
         return dashboard
 
@@ -83,7 +83,7 @@ class AnalyticsService:
         widgets.append(widget)
         dashboard.widgets = widgets
         dashboard.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         return widget
 
     async def remove_widget(self, dashboard_id: int, widget_id: int, tenant_id: int = 0) -> bool:
@@ -91,7 +91,7 @@ class AnalyticsService:
         widgets = [w for w in (dashboard.widgets or []) if w.get("id") != widget_id]
         dashboard.widgets = widgets
         dashboard.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         return True
 
     # -------------------------------------------------------------------------
@@ -118,7 +118,7 @@ class AnalyticsService:
         self.session.add(report)
         await self.session.flush()
         await self.session.refresh(report)
-        await self.session.commit()
+        await self.session.flush()
         return report
 
     async def get_report(self, report_id: int, tenant_id: int = 0) -> ReportModel:
@@ -134,7 +134,7 @@ class AnalyticsService:
         report = await self.get_report(report_id, tenant_id)
         report.date_range = date_range
         report.last_run_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
 
         start = date_range.get("start")
         end = date_range.get("end")

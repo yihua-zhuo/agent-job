@@ -52,7 +52,7 @@ class MarketingService:
         self.session.add(campaign)
         await self.session.flush()
         await self.session.refresh(campaign)
-        await self.session.commit()
+        await self.session.flush()
         return campaign
 
     async def get_campaign(self, campaign_id: int, tenant_id: int = 0) -> CampaignModel:
@@ -74,7 +74,7 @@ class MarketingService:
                     value = _enum_val(value)
                 setattr(campaign, key, value)
         campaign.updated_at = datetime.now(UTC)
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(campaign)
         return campaign
 
@@ -152,7 +152,7 @@ class MarketingService:
             campaign.click_count += 1
         campaign.updated_at = datetime.now(UTC)
 
-        await self.session.commit()
+        await self.session.flush()
         await self.session.refresh(event)
         return event
 

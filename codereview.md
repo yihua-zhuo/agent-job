@@ -177,3 +177,35 @@
 120. Simplicity preferred unless complexity is justified
 
 ---
+
+# Project-Specific Rules
+
+121. **Transaction boundary lives at the router layer.** The `get_db` /
+     `get_db_session` dependency in `src/db/connection.py` commits on normal
+     exit and rolls back on exception. Service-layer code must NOT call
+     `session.commit()` or `session.rollback()` — those calls fight the
+     dependency's transaction lifecycle and corrupt the request-scoped unit
+     of work.
+122. **Service layer may flush, never commit.** Use `await self.session.flush()`
+     when you need auto-generated IDs to be populated, an integrity error
+     to surface for translation (e.g. `IntegrityError` → `ConflictException`),
+     or to make pending changes visible to subsequent queries within the
+     same transaction. Flushing is local to the in-progress transaction;
+     committing ends it and breaks router-owned semantics.
+123. **No `flush()` + `refresh()` + `commit()` triple in services.** That
+     pattern indicates the service is trying to own the transaction.
+     Rewrite to `flush() → refresh()` and let the router commit.
+124. **Integration tests must not mock the database.** Tests under
+     `tests/integration/` must use the real Postgres test DB via the
+     `async_session`, `db_schema`, and `tenant_id` fixtures from
+     `tests/integration/conftest.py`. `unittest.mock.MagicMock` /
+     `AsyncMock` / `monkeypatch`-of-DB are forbidden in this directory.
+     If a method genuinely doesn't touch the DB, still construct the
+     service with the real `async_session` fixture — or move the test
+     to `tests/unit/` where mocking is the convention. The point of an
+     integration test is to exercise the actual SQL, type coercion, and
+     constraint behavior; mocks defeat the purpose.
+     (`monkeypatch.setenv` for environment variables is exempt — that's
+     not a DB mock.)
+
+---

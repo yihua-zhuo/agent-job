@@ -65,7 +65,7 @@ class ActivityService:
         self.session.add(row)
         await self.session.flush()
         await self.session.refresh(row)
-        await self.session.commit()
+        await self.session.flush()
         return _to_activity(row)
 
     async def get_activity(self, activity_id: int, tenant_id: int = 0) -> Activity:
@@ -89,7 +89,7 @@ class ActivityService:
             await self.session.execute(
                 update(ActivityModel).where(ActivityModel.id == activity_id).values(**update_values)
             )
-            await self.session.commit()
+            await self.session.flush()
 
         return _to_activity(await self._fetch(activity_id, tenant_id))
 
@@ -103,7 +103,7 @@ class ActivityService:
                 )
             )
         )
-        await self.session.commit()
+        await self.session.flush()
         return {"id": activity_id}
 
     async def list_activities(
