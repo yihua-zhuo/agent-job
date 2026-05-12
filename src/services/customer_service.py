@@ -1,12 +1,13 @@
 """Customer service — CRUD + tagging + status management via SQLAlchemy ORM."""
 
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Dict
 
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
+from models.customer import CustomerStatus
 from models.customer_create_dto import CustomerCreateDTO
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
@@ -135,14 +136,14 @@ class CustomerService:
         await self.session.flush()
         return {"id": customer_id}
 
-    async def count_by_status(self, tenant_id: int) -> dict:
+    async def count_by_status(self, tenant_id: int) -> Dict[CustomerStatus, int]:
         """Count customers grouped by status."""
         result = await self.session.execute(
             select(CustomerModel.status, func.count(CustomerModel.id))
             .where(CustomerModel.tenant_id == tenant_id)
             .group_by(CustomerModel.status)
         )
-        return {row[0]: row[1] for row in result.all()}
+        return {CustomerStatus(row[0]): row[1] for row in result.all()}
 
     async def search_customers(self, keyword: str, tenant_id: int) -> list[CustomerModel]:
         """Search customers by name or email (case-insensitive)."""
