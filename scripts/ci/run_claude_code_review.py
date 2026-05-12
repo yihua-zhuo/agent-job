@@ -189,8 +189,44 @@ def extract_json_object(text: str) -> dict[str, Any] | None:
     return None
 
 
-def build_file_review_prompt(filename: str) -> str:
+def load_guidelines() -> str:
+    """Load project-specific review guidelines from a Markdown file.
+
+    Path is configurable via `CODE_REVIEW_GUIDELINES_PATH` (default
+    `codereview.md` at the repo root). Returns an empty string if the file
+    isn't present so reviews still work in repos that haven't added one.
+    """
+    path = os.environ.get("CODE_REVIEW_GUIDELINES_PATH", "codereview.md")
+    p = Path(path)
+    if not p.exists():
+        log(f"guidelines_not_found path={path}")
+        return ""
+    try:
+        text = p.read_text(encoding="utf-8").strip()
+    except OSError as e:
+        log(f"guidelines_read_failed path={path} err={e}")
+        return ""
+    log(f"guidelines_loaded path={path} bytes={len(text)}")
+    return text
+
+
+def _guideline_block(guidelines: str) -> str:
+    """Render the guidelines section that prepends each review prompt."""
+    if not guidelines:
+        return ""
     return (
+        "Use the following project review guidelines as your evaluation criteria. "
+        "Flag issues that violate these rules; cite the rule number in `message` "
+        "when applicable. Treat unlisted concerns with lower priority.\n\n"
+        "----- REVIEW GUIDELINES -----\n"
+        f"{guidelines}\n"
+        "----- END GUIDELINES -----\n\n"
+    )
+
+
+def build_file_review_prompt(filename: str, guidelines: str = "") -> str:
+    return (
+        f"{_guideline_block(guidelines)}"
         f"Please read the file at path '{filename}' and review its contents.\n"
         "Respond with JSON only, no prose, no markdown fence. Exact shape:\n"
         "{\n"
@@ -208,10 +244,11 @@ def build_file_review_prompt(filename: str) -> str:
     )
 
 
-def build_batch_review_prompt(filenames: list[str]) -> str:
+def build_batch_review_prompt(filenames: list[str], guidelines: str = "") -> str:
     """Build a prompt that asks Claude to review multiple files in one pass."""
     files_list = "\n".join(f"- {f}" for f in filenames)
     return (
+        f"{_guideline_block(guidelines)}"
         "Please read and review each of the following files:\n"
         f"{files_list}\n\n"
         "Respond with a JSON array only — no prose, no markdown fence. "
@@ -261,6 +298,9 @@ class ReviewConfig:
 class ClaudeCodeReviewRunner:
     def __init__(self, config: ReviewConfig) -> None:
         self.config = config
+        # Loaded once per run; appended to every per-file/batch prompt so
+        # Claude evaluates against the project's checklist consistently.
+        self._guidelines: str = load_guidelines()
 
     @property
     def qualified_base(self) -> str:
@@ -383,7 +423,7 @@ class ClaudeCodeReviewRunner:
 
     def run_file_review(self, filename: str) -> dict[str, Any]:
         cmd = self.build_command()
-        prompt = build_file_review_prompt(filename)
+        prompt = build_file_review_prompt(filename, guidelines=self._guidelines)
         log(f"reviewing_file={filename}")
         log(f"command={' '.join(cmd)}")
         try:
@@ -426,7 +466,7 @@ class ClaudeCodeReviewRunner:
     def run_batch_review(self, filenames: list[str]) -> list[dict[str, Any]]:
         """Review a batch of files in a single Claude invocation and return one result per file."""
         cmd = self.build_command()
-        prompt = build_batch_review_prompt(filenames)
+        prompt = build_batch_review_prompt(filenames, guidelines=self._guidelines)
         log(f"reviewing_batch={filenames}")
         log(f"command={' '.join(cmd)}")
         try:
