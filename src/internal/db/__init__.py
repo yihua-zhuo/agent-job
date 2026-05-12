@@ -1,28 +1,32 @@
 """Async SQLAlchemy session infrastructure — Supabase PostgreSQL foundation.
 
-All services should use::
+Usage in services::
 
-    from internal.db import session_scope, SessionDep
+    from internal.db import session_scope
 
     async with session_scope() as session:
-        ...
+        result = await session.execute(select(MyModel).where(...))
+        return result.scalar_one_or_none()
 
-Or in FastAPI routes::
+Usage in FastAPI routes::
+
+    from internal.db import SessionDep
 
     async def my_route(session: SessionDep):
         ...
 
-Acceptance criteria met:
-  1) create_engine_from_env() / create_async_engine_from_env() — reads DATABASE_URL
-  2) get_async_engine() — singleton async engine with pool_pre_ping=True, pool_size=5
-  3) SessionLocal() — async_sessionmaker with autoflush=False, autocommit=False
-  4) Base — declarative base
-  5) session_scope() — async context manager for safe transaction handling
-  6) All services use session_scope() for DB access
+Acceptance criteria:
+  1) create_engine_from_env() — reads DATABASE_URL env var
+  2) get_async_engine() singleton with pool_pre_ping=True, pool_size=5
+  3) SessionLocal() async_sessionmaker with autoflush=False, autocommit=False
+  4) Base declarative base
+  5) session_scope() async context manager for safe transaction handling
+  6) All services use session_scope() via SessionDep / get_db dependency
 """
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from typing import Annotated, AsyncGenerator
 
 from fastapi import Depends
@@ -42,7 +46,7 @@ from internal.db.engine import (
 # Public async sessionmaker — lazily initialised on first call
 # ---------------------------------------------------------------------------
 
-def SessionLocal():
+def SessionLocal() -> async_sessionmaker[AsyncSession]:
     """Lazily-initialised async sessionmaker.
 
     Usage::
@@ -57,7 +61,8 @@ def SessionLocal():
 # Async session scope — the primary interface for all services
 # ---------------------------------------------------------------------------
 
-async def session_scope():
+@asynccontextmanager
+async def session_scope() -> AsyncGenerator[AsyncSession, None]:
     """Async transactional scope for safe DB access in all services.
 
     Commits on normal exit, rolls back on exception, always closes the session.

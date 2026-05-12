@@ -25,6 +25,7 @@ load_dotenv()
 _sync_engine = None
 _sync_engine_lock = threading.Lock()
 _sync_session_factory = None
+_sync_session_lock = threading.Lock()
 
 
 def create_engine_from_env():
@@ -56,7 +57,9 @@ def get_session():
     """Create a sync Session bound to the lazily initialized Engine."""
     global _sync_session_factory
     if _sync_session_factory is None:
-        _sync_session_factory = sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
+        with _sync_session_lock:
+            if _sync_session_factory is None:
+                _sync_session_factory = sessionmaker(bind=get_engine(), autoflush=False, autocommit=False)
     return _sync_session_factory()
 
 
@@ -83,8 +86,8 @@ def session_scope():
 # ---------------------------------------------------------------------------
 
 _async_engine: AsyncEngine | None = None
-_async_session_factory: async_sessionmaker[AsyncSession] | None = None
 _async_engine_lock = threading.Lock()
+_async_session_lock = threading.Lock()
 
 
 def _build_async_engine(url: str) -> AsyncEngine:
@@ -106,8 +109,12 @@ def _build_async_engine(url: str) -> AsyncEngine:
         else:
             port = port_and_path
             path = ""
+
+        # Supabase pooler host — configurable via env var to avoid hardcoded IP
+        pooler_host = os.environ.get("SUPABASE_POOLER_HOST", "13.114.6.6")
+
         connect_args = {
-            "host": "13.114.6.6",
+            "host": pooler_host,
             "user": user_part,
             "password": password,
             "database": path.lstrip("/") or "postgres",
@@ -115,7 +122,7 @@ def _build_async_engine(url: str) -> AsyncEngine:
             "statement_cache_size": 0,
         }
         # Rebuild URL without credentials for asyncpg
-        url = f"postgresql+asyncpg://{user_part}@13.114.6.6:{port}{path}"
+        url = f"postgresql+asyncpg://{user_part}@{pooler_host}:{port}{path}"
     elif url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
@@ -149,7 +156,9 @@ def get_async_session_factory() -> async_sessionmaker[AsyncSession]:
     """Get or create the singleton async sessionmaker."""
     global _async_session_factory
     if _async_session_factory is None:
-        _async_session_factory = async_sessionmaker(
+        with _async_session_lock:
+            if _async_session_factory is None:
+                _async_session_factory = async_sessionmaker(
             bind=get_async_engine(),
             class_=AsyncSession,
             autoflush=False,
