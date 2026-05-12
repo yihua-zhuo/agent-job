@@ -1,10 +1,7 @@
 name: Pipeline · Code Review
 
 on:
-
   pull_request:
-    branches: ['*']
-  push:
     branches: ['*']
   workflow_dispatch:
 
@@ -20,7 +17,7 @@ jobs:
     permissions:
       contents: read
       issues: write
-      pull-requests: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -44,26 +41,26 @@ jobs:
             "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
             shared-memory
 
-      - name: Fetch diff
-        id: diff
-        run: |
-          git fetch --quiet --no-write-fetch-head origin master develop
-          git diff origin/master..origin/develop > /tmp/pr-diff.txt
-          echo "DIFF_LINES=$(wc -l < /tmp/pr-diff.txt)" >> $GITHUB_OUTPUT
-          echo "HEAD=$(git log -1 --format=%H origin/develop)" >> $GITHUB_OUTPUT
-          echo "BASE=$(git log -1 --format=%H origin/master)" >> $GITHUB_OUTPUT
-
       - name: Run Claude Code Review
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           DIFF_FILE: /tmp/pr-diff.txt
-          HEAD_INFO: ${{ steps.diff.outputs.HEAD }}
-          BASE_INFO: ${{ steps.diff.outputs.BASE }}
+          CODE_REVIEW_RESULT_PATH: shared-memory/results/code-review-result.json
+          DIFF_REMOTE: origin
+          DIFF_BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref || github.event.before }}
+          DIFF_HEAD_REF: ${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
         run: |
           python3 scripts/ci/run_claude_code_review.py
-          python3 scripts/ci/save_code_review_result.py
+
+      - name: Post PR line comments
+        if: github.event_name == 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CODE_REVIEW_RESULT_PATH: shared-memory/results/code-review-result.json
+        run: |
+          python3 scripts/ci/post_pr_line_comments.py
 
       - name: Push shared-memory
         if: always()
