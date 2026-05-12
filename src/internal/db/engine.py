@@ -44,10 +44,11 @@ def create_engine_from_env():
 def get_engine():
     """Get or create the singleton sync Engine instance."""
     global _sync_engine
-    if _sync_engine is None:
-        with _sync_engine_lock:
-            if _sync_engine is None:
-                _sync_engine = create_engine_from_env()
+    if _sync_engine is not None:
+        return _sync_engine
+    with _sync_engine_lock:
+        if _sync_engine is None:
+            _sync_engine = create_engine_from_env()
     return _sync_engine
 
 
@@ -130,7 +131,11 @@ def _build_async_engine(url: str) -> AsyncEngine:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-    return create_async_engine(url, pool_pre_ping=True, pool_size=5, connect_args=connect_args or None)
+
+    kwargs = {"pool_pre_ping": True, "pool_size": 5}
+    if connect_args:
+        kwargs["connect_args"] = connect_args
+    return create_async_engine(url, **kwargs)
 
 
 def create_async_engine_from_env() -> AsyncEngine:
@@ -148,10 +153,11 @@ def create_async_engine_from_env() -> AsyncEngine:
 def get_async_engine() -> AsyncEngine:
     """Get or create the singleton async Engine instance."""
     global _async_engine
-    if _async_engine is None:
-        with _async_engine_lock:
-            if _async_engine is None:
-                _async_engine = create_async_engine_from_env()
+    if _async_engine is not None:
+        return _async_engine
+    with _async_engine_lock:
+        if _async_engine is None:
+            _async_engine = create_async_engine_from_env()
     return _async_engine
 
 
