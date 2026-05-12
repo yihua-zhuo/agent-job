@@ -50,8 +50,13 @@ Critical rules — follow ALL of them:
 4. Use the Bash tool to run pytest, ruff, and any shell commands. Use Edit and
    Write to modify files. Use Read to examine code before changing it.
 
-5. Do NOT run `git commit`, `git push`, `git add`, or modify anything under
-   `.git/`. The workflow will commit your changes after verifying tests.
+5. Do NOT run ANY of: `git commit`, `git commit --amend`, `git push`,
+   `git add`, `git stash`, `git reset`, `git checkout` of files, or any
+   command that modifies `.git/` or git history. Leave all changes as
+   UNSTAGED edits in the working tree — the workflow stages and commits
+   them after you finish. If you make a commit, the workflow's "no diff
+   vs master" guard now catches it, but you'll still create a confusing
+   audit trail. Just edit files and stop.
 
 6. Do NOT modify `.github/workflows/` files unless the plan explicitly requires it.
 
