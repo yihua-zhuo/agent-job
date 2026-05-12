@@ -15,7 +15,10 @@ from urllib.parse import unquote
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, declarative_base, sessionmaker
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncEngine
 
 load_dotenv()
 
@@ -105,8 +108,12 @@ def _build_async_engine(url: str) -> AsyncEngine:
         password = unquote(password)
         host_port = url[creds_end + 1:]
         last_colon = host_port.rfind(":")
+        if last_colon == -1:
+            raise ValueError(
+                "Invalid Supabase pooler URL: no port separator ':' found in host portion"
+            )
         host = host_port[:last_colon]
-        port_and_path = host_port[last_colon + 1:]
+        port_and_path = host_port[last_colon + 1 :]
         if "/" in port_and_path:
             port, path = port_and_path.split("/", 1)
             path = "/" + path
@@ -114,8 +121,14 @@ def _build_async_engine(url: str) -> AsyncEngine:
             port = port_and_path
             path = ""
 
-        # Supabase pooler host — configurable via env var to avoid hardcoded IP
-        pooler_host = os.environ.get("SUPABASE_POOLER_HOST", "13.114.6.6")
+        # Supabase pooler host IP — configurable via env var to avoid
+        # hardcoded IP (useful for local Supabase development proxies).
+        # SECURITY: Treat SUPABASE_POOLER_HOST as a secret; restrict access
+        # to the environment where this process runs.
+        pooler_host = os.environ.get(
+            "SUPABASE_POOLER_HOST",
+            "13.114.6.6",
+        )
 
         connect_args = {
             "host": pooler_host,
