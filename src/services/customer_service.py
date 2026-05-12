@@ -48,9 +48,8 @@ class CustomerService:
             updated_at=now,
         )
         self.session.add(customer)
-        await self.session.flush()
-        await self.session.refresh(customer)
         await self.session.commit()
+        await self.session.refresh(customer)
         return customer
 
     async def list_customers(

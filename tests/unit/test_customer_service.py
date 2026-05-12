@@ -133,7 +133,6 @@ class TestCreateCustomerService:
             tenant_id=1,
         )
         mock_session.add.assert_called_once()
-        mock_session.flush.assert_called_once()
         mock_session.commit.assert_called_once()
 
     @pytest.mark.asyncio
@@ -158,7 +157,6 @@ class TestCreateCustomerService:
         result = await service.create_customer(dto, tenant_id=1)
 
         mock_session.add.assert_called_once()
-        mock_session.flush.assert_called_once()
         mock_session.commit.assert_called_once()
 
         # Verify the entity was built from dto.to_dict()
