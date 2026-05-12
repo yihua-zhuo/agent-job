@@ -16,7 +16,6 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      issues: write
       pull-requests: write
     steps:
       - uses: actions/checkout@v4
@@ -87,10 +86,3 @@ jobs:
           name: pipeline-code-review-result
           path: shared-memory/results/code-review-result.json
           retention-days: 3
-
-      - name: Create GitHub Issue on critical issues
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITHUB_RUN_ID: ${{ github.run_id }}
-          ARTIFACT_PATH: shared-memory/results/code-review-result.json
-        run: python3 scripts/ci/create_cr_issue.py
