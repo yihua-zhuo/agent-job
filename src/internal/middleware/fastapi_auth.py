@@ -11,17 +11,6 @@ security = HTTPBearer(auto_error=False)
 JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET") or "dev-jwt-secret"
 
 
-def _get_jwt_secret():
-    """Read JWT secret with priority: JWT_SECRET_KEY env > app.state.jwt_secret > fallback."""
-    env_secret = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET")
-    if env_secret:
-        return env_secret
-    # app.state.jwt_secret is set by create_app() from settings.jwt_secret
-    # This function should be called per-request when the app is fully initialized.
-    # For imports that happen before app creation, fall back to env/file-based reading.
-    return os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET") or "dev-jwt-secret"
-
-
 def get_jwt_secret() -> str:
     """Get current JWT secret per request — reads os.environ at call time."""
     # Priority: JWT_SECRET_KEY env > app.state.jwt_secret (from settings.jwt_secret) > fallback
@@ -34,7 +23,7 @@ def get_jwt_secret() -> str:
         secret = getattr(_main_app.state, "jwt_secret", None)
         if secret:
             return secret
-    except Exception:
+    except (ImportError, ModuleNotFoundError, AttributeError):
         pass
     return os.environ.get("JWT_SECRET") or "dev-jwt-secret"
 

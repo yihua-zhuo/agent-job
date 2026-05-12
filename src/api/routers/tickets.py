@@ -13,6 +13,7 @@ from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.ticket import SLALevel, TicketChannel, TicketPriority, TicketStatus
 from services.sla_service import SLAService
 from services.ticket_service import TicketService
+from services.user_service import UserService
 
 tickets_router = APIRouter(prefix="/api/v1", tags=["tickets"])
 
@@ -167,6 +168,8 @@ async def assign_ticket(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    user_service = UserService(session)
+    await user_service.get_user_by_id(body.assignee_id, tenant_id=ctx.tenant_id or 0)
     service = TicketService(session)
     ticket = await service.assign_ticket(ticket_id, body.assignee_id, tenant_id=ctx.tenant_id or 0)
     return {"success": True, "data": ticket.to_dict(), "message": "工单分配成功"}

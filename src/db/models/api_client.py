@@ -23,7 +23,7 @@ class ApiClientModel(Base):
     # Public key — for RS*/ES* algorithms (server stores public key only)
     public_key: Mapped[str] = mapped_column(Text, nullable=True)
     # Scopes granted to this client, stored as JSON list
-    scopes: Mapped[dict] = mapped_column(JSON, default=list, nullable=False)
+    scopes: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     description: Mapped[str] = mapped_column(String(500), nullable=True)
@@ -31,3 +31,23 @@ class ApiClientModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    def to_dict(self) -> dict:
+        """Serialize non-sensitive API client fields."""
+        if self.scopes is None:
+            scopes = []
+        elif isinstance(self.scopes, (list, tuple)):
+            scopes = list(self.scopes)
+        else:
+            raise TypeError(f"ApiClientModel.scopes has unexpected type: {type(self.scopes).__name__}")
+        return {
+            "id": self.id,
+            "name": self.name,
+            "algorithm": self.algorithm,
+            "scopes": scopes,
+            "tenant_id": self.tenant_id,
+            "is_active": self.is_active,
+            "description": self.description,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

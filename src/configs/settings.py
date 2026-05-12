@@ -19,8 +19,8 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(default=10, ge=0)
 
     # JWT
-    secret_key: str = Field(default="dev-secret")
-    jwt_secret: str = Field(default="dev-jwt-secret")
+    secret_key: str | None = Field(default=None)
+    jwt_secret: str | None = Field(default=None)
     jwt_algorithm: str = Field(default="HS256")
     access_token_expire_minutes: int = Field(default=30, ge=1)
 
@@ -39,3 +39,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
+if settings.env not in {"development", "local", "test"} and (
+    not settings.secret_key or not settings.jwt_secret
+):
+    raise RuntimeError("SECRET_KEY and JWT_SECRET are required outside local development")

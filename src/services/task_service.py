@@ -2,10 +2,11 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import and_, delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.task import TaskModel
+from pkg.errors.app_exceptions import NotFoundException
 
 
 class TaskService:
@@ -13,10 +14,6 @@ class TaskService:
 
     def __init__(self, session: AsyncSession):
         self.session = session
-
-    @staticmethod
-    def _ok(task: TaskModel, message: str = "") -> dict:
-        return {"success": True, "data": task.to_dict(), "message": message}
 
     async def create_task(
         self,
@@ -26,7 +23,7 @@ class TaskService:
         due_date: datetime | None = None,
         tenant_id: int = 0,
         **kwargs,
-    ) -> dict:
+    ) -> TaskModel:
         now = datetime.now(UTC)
         task = TaskModel(
             tenant_id=tenant_id,
@@ -46,22 +43,24 @@ class TaskService:
         await self.session.flush()
         await self.session.refresh(task)
         await self.session.commit()
-        return self._ok(task, "任务创建成功")
+        return task
 
-    async def _fetch(self, task_id: int) -> TaskModel | None:
-        result = await self.session.execute(select(TaskModel).where(TaskModel.id == task_id))
+    async def _fetch(self, task_id: int, tenant_id: int) -> TaskModel | None:
+        result = await self.session.execute(
+            select(TaskModel).where(and_(TaskModel.id == task_id, TaskModel.tenant_id == tenant_id))
+        )
         return result.scalar_one_or_none()
 
-    async def get_task(self, task_id: int) -> dict:
-        task = await self._fetch(task_id)
+    async def get_task(self, tenant_id: int, task_id: int) -> TaskModel:
+        task = await self._fetch(task_id, tenant_id)
         if task is None:
-            return {"success": False, "data": None, "message": "任务不存在"}
-        return {"success": True, "data": task.to_dict(), "message": ""}
+            raise NotFoundException("任务不存在")
+        return task
 
-    async def update_task(self, task_id: int, **kwargs) -> dict:
-        task = await self._fetch(task_id)
+    async def update_task(self, tenant_id: int, task_id: int, **kwargs) -> TaskModel:
+        task = await self._fetch(task_id, tenant_id)
         if task is None:
-            return {"success": False, "data": None, "message": "任务不存在"}
+            raise NotFoundException("任务不存在")
 
         update_values: dict = {"updated_at": datetime.now(UTC)}
         for key in ("title", "description", "assigned_to", "status", "priority"):
@@ -76,69 +75,65 @@ class TaskService:
             else:
                 update_values["due_date"] = datetime.combine(due, datetime.min.time(), tzinfo=UTC)
 
-        await self.session.execute(update(TaskModel).where(TaskModel.id == task_id).values(**update_values))
+        await self.session.execute(
+            update(TaskModel)
+            .where(and_(TaskModel.id == task_id, TaskModel.tenant_id == tenant_id))
+            .values(**update_values)
+        )
         await self.session.commit()
 
-        refreshed = await self._fetch(task_id)
-        return self._ok(refreshed, "任务更新成功")
+        refreshed = await self._fetch(task_id, tenant_id)
+        return refreshed
 
-    async def complete_task(self, task_id: int) -> dict:
-        task = await self._fetch(task_id)
+    async def complete_task(self, tenant_id: int, task_id: int) -> TaskModel:
+        task = await self._fetch(task_id, tenant_id)
         if task is None:
-            return {"success": False, "data": None, "message": "任务不存在"}
+            raise NotFoundException("任务不存在")
         now = datetime.now(UTC)
         await self.session.execute(
             update(TaskModel)
-            .where(TaskModel.id == task_id)
+            .where(and_(TaskModel.id == task_id, TaskModel.tenant_id == tenant_id))
             .values(status="completed", completed_at=now, updated_at=now)
         )
         await self.session.commit()
-        refreshed = await self._fetch(task_id)
-        return self._ok(refreshed, "任务已完成")
+        refreshed = await self._fetch(task_id, tenant_id)
+        return refreshed
 
-    async def delete_task(self, task_id: int) -> dict:
-        task = await self._fetch(task_id)
+    async def delete_task(self, tenant_id: int, task_id: int) -> TaskModel:
+        task = await self._fetch(task_id, tenant_id)
         if task is None:
-            return {"success": False, "data": None, "message": "任务不存在"}
-        await self.session.execute(delete(TaskModel).where(TaskModel.id == task_id))
+            raise NotFoundException("任务不存在")
+        await self.session.execute(
+            delete(TaskModel).where(and_(TaskModel.id == task_id, TaskModel.tenant_id == tenant_id))
+        )
         await self.session.commit()
-        return {"success": True, "data": {"id": task_id}, "message": "任务删除成功"}
+        return task
 
     async def list_tasks(
         self,
+        tenant_id: int,
         assigned_to: int | None = None,
         status: str | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> dict:
-        conditions = []
+    ) -> list[TaskModel]:
+        conditions = [TaskModel.tenant_id == tenant_id]
         if assigned_to is not None:
             conditions.append(TaskModel.assigned_to == assigned_to)
         if status:
             conditions.append(TaskModel.status == status)
 
-        count_stmt = select(func.count(TaskModel.id))
-        if conditions:
-            count_stmt = count_stmt.where(and_(*conditions))
-        total = (await self.session.execute(count_stmt)).scalar() or 0
-
         offset = (page - 1) * page_size
         stmt = select(TaskModel).order_by(TaskModel.created_at.desc()).offset(offset).limit(page_size)
-        if conditions:
-            stmt = stmt.where(and_(*conditions))
+        stmt = stmt.where(and_(*conditions))
         result = await self.session.execute(stmt)
-        items = [t.to_dict() for t in result.scalars().all()]
-        return {
-            "success": True,
-            "data": {"page": page, "page_size": page_size, "total": total, "items": items},
-            "message": "",
-        }
+        return result.scalars().all()
 
-    async def get_my_tasks(self, user_id: int, status: str | None = None) -> list[dict]:
-        conditions = [TaskModel.assigned_to == user_id]
+    async def get_my_tasks(self, tenant_id: int, user_id: int, status: str | None = None) -> list[TaskModel]:
+        conditions = [TaskModel.tenant_id == tenant_id, TaskModel.assigned_to == user_id]
         if status:
             conditions.append(TaskModel.status == status)
         result = await self.session.execute(
             select(TaskModel).where(and_(*conditions)).order_by(TaskModel.due_date.asc().nullslast())
         )
-        return [t.to_dict() for t in result.scalars().all()]
+        return result.scalars().all()

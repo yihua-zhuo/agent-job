@@ -361,7 +361,7 @@ class TestSalesServiceIntegration:
         oid = created["id"]
 
         changed = await sales_svc.change_stage(tenant_id, oid, "qualified")
-        assert changed["stage"] == "qualified"
+        assert changed.stage == "qualified"
 
     async def test_list_opportunities(self, db_schema, tenant_id, async_session):
         sales_svc = SalesService(async_session)

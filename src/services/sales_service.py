@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.opportunity import OpportunityModel
 from db.models.pipeline import PipelineModel
 from db.models.pipeline_stage import PipelineStageModel
-from pkg.errors.app_exceptions import ConflictException, NotFoundException
+from pkg.errors.app_exceptions import ConflictException, NotFoundException, ValidationException
 
 DEFAULT_STAGES = ["lead", "qualified", "proposal", "negotiation", "closed"]
 
@@ -45,10 +45,12 @@ class SalesService:
     # Pipelines
     # -------------------------------------------------------------------------
 
-    async def _get_pipeline_stages(self, pipeline_id: int) -> list[str]:
+    async def _get_pipeline_stages(self, pipeline_id: int, tenant_id: int) -> list[str]:
         stages_result = await self.session.execute(
             select(PipelineStageModel.name)
+            .join(PipelineModel, PipelineStageModel.pipeline_id == PipelineModel.id)
             .where(PipelineStageModel.pipeline_id == pipeline_id)
+            .where(PipelineModel.tenant_id == tenant_id)
             .order_by(PipelineStageModel.display_order)
         )
         return [name for (name,) in stages_result.all()]
@@ -59,7 +61,7 @@ class SalesService:
             "tenant_id": pipeline.tenant_id,
             "name": pipeline.name,
             "is_default": pipeline.is_default,
-            "stages": await self._get_pipeline_stages(pipeline.id),
+            "stages": await self._get_pipeline_stages(pipeline.id, pipeline.tenant_id),
         }
 
     async def create_pipeline(self, tenant_id: int = 0, data: dict | None = None) -> dict:
@@ -115,7 +117,7 @@ class SalesService:
         return await self._pipeline_to_dict(pipeline)
 
     async def get_pipeline_stats(self, tenant_id: int = 0, pipeline_id: int = 0) -> dict:
-        stage_names = await self._get_pipeline_stages(pipeline_id)
+        stage_names = await self._get_pipeline_stages(pipeline_id, tenant_id)
         result = await self.session.execute(
             select(
                 OpportunityModel.stage,
@@ -155,7 +157,7 @@ class SalesService:
         }
 
     async def get_pipeline_funnel(self, tenant_id: int = 0, pipeline_id: int = 0) -> dict:
-        stage_names = await self._get_pipeline_stages(pipeline_id)
+        stage_names = await self._get_pipeline_stages(pipeline_id, tenant_id)
         result = await self.session.execute(
             select(OpportunityModel.stage, func.count(OpportunityModel.id))
             .where(
@@ -277,16 +279,20 @@ class SalesService:
         refreshed = await self._fetch_opportunity(tenant_id, opp_id)
         return _opp_to_dict(refreshed)
 
-    async def change_stage(self, tenant_id: int = 0, opp_id: int = 0, stage: str = "") -> dict:
-        await self._fetch_opportunity(tenant_id, opp_id)
+    async def change_stage(self, tenant_id: int = 0, opp_id: int = 0, stage: str = "") -> OpportunityModel:
+        opportunity = await self._fetch_opportunity(tenant_id, opp_id)
+        if opportunity.pipeline_id is not None:
+            allowed_stages = await self._get_pipeline_stages(opportunity.pipeline_id, tenant_id)
+            if stage not in allowed_stages:
+                raise ValidationException("Stage is not defined in the opportunity pipeline")
         await self.session.execute(
             update(OpportunityModel)
-            .where(OpportunityModel.id == opp_id)
+            .where(and_(OpportunityModel.id == opp_id, OpportunityModel.tenant_id == tenant_id))
             .values(stage=stage, updated_at=datetime.now(UTC))
         )
         await self.session.commit()
         refreshed = await self._fetch_opportunity(tenant_id, opp_id)
-        return _opp_to_dict(refreshed)
+        return refreshed
 
     async def get_forecast(self, tenant_id: int = 0, owner_id: int | None = None) -> dict:
         conditions = [OpportunityModel.tenant_id == tenant_id]

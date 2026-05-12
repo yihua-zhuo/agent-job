@@ -1,0 +1,50 @@
+name: Pipeline · Documentation Sync
+
+on:
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+env:
+  PYTHON_VERSION: '3.11'
+  CLAUDE_CODE_VERSION: '1.0.0'
+
+jobs:
+  doc-sync:
+    name: Documentation Sync
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up claude
+        run: |
+          if ! command -v claude &>/dev/null; then
+            npm install -g @anthropic-ai/claude-code@${{ env.CLAUDE_CODE_VERSION }}
+          fi
+
+      - name: Check documentation sync
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          DOC_SYNC_RESULT_PATH: artifacts/doc-sync-result.json
+        run: python3 scripts/ci/run_claude_doc_sync_check.py
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pipeline-doc-sync-result
+          path: artifacts/doc-sync-result.json
+          retention-days: 7

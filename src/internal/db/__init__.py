@@ -2,16 +2,16 @@
 
 from internal.db.engine import (
     Base,
-    SessionLocal,
     create_engine_from_env,
     get_engine,
+    get_session,
     session_scope,
 )
 
 __all__ = [
     "create_engine_from_env",
     "get_engine",
-    "SessionLocal",
+    "get_session",
     "Base",
     "session_scope",
 ]

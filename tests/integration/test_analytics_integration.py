@@ -213,7 +213,7 @@ class TestReportIntegration:
         svc = ReportService(async_session)
         await _seed_user(tenant_id, async_session, "rep")
 
-        generated = svc.generate_pdf_report(
+        generated = await svc.generate_pdf_report(
             report_data={
                 "labels": ["Jan", "Feb", "Mar"],
                 "datasets": [{"data": [100, 200, 300]}],
@@ -228,7 +228,7 @@ class TestReportIntegration:
         svc = ReportService(async_session)
         await _seed_user(tenant_id, async_session, "rep")
 
-        generated = svc.generate_excel_report(
+        generated = await svc.generate_excel_report(
             report_data={
                 "labels": ["Product A", "Product B"],
                 "datasets": [{"data": [500, 750]}],
@@ -248,7 +248,7 @@ class TestReportIntegration:
         ]
         filename = f"test_export_{uuid.uuid4().hex[:8]}.csv"
 
-        result = svc.export_to_csv(data=data, filename=filename)
+        result = await svc.export_to_csv(data=data, filename=filename)
         assert result["status"] == "success"
         assert result["rows_exported"] == 2
         assert filename in result["filename"]
@@ -256,7 +256,7 @@ class TestReportIntegration:
     async def test_export_to_csv_empty_data(self, db_schema, tenant_id, async_session):
         svc = ReportService(async_session)
         with pytest.raises(ValidationException):
-            svc.export_to_csv(data=[], filename="empty.csv")
+            await svc.export_to_csv(data=[], filename="empty.csv")
 
     async def test_schedule_report(self, db_schema, tenant_id, async_session):
         analytics_svc = AnalyticsService(async_session)

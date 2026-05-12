@@ -130,14 +130,18 @@ class UserService:
             raise NotFoundException("用户")
         return user
 
-    async def get_user_by_username(self, username: str) -> UserModel | None:
-        """Fetch a user by username (across all tenants)."""
-        result = await self.session.execute(select(UserModel).where(UserModel.username == username))
+    async def get_user_by_username(self, tenant_id: int, username: str) -> UserModel | None:
+        """Fetch a user by username within a tenant."""
+        result = await self.session.execute(
+            select(UserModel).where(and_(UserModel.tenant_id == tenant_id, UserModel.username == username))
+        )
         return result.scalar_one_or_none()
 
-    async def get_user_by_email(self, email: str) -> UserModel | None:
-        """Fetch a user by email (across all tenants)."""
-        result = await self.session.execute(select(UserModel).where(UserModel.email == email))
+    async def get_user_by_email(self, tenant_id: int, email: str) -> UserModel | None:
+        """Fetch a user by email within a tenant."""
+        result = await self.session.execute(
+            select(UserModel).where(and_(UserModel.tenant_id == tenant_id, UserModel.email == email))
+        )
         return result.scalar_one_or_none()
 
     async def list_users(
