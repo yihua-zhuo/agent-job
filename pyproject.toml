@@ -50,5 +50,5 @@ select = ["E", "F", "UP", "S", "I", "W"]
 ignore = ["E501"]  # line-length handled by line-length setting
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "INP001"]  # assert okay in tests, explicit namespace package okay
+"tests/**" = ["S101", "S106", "INP001"]  # assert okay in tests, hardcoded password okay in integration test seeds
 "src/main.py" = ["F401"]  # app may import without using all routers

@@ -68,6 +68,12 @@ class TicketStatusChange(BaseModel):
     new_status: str = Field(..., pattern="^(open|in_progress|pending|resolved|closed)$")
 
 
+class TicketBulkUpdate(BaseModel):
+    ticket_ids: list[int] = Field(..., min_length=1)
+    assigned_to: int | None = Field(None, ge=1)
+    status: str | None = Field(None, pattern="^(open|in_progress|pending|resolved|closed)$")
+
+
 def _status_str_to_enum(status_str: str) -> TicketStatus:
     mapping = {
         "open": TicketStatus.OPEN,
@@ -235,6 +241,25 @@ async def get_sla_breaches(
     }
 
 
+@tickets_router.post("/tickets/bulk-update")
+async def bulk_update_tickets(
+    body: TicketBulkUpdate,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    service = TicketService(session)
+    updated = []
+    for ticket_id in body.ticket_ids:
+        kwargs: dict = {}
+        if body.assigned_to is not None:
+            kwargs["assigned_to"] = body.assigned_to
+        if body.status is not None:
+            kwargs["status"] = _status_str_to_enum(body.status)
+        ticket = await service.update_ticket(ticket_id, tenant_id=ctx.tenant_id or 0, **kwargs)
+        updated.append(ticket.to_dict())
+    return {"success": True, "data": updated, "message": "Bulk update successful"}
+
+
 @tickets_router.post("/tickets/{ticket_id}/auto-assign")
 async def auto_assign_ticket(
     ticket_id: int,
@@ -249,6 +274,36 @@ async def auto_assign_ticket(
 # ---------------------------------------------------------------------------
 # SLA endpoints
 # ---------------------------------------------------------------------------
+
+
+@tickets_router.get("/tickets/{ticket_id}/replies")
+async def get_replies(
+    ticket_id: int,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    service = TicketService(session)
+    replies = await service.get_ticket_replies(ticket_id, tenant_id=ctx.tenant_id or 0)
+    return {
+        "success": True,
+        "data": [r.to_dict() for r in replies],
+        "message": "查询成功",
+    }
+
+
+@tickets_router.get("/tickets/{ticket_id}/activity")
+async def get_ticket_activity(
+    ticket_id: int,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    service = TicketService(session)
+    activities = await service.get_ticket_activity(ticket_id, tenant_id=ctx.tenant_id or 0)
+    return {
+        "success": True,
+        "data": [a.to_dict() for a in activities],
+        "message": "查询成功",
+    }
 
 
 @tickets_router.get("/sla/status/{ticket_id}")

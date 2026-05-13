@@ -5,6 +5,7 @@ from datetime import UTC, datetime, timedelta
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.activity import ActivityModel
 from db.models.ticket import TicketModel
 from db.models.ticket_reply import TicketReplyModel
 from models.ticket import (
@@ -223,3 +224,32 @@ class TicketService:
             return ticket
         agent_id = await self._next_agent(tenant_id)
         return await self.update_ticket(ticket_id, tenant_id=tenant_id, assigned_to=agent_id)
+
+    async def get_ticket_replies(self, ticket_id: int, tenant_id: int = 0) -> list[TicketReplyModel]:
+        await self._fetch(ticket_id, tenant_id)
+        result = await self.session.execute(
+            select(TicketReplyModel)
+            .where(
+                and_(
+                    TicketReplyModel.ticket_id == ticket_id,
+                    TicketReplyModel.tenant_id == tenant_id,
+                )
+            )
+            .order_by(TicketReplyModel.created_at.asc())
+        )
+        return list(result.scalars().all())
+
+    async def get_ticket_activity(self, ticket_id: int, tenant_id: int = 0) -> list[ActivityModel]:
+        await self._fetch(ticket_id, tenant_id)
+        result = await self.session.execute(
+            select(ActivityModel)
+            .where(
+                and_(
+                    ActivityModel.tenant_id == tenant_id,
+                    ActivityModel.opportunity_id.is_(None),
+                )
+            )
+            .where(ActivityModel.content.like(f"%ticket#{ticket_id}%"))
+            .order_by(ActivityModel.created_at.desc())
+        )
+        return list(result.scalars().all())
