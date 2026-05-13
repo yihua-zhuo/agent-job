@@ -263,8 +263,8 @@ async def logout(
     """Revoke the current refresh token (logout)."""
     from configs.settings import settings
 
+    token_svc = TokenService(session, secret_key=settings.jwt_secret)
     if refresh_token:
-        token_svc = TokenService(session, secret_key=settings.jwt_secret)
         await token_svc.revoke_refresh_token(refresh_token)
 
     response = Response(
