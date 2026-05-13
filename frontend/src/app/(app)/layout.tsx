@@ -6,6 +6,9 @@ import { SessionTimeoutGuard } from "@/lib/components/session-timeout-guard";
 import { OfflineBanner } from "@/lib/components/offline-banner";
 import { AIPanel } from "@/lib/components/ai-panel";
 import { AppSidebar } from "@/components/layout/app-sidebar";
+import { TaskModal } from "@/app/(app)/tasks/task-modal";
+import { useQuickAddTask } from "@/lib/store/task-store";
+import { useCreateTask, useUpdateTask } from "@/lib/api/queries";
 import { Menu } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -17,6 +20,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     try { return localStorage.getItem(STORAGE_KEY) === "true"; } catch { return false; }
   });
   const pathname = usePathname();
+  const quickAdd = useQuickAddTask();
+  const create = useCreateTask();
+  const update = useUpdateTask();
 
   /* eslint-disable react-hooks/set-state-in-effect -- intentional: synchronizing sidebar open state with pathname change */
   useEffect(() => {
@@ -71,6 +77,18 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
         <AIPanel />
         <SessionTimeoutGuard />
+
+        <TaskModal
+          open={quickAdd.isOpen}
+          title="Create Task"
+          onClose={quickAdd.close}
+          initialStatus={quickAdd.initialStatus}
+          onSubmit={async (data) => {
+            await create.mutateAsync({ ...data, status: quickAdd.initialStatus });
+            quickAdd.close();
+          }}
+          isSubmitting={create.isPending}
+        />
       </div>
     </AuthGuard>
   );
