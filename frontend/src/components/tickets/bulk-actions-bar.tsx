@@ -22,7 +22,7 @@ export function BulkActionsBar({ selectedIds, onClear }: BulkActionsBarProps) {
   const [assigneeId, setAssigneeId] = useState<string>("");
   const [newStatus, setNewStatus] = useState<string>("");
 
-  const { data: usersData } = useUsers(1);
+  const { data: usersData } = useUsers(1, 100);
   const bulkUpdate = useBulkUpdateTickets();
 
   const users = (usersData?.data?.items ?? []) as Array<{ id: number; username: string; full_name?: string }>;
@@ -42,6 +42,8 @@ export function BulkActionsBar({ selectedIds, onClear }: BulkActionsBarProps) {
       if (newStatus) payload.status = newStatus;
       await bulkUpdate.mutateAsync(payload);
       toast.success(`${selectedIds.size} tickets updated`);
+      setAssigneeId("");
+      setNewStatus("");
       onClear();
     } catch {
       toast.error("Bulk update failed");

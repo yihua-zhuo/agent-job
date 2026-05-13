@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useTicket, useTicketReplies, useTicketActivity, useAddReply, useUpdateTicket, useDeleteTicket } from "@/lib/api/queries";
@@ -12,6 +12,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { EditIcon, Trash2Icon, ArrowLeftIcon, LockIcon, MessageSquareIcon } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +77,8 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
   const [replyContent, setReplyContent] = useState("");
   const [isInternal, setIsInternal] = useState(false);
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const slaToastShownRef = useRef(false);
 
   const ticket = ticketData?.data as Record<string, unknown> | undefined;
   const replies = (repliesData?.data ?? []) as Array<Record<string, unknown>>;
@@ -76,14 +86,14 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
 
   // SLA breach toast on load
   useEffect(() => {
-    if (ticket && ticket.response_deadline) {
+    if (ticket && ticket.response_deadline && !slaToastShownRef.current) {
       const deadline = new Date(ticket.response_deadline as string).getTime();
       if (deadline < Date.now() && !ticket.resolved_at) {
+        slaToastShownRef.current = true;
         toast.error(`SLA breached on ticket #${ticketId}`);
       }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ticketLoading]);
+  }, [ticket, ticketId]);
 
   async function handleSendReply() {
     if (!replyContent.trim()) return;
@@ -92,7 +102,6 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
         ticketId,
         data: {
           content: replyContent,
-          created_by: 0, // populated by auth context on backend
           is_internal: isInternal,
         },
       });
@@ -103,16 +112,8 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
     }
   }
 
-  async function handleDelete() {
-    if (window.confirm(`Delete ticket #${ticketId}? This cannot be undone.`)) {
-      try {
-        await deleteTicket.mutateAsync(ticketId);
-        toast.success("Ticket deleted");
-        router.push("/tickets");
-      } catch {
-        toast.error("Failed to delete ticket");
-      }
-    }
+  function handleDelete() {
+    setDeleteDialogOpen(true);
   }
 
   if (ticketLoading) {
@@ -343,6 +344,37 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
           priority: ticket.priority as string,
         }}
       />
+
+      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Ticket</DialogTitle>
+            <DialogDescription>
+              Delete ticket #{ticketId}? This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={async () => {
+                setDeleteDialogOpen(false);
+                try {
+                  await deleteTicket.mutateAsync(ticketId);
+                  toast.success("Ticket deleted");
+                  router.push("/tickets");
+                } catch {
+                  toast.error("Failed to delete ticket");
+                }
+              }}
+            >
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

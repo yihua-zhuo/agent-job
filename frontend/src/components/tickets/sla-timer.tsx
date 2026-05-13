@@ -21,8 +21,8 @@ function formatRemaining(totalMs: number): string {
   const totalMinutes = Math.floor(Math.abs(totalMs) / 60000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (totalMs <= 0) return `${hours}h ${minutes}m left`;
-  return `${hours}h ${minutes}m`;
+  if (totalMs > 0) return `${hours}h ${minutes}m left`;
+  return `Overdue ${hours}h ${minutes}m`;
 }
 
 export function SLATimer({ responseDeadline, createdAt, slaLevel, className }: SLATimerProps) {
@@ -61,7 +61,6 @@ export function SLATimer({ responseDeadline, createdAt, slaLevel, className }: S
 
   return (
     <Badge
-      colorClass={colorClass}
       className={
         breached
           ? `${colorClass} animate-pulse border-red-500`

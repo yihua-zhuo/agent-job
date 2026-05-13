@@ -248,6 +248,9 @@ async def bulk_update_tickets(
     session: AsyncSession = Depends(get_db),
 ):
     service = TicketService(session)
+    # Pre-validate all tickets exist to avoid partial updates
+    for ticket_id in body.ticket_ids:
+        await service.get_ticket(ticket_id, tenant_id=ctx.tenant_id or 0)
     updated = []
     for ticket_id in body.ticket_ids:
         kwargs: dict = {}

@@ -186,6 +186,7 @@ export default function TicketsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<ViewMode>("table");
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const toastsShownRef = useRef(false);
 
   const deleteTicket = useDeleteTicket();
   const router = useRouter();
@@ -303,14 +304,15 @@ export default function TicketsPage() {
 
   // SLA breach toasts on mount
   useEffect(() => {
-    if (breachedTicketIds.size > 0 && !isLoading) {
+    if (breachedTicketIds.size > 0 && !isLoading && !toastsShownRef.current) {
+      toastsShownRef.current = true;
       const ids = Array.from(breachedTicketIds).slice(0, 3);
       ids.forEach((id, i) => {
         setTimeout(() => toast.error(`SLA breached on ticket #${id}`), i * 500);
       });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isLoading]);
+  }, [isLoading, breachedTicketIds]);
 
   const totalShown = info?.total ?? 0;
   const startShown = info?.total === 0 ? 0 : ((page - 1) * (info?.page_size ?? 20)) + 1;
@@ -492,8 +494,7 @@ export default function TicketsPage() {
                     Channel<SortIconStatic col="channel" sortKey={sortKey} sortDir={sortDir} />
                   </th>
                   <th
-                    className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold cursor-pointer hover:text-foreground group select-none"
-                    onClick={() => handleSort("assignee")}
+                    className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none"
                   >
                     Assignee
                   </th>

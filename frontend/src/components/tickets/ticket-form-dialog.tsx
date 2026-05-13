@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { toast } from "sonner";
 import { useCustomers, useCreateTicket, useUpdateTicket } from "@/lib/api/queries";
@@ -61,6 +61,17 @@ export function TicketFormDialog({ open, onOpenChange, initialData }: TicketForm
       sla_level: initialData?.sla_level ?? "standard",
     },
   });
+
+  useEffect(() => {
+    reset({
+      subject: initialData?.subject ?? "",
+      description: initialData?.description ?? "",
+      customer_id: initialData?.customer_id ?? 0,
+      channel: initialData?.channel ?? "email",
+      priority: initialData?.priority ?? "medium",
+      sla_level: initialData?.sla_level ?? "standard",
+    });
+  }, [initialData, reset]);
 
   const customers = (customersData?.data?.items ?? []) as Array<{ id: number; name: string }>;
 
@@ -159,6 +170,12 @@ export function TicketFormDialog({ open, onOpenChange, initialData }: TicketForm
                     ))}
                   </SelectContent>
                 </Select>
+                <input
+                  type="hidden"
+                  {...register("customer_id", {
+                    validate: (v) => v > 0 || "Customer is required",
+                  })}
+                />
                 {errors.customer_id && (
                   <p className="text-xs text-destructive">Customer is required</p>
                 )}
