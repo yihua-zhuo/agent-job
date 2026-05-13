@@ -150,7 +150,14 @@ def main() -> int:
         "claude", "-p",
         "--model", model,
         "--max-turns", max_turns,
-        "--output-format", "json",
+        # stream-json emits one JSON event per turn (tool call / tool result /
+        # assistant message) instead of buffering a single blob until the end.
+        # Combined with stream_claude()'s line-by-line forwarding, this gives
+        # live progress in the workflow log — essential for diagnosing where a
+        # long run got stuck before CLAUDE_TIMEOUT_SECONDS fires. `--verbose`
+        # is required by the CLI when streaming -p output.
+        "--output-format", "stream-json",
+        "--verbose",
         # Headless `-p` mode defaults to interactive permission prompts on
         # Write/Edit/Bash — but there's no interactive terminal in CI, so
         # every tool call gets silently denied. The previous 8-minute run
