@@ -14,6 +14,7 @@ import uuid
 import pytest
 
 from pkg.errors.app_exceptions import NotFoundException
+from models.customer import CustomerStatus
 from services.customer_service import CustomerService
 from services.pipeline_service import PipelineService
 from services.sales_service import SalesService
@@ -411,3 +412,59 @@ class TestSalesServiceIntegration:
         funnel = await sales_svc.get_pipeline_funnel(tenant_id, pid)
         assert funnel is not None
         assert isinstance(funnel, dict)
+
+
+@pytest.mark.integration
+class TestCustomerCountByStatusIntegration:
+    """Integration tests for CustomerService.count_by_status with real DB."""
+
+    async def test_count_by_status_empty(self, db_schema, tenant_id, async_session):
+        """Returns empty dict when no customers exist."""
+        cust_svc = CustomerService(async_session)
+        result = await cust_svc.count_by_status(tenant_id=tenant_id)
+        assert result == {}
+
+    async def test_count_by_status_single_status(self, db_schema, tenant_id, async_session):
+        """Counts customers grouped by status correctly."""
+        cust_svc = CustomerService(async_session)
+        suffix = uuid.uuid4().hex[:8]
+        for i in range(3):
+            await cust_svc.create_customer(
+                data={"name": f"Lead {suffix}-{i}", "email": f"lead_{suffix}_{i}@example.com", "status": "lead"},
+                tenant_id=tenant_id,
+            )
+        for i in range(2):
+            await cust_svc.create_customer(
+                data={"name": f"Opp {suffix}-{i}", "email": f"opp_{suffix}_{i}@example.com", "status": "opportunity"},
+                tenant_id=tenant_id,
+            )
+
+        result = await cust_svc.count_by_status(tenant_id=tenant_id)
+        assert result is not None
+        assert len(result) == 2
+
+    async def test_count_by_status_tenant_isolation(self, db_schema, tenant_id, async_session):
+        """Tenant A does not see Tenant B's customer counts."""
+        cust_svc = CustomerService(async_session)
+        suffix = uuid.uuid4().hex[:8]
+
+        # Tenant 1: 2 leads
+        for i in range(2):
+            await cust_svc.create_customer(
+                data={"name": f"T1 {suffix}-{i}", "email": f"t1_{suffix}_{i}@example.com", "status": "lead"},
+                tenant_id=tenant_id,
+            )
+
+        # Tenant 2: 5 leads (different tenant)
+        tenant2_id = tenant_id + 100
+        for i in range(5):
+            await cust_svc.create_customer(
+                data={"name": f"T2 {suffix}-{i}", "email": f"t2_{suffix}_{i}@example.com", "status": "lead"},
+                tenant_id=tenant2_id,
+            )
+
+        result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id)
+        result_t2 = await cust_svc.count_by_status(tenant_id=tenant2_id)
+
+        assert result_t1.get(CustomerStatus.LEAD, 0) == 2
+        assert result_t2.get(CustomerStatus.LEAD, 0) == 5

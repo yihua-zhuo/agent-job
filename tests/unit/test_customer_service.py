@@ -8,6 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
+from models.customer import CustomerStatus
 from models.customer_create_dto import CustomerCreateDTO
 from services.customer_service import CustomerService
 
@@ -213,3 +214,56 @@ class TestCreateCustomerService:
         assert call_args.owner_id == 0
         assert call_args.tags == []
         assert result.name == "Customer"
+
+
+@pytest.mark.asyncio
+class TestCountByStatus:
+    """Unit tests for CustomerService.count_by_status."""
+
+    async def test_count_by_status_empty(self):
+        """Returns empty dict when no customers in tenant."""
+        session = MagicMock()
+        session.execute = AsyncMock(return_value=MagicMock(all=MagicMock(return_value=[])))
+        service = CustomerService(session)
+        result = await service.count_by_status(tenant_id=1)
+        assert result == {}
+
+    async def test_count_by_status_returns_counts(self):
+        """Returns correct count per status."""
+        session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.all = MagicMock(return_value=[
+            ("lead", 3),
+            ("opportunity", 2),
+            ("customer", 1),
+        ])
+        session.execute = AsyncMock(return_value=mock_result)
+        service = CustomerService(session)
+        result = await service.count_by_status(tenant_id=1)
+        assert result[CustomerStatus.LEAD] == 3
+        assert result[CustomerStatus.OPPORTUNITY] == 2
+        assert result[CustomerStatus.CUSTOMER] == 1
+
+    async def test_count_by_status_tenant_isolation(self):
+        """Groups counts only for the specified tenant."""
+        session = MagicMock()
+        mock_result = MagicMock()
+        # Only "lead" status for tenant 999
+        mock_result.all = MagicMock(return_value=[("lead", 7)])
+        session.execute = AsyncMock(return_value=mock_result)
+        service = CustomerService(session)
+        result = await service.count_by_status(tenant_id=999)
+        assert result[CustomerStatus.LEAD] == 7
+        assert CustomerStatus.OPPORTUNITY not in result
+        assert CustomerStatus.CUSTOMER not in result
+
+    async def test_count_by_status_single_status(self):
+        """Returns one entry when all customers share same status."""
+        session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.all = MagicMock(return_value=[("inactive", 10)])
+        session.execute = AsyncMock(return_value=mock_result)
+        service = CustomerService(session)
+        result = await service.count_by_status(tenant_id=1)
+        assert len(result) == 1
+        assert result[CustomerStatus.INACTIVE] == 10
