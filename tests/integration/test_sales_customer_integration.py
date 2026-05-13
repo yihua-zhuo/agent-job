@@ -416,100 +416,105 @@ class TestSalesServiceIntegration:
 
 @pytest.mark.integration
 class TestCustomerCountByStatusIntegration:
-    """Integration tests for CustomerService.count_by_status — real DB, real queries."""
+    """Integration tests for CustomerService.count_by_status via real DB + REST API.
 
-    async def test_count_by_status_empty(self, db_schema, tenant_id, async_session):
-        """Returns empty dict when no customers exist."""
+    Customers are created via the REST POST /customers endpoint so the full
+    request/response cycle (auth → validation → DTO → service → DB) is exercised.
+    count_by_status is called directly on the service to verify the aggregation.
+    """
+
+    async def test_count_by_status_empty(
+        self, db_schema, tenant_id, async_session
+    ):
+        """Returns empty dict when no customers exist for the tenant."""
         cust_svc = CustomerService(async_session)
         result = await cust_svc.count_by_status(tenant_id=tenant_id)
         assert result == {}
 
-    async def test_count_by_status_returns_correct_counts(self, db_schema, tenant_id, async_session):
-        """Three leads + two opportunities + one customer — counts must match exactly."""
-        cust_svc = CustomerService(async_session)
+    async def test_count_by_status_returns_correct_counts(
+        self, db_schema, tenant_id_web, api_client, async_session
+    ):
+        """Three leads + two opportunities + one customer via REST — counts must match exactly."""
         suffix = uuid.uuid4().hex[:8]
 
-        # Insert via raw SQL so status is exactly what we want (no DTO default)
-        from sqlalchemy import text
-        await async_session.execute(
-            text(
-                """
-                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
-                VALUES (:tid, :name, :email, :status, NOW(), NOW())
-                """
-            ),
-            [
-                dict(tid=tenant_id, name=f"Lead {suffix}-{i}", email=f"lead_{suffix}_{i}@test.com", status="lead")
-                for i in range(3)
-            ]
-        )
-        await async_session.execute(
-            text(
-                """
-                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
-                VALUES (:tid, :name, :email, :status, NOW(), NOW())
-                """
-            ),
-            [
-                dict(tid=tenant_id, name=f"Opp {suffix}-{i}", email=f"opp_{suffix}_{i}@test.com", status="opportunity")
-                for i in range(2)
-            ]
-        )
-        await async_session.execute(
-            text(
-                """
-                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
-                VALUES (:tid, :name, :email, :status, NOW(), NOW())
-                """
-            ),
-            [dict(tid=tenant_id, name=f"Cust {suffix}", email=f"cust_{suffix}@test.com", status="customer")]
-        )
-        await async_session.commit()
+        # Create 3 leads via REST
+        for i in range(3):
+            r = await api_client.post(
+                "/customers",
+                json={
+                    "name": f"Lead {suffix}-{i}",
+                    "email": f"lead_{suffix}_{i}@test.com",
+                    "status": "lead",
+                },
+            )
+            assert r.status_code == 201
 
-        result = await cust_svc.count_by_status(tenant_id=tenant_id)
+        # Create 2 opportunities via REST
+        for i in range(2):
+            r = await api_client.post(
+                "/customers",
+                json={
+                    "name": f"Opp {suffix}-{i}",
+                    "email": f"opp_{suffix}_{i}@test.com",
+                    "status": "opportunity",
+                },
+            )
+            assert r.status_code == 201
+
+        # Create 1 customer via REST
+        r = await api_client.post(
+            "/customers",
+            json={
+                "name": f"Cust {suffix}",
+                "email": f"cust_{suffix}@test.com",
+                "status": "customer",
+            },
+        )
+        assert r.status_code == 201
+
+        # Verify aggregation via the service layer
+        cust_svc = CustomerService(async_session)
+        result = await cust_svc.count_by_status(tenant_id=tenant_id_web)
 
         assert result[CustomerStatus.LEAD] == 3
         assert result[CustomerStatus.OPPORTUNITY] == 2
         assert result[CustomerStatus.CUSTOMER] == 1
 
-    async def test_count_by_status_tenant_isolation(self, db_schema, tenant_id, async_session):
+    async def test_count_by_status_tenant_isolation(
+        self, db_schema, tenant_id_web, tenant_id_2_web,
+        api_client, api_client_tenant_2, async_session
+    ):
         """Tenant A's customers must not appear in Tenant B's count."""
-        cust_svc = CustomerService(async_session)
         suffix = uuid.uuid4().hex[:8]
-        tenant2_id = tenant_id + 999
 
-        from sqlalchemy import text
+        # Tenant 1: 2 leads via REST
+        for i in range(2):
+            r = await api_client.post(
+                "/customers",
+                json={
+                    "name": f"T1 {suffix}-{i}",
+                    "email": f"t1_{suffix}_{i}@test.com",
+                    "status": "lead",
+                },
+            )
+            assert r.status_code == 201
 
-        # Tenant 1: 2 leads
-        await async_session.execute(
-            text(
-                """
-                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
-                VALUES (:tid, :name, :email, :status, NOW(), NOW())
-                """
-            ),
-            [
-                dict(tid=tenant_id, name=f"T1 {suffix}-{i}", email=f"t1_{suffix}_{i}@test.com", status="lead")
-                for i in range(2)
-            ]
-        )
-        # Tenant 2: 5 leads
-        await async_session.execute(
-            text(
-                """
-                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
-                VALUES (:tid, :name, :email, :status, NOW(), NOW())
-                """
-            ),
-            [
-                dict(tid=tenant2_id, name=f"T2 {suffix}-{i}", email=f"t2_{suffix}_{i}@test.com", status="lead")
-                for i in range(5)
-            ]
-        )
-        await async_session.commit()
+        # Tenant 2: 5 leads via REST
+        for i in range(5):
+            r = await api_client_tenant_2.post(
+                "/customers",
+                json={
+                    "name": f"T2 {suffix}-{i}",
+                    "email": f"t2_{suffix}_{i}@test.com",
+                    "status": "lead",
+                },
+            )
+            assert r.status_code == 201
 
-        result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id)
-        result_t2 = await cust_svc.count_by_status(tenant_id=tenant2_id)
+        # Verify counts via service layer using tenant sessions
+        cust_svc = CustomerService(async_session)
+        result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id_web)
+        result_t2 = await cust_svc.count_by_status(tenant_id=tenant_id_2_web)
 
         assert result_t1[CustomerStatus.LEAD] == 2
         assert result_t2[CustomerStatus.LEAD] == 5
