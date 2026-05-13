@@ -26,6 +26,7 @@ from db.models import (
     PipelineStageModel,
     ReminderModel,
     ReportModel,
+    RoutingRuleModel,
     TaskModel,
     TenantModel,
     TicketModel,

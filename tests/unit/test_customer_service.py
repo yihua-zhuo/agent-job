@@ -15,6 +15,8 @@ from services.customer_service import CustomerService
 @pytest.fixture
 def mock_db_session():
     """Async mock session that tracks calls and properly wires execute()."""
+    from unittest.mock import patch
+
     session = MagicMock()
     session.add = MagicMock()
     session.flush = AsyncMock()
@@ -30,8 +32,11 @@ def mock_db_session():
     mock_result.all = AsyncMock(return_value=[])
     mock_result.rowcount = 0
     session.execute = AsyncMock(return_value=mock_result)
+    session.get = AsyncMock(return_value=None)
 
-    return session
+    # auto_assign_lead is a no-op in tests that don't cover routing
+    with patch("services.lead_routing_service.LeadRoutingService.auto_assign_lead", new_callable=AsyncMock, return_value=None):
+        yield session
 
 
 class TestCustomerCreateDTO:

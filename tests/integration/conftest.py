@@ -186,6 +186,7 @@ _TABLES = [
     "tenants",
     "notifications",
     "reminders",
+    "routing_rules",
     "tasks",
 ]
 
@@ -334,6 +335,36 @@ def tenant_id_2_web() -> int:
     if _tenant_id_2_web is None:
         _tenant_id_2_web = random.randint(10_000_000, 99_999_999)
     return _tenant_id_2_web
+
+
+async def _seed_routing_rule(
+    session: AsyncSession,
+    tenant_id: int,
+    name: str = "APAC Rule",
+    conditions: list[dict] | None = None,
+    assignee_type: str = "user",
+    assignee_id: int | None = 5,
+    priority: int = 100,
+    is_active: bool = True,
+):
+    """Seed a routing rule for lead routing tests."""
+    from datetime import UTC, datetime
+    from db.models.routing_rule import RoutingRuleModel
+
+    rule = RoutingRuleModel(
+        tenant_id=tenant_id,
+        name=name,
+        conditions_json=conditions or [{"field": "region", "operator": "in", "value": ["APAC"]}],
+        assignee_type=assignee_type,
+        assignee_id=assignee_id,
+        priority=priority,
+        is_active=is_active,
+        created_at=datetime.now(UTC),
+        updated_at=datetime.now(UTC),
+    )
+    session.add(rule)
+    await session.flush()
+    return rule
 
 
 @pytest_asyncio.fixture(scope="function")

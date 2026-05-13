@@ -3,7 +3,7 @@
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
@@ -58,6 +58,14 @@ class CustomerService:
         self.session.add(customer)
         await self.session.flush()
         await self.session.refresh(customer)
+
+        # Step 8 — trigger auto-assignment for new leads with no owner
+        if customer.status == "lead" and customer.owner_id == 0:
+            from services.lead_routing_service import LeadRoutingService
+
+            routing_svc = LeadRoutingService(self.session)
+            await routing_svc.auto_assign_lead(customer.id, tenant_id)
+
         return customer
 
     async def list_customers(
@@ -205,8 +213,11 @@ class CustomerService:
     ) -> CustomerModel:
         """Assign an owner to a customer."""
         customer = await self.get_customer(customer_id, tenant_id)
+        now = datetime.now(UTC)
         customer.owner_id = owner_id
-        customer.updated_at = datetime.now(UTC)
+        if customer.assigned_at is None:
+            customer.assigned_at = now
+        customer.updated_at = now
         await self.session.flush()
         await self.session.refresh(customer)
         return customer
@@ -233,3 +244,129 @@ class CustomerService:
             )
         await self.session.flush()
         return len(customers)
+
+    async def reassign_lead(
+        self,
+        customer_id: int,
+        new_owner_id: int,
+        tenant_id: int,
+        reason: str | None = None,
+    ) -> CustomerModel:
+        """Reassign a lead with history tracking."""
+        customer = await self.get_customer(customer_id, tenant_id)
+        now = datetime.now(UTC)
+        entry = {
+            "recycled_at": now.isoformat(),
+            "previous_owner_id": customer.owner_id,
+            "reason": reason or "manual_reassign",
+        }
+        history = list(customer.recycle_history or [])
+        history.append(entry)
+        await self.session.execute(
+            update(CustomerModel)
+            .where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
+            .values(
+                owner_id=new_owner_id,
+                assigned_at=now,
+                recycle_count=customer.recycle_count + 1,
+                recycle_history=history,
+                updated_at=now,
+            )
+        )
+        await self.session.flush()
+        await self.session.refresh(customer)
+        return customer
+
+    async def get_unassigned_leads(
+        self,
+        tenant_id: int,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[CustomerModel], int]:
+        """Return leads with owner_id=0 and status=lead, ordered by created_at."""
+        conditions = [
+            CustomerModel.tenant_id == tenant_id,
+            CustomerModel.owner_id == 0,
+            CustomerModel.status == "lead",
+        ]
+        count_result = await self.session.execute(
+            select(func.count(CustomerModel.id)).where(and_(*conditions))
+        )
+        total = count_result.scalar() or 0
+        offset = (page - 1) * page_size
+        result = await self.session.execute(
+            select(CustomerModel)
+            .where(and_(*conditions))
+            .order_by(CustomerModel.created_at.asc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        return result.scalars().all(), total
+
+    async def get_leads_by_owner(
+        self,
+        owner_id: int,
+        tenant_id: int,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[CustomerModel], int]:
+        """Return leads for a specific owner."""
+        conditions = [
+            CustomerModel.tenant_id == tenant_id,
+            CustomerModel.owner_id == owner_id,
+            CustomerModel.status == "lead",
+        ]
+        count_result = await self.session.execute(
+            select(func.count(CustomerModel.id)).where(and_(*conditions))
+        )
+        total = count_result.scalar() or 0
+        offset = (page - 1) * page_size
+        result = await self.session.execute(
+            select(CustomerModel)
+            .where(and_(*conditions))
+            .order_by(CustomerModel.created_at.asc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        return result.scalars().all(), total
+
+    async def bulk_recycle(self, customer_ids: list[int], tenant_id: int) -> list[int]:
+        """Bulk recycle a list of lead IDs (set owner_id=0, increment count, log history)."""
+        if not customer_ids:
+            return []
+        now = datetime.now(UTC)
+        result = await self.session.execute(
+            select(CustomerModel).where(
+                and_(
+                    CustomerModel.tenant_id == tenant_id,
+                    CustomerModel.id.in_(customer_ids),
+                    CustomerModel.status == "lead",
+                    CustomerModel.owner_id != 0,
+                )
+            )
+        )
+        leads = result.scalars().all()
+        recycled_ids: list[int] = []
+
+        for lead in leads:
+            entry = {
+                "recycled_at": now.isoformat(),
+                "previous_owner_id": lead.owner_id,
+                "reason": "manual_bulk_recycle",
+            }
+            history = list(lead.recycle_history or [])
+            history.append(entry)
+            await self.session.execute(
+                update(CustomerModel)
+                .where(and_(CustomerModel.id == lead.id, CustomerModel.tenant_id == tenant_id))
+                .values(
+                    owner_id=0,
+                    assigned_at=None,
+                    recycle_count=lead.recycle_count + 1,
+                    recycle_history=history,
+                )
+            )
+            recycled_ids.append(lead.id)
+
+        await self.session.flush()
+        return recycled_ids
