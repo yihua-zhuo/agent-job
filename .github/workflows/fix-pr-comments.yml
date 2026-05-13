@@ -1,0 +1,146 @@
+name: Fix · PR Comments
+
+# Manually triggered via workflow_dispatch with a PR number. The dispatcher
+# script (scripts/ci/dispatch_pr_fixes.py) is the intended caller: it scans
+# open PRs, checks for unresolved feedback + absence of a running fix, and
+# fires this workflow only where it's actually needed.
+#
+# Checks out the PR's HEAD branch and pushes fixes back to it — never master.
+on:
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'PR number to address comments on'
+        required: true
+        type: number
+
+# Don't let two fix runs race on the same PR — they'd compete to push.
+concurrency:
+  group: fix-pr-comments-${{ inputs.pr_number }}
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  fix:
+    name: Address reviewer feedback
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Resolve PR metadata
+        id: pr
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          PR_NUMBER="${{ inputs.pr_number }}"
+          HEAD_REF=$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)
+          BASE_REF=$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)
+          echo "pr_number=$PR_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "head_ref=$HEAD_REF" >> "$GITHUB_OUTPUT"
+          echo "base_ref=$BASE_REF" >> "$GITHUB_OUTPUT"
+          echo "Resolved PR #$PR_NUMBER on branch $HEAD_REF (base: $BASE_REF)"
+
+      - uses: actions/checkout@v4
+        with:
+          # Check out the PR's head branch so we can commit & push back to it.
+          # PAT is required so the resulting push fires downstream CI; events
+          # produced by GITHUB_TOKEN do NOT fire pull_request workflows.
+          ref: ${{ steps.pr.outputs.head_ref }}
+          fetch-depth: 0
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up claude
+        run: |
+          if ! command -v claude &>/dev/null; then
+            npm install -g @anthropic-ai/claude-code
+          fi
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install Python dependencies
+        run: |
+          set -e
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" 2>/dev/null || pip install -e . || pip install -r requirements.txt
+          pip install pytest pytest-asyncio ruff sqlalchemy asyncpg fastapi
+
+      - name: Start docker compose (test DB)
+        run: |
+          docker compose -f configs/docker-compose.test.yml up -d test-db
+          for i in {1..30}; do
+            if docker compose -f configs/docker-compose.test.yml exec -T test-db pg_isready -U test_user > /dev/null 2>&1; then
+              echo "test-db ready after ${i} polls"
+              break
+            fi
+            sleep 2
+          done
+          if ! docker compose -f configs/docker-compose.test.yml exec -T test-db pg_isready -U test_user > /dev/null 2>&1; then
+            echo "test-db did not become ready within timeout" >&2
+            docker compose -f configs/docker-compose.test.yml logs test-db || true
+            exit 1
+          fi
+
+      - name: Fetch comments and let Claude fix them
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
+          PYTHONPATH: src
+        run: python3 scripts/ci/fix_pr_comments.py
+
+      - name: Diagnostics (working tree after Claude)
+        run: |
+          echo "=== git status -uall ==="
+          git status -uall
+          echo
+          echo "=== Files changed vs base branch ==="
+          git diff --stat "origin/${{ steps.pr.outputs.base_ref }}..HEAD" -- . ':!.plans/*' || true
+
+      - name: Commit and push fixes
+        env:
+          GH_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          PR_NUMBER="${{ steps.pr.outputs.pr_number }}"
+          HEAD_REF="${{ steps.pr.outputs.head_ref }}"
+
+          git add -A
+          if ! git diff --cached --quiet; then
+            git commit \
+              -m "fix: address PR #${PR_NUMBER} review comments" \
+              -m "Auto-applied by Claude Code based on unresolved reviewer feedback. Tests re-run before commit."
+          fi
+
+          # Compare HEAD against the remote head_ref tip. If nothing new
+          # exists, there's nothing to push — exit cleanly.
+          git fetch origin "$HEAD_REF" || true
+          if git rev-parse --verify "origin/$HEAD_REF" >/dev/null 2>&1; then
+            if git diff --quiet "origin/$HEAD_REF..HEAD"; then
+              echo "No new commits beyond origin/$HEAD_REF — nothing to push."
+              exit 0
+            fi
+          fi
+          git push origin "HEAD:$HEAD_REF"
+
+      - name: Stop docker compose
+        if: always()
+        run: docker compose -f configs/docker-compose.test.yml down -v || true
