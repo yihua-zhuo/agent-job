@@ -28,50 +28,78 @@ The project's review rules are in `codereview.md` at the repo root.
 
 Your task — execute in order:
 
-1. Inspect your own changes:
+1. Read the plan at `{plan_path}` end-to-end. Internalise three sections in
+   particular: **Affected Files**, **Implementation Steps**, and
+   **Acceptance Criteria**.
+
+2. Inspect your own changes:
        git diff --stat origin/master..HEAD
        git diff --stat                              # unstaged
        git diff origin/master..HEAD | head -800
        git diff | head -800                         # unstaged
    Use `head` or `--stat` first if the diff is large; you don't need every
-   byte, just enough to find rule violations.
+   byte, just enough to find rule violations and assess plan coverage.
 
-2. Read `codereview.md`. Pay particular attention to:
+3. Compare diff against plan — this is the FIRST review pass:
+   - For each file in **Affected Files**: does the diff include the change
+     the plan described, or is the file missing / under-implemented?
+   - For each step in **Implementation Steps**: is the corresponding code
+     present in the diff?
+   - For each criterion in **Acceptance Criteria**: is there evidence
+     (production code + tests) that the criterion will hold? Acceptance
+     criteria without test coverage are a real gap.
+   - Did you add files OUTSIDE the plan's Affected Files? That's usually a
+     scope creep — but acceptable if the new file is a necessary dependency
+     the plan missed (e.g. an Alembic migration, an `__init__.py`). Note
+     any such additions explicitly in your summary so the human reviewer
+     can sanity-check them.
+   List every mismatch as either "MISSING" (plan said do X, diff doesn't),
+   "EXTRA" (diff does Y, plan didn't), or "PARTIAL" (started but incomplete).
+
+4. Read `codereview.md` — this is the SECOND review pass. Focus on:
    - Architecture & Project Structure (rules 1-10)
    - Readability & Maintainability (rules 11-20)
    - Python-Specific Best Practices (rules 21-30)
    - Project-Specific Rules (121+) — especially the transaction-boundary
      rules (121-123) and the integration-tests-must-not-mock rule (124).
 
-3. Identify violations IN YOUR OWN DIFF only. Be ruthless about real rule
-   breakages (e.g. `session.commit()` in a service, `MagicMock` under
-   `tests/integration/`, missing tenant_id filter, manual `try/except`
-   in a router that should rely on the global exception handler).
+5. Identify rule violations IN YOUR OWN DIFF only. Be ruthless about real
+   rule breakages (e.g. `session.commit()` in a service, `MagicMock` under
+   `tests/integration/`, missing tenant_id filter, manual `try/except` in a
+   router that should rely on the global exception handler).
    Do NOT flag things that already exist in the codebase outside your diff.
 
-4. Apply fixes ONLY to the files you already touched. Rules:
-   - Do NOT scope-creep into unrelated code or files.
+6. Apply fixes for BOTH categories (plan-mismatch from step 3 AND
+   rule-violations from step 5). Rules:
+   - "MISSING" gaps: implement the missing piece per the plan.
+   - "PARTIAL" gaps: complete the implementation.
+   - "EXTRA" additions: justify in summary; remove only if unrelated noise.
+   - Rule violations: fix per the codereview.md rule.
    - Do NOT modify the plan file at `{plan_path}`.
    - Do NOT make purely stylistic changes that don't violate a rule.
    - Do NOT touch `.github/workflows/` or `scripts/ci/`.
 
-5. If you made any fixes, re-run the full validation suite:
+7. If you made any fixes, re-run the full validation suite:
        PYTHONPATH=src ruff check src/
        PYTHONPATH=src pytest tests/unit/ -v
        DATABASE_URL=postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db PYTHONPATH=src pytest tests/integration/ -v
    All three must be green. If a fix breaks tests, refine the fix; don't
    revert silently.
 
-6. Stop when: no more rule violations remain AND all three checks are green.
-   Print a short summary of what you changed (or "no issues found, no
-   changes made" if the diff was already clean).
+8. Stop when: every plan item is covered (or its absence justified), no rule
+   violations remain, and all three checks are green. Print a short summary
+   covering both passes:
+       Plan coverage: <gaps found and how you closed them, or "fully covered">
+       Rule violations: <what you fixed, or "none found">
+   If the diff was already clean on both axes, say "no issues found, no
+   changes made".
 
-7. Do NOT run `git commit`, `git push`, `git add`, `git stash`, `git reset`,
+9. Do NOT run `git commit`, `git push`, `git add`, `git stash`, `git reset`,
    or modify `.git/`. Leave all edits as unstaged changes — the workflow
    stages and commits them after you finish.
 
-If you find no violations, say so explicitly and stop without making any
-changes. Don't invent issues to fix.
+Don't invent issues to fix. But if the implementation diverged from the plan
+without a documented reason, that IS a real issue — flag it and reconcile.
 """
 
 
