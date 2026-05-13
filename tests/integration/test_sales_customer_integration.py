@@ -416,7 +416,7 @@ class TestSalesServiceIntegration:
 
 @pytest.mark.integration
 class TestCustomerCountByStatusIntegration:
-    """Integration tests for CustomerService.count_by_status with real DB."""
+    """Integration tests for CustomerService.count_by_status — real DB, real queries."""
 
     async def test_count_by_status_empty(self, db_schema, tenant_id, async_session):
         """Returns empty dict when no customers exist."""
@@ -424,47 +424,92 @@ class TestCustomerCountByStatusIntegration:
         result = await cust_svc.count_by_status(tenant_id=tenant_id)
         assert result == {}
 
-    async def test_count_by_status_single_status(self, db_schema, tenant_id, async_session):
-        """Counts customers grouped by status correctly."""
+    async def test_count_by_status_returns_correct_counts(self, db_schema, tenant_id, async_session):
+        """Three leads + two opportunities + one customer — counts must match exactly."""
         cust_svc = CustomerService(async_session)
         suffix = uuid.uuid4().hex[:8]
-        for i in range(3):
-            await cust_svc.create_customer(
-                data={"name": f"Lead {suffix}-{i}", "email": f"lead_{suffix}_{i}@example.com", "status": "lead"},
-                tenant_id=tenant_id,
-            )
-        for i in range(2):
-            await cust_svc.create_customer(
-                data={"name": f"Opp {suffix}-{i}", "email": f"opp_{suffix}_{i}@example.com", "status": "opportunity"},
-                tenant_id=tenant_id,
-            )
+
+        # Insert via raw SQL so status is exactly what we want (no DTO default)
+        from sqlalchemy import text
+        await async_session.execute(
+            text(
+                """
+                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
+                VALUES (:tid, :name, :email, :status, NOW(), NOW())
+                """
+            ),
+            [
+                dict(tid=tenant_id, name=f"Lead {suffix}-{i}", email=f"lead_{suffix}_{i}@test.com", status="lead")
+                for i in range(3)
+            ]
+        )
+        await async_session.execute(
+            text(
+                """
+                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
+                VALUES (:tid, :name, :email, :status, NOW(), NOW())
+                """
+            ),
+            [
+                dict(tid=tenant_id, name=f"Opp {suffix}-{i}", email=f"opp_{suffix}_{i}@test.com", status="opportunity")
+                for i in range(2)
+            ]
+        )
+        await async_session.execute(
+            text(
+                """
+                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
+                VALUES (:tid, :name, :email, :status, NOW(), NOW())
+                """
+            ),
+            [dict(tid=tenant_id, name=f"Cust {suffix}", email=f"cust_{suffix}@test.com", status="customer")]
+        )
+        await async_session.commit()
 
         result = await cust_svc.count_by_status(tenant_id=tenant_id)
-        assert result is not None
-        assert len(result) == 2
+
+        assert result[CustomerStatus.LEAD] == 3
+        assert result[CustomerStatus.OPPORTUNITY] == 2
+        assert result[CustomerStatus.CUSTOMER] == 1
 
     async def test_count_by_status_tenant_isolation(self, db_schema, tenant_id, async_session):
-        """Tenant A does not see Tenant B's customer counts."""
+        """Tenant A's customers must not appear in Tenant B's count."""
         cust_svc = CustomerService(async_session)
         suffix = uuid.uuid4().hex[:8]
+        tenant2_id = tenant_id + 999
+
+        from sqlalchemy import text
 
         # Tenant 1: 2 leads
-        for i in range(2):
-            await cust_svc.create_customer(
-                data={"name": f"T1 {suffix}-{i}", "email": f"t1_{suffix}_{i}@example.com", "status": "lead"},
-                tenant_id=tenant_id,
-            )
-
-        # Tenant 2: 5 leads (different tenant)
-        tenant2_id = tenant_id + 100
-        for i in range(5):
-            await cust_svc.create_customer(
-                data={"name": f"T2 {suffix}-{i}", "email": f"t2_{suffix}_{i}@example.com", "status": "lead"},
-                tenant_id=tenant2_id,
-            )
+        await async_session.execute(
+            text(
+                """
+                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
+                VALUES (:tid, :name, :email, :status, NOW(), NOW())
+                """
+            ),
+            [
+                dict(tid=tenant_id, name=f"T1 {suffix}-{i}", email=f"t1_{suffix}_{i}@test.com", status="lead")
+                for i in range(2)
+            ]
+        )
+        # Tenant 2: 5 leads
+        await async_session.execute(
+            text(
+                """
+                INSERT INTO customers (tenant_id, name, email, status, created_at, updated_at)
+                VALUES (:tid, :name, :email, :status, NOW(), NOW())
+                """
+            ),
+            [
+                dict(tid=tenant2_id, name=f"T2 {suffix}-{i}", email=f"t2_{suffix}_{i}@test.com", status="lead")
+                for i in range(5)
+            ]
+        )
+        await async_session.commit()
 
         result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id)
         result_t2 = await cust_svc.count_by_status(tenant_id=tenant2_id)
 
-        assert result_t1.get(CustomerStatus.LEAD, 0) == 2
-        assert result_t2.get(CustomerStatus.LEAD, 0) == 5
+        assert result_t1[CustomerStatus.LEAD] == 2
+        assert result_t2[CustomerStatus.LEAD] == 5
