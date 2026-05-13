@@ -14,10 +14,11 @@ from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.device_trust import DeviceTrustModel
+from pkg.errors.app_exceptions import ForbiddenException, NotFoundException, ValidationException
 
 
 class SuspiciousActivityReason:
-    """Reausible causes for triggering re-authentication."""
+    """Reasonable causes for triggering re-authentication."""
 
     NEW_DEVICE = "new_device"
     NEW_IP = "new_ip"
@@ -34,7 +35,11 @@ def generate_device_fingerprint(
 
     Note: This is a simple fingerprint. For stronger fingerprinting,
     consider adding canvas/WebGL, fonts, or TLS JA3 signatures client-side.
+    Returns empty string if all inputs are None/empty.
     """
+    if not ip_address and not user_agent and not accept_language:
+        return ""
+
     parts = [
         ip_address or "",
         user_agent or "",
@@ -95,6 +100,7 @@ class DeviceTrustService:
             model.last_ip = ip_address or model.last_ip
             model.last_location = location or model.last_location
             model.last_used_at = datetime.now(UTC)
+            model.trusted_at = datetime.now(UTC)
 
         await self.session.flush()
         return model
@@ -116,7 +122,10 @@ class DeviceTrustService:
         """Revoke trust for all devices of a user (e.g. after password change)."""
         result = await self.session.execute(
             update(DeviceTrustModel)
-            .where(DeviceTrustModel.user_id == user_id, DeviceTrustModel.trusted == True)  # noqa: E712
+            .where(
+                DeviceTrustModel.user_id == user_id,
+                DeviceTrustModel.trusted == True,  # noqa: E712
+            )
             .values(trusted=False)
         )
         await self.session.flush()
@@ -156,6 +165,10 @@ class DeviceTrustService:
         """
         reasons: list[str] = []
 
+        if not device_fingerprint:
+            reasons.append(SuspiciousActivityReason.NEW_DEVICE)
+            return bool(reasons), reasons
+
         result = await self.session.execute(
             select(DeviceTrustModel).where(
                 DeviceTrustModel.user_id == user_id,
@@ -168,12 +181,8 @@ class DeviceTrustService:
         if device is None:
             reasons.append(SuspiciousActivityReason.NEW_DEVICE)
         else:
-            # Check IP change
             if ip_address and device.last_ip and ip_address != device.last_ip:
                 reasons.append(SuspiciousActivityReason.NEW_IP)
-
-        # In production: integrate with a geo-IP service to detect location changes
-        # e.g. if country changes from "US" to "CN", trigger re-auth
 
         return bool(reasons), reasons
 
@@ -185,6 +194,6 @@ class DeviceTrustService:
                 DeviceTrustModel.user_id == user_id,
                 DeviceTrustModel.trusted == True,  # noqa: E712
             )
-            .order_by(DeviceTrustModel.last_used_at.desc().nonnull(), DeviceTrustModel.trusted_at.desc())
+            .order_by(DeviceTrustModel.last_used_at.desc().nullsfirst(), DeviceTrustModel.trusted_at.desc())
         )
         return list(result.scalars().all())

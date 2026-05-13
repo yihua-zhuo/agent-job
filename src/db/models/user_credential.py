@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -13,29 +13,26 @@ class UserCredentialModel(Base):
 
     __tablename__ = "user_credentials"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
-    credential_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)  # WebAuthn cred ID
-    public_key: Mapped[str] = mapped_column(String(1024), nullable=False)  # Base64-encoded public key
+    # WebAuthn credential ID (base64url, can be up to 1023 bytes raw)
+    credential_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
+    # Text — FIDO2 attestation objects (X.509 cert chains) routinely exceed 1024 chars
+    public_key: Mapped[str] = mapped_column(Text, nullable=False)
     device_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)
     device_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # WebAuthn counter to detect cloned credentials
+    # WebAuthn sign counter to detect cloned credentials
     sign_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    # UAF/U2F vs FIDO2
     authenticator_type: Mapped[str] = mapped_column(String(20), default="fido2", nullable=False)
-    # WebAuthn transports (none, usb, nfc, ble, internal)
     transports: Mapped[str | None] = mapped_column(String(100), nullable=True)
-    enabled: Mapped[bool] = mapped_column(Integer, default=1, nullable=False)  # 1=enabled, 0=disabled
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    __table_args__ = (
-        Index("ix_user_credentials_user_id", "user_id"),
-        Index("ix_user_credentials_credential_id", "credential_id"),
-    )
+    __table_args__ = (Index("ix_user_credentials_credential_id", "credential_id"),)
 
     def to_dict(self) -> dict:
         return {

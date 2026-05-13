@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -13,31 +13,22 @@ class DeviceTrustModel(Base):
 
     __tablename__ = "device_trust"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
     device_fingerprint: Mapped[str] = mapped_column(String(255), nullable=False)
     device_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # IP address when device was first trusted
     trusted_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    # Last known IP address
     last_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
-    # Last known geo location (city, country)
     last_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # Last time this device was used to authenticate
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    # When the device was first trusted
     trusted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    # Whether this device is currently trusted
-    trusted: Mapped[bool] = mapped_column(Integer, default=1, nullable=False)  # 1=trusted, 0=revoked
+    trusted: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    __table_args__ = (
-        Index("ix_device_trust_user_id", "user_id"),
-        Index("ix_device_trust_fingerprint", "device_fingerprint"),
-    )
+    __table_args__ = (Index("ix_device_trust_fingerprint", "device_fingerprint"),)
 
     def to_dict(self) -> dict:
         return {

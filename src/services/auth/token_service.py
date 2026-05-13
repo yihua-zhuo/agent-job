@@ -9,7 +9,6 @@ This module implements the P0 priority from issue #163:
 import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
-from typing import Optional
 
 import jwt
 from sqlalchemy import select, update
@@ -18,9 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.refresh_token import RefreshTokenModel
 
 
-# Access token is short-lived (5-15 min, default 10)
 ACCESS_TOKEN_EXPIRY_MINUTES = 10
-# Refresh token lives 7 days by default (configurable 7-30)
 REFRESH_TOKEN_EXPIRY_DAYS = 7
 
 
@@ -44,10 +41,6 @@ class TokenService:
     def __init__(self, session: AsyncSession, secret_key: str):
         self.session = session
         self.secret_key = secret_key
-
-    # -------------------------------------------------------------------------
-    # Access token helpers (kept for compatibility; real tokens are stateless)
-    # -------------------------------------------------------------------------
 
     def create_access_token(
         self,
@@ -79,10 +72,6 @@ class TokenService:
             return payload
         except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
             return None
-
-    # -------------------------------------------------------------------------
-    # Refresh token CRUD
-    # -------------------------------------------------------------------------
 
     async def create_refresh_token(
         self,
@@ -128,8 +117,7 @@ class TokenService:
         model = result.scalar_one_or_none()
         if model is None:
             return None
-        # Check expiry
-        if model.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
+        if model.expires_at < datetime.now(UTC):
             return None
         return model
 
@@ -138,7 +126,10 @@ class TokenService:
         token_hash = hash_token(raw_token)
         result = await self.session.execute(
             update(RefreshTokenModel)
-            .where(RefreshTokenModel.token_hash == token_hash)
+            .where(
+                RefreshTokenModel.token_hash == token_hash,
+                RefreshTokenModel.revoked == False,  # noqa: E712
+            )
             .values(revoked=True, revoked_at=datetime.now(UTC))
         )
         await self.session.flush()
@@ -176,10 +167,10 @@ class TokenService:
         user_agent: str | None = None,
         ip_address: str | None = None,
     ) -> tuple[str, RefreshTokenModel] | None:
-        """Atomically rotate a refresh token: revoke old, issue new.
+        """Atomically rotate a refresh token: revoke old, issue new with remaining TTL.
 
         Used for "silent re-login" when the token is still valid.
-        Returns (new_raw_token, new_model) or None if old token is invalid.
+        Returns (new_raw_token, new_model) or None if old token is invalid/expired.
         """
         token_hash = hash_token(old_raw_token)
         result = await self.session.execute(
@@ -191,16 +182,20 @@ class TokenService:
         old_model = result.scalar_one_or_none()
         if old_model is None:
             return None
-        if old_model.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
+        if old_model.expires_at < datetime.now(UTC):
             return None
 
         # Revoke old
         old_model.revoked = True
         old_model.revoked_at = datetime.now(UTC)
 
-        # Issue new with remaining TTL from old token
-        remaining = old_model.expires_at.replace(tzinfo=UTC) - datetime.now(UTC)
-        expiry_days = max(1, remaining.days)
+        # Compute remaining TTL precisely (in seconds, not truncated days)
+        now = datetime.now(UTC)
+        remaining = old_model.expires_at - now
+        expiry_seconds = max(1, int(remaining.total_seconds()))
+        expiry_days = max(1, expiry_seconds // 86400)
+        if expiry_seconds < 86400:
+            expiry_days = 1  # Less than a day → 1 day minimum
 
         new_raw, new_model = await self.create_refresh_token(
             user_id=old_model.user_id,

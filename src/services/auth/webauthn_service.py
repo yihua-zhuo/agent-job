@@ -19,6 +19,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.user_credential import UserCredentialModel
 from db.models.webauthn_challenge import WebAuthnChallengeModel
+from pkg.errors.app_exceptions import (
+    ConflictException,
+    NotFoundException,
+    UnauthorizedException,
+    ValidationException,
+)
 
 
 def generate_challenge(length: int = 64) -> str:
@@ -106,8 +112,7 @@ class WebAuthnService:
         if model is None:
             return None
 
-        # Check TTL
-        if model.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
+        if model.expires_at < datetime.now(UTC):
             return None
 
         if consume:
@@ -118,7 +123,7 @@ class WebAuthnService:
         return model
 
     async def _cleanup_expired_challenges(self) -> int:
-        """Delete all expired challenges. Called periodically to keep table small."""
+        """Delete all consumed-and-expired challenges. Call periodically to keep table small."""
         result = await self.session.execute(
             delete(WebAuthnChallengeModel).where(
                 WebAuthnChallengeModel.expires_at < datetime.now(UTC),
@@ -143,7 +148,6 @@ class WebAuthnService:
 
         The client will call finish_registration() with the authenticator's response.
         """
-        # Store challenge in DB with 60s TTL
         challenge = await self._create_challenge(
             user_id=user_id,
             purpose="registration",
@@ -196,7 +200,8 @@ class WebAuthnService:
         """Verify WebAuthn attestation and store the credential.
 
         Raises:
-            ValueError: If attestation verification fails or challenge is invalid/expired.
+            ValidationException: If challenge is expired/already-used/invalid.
+            ValueError: For malformed attestation data.
         """
         client_data = registration_response.get("response", {}).get("clientDataJSON", "")
         attestation_object = registration_response.get("response", {}).get("attestationObject", "")
@@ -208,8 +213,8 @@ class WebAuthnService:
             else:
                 client_data_bytes = base64.b64decode(client_data)
             client_data_json = json.loads(client_data_bytes)
-        except Exception as e:
-            raise ValueError(f"Invalid client data JSON: {e}")
+        except json.JSONDecodeError as e:
+            raise ValidationException(f"Invalid client data JSON: {e}")
 
         presented_challenge = client_data_json.get("challenge", "")
         origin = client_data_json.get("origin", "")
@@ -217,11 +222,11 @@ class WebAuthnService:
         # Consume challenge from DB (validates existence, TTL, not reused)
         db_challenge = await self._consume_challenge(user_id, presented_challenge, purpose="registration")
         if db_challenge is None:
-            raise ValueError("Challenge expired, already used, or invalid")
+            raise ValidationException("Challenge expired, already used, or invalid")
 
         # Verify origin matches expected rpId
-        # In production: validate origin is https and matches self.rp_id
-        _ = origin  # TODO: full origin/rpId validation in production
+        # TODO: full origin/rpId validation in production
+        _ = origin
 
         # Extract credential ID
         credential_id_raw = registration_response.get("credential", {}).get("id", "")
@@ -298,7 +303,9 @@ class WebAuthnService:
         Returns (credential_model, counter_updated).
 
         Raises:
-            ValueError: If the assertion is invalid or challenge is expired/used.
+            ValidationException: If client data is malformed or challenge invalid.
+            NotFoundException: If credential is not found.
+            ConflictException: If clone detection fires (sign_count not incremented).
         """
         credential_id = assertion_response.get("credentialId", "")
         client_data_json_b64 = assertion_response.get("response", {}).get("clientDataJSON", "")
@@ -311,21 +318,21 @@ class WebAuthnService:
             else:
                 client_data_bytes = base64.b64decode(client_data_json_b64)
             client_data = json.loads(client_data_bytes)
-        except Exception as e:
-            raise ValueError(f"Invalid client data: {e}")
+        except json.JSONDecodeError as e:
+            raise ValidationException(f"Invalid client data: {e}")
 
         presented_challenge = client_data.get("challenge", "")
         origin = client_data.get("origin", "")
-        # In production: validate origin matches rpId
+        # TODO: validate origin matches rpId in production
 
         # Consume challenge from DB
         db_challenge = await self._consume_challenge(user_id, presented_challenge, purpose="assertion")
         if db_challenge is None:
-            raise ValueError("Challenge expired, already used, or invalid")
+            raise ValidationException("Challenge expired, already used, or invalid")
 
         # Verify credential_id in challenge matches presented credential
         if db_challenge.credential_id and db_challenge.credential_id != credential_id:
-            raise ValueError("Credential ID mismatch")
+            raise ValidationException("Credential ID mismatch")
 
         # Find credential
         result = await self.session.execute(
@@ -337,7 +344,7 @@ class WebAuthnService:
         )
         credential = result.scalar_one_or_none()
         if credential is None:
-            raise ValueError("Unknown credential")
+            raise NotFoundException("Credential")
 
         # Parse authenticator data for sign count (byte offset 37-41, big-endian uint32)
         sign_count = 0
@@ -349,11 +356,11 @@ class WebAuthnService:
             if len(auth_data_bytes) >= 41:
                 sign_count = int.from_bytes(auth_data_bytes[37:41], byteorder="big")
         except Exception:
-            pass  # auth_data parsing is best-effort
+            pass  # best-effort parsing
 
         # Anti-cloning: reject if reported counter <= stored counter
         if credential.sign_count > 0 and sign_count <= credential.sign_count:
-            raise ValueError("Possible credential clone detected — signature counter not incremented")
+            raise ConflictException("Possible credential clone detected — signature counter not incremented")
 
         # Update counter
         await self.session.execute(
