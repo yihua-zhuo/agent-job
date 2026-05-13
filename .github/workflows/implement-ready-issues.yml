@@ -25,7 +25,7 @@ jobs:
   implement:
     name: Implement next ready issue
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 180
     permissions:
       contents: write
       issues: write
@@ -124,7 +124,7 @@ jobs:
           # 60 min cap. Leaves ~30 min of the 90-min job budget for Stage 1
           # (~2 min), docker + deps setup (~10 min), Stage 3 self-review,
           # and the commit/PR step.
-          CLAUDE_TIMEOUT_SECONDS: '3600'
+          CLAUDE_TIMEOUT_SECONDS: '7200'
         run: python3 scripts/ci/execute_implementation.py
 
       - name: Stage 3 — self-review & fix
