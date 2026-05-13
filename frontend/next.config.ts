@@ -5,7 +5,10 @@ const nextConfig: NextConfig = {
     return [
       {
         source: "/api/:path*",
-        destination: "https://agent-job-production.up.railway.app/api/:path*",
+        destination:
+          process.env.NODE_ENV === "development"
+            ? "http://localhost:8000/api/:path*"
+            : "https://agent-job-production.up.railway.app/api/:path*",
       },
     ];
   },
