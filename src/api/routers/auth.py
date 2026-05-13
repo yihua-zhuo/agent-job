@@ -8,6 +8,7 @@ Implements issue #163:
 """
 
 from typing import Any
+import math
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
@@ -208,7 +209,7 @@ async def refresh_token(
         raise HTTPException(status_code=401, detail="刷新令牌无效")
 
     user_model = await auth_svc.get_current_user(
-        await auth_svc.create_token(result.user_id, "", "", None)
+        await auth_svc.create_token(result.user_id, result.username or "", "", result.tenant_id or None)
     )
 
     access_token = token_svc.create_access_token(
