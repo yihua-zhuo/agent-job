@@ -80,8 +80,27 @@ def upgrade() -> None:
     op.create_index("ix_device_trust_user_id", "device_trust", ["user_id"])
     op.create_index("ix_device_trust_fingerprint", "device_trust", ["device_fingerprint"])
 
+    # webauthn_challenges — single-use challenges for WebAuthn registration/assertion
+    op.create_table(
+        "webauthn_challenges",
+        sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("user_id", sa.Integer(), nullable=False, index=True),
+        sa.Column("challenge", sa.String(length=255), nullable=False),
+        sa.Column("purpose", sa.String(length=20), nullable=False, server_default="registration"),
+        sa.Column("credential_id", sa.String(length=255), nullable=True),
+        sa.Column("device_fingerprint", sa.String(length=255), nullable=True),
+        sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("consumed", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column("consumed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
+        sa.ForeignKeyConstraint(["user_id"], ["users.id"], ondelete="CASCADE"),
+    )
+    op.create_index("ix_webauthn_challenges_challenge", "webauthn_challenges", ["challenge"])
+    op.create_index("ix_webauthn_challenges_expires", "webauthn_challenges", ["expires_at"])
+
 
 def downgrade() -> None:
+    op.drop_table("webauthn_challenges")
     op.drop_table("device_trust")
     op.drop_table("user_credentials")
     op.drop_table("refresh_tokens")

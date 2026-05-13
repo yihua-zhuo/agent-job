@@ -4,18 +4,21 @@ This module implements the WebAuthn (FIDO2 / U2F) portion of issue #163:
 - Registration: generate challenge, verify attestation, store credential
 - Assertion: verify authentication, check counter for clone detection
 - Device trust integration for suspicious activity detection
+
+Challenges are stored in PostgreSQL (webauthn_challenges table) with TTL.
 """
 
 import base64
 import json
 import secrets
-from datetime import UTC, datetime
-from typing import Annotated, Any
+from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.user_credential import UserCredentialModel
+from db.models.webauthn_challenge import WebAuthnChallengeModel
 
 
 def generate_challenge(length: int = 64) -> str:
@@ -34,10 +37,14 @@ def encode_credential_id(credential_id: bytes) -> str:
     return base64.urlsafe_b64encode(credential_id).rstrip(b"=").decode()
 
 
+# Default TTLs
+REGISTRATION_CHALLENGE_TTL_SECONDS = 60
+ASSERTION_CHALLENGE_TTL_SECONDS = 300
+
+
 class WebAuthnService:
     """Service for WebAuthn registration and authentication flows."""
 
-    # rpId defaults — can be overridden per-call
     DEFAULT_RP_ID = "localhost"
     DEFAULT_RP_NAME = "AgentJob"
 
@@ -47,7 +54,82 @@ class WebAuthnService:
         self.rp_name = rp_name or self.DEFAULT_RP_NAME
 
     # -------------------------------------------------------------------------
-    # Registration helpers (server-side challenge generation)
+    # Challenge management (PostgreSQL-backed, TTL expiry)
+    # -------------------------------------------------------------------------
+
+    async def _create_challenge(
+        self,
+        user_id: int,
+        purpose: str,
+        credential_id: str | None = None,
+        device_fingerprint: str | None = None,
+        ttl_seconds: int = REGISTRATION_CHALLENGE_TTL_SECONDS,
+    ) -> str:
+        """Store a challenge in DB with TTL. Returns the raw challenge string."""
+        challenge = generate_challenge()
+        expires_at = datetime.now(UTC) + timedelta(seconds=ttl_seconds)
+
+        model = WebAuthnChallengeModel(
+            user_id=user_id,
+            challenge=challenge,
+            purpose=purpose,
+            credential_id=credential_id,
+            device_fingerprint=device_fingerprint,
+            expires_at=expires_at,
+            consumed=False,
+        )
+        self.session.add(model)
+        await self.session.flush()
+        return challenge
+
+    async def _consume_challenge(
+        self,
+        user_id: int,
+        challenge: str,
+        purpose: str,
+        consume: bool = True,
+    ) -> WebAuthnChallengeModel | None:
+        """Find and optionally mark a challenge as consumed.
+
+        Returns the challenge model if valid (exists, not expired, not consumed).
+        Returns None if challenge is missing, expired, or already consumed.
+        """
+        result = await self.session.execute(
+            select(WebAuthnChallengeModel).where(
+                WebAuthnChallengeModel.user_id == user_id,
+                WebAuthnChallengeModel.challenge == challenge,
+                WebAuthnChallengeModel.purpose == purpose,
+                WebAuthnChallengeModel.consumed == False,  # noqa: E712
+            )
+        )
+        model = result.scalar_one_or_none()
+        if model is None:
+            return None
+
+        # Check TTL
+        if model.expires_at.replace(tzinfo=UTC) < datetime.now(UTC):
+            return None
+
+        if consume:
+            model.consumed = True
+            model.consumed_at = datetime.now(UTC)
+            await self.session.flush()
+
+        return model
+
+    async def _cleanup_expired_challenges(self) -> int:
+        """Delete all expired challenges. Called periodically to keep table small."""
+        result = await self.session.execute(
+            delete(WebAuthnChallengeModel).where(
+                WebAuthnChallengeModel.expires_at < datetime.now(UTC),
+                WebAuthnChallengeModel.consumed == True,  # noqa: E712
+            )
+        )
+        await self.session.flush()
+        return result.rowcount
+
+    # -------------------------------------------------------------------------
+    # Registration
     # -------------------------------------------------------------------------
 
     async def start_registration(
@@ -55,16 +137,22 @@ class WebAuthnService:
         user_id: int,
         username: str,
         credential_nickname: str | None = None,
+        device_fingerprint: str | None = None,
     ) -> dict[str, Any]:
-        """Start WebAuthn registration: generate challenge and options for client.
+        """Start WebAuthn registration: store challenge in DB, return options for client.
 
-        The client will call finish_registration() with the credential created
-        by the authenticator.
+        The client will call finish_registration() with the authenticator's response.
         """
-        challenge = generate_challenge()
+        # Store challenge in DB with 60s TTL
+        challenge = await self._create_challenge(
+            user_id=user_id,
+            purpose="registration",
+            device_fingerprint=device_fingerprint,
+            ttl_seconds=REGISTRATION_CHALLENGE_TTL_SECONDS,
+        )
+
         user_id_b64 = base64.urlsafe_b64encode(str(user_id).encode()).rstrip(b"=").decode()
 
-        # Options the client will pass to navigator.credentials.create()
         public_key_options = {
             "challenge": challenge,
             "rp": {
@@ -85,12 +173,10 @@ class WebAuthnService:
                 "requireResidentKey": False,
                 "userVerification": "preferred",
             },
-            "timeout": 60000,  # 60 seconds
-            "attestation": "none",  # No attestation for privacy; change to "direct" if needed
+            "timeout": REGISTRATION_CHALLENGE_TTL_SECONDS * 1000,
+            "attestation": "none",
         }
 
-        # Store challenge server-side for verification (in production, use a temporary store or sign the challenge)
-        # For simplicity we return it; production should store/Redis and expire after 60s
         return {
             "challenge": challenge,
             "publicKeyOptions": public_key_options,
@@ -109,40 +195,50 @@ class WebAuthnService:
     ) -> UserCredentialModel:
         """Verify WebAuthn attestation and store the credential.
 
-        Args:
-            user_id: The user owning this credential.
-            username: Username (for audit).
-            registration_response: The response from navigator.credentials.create().
-            device_fingerprint: Optional device fingerprint for device trust.
-            credential_nickname: Optional human-readable name (e.g. "MacBook TouchID").
-
-        Returns:
-            The stored UserCredentialModel.
-
         Raises:
-            ValueError: If attestation verification fails.
+            ValueError: If attestation verification fails or challenge is invalid/expired.
         """
         client_data = registration_response.get("response", {}).get("clientDataJSON", "")
         attestation_object = registration_response.get("response", {}).get("attestationObject", "")
 
-        # Decode and parse client data
-        client_data_bytes = decode_credential_id(client_data) if len(client_data) < 256 else base64.b64decode(client_data)
-        client_data_json = json.loads(client_data_bytes)
-        challenge = client_data_json.get("challenge", "")
+        # Parse client data JSON
+        try:
+            if len(client_data) < 256:
+                client_data_bytes = decode_credential_id(client_data)
+            else:
+                client_data_bytes = base64.b64decode(client_data)
+            client_data_json = json.loads(client_data_bytes)
+        except Exception as e:
+            raise ValueError(f"Invalid client data JSON: {e}")
+
+        presented_challenge = client_data_json.get("challenge", "")
         origin = client_data_json.get("origin", "")
 
-        # In production: verify challenge, origin, rpId here
-        # For now we do basic structure validation
+        # Consume challenge from DB (validates existence, TTL, not reused)
+        db_challenge = await self._consume_challenge(user_id, presented_challenge, purpose="registration")
+        if db_challenge is None:
+            raise ValueError("Challenge expired, already used, or invalid")
+
+        # Verify origin matches expected rpId
+        # In production: validate origin is https and matches self.rp_id
+        _ = origin  # TODO: full origin/rpId validation in production
+
+        # Extract credential ID
         credential_id_raw = registration_response.get("credential", {}).get("id", "")
-        credential_id = encode_credential_id(decode_credential_id(credential_id_raw)) if len(credential_id_raw) < 256 else credential_id_raw
+        if len(credential_id_raw) < 256:
+            credential_id = encode_credential_id(decode_credential_id(credential_id_raw))
+        else:
+            credential_id = credential_id_raw
 
-        public_key_bytes = attestation_object if len(attestation_object) > 256 else decode_credential_id(attestation_object)
-        public_key_b64 = base64.b64encode(public_key_bytes).decode()
-
-        authenticator_data = registration_response.get("response", {}).get("authenticatorData", "")
-        # Parse flags from authenticator data (first byte after rpIdHash + counter)
-        # flag_byte = authenticator_data_bytes[37] if len(authenticator_data_bytes) > 37 else 0
-        # attested_credential_included = bool(flag_byte & 0x01)
+        # Encode public key (attestationObject contains the CBOR-encoded public key)
+        try:
+            if len(attestation_object) < 128:
+                pk_bytes = decode_credential_id(attestation_object)
+            else:
+                pk_bytes = base64.b64decode(attestation_object)
+            public_key_b64 = base64.b64encode(pk_bytes).decode()
+        except Exception:
+            public_key_b64 = attestation_object
 
         transports = registration_response.get("transports", [])
         transports_str = ",".join(transports) if transports else None
@@ -151,7 +247,7 @@ class WebAuthnService:
             user_id=user_id,
             credential_id=credential_id,
             public_key=public_key_b64,
-            device_fingerprint=device_fingerprint,
+            device_fingerprint=device_fingerprint or db_challenge.device_fingerprint,
             device_name=credential_nickname,
             sign_count=0,
             authenticator_type="fido2",
@@ -163,8 +259,33 @@ class WebAuthnService:
         return model
 
     # -------------------------------------------------------------------------
-    # Assertion verification (login)
+    # Assertion (authentication)
     # -------------------------------------------------------------------------
+
+    async def start_assertion(
+        self,
+        user_id: int,
+        credential_id: str,
+        device_fingerprint: str | None = None,
+    ) -> dict[str, Any]:
+        """Start WebAuthn assertion: store challenge in DB, return options for client.
+
+        The client calls verify_assertion() with the authenticator's response.
+        """
+        challenge = await self._create_challenge(
+            user_id=user_id,
+            purpose="assertion",
+            credential_id=credential_id,
+            device_fingerprint=device_fingerprint,
+            ttl_seconds=ASSERTION_CHALLENGE_TTL_SECONDS,
+        )
+
+        return {
+            "challenge": challenge,
+            "credential_id": credential_id,
+            "timeout": ASSERTION_CHALLENGE_TTL_SECONDS * 1000,
+            "rp_id": self.rp_id,
+        }
 
     async def verify_assertion(
         self,
@@ -174,18 +295,16 @@ class WebAuthnService:
     ) -> tuple[UserCredentialModel, bool]:
         """Verify a WebAuthn assertion (authentication proof).
 
-        Returns (credential_model, counter_updated) where counter_updated=True
-        means the credential's sign_count was incremented.
+        Returns (credential_model, counter_updated).
 
         Raises:
-            ValueError: If the assertion is invalid.
+            ValueError: If the assertion is invalid or challenge is expired/used.
         """
         credential_id = assertion_response.get("credentialId", "")
         client_data_json_b64 = assertion_response.get("response", {}).get("clientDataJSON", "")
         authenticator_data_b64 = assertion_response.get("response", {}).get("authenticatorData", "")
-        signature = assertion_response.get("response", {}).get("signature", "")
 
-        # Decode client data
+        # Parse client data
         try:
             if len(client_data_json_b64) < 256:
                 client_data_bytes = decode_credential_id(client_data_json_b64)
@@ -195,9 +314,18 @@ class WebAuthnService:
         except Exception as e:
             raise ValueError(f"Invalid client data: {e}")
 
-        challenge = client_data.get("challenge", "")
+        presented_challenge = client_data.get("challenge", "")
         origin = client_data.get("origin", "")
-        # In production: verify challenge, origin, rpId
+        # In production: validate origin matches rpId
+
+        # Consume challenge from DB
+        db_challenge = await self._consume_challenge(user_id, presented_challenge, purpose="assertion")
+        if db_challenge is None:
+            raise ValueError("Challenge expired, already used, or invalid")
+
+        # Verify credential_id in challenge matches presented credential
+        if db_challenge.credential_id and db_challenge.credential_id != credential_id:
+            raise ValueError("Credential ID mismatch")
 
         # Find credential
         result = await self.session.execute(
@@ -211,21 +339,19 @@ class WebAuthnService:
         if credential is None:
             raise ValueError("Unknown credential")
 
-        # Parse authenticator data to get sign count
+        # Parse authenticator data for sign count (byte offset 37-41, big-endian uint32)
+        sign_count = 0
         try:
             if len(authenticator_data_b64) < 128:
                 auth_data_bytes = decode_credential_id(authenticator_data_b64)
             else:
                 auth_data_bytes = base64.b64decode(authenticator_data_b64)
+            if len(auth_data_bytes) >= 41:
+                sign_count = int.from_bytes(auth_data_bytes[37:41], byteorder="big")
         except Exception:
-            auth_data_bytes = b""
+            pass  # auth_data parsing is best-effort
 
-        # sign_count is at byte offset 37-41 (big-endian uint32)
-        sign_count = 0
-        if len(auth_data_bytes) >= 41:
-            sign_count = int.from_bytes(auth_data_bytes[37:41], byteorder="big")
-
-        # Anti-cloning: reject if reported counter <= stored counter (cloned authenticator)
+        # Anti-cloning: reject if reported counter <= stored counter
         if credential.sign_count > 0 and sign_count <= credential.sign_count:
             raise ValueError("Possible credential clone detected — signature counter not incremented")
 

@@ -20,6 +20,7 @@ from db.models.ticket import TicketModel
 from db.models.ticket_reply import TicketReplyModel
 from db.models.user import UserModel
 from db.models.user_credential import UserCredentialModel
+from db.models.webauthn_challenge import WebAuthnChallengeModel
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
 
 __all__ = [
@@ -44,6 +45,7 @@ __all__ = [
     "TicketReplyModel",
     "UserCredentialModel",
     "UserModel",
+    "WebAuthnChallengeModel",
     "WorkflowExecutionModel",
     "WorkflowModel",
 ]
