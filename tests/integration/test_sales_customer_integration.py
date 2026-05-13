@@ -440,7 +440,7 @@ class TestCustomerCountByStatusIntegration:
         # Create 3 leads via REST
         for i in range(3):
             r = await api_client.post(
-                "/customers",
+                "/api/v1/customers",
                 json={
                     "name": f"Lead {suffix}-{i}",
                     "email": f"lead_{suffix}_{i}@test.com",
@@ -452,7 +452,7 @@ class TestCustomerCountByStatusIntegration:
         # Create 2 opportunities via REST
         for i in range(2):
             r = await api_client.post(
-                "/customers",
+                "/api/v1/customers",
                 json={
                     "name": f"Opp {suffix}-{i}",
                     "email": f"opp_{suffix}_{i}@test.com",
@@ -463,7 +463,7 @@ class TestCustomerCountByStatusIntegration:
 
         # Create 1 customer via REST
         r = await api_client.post(
-            "/customers",
+            "/api/v1/customers",
             json={
                 "name": f"Cust {suffix}",
                 "email": f"cust_{suffix}@test.com",
@@ -490,7 +490,7 @@ class TestCustomerCountByStatusIntegration:
         # Tenant 1: 2 leads via REST
         for i in range(2):
             r = await api_client.post(
-                "/customers",
+                "/api/v1/customers",
                 json={
                     "name": f"T1 {suffix}-{i}",
                     "email": f"t1_{suffix}_{i}@test.com",
@@ -502,7 +502,7 @@ class TestCustomerCountByStatusIntegration:
         # Tenant 2: 5 leads via REST
         for i in range(5):
             r = await api_client_tenant_2.post(
-                "/customers",
+                "/api/v1/customers",
                 json={
                     "name": f"T2 {suffix}-{i}",
                     "email": f"t2_{suffix}_{i}@test.com",
