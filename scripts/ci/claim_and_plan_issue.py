@@ -153,6 +153,11 @@ Be specific: real paths, real names. Do NOT modify any files; you are only plann
         "--model", model,
         "--max-turns", "30",
         "--output-format", "json",
+        # Same reason as in execute_implementation.py: headless -p defaults
+        # to interactive permission prompts, but CI has no terminal — silent
+        # denials cripple the run. Stage 1 only needs Read, but the prompt
+        # gate applies uniformly, so bypass it here too.
+        "--permission-mode", "bypassPermissions",
     ]
     try:
         r = subprocess.run(cmd, input=prompt, capture_output=True, text=True, check=False, timeout=timeout)

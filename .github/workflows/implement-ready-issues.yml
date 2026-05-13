@@ -123,6 +123,17 @@ jobs:
           PYTHONPATH: src
         run: python3 scripts/ci/execute_implementation.py
 
+      - name: Stage 3 — self-review & fix
+        if: steps.plan.outputs.issue_number != ''
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          ISSUE_NUMBER: ${{ steps.plan.outputs.issue_number }}
+          PLAN_PATH: ${{ steps.plan.outputs.plan_path }}
+          DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
+          PYTHONPATH: src
+        run: python3 scripts/ci/self_review_implementation.py
+
       - name: Post-Stage-2 diagnostics (working tree + branch state)
         if: steps.plan.outputs.issue_number != ''
         run: |
@@ -157,7 +168,7 @@ jobs:
             git commit \
               -m "feat: implement issue #${ISSUE_NUMBER}" \
               -m "Closes #${ISSUE_NUMBER}" \
-              -m "Auto-implemented by Claude Code following ${PLAN_PATH}. Claude was instructed to run ruff + unit + integration tests until green before declaring done; PR-time CI re-verifies."
+              -m "Auto-implemented by Claude Code following ${PLAN_PATH}. Stage 2 implemented + ran tests until green; Stage 3 self-reviewed against codereview.md and fixed any rule violations found; PR-time CI re-verifies."
           fi
 
           # Decide whether to push by looking at the branch vs origin/master,
@@ -174,7 +185,7 @@ jobs:
           fi
 
           git push -u origin "$BRANCH"
-          PR_BODY=$(printf 'Closes #%s\n\nPlan: `%s`\n\nThis PR was auto-implemented by Claude Code. Claude was instructed to run `ruff check src/`, the unit test suite, and the integration test suite itself and iterate until all green. PR-time CI (`Dev Agent CI`) re-verifies independently before this PR is mergeable.\n\nPlease review before merging.' "$ISSUE_NUMBER" "$PLAN_PATH")
+          PR_BODY=$(printf 'Closes #%s\n\nPlan: `%s`\n\nThis PR was auto-implemented by Claude Code in three stages:\n\n1. **Plan** — Claude wrote a detailed implementation plan to `%s`.\n2. **Implement** — Claude executed the plan, ran `ruff check src/` + the unit and integration test suites, and iterated until all three were green.\n3. **Self-review** — Claude reviewed its own diff against `codereview.md` (the project review checklist) and fixed any rule violations found, re-running the test suite if any changes were made.\n\nPR-time CI (`Dev Agent CI`) re-verifies independently before this PR is mergeable.\n\nPlease review before merging.' "$ISSUE_NUMBER" "$PLAN_PATH" "$PLAN_PATH")
           gh pr create \
             --title "Auto: implement issue #${ISSUE_NUMBER}" \
             --body "$PR_BODY" \

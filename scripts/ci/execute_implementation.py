@@ -151,6 +151,12 @@ def main() -> int:
         "--model", model,
         "--max-turns", max_turns,
         "--output-format", "json",
+        # Headless `-p` mode defaults to interactive permission prompts on
+        # Write/Edit/Bash — but there's no interactive terminal in CI, so
+        # every tool call gets silently denied. The previous 8-minute run
+        # spent its entire budget on permission_denials. Bypass the prompt:
+        # the runner is ephemeral and has nothing to protect.
+        "--permission-mode", "bypassPermissions",
     ]
     log(f"invoking_claude model={model} max_turns={max_turns} timeout={timeout}s")
 
