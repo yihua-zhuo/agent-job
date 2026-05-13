@@ -211,11 +211,27 @@ def format_feedback_md(items: list[dict]) -> str:
     return "\n".join(parts)
 
 
-def build_prompt(pr_number: str, head_ref: str, feedback_md: str) -> str:
-    return f"""You are addressing reviewer feedback on PR #{pr_number} (branch `{head_ref}`).
+def build_prompt(pr_number: str, head_ref: str, feedback_md: str, failures_md: str = "") -> str:
+    # When the latest CI run on the PR's branch failed, the workflow's
+    # fetch_pr_test_failures.py step dumps the failed-step logs into a temp
+    # file and exposes them via PR_FAILURES_FILE. We splice them in here so
+    # Claude treats them as the FIRST thing to fix — broken tests block any
+    # downstream review work.
+    failure_section = ""
+    failures_intro = ""
+    if failures_md.strip():
+        failure_section = f"""
 
-Below is every unresolved actionable comment on the PR. Each item is feedback
-you must address by modifying the code at the indicated location.
+----- CI TEST FAILURES (latest failed run on this branch) -----
+{failures_md}
+----- END CI TEST FAILURES -----
+"""
+        failures_intro = " AND fixing the CI test failures listed below"
+
+    return f"""You are addressing reviewer feedback{failures_intro} on PR #{pr_number} (branch `{head_ref}`).{failure_section}
+
+Below is every unresolved actionable reviewer comment on the PR. Each item
+is feedback you must address by modifying the code at the indicated location.
 
 ----- REVIEWER FEEDBACK -----
 {feedback_md}
@@ -223,15 +239,22 @@ you must address by modifying the code at the indicated location.
 
 Rules:
 
-1. For each item above, make the change the reviewer is asking for. Read the
-   file at the indicated path + line BEFORE editing it.
+0. If CI TEST FAILURES are listed above, fix them FIRST. Read the failed
+   step's log carefully, locate the source of the failure (which test, which
+   line, which assertion or exception), and apply the fix. Verify by
+   re-running that specific test before moving on. Reviewer feedback can
+   wait; tests blocking merge cannot.
 
-2. If feedback is wrong, ambiguous, or would break things (contradicts another
-   comment, scope-creeps outside the PR, asks for a fix that fails tests),
-   make your best-effort interpretation. Note the reasoning in your final
-   summary — don't silently ignore it.
+1. For each reviewer comment, make the change the reviewer is asking for.
+   Read the file at the indicated path + line BEFORE editing it.
 
-3. After all fixes, run the full validation suite. Every command must exit 0:
+2. If feedback is wrong, ambiguous, or would break things (contradicts
+   another comment, scope-creeps outside the PR, asks for a fix that fails
+   tests), make your best-effort interpretation. Note the reasoning in your
+   final summary — don't silently ignore it.
+
+3. After ALL fixes (both test failures and reviewer feedback), run the full
+   validation suite. Every command must exit 0:
        PYTHONPATH=src ruff check src/
        PYTHONPATH=src pytest tests/unit/ -v
        DATABASE_URL=postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db PYTHONPATH=src pytest tests/integration/ -v
@@ -245,10 +268,12 @@ Rules:
 
 5. Do NOT modify `.github/workflows/`, `scripts/ci/`, or `.plans/`.
 
-6. Stop when every actionable item is addressed and all three checks are
-   green. Print a numbered summary mapping each feedback item to:
+6. Stop when every CI failure is fixed, every actionable reviewer item is
+   addressed, and all three checks are green. Print a numbered summary
+   mapping each item to one of:
        - "FIXED: <one-line description of change>"
        - "SKIPPED: <reason>"  (only when you genuinely couldn't fix it)
+   Group CI failures separately from reviewer feedback in your summary.
 """
 
 
@@ -327,12 +352,27 @@ def main() -> int:
     items = build_actionable_feedback(threads, issue_comments)
     log(f"actionable_items={len(items)}")
 
-    if not items:
-        log("no_actionable_feedback — exiting cleanly with no changes")
+    # Load CI failure dump (written by fetch_pr_test_failures.py earlier in
+    # the workflow). Path is configurable via env so this script doesn't
+    # hardcode /tmp; absent file means no current failures.
+    failures_md = ""
+    failures_path = os.environ.get("PR_FAILURES_FILE", "").strip()
+    if failures_path and os.path.exists(failures_path):
+        try:
+            with open(failures_path, encoding="utf-8") as f:
+                failures_md = f.read().strip()
+            log(f"loaded_failures path={failures_path} bytes={len(failures_md)}")
+        except OSError as e:
+            log(f"failures_read_failed path={failures_path} err={e}")
+    else:
+        log(f"no_failures_file path={failures_path or '(unset)'}")
+
+    if not items and not failures_md:
+        log("no_actionable_feedback_and_no_failures — exiting cleanly")
         return 0
 
-    feedback_md = format_feedback_md(items)
-    prompt = build_prompt(pr_number, head_ref, feedback_md)
+    feedback_md = format_feedback_md(items) if items else "(no unresolved reviewer comments)"
+    prompt = build_prompt(pr_number, head_ref, feedback_md, failures_md)
 
     model = os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
     timeout = int(os.environ.get("CLAUDE_TIMEOUT_SECONDS", "2400"))  # 40 min

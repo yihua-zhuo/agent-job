@@ -100,6 +100,18 @@ jobs:
             exit 1
           fi
 
+      - name: Fetch failing CI logs for this branch
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          PR_FAILURES_FILE: /tmp/pr-${{ steps.pr.outputs.pr_number }}-failures.md
+          # Which workflows count as "tests we want Claude to fix". Add more
+          # workflow filenames separated by commas if you grow the test matrix.
+          TEST_WORKFLOWS: 'ci.yml'
+        run: python3 scripts/ci/fetch_pr_test_failures.py
+
       - name: Fetch comments and let Claude fix them
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
@@ -107,6 +119,9 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          # Same path as the fetch step above — fix_pr_comments.py reads it
+          # if present and folds the failures into Claude's prompt.
+          PR_FAILURES_FILE: /tmp/pr-${{ steps.pr.outputs.pr_number }}-failures.md
           DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
           PYTHONPATH: src
         run: python3 scripts/ci/fix_pr_comments.py
