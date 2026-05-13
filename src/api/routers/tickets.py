@@ -19,6 +19,17 @@ tickets_router = APIRouter(prefix="/api/v1", tags=["tickets"])
 
 
 def _paginated(items, total, page, page_size):
+    """Build a paginated success envelope.
+
+    Args:
+        items: List of serializable model objects (must have ``.to_dict()``).
+        total: Total number of matching records (unfiltered count).
+        page: Current 1-based page number.
+        page_size: Items per page.
+
+    Returns:
+        ``{"success": True, "data": {"items": [...], "total": N, "page": N, ...}}``
+    """
     total_pages = (total + page_size - 1) // page_size
     return {
         "success": True,
@@ -96,6 +107,11 @@ async def create_ticket(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Create a new ticket.
+
+    The ticket is auto-assigned (round-robin) if ``assigned_to`` is not supplied.
+    The ``response_deadline`` is computed from the SLA level.
+    """
     service = TicketService(session)
     ticket = await service.create_ticket(
         subject=body.subject,
@@ -119,6 +135,13 @@ async def list_tickets(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """List tickets with optional filters and pagination.
+
+    Query params:
+        - ``status``: open / in_progress / pending / resolved / closed
+        - ``priority``: low / medium / high / urgent
+        - ``assignee_id``: filter by assigned agent (use 0 for unassigned)
+    """
     try:
         status_enum = TicketStatus(status) if status else None
     except ValueError:
@@ -145,6 +168,7 @@ async def get_ticket(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Fetch a single ticket by ID, verifying tenant ownership."""
     service = TicketService(session)
     ticket = await service.get_ticket(ticket_id, tenant_id=ctx.tenant_id or 0)
     return {"success": True, "data": ticket.to_dict()}
@@ -157,6 +181,7 @@ async def update_ticket(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Apply a partial update to a ticket (subject, description, priority, channel, assignee)."""
     service = TicketService(session)
     update_data = body.model_dump(exclude_none=True)
     if "priority" in update_data:
@@ -174,6 +199,10 @@ async def assign_ticket(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Explicitly assign (or re-assign) a ticket to a user.
+
+    Validates that the assignee user exists before assigning.
+    """
     user_service = UserService(session)
     await user_service.get_user_by_id(body.assignee_id, tenant_id=ctx.tenant_id or 0)
     service = TicketService(session)
@@ -188,6 +217,10 @@ async def add_reply(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Append a customer-facing reply or internal note to a ticket.
+
+    For external replies, sets ``first_response_at`` on the ticket.
+    """
     service = TicketService(session)
     reply = await service.add_reply(
         ticket_id=ticket_id,
@@ -206,6 +239,10 @@ async def change_ticket_status(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Transition a ticket to a new status.
+
+    Transitioning to ``resolved`` sets the ``resolved_at`` timestamp.
+    """
     service = TicketService(session)
     new_status = _status_str_to_enum(body.new_status)
     ticket = await service.change_status(ticket_id, new_status, tenant_id=ctx.tenant_id or 0)
@@ -218,6 +255,7 @@ async def get_customer_tickets(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """List all tickets for a specific customer, newest first."""
     service = TicketService(session)
     tickets = await service.get_customer_tickets(customer_id, tenant_id=ctx.tenant_id or 0)
     return {
@@ -232,6 +270,7 @@ async def get_sla_breaches(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Return all unresolved tickets whose SLA response deadline has been breached."""
     service = TicketService(session)
     tickets = await service.get_sla_breaches(tenant_id=ctx.tenant_id or 0)
     return {
@@ -247,6 +286,11 @@ async def bulk_update_tickets(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Apply a status change and/or assignee reassignment to multiple tickets atomically.
+
+    Validates every ticket exists (by calling ``get_ticket``) before applying any updates,
+    then processes them sequentially.
+    """
     service = TicketService(session)
     # Pre-validate all tickets exist to avoid partial updates
     for ticket_id in body.ticket_ids:
@@ -269,6 +313,10 @@ async def auto_assign_ticket(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Auto-assign a ticket using round-robin if it is currently unassigned.
+
+    Idempotent: returns unchanged ticket if already assigned.
+    """
     service = TicketService(session)
     ticket = await service.auto_assign(ticket_id, tenant_id=ctx.tenant_id or 0)
     return {"success": True, "data": ticket.to_dict(), "message": "自动分配成功"}
@@ -285,6 +333,10 @@ async def get_replies(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Fetch all replies for a ticket in chronological (ASC) order.
+
+    Used to render the replies thread in the ticket detail view.
+    """
     service = TicketService(session)
     replies = await service.get_ticket_replies(ticket_id, tenant_id=ctx.tenant_id or 0)
     return {
@@ -300,6 +352,10 @@ async def get_ticket_activity(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Fetch the activity/audit log for a ticket in reverse-chronological order.
+
+    Activity records are filtered by content containing ``ticket#<id>``.
+    """
     service = TicketService(session)
     activities = await service.get_ticket_activity(ticket_id, tenant_id=ctx.tenant_id or 0)
     return {
@@ -315,6 +371,10 @@ async def check_sla_status(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Return the current SLA status and remaining time for a ticket.
+
+    ``remaining_hours`` is negative when the deadline has already passed.
+    """
     ticket_svc = TicketService(session)
     ticket = await ticket_svc.get_ticket(ticket_id, tenant_id=ctx.tenant_id or 0)
     sla_svc = SLAService(session)
@@ -337,6 +397,7 @@ async def get_sla_breach_tickets(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Return all unresolved tickets with breached SLA response deadlines."""
     sla_svc = SLAService(session, ticket_service=TicketService(session))
     tickets = await sla_svc.get_breach_tickets(tenant_id=ctx.tenant_id or 0)
     return {
