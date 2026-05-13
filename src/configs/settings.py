@@ -24,6 +24,10 @@ class Settings(BaseSettings):
     jwt_algorithm: str = Field(default="HS256")
     access_token_expire_minutes: int = Field(default=30, ge=1)
 
+    # WebAuthn
+    webauthn_rp_id: str | None = Field(default=None, description="WebAuthn Relying Party ID (e.g. localhost or your domain)")
+    webauthn_rp_name: str | None = Field(default=None, description="WebAuthn Relying Party name")
+
     # CORS
     cors_origins: str = Field(default="localhost")
 
