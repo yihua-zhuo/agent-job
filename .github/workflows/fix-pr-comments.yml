@@ -35,8 +35,12 @@ jobs:
         id: pr
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
         run: |
           set -e
+          # This step runs BEFORE actions/checkout, so there's no git remote
+          # for `gh` to infer the repo from. GH_REPO env var (or --repo) tells
+          # gh which repo to query without git context.
           PR_NUMBER="${{ inputs.pr_number }}"
           HEAD_REF=$(gh pr view "$PR_NUMBER" --json headRefName --jq .headRefName)
           BASE_REF=$(gh pr view "$PR_NUMBER" --json baseRefName --jq .baseRefName)
