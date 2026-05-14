@@ -28,6 +28,7 @@ def _paginated(items, total, page, page_size):
             "page_size": page_size,
             "total_pages": total_pages,
         },
+        "message": "获取任务列表成功",
     }
 
 
@@ -105,7 +106,7 @@ async def get_task(
 ):
     service = TaskService(session)
     task = await service.get_task(tenant_id=ctx.tenant_id or 0, task_id=task_id)
-    return {"success": True, "data": task.to_dict()}
+    return {"success": True, "data": task.to_dict(), "message": "获取任务成功"}
 
 
 @tasks_router.patch("/tasks/{task_id}")
@@ -116,7 +117,7 @@ async def update_task(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    update_data = body.model_dump(exclude_none=True)
+    update_data = body.model_dump(exclude_unset=True)
     task = await service.update_task(tenant_id=ctx.tenant_id or 0, task_id=task_id, **update_data)
     return {"success": True, "data": task.to_dict(), "message": "任务更新成功"}
 
@@ -140,4 +141,4 @@ async def delete_task(
 ):
     service = TaskService(session)
     await service.delete_task(tenant_id=ctx.tenant_id or 0, task_id=task_id)
-    return {"success": True, "message": "任务已删除"}
+    return {"success": True, "data": None, "message": "任务已删除"}
