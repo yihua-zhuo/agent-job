@@ -21,6 +21,14 @@ _AGENT_POOL = (1, 2, 3)
 
 
 def _to_str(value) -> str:
+    """Coerce an enum or plain value to its string representation.
+
+    Args:
+        value: A Python enum with a ``.value`` attribute, or a plain string.
+
+    Returns:
+        The string form of ``value``.
+    """
     return value.value if hasattr(value, "value") else value
 
 

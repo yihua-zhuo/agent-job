@@ -86,6 +86,16 @@ class TicketBulkUpdate(BaseModel):
 
 
 def _status_str_to_enum(status_str: str) -> TicketStatus:
+    """Map a raw status string to the corresponding TicketStatus enum.
+
+    Args:
+        status_str: One of ``open``, ``in_progress``, ``pending``, ``resolved``,
+            ``closed``.
+
+    Returns:
+        The matching TicketStatus enum value, defaulting to ``OPEN`` for unknown
+        inputs.
+    """
     mapping = {
         "open": TicketStatus.OPEN,
         "in_progress": TicketStatus.IN_PROGRESS,
