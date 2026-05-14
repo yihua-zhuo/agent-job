@@ -14,6 +14,8 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from db.base import Base
 from db.models import (
+    AIMessageModel,
+    AIConversationModel,
     ActivityModel,
     ApiClientModel,
     CampaignEventModel,

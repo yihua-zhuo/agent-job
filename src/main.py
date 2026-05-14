@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from api import (
     activities_router,
+    ai_router,
     automation_router,
     customers_router,
     notifications_router,
@@ -105,6 +106,7 @@ def create_app() -> FastAPI:
     app.include_router(automation_router)
     app.include_router(reports_router)
     app.include_router(rbac_router)
+    app.include_router(ai_router)
 
     @app.get("/")
     async def health():
