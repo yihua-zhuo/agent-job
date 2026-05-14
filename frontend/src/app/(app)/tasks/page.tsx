@@ -25,14 +25,14 @@ const COLUMNS = [
   { id: "pending", label: "To Do", color: "text-blue-600", borderColor: "border-blue-400" },
   { id: "in_progress", label: "In Progress", color: "text-yellow-600", borderColor: "border-yellow-400" },
   { id: "completed", label: "Done", color: "text-green-600", borderColor: "border-green-400" },
-];
+] as const;
 
 const PRIORITY_COLORS: Record<string, string> = {
   high: "bg-red-100 text-red-800",
   urgent: "bg-red-100 text-red-800",
   normal: "bg-blue-100 text-blue-800",
   low: "bg-gray-100 text-gray-600",
-};
+} as const;
 
 interface TaskData {
   id: string | number;

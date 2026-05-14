@@ -57,14 +57,21 @@ export function TaskModal({
   const [previewDesc, setPreviewDesc] = useState(false);
   const [customerSearch, setCustomerSearch] = useState<string | undefined>(undefined);
 
-  const { data: usersData } = useUsers(1);
-  const { data: opportunitiesData } = useOpportunities(1);
+  const { data: usersData } = useUsers(1, 100);
+  const { data: opportunitiesData } = useOpportunities(1, 100);
 
   const [debouncedSearch, setDebouncedSearch] = useState<string | undefined>(undefined);
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedSearch(customerSearch), 300);
     return () => clearTimeout(timer);
   }, [customerSearch]);
+
+  // Sync initialStatus into form status when task is not being edited
+  useEffect(() => {
+    if (!task && initialStatus) {
+      setForm((f) => ({ ...f, status: initialStatus }));
+    }
+  }, [task, initialStatus]);
 
   const { data: customerData } = useSearchCustomers(debouncedSearch);
 

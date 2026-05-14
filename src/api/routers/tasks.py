@@ -103,17 +103,12 @@ async def list_tasks(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    items = await service.list_tasks(
+    items, total = await service.list_tasks(
         page=page,
         page_size=page_size,
         status=status,
         assigned_to=assigned_to,
         tenant_id=ctx.tenant_id,
-    )
-    total = await service.count_tasks(
-        tenant_id=ctx.tenant_id,
-        status=status,
-        assigned_to=assigned_to,
     )
     return _paginated(items, total, page, page_size)
 

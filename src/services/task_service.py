@@ -115,7 +115,7 @@ class TaskService:
         status: str | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> list[TaskModel]:
+    ) -> tuple[list[TaskModel], int]:
         conditions = [TaskModel.tenant_id == tenant_id]
         if assigned_to is not None:
             conditions.append(TaskModel.assigned_to == assigned_to)
@@ -126,7 +126,18 @@ class TaskService:
         stmt = select(TaskModel).order_by(TaskModel.created_at.desc()).offset(offset).limit(page_size)
         stmt = stmt.where(and_(*conditions))
         result = await self.session.execute(stmt)
-        return result.scalars().all()
+        items = result.scalars().all()
+
+        count_conditions = [TaskModel.tenant_id == tenant_id]
+        if assigned_to is not None:
+            count_conditions.append(TaskModel.assigned_to == assigned_to)
+        if status:
+            count_conditions.append(TaskModel.status == status)
+        count_stmt = select(func.count(TaskModel.id)).where(and_(*count_conditions))
+        count_result = await self.session.execute(count_stmt)
+        total = count_result.scalar() or 0
+
+        return items, total
 
     async def get_my_tasks(self, tenant_id: int, user_id: int, status: str | None = None) -> list[TaskModel]:
         conditions = [TaskModel.tenant_id == tenant_id, TaskModel.assigned_to == user_id]

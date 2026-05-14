@@ -1,6 +1,7 @@
 """Central API router — aggregates all feature routers."""
 
 from api.routers.activities import activities_router
+from api.routers.auth import auth_router
 from api.routers.automation import automation_router
 from api.routers.customers import customers_router
 from api.routers.notifications import notifications_router
@@ -13,15 +14,16 @@ from api.routers.tickets import tickets_router
 from api.routers.users import users_router
 
 __all__ = [
+    "activities_router",
+    "auth_router",
+    "automation_router",
     "customers_router",
+    "notifications_router",
+    "rbac_router",
+    "reports_router",
     "sales_router",
-    "users_router",
+    "tasks_router",
     "tenants_router",
     "tickets_router",
-    "activities_router",
-    "notifications_router",
-    "automation_router",
-    "reports_router",
-    "rbac_router",
-    "tasks_router",
+    "users_router",
 ]
