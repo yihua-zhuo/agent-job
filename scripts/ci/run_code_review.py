@@ -470,19 +470,16 @@ def stage_comment(
     _info(f"eligible inline comments = {inline_count}")
 
     try:
-        github.dismiss_previous_review_comments(pr_number)
-        _info("previous bot review comments dismissed")
-    except Exception as exc:
-        _warn(f"could not dismiss old comments: {exc}")
-
-    try:
-        github.post_review_with_inline_comments(
+        stats = github.reconcile_review_comments(
             pr_number=pr_number,
             commit_sha=commit_sha,
             issues=all_issues,
             summary_body=summary_body,
         )
-        _ok(f"inline review posted ({inline_count} comment(s))")
+        _ok(
+            f"inline review reconciled "
+            f"(new={stats['new']} kept={stats['kept']} resolved={stats['resolved']})"
+        )
     except (HTTPError, URLError, OSError, ValueError) as exc:
         _err(f"inline review failed: {exc}")
         return False
