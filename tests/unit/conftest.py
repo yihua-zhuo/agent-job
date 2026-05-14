@@ -882,6 +882,7 @@ def task_handler(sql_text, params):
 
     if "from tasks where id" in sql_text:
         task_id = params.get("id")
+        tenant_id = params.get("tenant_id")
         fixtures = {
             1: {
                 "id": 1,
@@ -912,31 +913,29 @@ def task_handler(sql_text, params):
                 "updated_at": None,
             },
         }
-        if task_id in fixtures:
+        if task_id in fixtures and fixtures[task_id].get("tenant_id") == tenant_id:
             return MockResult([MockRow(fixtures[task_id].copy())])
         return MockResult([])
 
     if "from tasks" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": 1,
-                        "title": "Task A",
-                        "description": "Desc A",
-                        "assigned_to": 1,
-                        "due_date": None,
-                        "status": "pending",
-                        "priority": "normal",
-                        "created_by": 1,
-                        "completed_at": None,
-                        "created_at": None,
-                        "updated_at": None,
-                    }
-                )
-            ]
-        )
+        tenant_id = params.get("tenant_id")
+        rows = [
+            {
+                "id": 1,
+                "tenant_id": 1,
+                "title": "Task A",
+                "description": "Desc A",
+                "assigned_to": 1,
+                "due_date": None,
+                "status": "pending",
+                "priority": "normal",
+                "created_by": 1,
+                "completed_at": None,
+                "created_at": None,
+                "updated_at": None,
+            }
+        ]
+        return MockResult([MockRow(r) for r in rows if r.get("tenant_id") == tenant_id])
 
     return None
 

@@ -177,6 +177,7 @@ class TestListTasksEndpoint:
         client, svc = client_with_service
         mock_task = MockTask(TASK_ROW)
         svc.list_tasks = AsyncMock(return_value=[mock_task])
+        svc.count_tasks = AsyncMock(return_value=1)
         resp = client.get("/api/v1/tasks")
         assert resp.status_code == 200
         body = resp.json()
@@ -188,12 +189,14 @@ class TestListTasksEndpoint:
     def test_filter_by_status(self, client_with_service):
         client, svc = client_with_service
         svc.list_tasks = AsyncMock(return_value=[])
+        svc.count_tasks = AsyncMock(return_value=0)
         resp = client.get("/api/v1/tasks?status=pending")
         assert resp.status_code == 200
 
     def test_filter_by_assignee(self, client_with_service):
         client, svc = client_with_service
         svc.list_tasks = AsyncMock(return_value=[])
+        svc.count_tasks = AsyncMock(return_value=0)
         resp = client.get("/api/v1/tasks?assigned_to=5")
         assert resp.status_code == 200
 

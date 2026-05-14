@@ -108,15 +108,11 @@ async def list_tasks(
         assigned_to=assigned_to,
         tenant_id=ctx.tenant_id or 0,
     )
-    # Get total count
-    all_items = await service.list_tasks(
-        page=1,
-        page_size=10_000,
+    total = await service.count_tasks(
+        tenant_id=ctx.tenant_id or 0,
         status=status,
         assigned_to=assigned_to,
-        tenant_id=ctx.tenant_id or 0,
     )
-    total = len(all_items)
     return _paginated(items, total, page, page_size)
 
 

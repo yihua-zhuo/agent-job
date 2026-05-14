@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { useTasks, useDeleteTask, useCompleteTask, useUpdateTask } from "@/lib/api/queries";
+import { useTasks, useDeleteTask, useCompleteTask, useUpdateTask, useUsers } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { TaskModal } from "../task-modal";
 import { cn } from "@/lib/utils";
@@ -47,8 +47,10 @@ export default function TaskListPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const { data, isLoading, isError } = useTasks(page, statusFilter);
+  const { data: usersData } = useUsers(1);
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
+  const users = (usersData?.data?.items ?? []) as Record<string, unknown>[];
 
   const complete = useCompleteTask();
   const remove = useDeleteTask();
@@ -191,6 +193,11 @@ export default function TaskListPage() {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__none__">All Assignees</SelectItem>
+            {users.map((u) => (
+              <SelectItem key={String(u.id)} value={String(u.id)}>
+                {String(u.full_name ?? u.username ?? u.email ?? u.id)}
+              </SelectItem>
+            ))}
           </SelectContent>
         </Select>
         <div className="flex items-center gap-1 text-xs text-muted-foreground">

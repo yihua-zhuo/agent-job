@@ -55,7 +55,7 @@ export function TaskModal({
     opportunity_id: task ? String(task.opportunity_id ?? "") : "",
   });
   const [previewDesc, setPreviewDesc] = useState(false);
-  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerSearch, setCustomerSearch] = useState<string | undefined>(undefined);
 
   const { data: usersData } = useUsers(1);
   const { data: customerData } = useSearchCustomers(customerSearch);
@@ -209,12 +209,35 @@ export function TaskModal({
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="text-sm font-medium" htmlFor="task-customer">Customer</label>
-              <Input
-                id="task-customer"
-                value={form.customer_id}
-                onChange={(e) => setFormField("customer_id", e.target.value)}
-                placeholder="Customer ID"
-              />
+              <Select
+                value={form.customer_id || "__none__"}
+                onValueChange={(v) => setFormField("customer_id", v === "__none__" ? "" : v)}
+              >
+                <SelectTrigger id="task-customer">
+                  <SelectValue placeholder="Search customer..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <div className="px-2 py-1.5">
+                    <Input
+                      placeholder="Search customers..."
+                      value={customerSearch ?? ""}
+                      onChange={(e) => {
+                        setCustomerSearch(e.target.value);
+                      }}
+                      className="h-8"
+                    />
+                  </div>
+                  <SelectItem value="__none__">None</SelectItem>
+                  {customers.map((c) => (
+                    <SelectItem key={String(c.id)} value={String(c.id)}>
+                      {String(c.name ?? c.company_name ?? c.id)}
+                    </SelectItem>
+                  ))}
+                  {customerData && customers.length === 0 && (
+                    <div className="px-2 py-1.5 text-xs text-muted-foreground">No customers found</div>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
             <div className="space-y-1.5">
               <label className="text-sm font-medium" htmlFor="task-opportunity">Opportunity</label>

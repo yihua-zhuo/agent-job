@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, select, update
+from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.task import TaskModel
@@ -136,3 +136,18 @@ class TaskService:
             select(TaskModel).where(and_(*conditions)).order_by(TaskModel.due_date.asc().nullslast())
         )
         return result.scalars().all()
+
+    async def count_tasks(
+        self,
+        tenant_id: int,
+        status: str | None = None,
+        assigned_to: int | None = None,
+    ) -> int:
+        conditions = [TaskModel.tenant_id == tenant_id]
+        if assigned_to is not None:
+            conditions.append(TaskModel.assigned_to == assigned_to)
+        if status:
+            conditions.append(TaskModel.status == status)
+        stmt = select(func.count(TaskModel.id)).where(and_(*conditions))
+        result = await self.session.execute(stmt)
+        return result.scalar() or 0
