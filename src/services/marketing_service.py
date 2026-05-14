@@ -183,3 +183,10 @@ class MarketingService:
             trigger_type=trigger_type,
             trigger_days=trigger_days,
         )
+
+    async def delete_campaign(self, campaign_id: int, tenant_id: int = 0) -> CampaignModel:
+        """删除活动"""
+        campaign = await self.get_campaign(campaign_id, tenant_id)
+        await self.session.delete(campaign)
+        await self.session.flush()
+        return campaign
