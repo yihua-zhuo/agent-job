@@ -7,6 +7,7 @@ from api.routers.notifications import notifications_router
 from api.routers.rbac import rbac_router
 from api.routers.reports import reports_router
 from api.routers.sales import sales_router
+from api.routers.tasks import tasks_router
 from api.routers.tenants import tenants_router
 from api.routers.tickets import tickets_router
 from api.routers.users import users_router
@@ -14,6 +15,7 @@ from api.routers.users import users_router
 __all__ = [
     "customers_router",
     "sales_router",
+    "tasks_router",
     "users_router",
     "tenants_router",
     "tickets_router",

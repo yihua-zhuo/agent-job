@@ -14,6 +14,7 @@ from api import (
     rbac_router,
     reports_router,
     sales_router,
+    tasks_router,
     tenants_router,
     tickets_router,
     users_router,
@@ -100,6 +101,7 @@ def create_app() -> FastAPI:
     app.include_router(users_router)
     app.include_router(tenants_router)
     app.include_router(tickets_router)
+    app.include_router(tasks_router)
     app.include_router(activities_router)
     app.include_router(notifications_router)
     app.include_router(automation_router)
