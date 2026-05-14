@@ -164,6 +164,33 @@ rather than commit broken code.
 """
 
 
+def ensure_full_history() -> bool:
+    """Unshallow if needed so the merge-base between HEAD and origin/master is reachable.
+
+    `git merge` fails with "refusing to merge unrelated histories" when it
+    can't find a common ancestor. That's usually a symptom of a shallow
+    clone (actions/checkout sometimes ends up shallow despite fetch-depth: 0
+    interactions with later fetches), not genuinely orphaned branches.
+    """
+    if os.path.exists(os.path.join(".git", "shallow")):
+        log("local_clone_is_shallow — deepening from origin")
+        r = run_git(["fetch", "--unshallow", "origin"])
+        if r.returncode != 0:
+            # --unshallow errors if the clone is already complete; fall back
+            # to a max-depth fetch which is always safe.
+            r = run_git(["fetch", "origin", "--depth=2147483647"])
+            if r.returncode != 0:
+                log(f"deepen_failed stderr={r.stderr.strip()[:200]}")
+                return False
+    return True
+
+
+def has_shared_history() -> bool:
+    """True iff HEAD and origin/master share at least one common ancestor."""
+    r = run_git(["merge-base", "HEAD", "origin/master"])
+    return r.returncode == 0 and bool(r.stdout.strip())
+
+
 def main() -> int:
     pr_number = os.environ.get("PR_NUMBER", "").strip()
     head_ref = os.environ.get("HEAD_REF", "").strip()
@@ -173,11 +200,27 @@ def main() -> int:
 
     log(f"pr=#{pr_number} branch={head_ref}")
 
-    # Refresh master.
+    # Refresh master (and the PR branch implicitly via the deepen path).
+    if not ensure_full_history():
+        log("ensure_full_history failed; aborting merge resolution")
+        return 1
     fetch = run_git(["fetch", "origin", "master"])
     if fetch.returncode != 0:
         log(f"fetch_failed stderr={fetch.stderr.strip()[:200]}")
         return 1
+
+    # Guard: if HEAD and master genuinely have no common ancestor, there's
+    # nothing this script can sensibly do. That state usually means the PR
+    # branch was created in an unusual way (force-pushed root, imported
+    # from a separate repo, etc.) — exit 0 with a clear warning so the
+    # downstream review-fix step still runs but no merge is attempted.
+    if not has_shared_history():
+        log(
+            "unrelated_histories: HEAD and origin/master share no common "
+            "ancestor — skipping merge resolution. The PR is likely orphaned; "
+            "investigate manually."
+        )
+        return 0
 
     # Attempt the merge without auto-committing or fast-forwarding.
     merge = run_git(["merge", "--no-commit", "--no-ff", "origin/master"])
