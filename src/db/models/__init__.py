@@ -1,6 +1,7 @@
 """Re-export all ORM models for convenience."""
 
 from db.models.activity import ActivityModel
+from db.models.ai_conversation import AIConversationModel, AIMessageModel
 from db.models.analytics import DashboardModel, ReportModel
 from db.models.api_client import ApiClientModel
 from db.models.customer import CustomerModel
@@ -20,6 +21,8 @@ from db.models.user import UserModel
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
 
 __all__ = [
+    "AIMessageModel",
+    "AIConversationModel",
     "ActivityModel",
     "ApiClientModel",
     "CampaignEventModel",

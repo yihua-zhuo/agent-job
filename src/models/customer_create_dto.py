@@ -1,10 +1,9 @@
 """Customer model for CRM system."""
 
-from datetime import UTC, datetime
 from enum import Enum
 from typing import Annotated, Any
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CustomerStatus(Enum):
