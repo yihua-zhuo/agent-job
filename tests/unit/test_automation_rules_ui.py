@@ -16,7 +16,8 @@ import pytest
 from services.automation_service import AutomationService
 
 
-def make_mock_session():
+@pytest.fixture
+def mock_db_session():
     """Build a mock AsyncSession wired to return controlled mock results."""
     session = MagicMock()
     session.add = MagicMock()
@@ -40,9 +41,9 @@ def make_mock_session():
 class TestAutomationServiceRuleBuilder:
     """Service-layer rule CRUD — tested via mock DB session."""
 
-    async def test_create_rule_returns_orm_object(self):
+    async def test_create_rule_returns_orm_object(self, mock_db_session):
         """AutomationService.create_rule returns an ORM rule object with to_dict."""
-        session = make_mock_session()
+        session = mock_db_session
 
         # Wire session.execute to return a saved rule on INSERT flush
         saved_rule = MagicMock()
@@ -86,9 +87,9 @@ class TestAutomationServiceRuleBuilder:
         assert rule.trigger_event == "ticket.created"
         assert rule.tenant_id == 1
 
-    async def test_create_rule_allows_empty_name_in_service(self):
+    async def test_create_rule_allows_empty_name_in_service(self, mock_db_session):
         """Service layer does not validate name length — that's the router's job."""
-        session = make_mock_session()
+        session = mock_db_session
         saved_rule = MagicMock()
         saved_rule.id = 1
         saved_rule.name = ""
@@ -123,9 +124,9 @@ class TestAutomationServiceRuleBuilder:
         )
         assert hasattr(rule, "id")
 
-    async def test_list_rules_returns_items_and_total(self):
+    async def test_list_rules_returns_items_and_total(self, mock_db_session):
         """AutomationService.list_rules returns (items, total) for pagination."""
-        session = make_mock_session()
+        session = mock_db_session
 
         mock_items = [MagicMock(id=1, name="Rule A"), MagicMock(id=2, name="Rule B")]
         execute_call_count = [0]
@@ -148,9 +149,9 @@ class TestAutomationServiceRuleBuilder:
         assert isinstance(total, int)
         assert total == 2
 
-    async def test_get_rule_raises_not_found_for_missing_id(self):
+    async def test_get_rule_raises_not_found_for_missing_id(self, mock_db_session):
         """AutomationService.get_rule raises NotFoundException when rule doesn't exist."""
-        session = make_mock_session()
+        session = mock_db_session
 
         def execute_side_effect(sql, **kwargs):
             mock_result = MagicMock()
@@ -164,9 +165,9 @@ class TestAutomationServiceRuleBuilder:
             await svc.get_rule(rule_id=9999, tenant_id=1)
         assert "规则" in str(exc_info.value)
 
-    async def test_update_rule_calls_update_stmt(self):
+    async def test_update_rule_calls_update_stmt(self, mock_db_session):
         """AutomationService.update_rule calls UPDATE and returns the updated row."""
-        session = make_mock_session()
+        session = mock_db_session
 
         updated_rule = MagicMock()
         updated_rule.id = 5
@@ -188,9 +189,9 @@ class TestAutomationServiceRuleBuilder:
         assert hasattr(updated, "id")
         assert hasattr(updated, "to_dict")
 
-    async def test_delete_rule_returns_deleted_id(self):
+    async def test_delete_rule_returns_deleted_id(self, mock_db_session):
         """AutomationService.delete_rule returns the deleted rule id."""
-        session = make_mock_session()
+        session = mock_db_session
 
         def execute_side_effect(sql, **kwargs):
             mock_result = MagicMock()
@@ -207,9 +208,9 @@ class TestAutomationServiceRuleBuilder:
         deleted_id = await svc.delete_rule(rule_id=5, tenant_id=1)
         assert deleted_id == 5
 
-    async def test_toggle_rule_flips_enabled_state(self):
+    async def test_toggle_rule_flips_enabled_state(self, mock_db_session):
         """AutomationService.toggle_rule flips enabled and returns updated ORM object."""
-        session = make_mock_session()
+        session = mock_db_session
 
         original_rule = MagicMock()
         original_rule.id = 7
@@ -241,9 +242,9 @@ class TestAutomationServiceRuleBuilder:
         toggled = await svc.toggle_rule(rule_id=7, tenant_id=1)
         assert toggled.enabled is True
 
-    async def test_list_logs_returns_items_and_total(self):
+    async def test_list_logs_returns_items_and_total(self, mock_db_session):
         """AutomationService.list_logs returns (items, total) for pagination."""
-        session = make_mock_session()
+        session = mock_db_session
 
         mock_logs = [
             MagicMock(id=1, rule_id=7, status="success"),
@@ -269,9 +270,9 @@ class TestAutomationServiceRuleBuilder:
         assert isinstance(total, int)
         assert total == 2
 
-    async def test_list_logs_with_rule_id_filter(self):
+    async def test_list_logs_with_rule_id_filter(self, mock_db_session):
         """AutomationService.list_logs accepts rule_id filter."""
-        session = make_mock_session()
+        session = mock_db_session
         call_count = [0]
 
         def execute_side_effect(sql, **kwargs):
@@ -288,9 +289,9 @@ class TestAutomationServiceRuleBuilder:
         assert isinstance(items, list)
         assert isinstance(total, int)
 
-    async def test_list_logs_with_status_filter(self):
+    async def test_list_logs_with_status_filter(self, mock_db_session):
         """AutomationService.list_logs accepts status filter."""
-        session = make_mock_session()
+        session = mock_db_session
         call_count = [0]
 
         def execute_side_effect(sql, **kwargs):
@@ -307,9 +308,9 @@ class TestAutomationServiceRuleBuilder:
         assert isinstance(items, list)
         assert isinstance(total, int)
 
-    async def test_trigger_event_fires_matching_rules(self):
+    async def test_trigger_event_fires_matching_rules(self, mock_db_session):
         """AutomationService.trigger_event fires matching rules and returns results list."""
-        session = make_mock_session()
+        session = mock_db_session
 
         matching_rule = MagicMock()
         matching_rule.id = 10
@@ -337,9 +338,9 @@ class TestAutomationServiceRuleBuilder:
         )
         assert isinstance(results, list)
 
-    async def test_trigger_event_unknown_event_returns_empty(self):
+    async def test_trigger_event_unknown_event_returns_empty(self, mock_db_session):
         """Triggering an unknown event type returns an empty list."""
-        session = make_mock_session()
+        session = mock_db_session
 
         def execute_side_effect(sql, **kwargs):
             mock_result = MagicMock()
@@ -354,9 +355,9 @@ class TestAutomationServiceRuleBuilder:
         results = await svc.trigger_event(tenant_id=1, trigger_event="nonexistent.event", context={})
         assert results == []
 
-    async def test_create_rule_with_conditions_stored(self):
+    async def test_create_rule_with_conditions_stored(self, mock_db_session):
         """AutomationService.create_rule stores conditions and they appear on the ORM object."""
-        session = make_mock_session()
+        session = mock_db_session
 
         saved_rule = MagicMock()
         saved_rule.id = 99
@@ -394,9 +395,9 @@ class TestAutomationServiceRuleBuilder:
         assert hasattr(rule, "id")
         assert hasattr(rule, "to_dict")
 
-    async def test_list_rules_respects_trigger_event_filter(self):
+    async def test_list_rules_respects_trigger_event_filter(self, mock_db_session):
         """AutomationService.list_rules filters by trigger_event when provided."""
-        session = make_mock_session()
+        session = mock_db_session
         call_count = [0]
 
         def execute_side_effect(sql, **kwargs):
@@ -420,9 +421,9 @@ class TestAutomationServiceRuleBuilder:
         assert isinstance(items, list)
         assert isinstance(total, int)
 
-    async def test_list_rules_respects_enabled_filter(self):
+    async def test_list_rules_respects_enabled_filter(self, mock_db_session):
         """AutomationService.list_rules filters by enabled when provided."""
-        session = make_mock_session()
+        session = mock_db_session
         call_count = [0]
 
         def execute_side_effect(sql, **kwargs):
@@ -446,9 +447,9 @@ class TestAutomationServiceRuleBuilder:
         assert isinstance(items, list)
         assert isinstance(total, int)
 
-    async def test_update_rule_preserves_unmodified_fields(self):
+    async def test_update_rule_preserves_unmodified_fields(self, mock_db_session):
         """AutomationService.update_rule with name-only update returns updated ORM."""
-        session = make_mock_session()
+        session = mock_db_session
 
         updated_rule = MagicMock()
         updated_rule.id = 12

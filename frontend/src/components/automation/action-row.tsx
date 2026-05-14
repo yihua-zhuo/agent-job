@@ -21,7 +21,7 @@ const ACTION_TYPES = [
   { value: "tag.add", label: "Add Tag" },
 ];
 
-interface ActionRowValue {
+export interface ActionRowValue {
   type: string;
   params: Record<string, string>;
 }

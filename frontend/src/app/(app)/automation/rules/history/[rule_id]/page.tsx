@@ -1,6 +1,6 @@
 "use client";
 import { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useParams } from "next/navigation";
 import { useAutomationLogs } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,14 +38,14 @@ interface LogRow {
 }
 
 function PerRuleHistoryContent() {
-  const searchParams = useSearchParams();
+  const params = useParams<{ rule_id: string }>();
   const router = useRouter();
-  const ruleIdParam = searchParams.get("rule_id");
-  const ruleId = ruleIdParam ? Number(ruleIdParam) : null;
+  const parsedRuleId = Number(params.rule_id);
+  const ruleId = Number.isFinite(parsedRuleId) ? parsedRuleId : undefined;
 
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isError } = useAutomationLogs(page, 20, ruleId ?? undefined);
+  const { data, isLoading, isError } = useAutomationLogs(page, 20, ruleId);
 
   const rawItems = data?.data?.items ?? [];
   const info = data?.data;

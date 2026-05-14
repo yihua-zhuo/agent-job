@@ -38,6 +38,7 @@ export default function EditRulePage({ params }: { params: { id: string } }) {
           params: (a.params ?? {}) as Record<string, string>,
         })
       ),
+      enabled: Boolean(raw.enabled),
     };
   }
 
@@ -52,6 +53,7 @@ export default function EditRulePage({ params }: { params: { id: string } }) {
           trigger_event: values.trigger_event,
           conditions: values.conditions,
           actions: values.actions.map((a) => ({ type: a.type, params: a.params })),
+          enabled: values.enabled,
         },
       });
       router.push("/automation/rules");

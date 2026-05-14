@@ -16,9 +16,9 @@ export const qk = {
   reminders: (upcomingOnly = false) => ["reminders", upcomingOnly] as const,
   activities: (page = 1, type = "") => ["activities", page, type] as const,
   slaBreaches: () => ["sla", "breaches"] as const,
-  automationRules: (page = 1) => ["automation_rules", page] as const,
+  automationRules: (page = 1, pageSize = 20) => ["automation_rules", page, pageSize] as const,
   automationRule: (id: number) => ["automation_rules", "detail", id] as const,
-  automationLogs: (page = 1, ruleId?: number) => ["automation_logs", page, ruleId ?? null] as const,
+  automationLogs: (page = 1, pageSize = 20, ruleId?: number, status?: string) => ["automation_logs", page, pageSize, ruleId ?? null, status ?? ""] as const,
 } as const;
 
 interface PaginatedResponse<T> {
@@ -371,7 +371,7 @@ export function useDeleteReminder() {
 export function useAutomationRules(page = 1, pageSize = 20) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
-    queryKey: qk.automationRules(page),
+    queryKey: qk.automationRules(page, pageSize),
     queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/automation/rules?page=${page}&page_size=${pageSize}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
@@ -432,7 +432,7 @@ export function useAutomationLogs(page = 1, pageSize = 20, ruleId?: number, stat
   if (ruleId != null) params.set("rule_id", String(ruleId));
   if (status) params.set("status", status);
   return useQuery({
-    queryKey: qk.automationLogs(page, ruleId),
+    queryKey: qk.automationLogs(page, pageSize, ruleId, status),
     queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/automation/logs?${params}`, token ?? undefined),
     staleTime: 30 * 1000,
   });

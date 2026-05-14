@@ -219,6 +219,8 @@ class TestAutomationRulesUIIntegration:
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
+        for log in data["data"]["items"]:
+            assert log["status"] == "failed"
 
     async def test_404_on_nonexistent_rule(self, api_client, tenant_id_web):
         """GET /api/v1/automation/rules/99999 returns 404."""

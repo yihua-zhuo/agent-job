@@ -14,6 +14,7 @@ export interface RuleBuilderValues {
   trigger_event: string;
   conditions: ConditionRowValue[];
   actions: ActionRowValue[];
+  enabled: boolean;
 }
 
 interface RuleBuilderProps {
@@ -48,6 +49,7 @@ export function RuleBuilder({
   const [actions, setActions] = useState<ActionRowValue[]>(
     initialValues?.actions?.length ? initialValues.actions : [makeAction()]
   );
+  const [enabled, setEnabled] = useState(initialValues?.enabled ?? false);
   const [validationError, setValidationError] = useState("");
 
   const addCondition = useCallback(() => {
@@ -98,6 +100,7 @@ export function RuleBuilder({
       trigger_event: trigger,
       conditions: conditions.filter((c) => c.field.trim() !== ""),
       actions: filledActions,
+      enabled,
     };
 
     await onSubmit(payload);
@@ -205,15 +208,42 @@ export function RuleBuilder({
       </div>
 
       {/* Footer */}
-      <div className="flex gap-3 pt-2 border-t">
-        <Button type="submit" disabled={disabled}>
-          {submitLabel}
-        </Button>
-        {onCancel && (
-          <Button type="button" variant="outline" onClick={onCancel} disabled={disabled}>
-            Cancel
+      <div className="flex flex-col gap-4 pt-2 border-t">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            onClick={() => setEnabled((v) => !v)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
+              enabled ? "bg-green-500" : "bg-gray-300"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                enabled ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+          <div>
+            <p className="text-sm font-medium">
+              {enabled ? "Active" : "Disabled"}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {enabled ? "Rule will run automatically when triggered" : "Save as draft without activating"}
+            </p>
+          </div>
+        </div>
+        <div className="flex gap-3">
+          <Button type="button" onClick={() => handleSubmit(new Event("submit"))} disabled={disabled}>
+            {enabled ? "Activate Rule" : "Save as Draft"}
           </Button>
-        )}
+          {onCancel && (
+            <Button type="button" variant="outline" onClick={onCancel} disabled={disabled}>
+              Cancel
+            </Button>
+          )}
+        </div>
       </div>
     </form>
   );

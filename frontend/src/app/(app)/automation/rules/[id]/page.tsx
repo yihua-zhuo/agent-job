@@ -75,7 +75,7 @@ export default function RuleDetailPage({ params }: { params: { id: string } }) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => router.push(`/automation/rules/${ruleId}/history`)}
+            onClick={() => router.push(`/automation/rules/history/${ruleId}`)}
           >
             <History className="h-4 w-4 mr-1" />
             View history

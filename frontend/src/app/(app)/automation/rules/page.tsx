@@ -62,6 +62,7 @@ interface RuleRow {
   enabled: boolean;
   created_at?: string;
   updated_at?: string;
+  last_run?: string | null;
 }
 
 function RuleRow({
@@ -106,7 +107,7 @@ function RuleRow({
       </td>
       <td className="px-3 py-3">
         <span className="text-sm text-muted-foreground">
-          {formatDate(rule.updated_at ?? rule.created_at)}
+          {formatDate(rule.last_run ?? rule.updated_at ?? rule.created_at)}
         </span>
       </td>
       <td className="px-3 py-3 w-10">
@@ -165,6 +166,7 @@ export default function AutomationRulesPage() {
     enabled: Boolean(r.enabled),
     created_at: String(r.created_at ?? ""),
     updated_at: String(r.updated_at ?? ""),
+    last_run: r.last_run != null ? String(r.last_run) : null,
   }));
 
   function handleToggle(id: number) {
@@ -224,7 +226,7 @@ export default function AutomationRulesPage() {
                 Status
               </th>
               <th className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold">
-                Last Modified
+                Last Run
               </th>
               <th className="px-3 py-2.5 w-10" />
             </tr>

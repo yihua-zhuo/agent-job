@@ -163,6 +163,8 @@ class MockState:
         self.users: dict[int, dict] = {}
         self.users_next_id: int = 1
         self.deleted_user_ids: set[int] = set()
+        self.automation_rules: dict[int, dict] = {}
+        self.automation_rules_next_id: int = 1000
 
 
 # ---------------------------------------------------------------------------
@@ -640,7 +642,8 @@ def make_automation_handler(state: MockState):
 
         # INSERT automation_rule
         if "insert into automation_rules" in sql_text:
-            rid = len(state.customers) + 1000  # simulate id
+            rid = state.automation_rules_next_id
+            state.automation_rules_next_id += 1
             record = {
                 "id": rid,
                 "tenant_id": tenant_id,
@@ -654,27 +657,28 @@ def make_automation_handler(state: MockState):
                 "created_at": params.get("created_at"),
                 "updated_at": params.get("updated_at"),
             }
-            state.customers[rid] = record  # reuse customers dict as store
+            state.automation_rules[rid] = record
             return MockResult([MockRow(record.copy())], rowcount=1)
 
         # SELECT automation_rules by id
         if ("select" in sql_text and "from automation_rules" in sql_text
                 and "where id" in sql_text and "count" not in sql_text):
             rid = params.get("id")
-            if rid in state.customers:
-                row = state.customers[rid]
+            if rid in state.automation_rules:
+                row = state.automation_rules[rid]
                 return MockResult([MockRow(row.copy())])
 
         # SELECT automation_rules list (no id filter) — count first, then data
         if ("select" in sql_text and "from automation_rules" in sql_text
                 and "count" not in sql_text and "order_by" not in sql_text):
-            rows = [MockRow(r.copy()) for r in state.customers.values()]
+            rows = [MockRow(r.copy()) for r in state.automation_rules.values()
+                    if r.get("tenant_id") == tenant_id]
             return MockResult(rows if rows else [])
 
         # SELECT COUNT from automation_rules
         if ("select" in sql_text and "from automation_rules" in sql_text
                 and "count" in sql_text):
-            count_val = sum(1 for r in state.customers.values() if r.get("tenant_id") == tenant_id)
+            count_val = sum(1 for r in state.automation_rules.values() if r.get("tenant_id") == tenant_id)
             if count_val == 0:
                 count_val = 2  # seeded count
             return MockResult([[count_val]])
@@ -682,8 +686,8 @@ def make_automation_handler(state: MockState):
         # UPDATE automation_rules (toggle, general update)
         if "update" in sql_text and "automation_rules" in sql_text:
             rid = params.get("id")
-            if rid in state.customers:
-                rec = state.customers[rid]
+            if rid in state.automation_rules:
+                rec = state.automation_rules[rid]
                 for k, v in params.items():
                     if k not in ("id", "tenant_id"):
                         rec[k] = v
@@ -693,8 +697,8 @@ def make_automation_handler(state: MockState):
         # DELETE automation_rules
         if "delete" in sql_text and "automation_rules" in sql_text:
             rid = params.get("id")
-            if rid in state.customers:
-                del state.customers[rid]
+            if rid in state.automation_rules:
+                del state.automation_rules[rid]
                 return MockResult([MockRow({"id": rid})], rowcount=1)
             return MockResult([], rowcount=0)
 
@@ -718,8 +722,8 @@ def all_handlers(state: MockState):
         opportunity_handler,
         ticket_sql_handler,
         campaign_handler,
-        make_count_handler(state),
         make_automation_handler(state),
+        make_count_handler(state),
     ]
 
 

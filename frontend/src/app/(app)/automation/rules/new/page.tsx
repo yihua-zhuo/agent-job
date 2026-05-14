@@ -24,7 +24,7 @@ export default function NewRulePage() {
           type: a.type,
           params: a.params,
         })),
-        enabled: true,
+        enabled: values.enabled,
       });
       router.push("/automation/rules");
     } catch {

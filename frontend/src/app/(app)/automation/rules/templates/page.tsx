@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Zap, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
-import { useCreateAutomationRule, useToggleAutomationRule } from "@/lib/api/queries";
+import { useCreateAutomationRule } from "@/lib/api/queries";
 
 const TEMPLATES = [
   {
@@ -129,7 +129,6 @@ function TemplateCard({ template, onActivate, activating }: TemplateCardProps) {
 export default function TemplatesPage() {
   const router = useRouter();
   const createRule = useCreateAutomationRule();
-  const toggleRule = useToggleAutomationRule();
   const [activatingTemplate, setActivatingTemplate] = useState<string | null>(null);
   const [error, setError] = useState("");
 
@@ -137,18 +136,14 @@ export default function TemplatesPage() {
     setError("");
     setActivatingTemplate(template.name);
     try {
-      const result = await createRule.mutateAsync({
+      await createRule.mutateAsync({
         name: template.name,
         description: template.description,
         trigger_event: template.trigger,
         conditions: template.conditions,
         actions: template.actions,
-        enabled: false,
+        enabled: true,
       });
-      const ruleId = (result as { data?: { id?: number } })?.data?.id;
-      if (ruleId) {
-        await toggleRule.mutateAsync(ruleId);
-      }
       router.push("/automation/rules");
     } catch {
       setError("Failed to activate template. Please try again.");

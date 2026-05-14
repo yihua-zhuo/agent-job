@@ -104,7 +104,11 @@ function HistoryContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const ruleIdParam = searchParams.get("rule_id");
-  const ruleId = ruleIdParam ? Number(ruleIdParam) : undefined;
+  const parsedRuleId = ruleIdParam ? Number(ruleIdParam) : undefined;
+  const ruleId =
+    parsedRuleId != null && Number.isFinite(parsedRuleId) && parsedRuleId > 0
+      ? parsedRuleId
+      : undefined;
 
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("all");
