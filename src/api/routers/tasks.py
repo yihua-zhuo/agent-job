@@ -16,6 +16,8 @@ from services.task_service import TaskService
 
 tasks_router = APIRouter(prefix="/api/v1", tags=["tasks"])
 
+UNASSIGNED = 0
+
 
 def _paginated(items, total, page, page_size):
     total_pages = (total + page_size - 1) // page_size
@@ -43,7 +45,7 @@ class TaskCreate(BaseModel):
     priority: str = Field(default="normal", pattern="^(low|normal|high|urgent)$")
     status: str = Field(default="pending", pattern="^(pending|in_progress|completed|cancelled)$")
     due_date: str | None = Field(default=None)
-    assigned_to: int = Field(default=0, ge=0)
+    assigned_to: int = Field(default=UNASSIGNED, ge=0)
 
 
 class TaskUpdate(BaseModel):
@@ -85,7 +87,7 @@ async def create_task(
         priority=body.priority,
         tenant_id=ctx.tenant_id,
         created_by=ctx.user_id,
-        assigned_to=body.assigned_to or 0,
+        assigned_to=body.assigned_to or UNASSIGNED,
         due_date=_parse_due_date(body.due_date),
     )
     return {"success": True, "data": task.to_dict(), "message": "Task created"}

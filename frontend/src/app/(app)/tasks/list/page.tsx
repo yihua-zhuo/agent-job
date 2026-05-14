@@ -252,11 +252,12 @@ export default function TaskListPage() {
                   "border-b hover:bg-muted/50 cursor-pointer transition-colors",
                   isSelected && "bg-primary/5"
                 )} onClick={() => setEditTask(t)}>
-                  <td className="px-3 py-2.5" onClick={(e) => { e.stopPropagation(); toggleSelect(taskId); }}>
+                  <td className="px-3 py-2.5" onClick={(e) => e.stopPropagation()}>
                     <input
                       type="checkbox"
                       checked={isSelected}
                       onChange={() => toggleSelect(taskId)}
+                      onClick={(e) => e.stopPropagation()}
                       className="cursor-pointer"
                       aria-label={`Select task ${t.id}`}
                     />

@@ -267,7 +267,7 @@ export function TaskModal({
             </div>
           </div>
 
-          <DialogFooter className="flex-row! justify-between gap-2 sm:justify-between">
+          <DialogFooter className="flex flex-row justify-between gap-2 sm:justify-between">
             <div>
               {isEdit && onComplete && (
                 <Button type="button" size="sm" onClick={onComplete} disabled={isSubmitting}>

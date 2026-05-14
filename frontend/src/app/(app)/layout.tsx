@@ -26,7 +26,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   /* eslint-disable react-hooks/set-state-in-effect -- intentional: synchronizing sidebar open state with pathname change */
   useEffect(() => {
-    setSidebarOpen(false);
+    if (sidebarOpen) setSidebarOpen(false);
   }, [pathname]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
@@ -84,12 +84,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           onClose={quickAdd.close}
           initialStatus={quickAdd.initialStatus}
           onSubmit={async (data) => {
-            try {
-              await create.mutateAsync({ ...data, status: (data.status as string | undefined) ?? quickAdd.initialStatus });
-              quickAdd.close();
-            } catch {
-              // Error surfaced via React Query onError callback
-            }
+            await create.mutateAsync({ ...data, status: (data.status as string | undefined) ?? quickAdd.initialStatus });
+            quickAdd.close();
           }}
           isSubmitting={create.isPending}
         />

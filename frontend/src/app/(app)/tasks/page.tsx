@@ -215,9 +215,11 @@ export default function TasksPage() {
     return counts;
   }, [allTasks]);
 
-  function tasksByStatus(status: string) {
-    return allTasks.filter((t) => t.status === status);
-  }
+  const tasksByStatus = useMemo(() => {
+    const m: Record<string, TaskData[]> = {};
+    for (const col of COLUMNS) m[col.id] = allTasks.filter((t) => t.status === col.id);
+    return m;
+  }, [allTasks]);
 
   function countByStatus(status: string) {
     return statusCounts[status] ?? 0;
@@ -231,6 +233,14 @@ export default function TasksPage() {
 
   function handleDragStart(event: DragStartEvent) {
     setActiveTaskId(event.active.id);
+  }
+
+  async function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over) return;
+    const taskId = Number(active.id);
+    const newStatus = over.id as string;
+    await update.mutateAsync({ id: taskId, data: { status: newStatus } });
   }
 
   async function handleCreate(data: Record<string, unknown>) {
@@ -314,7 +324,7 @@ export default function TasksPage() {
                 </div>
               </div>
               <SortableContext
-                items={tasksByStatus(col.id).map((t) => String(t.id))}
+                items={tasksByStatus[col.id].map((t) => String(t.id))}
                 strategy={verticalListSortingStrategy}
               >
                 <div
@@ -329,12 +339,12 @@ export default function TasksPage() {
                     <div className="py-8 text-center text-sm text-muted-foreground">
                       Loading…
                     </div>
-                  ) : tasksByStatus(col.id).length === 0 ? (
+                  ) : tasksByStatus[col.id].length === 0 ? (
                     <div className="py-8 text-center text-sm text-muted-foreground">
                       No tasks
                     </div>
                   ) : (
-                    tasksByStatus(col.id).map((t) => (
+                    tasksByStatus[col.id].map((t) => (
                       <DraggableTaskCard
                         key={String(t.id)}
                         task={t}
