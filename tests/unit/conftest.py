@@ -239,6 +239,15 @@ def all_handlers(state: MockState):
     return _domain_handlers(state)
 
 
+def make_analytics_handlers(state: MockState):
+    """Return handlers used by analytics unit tests.
+
+    Kept as a narrow compatibility helper for tests that import it directly;
+    the actual handlers are provided by the domain handler modules.
+    """
+    return all_handlers(state)
+
+
 def make_mock_session(handlers=None, state=None):
     """Create a mock AsyncSession wired to the given SQL handlers.
 
@@ -417,5 +426,4 @@ def tenant_id() -> int:
 def tenant_id_2() -> int:
     """Return a second fixed test tenant ID."""
     return 2
-
 
