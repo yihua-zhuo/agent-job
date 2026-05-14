@@ -14,7 +14,7 @@ export const qk = {
   ticketActivity: (ticketId: number) => ["ticket", ticketId, "activity"] as const,
   tasks: (page = 1, status = "") => ["tasks", page, status] as const,
   task: (id: number) => ["task", id] as const,
-  users: (page = 1) => ["users", page] as const,
+  users: (page = 1, q = "", role = "") => ["users", page, q, role] as const,
   notifications: (page = 1, unreadOnly = false) => ["notifications", page, unreadOnly] as const,
   reminders: (upcomingOnly = false) => ["reminders", upcomingOnly] as const,
   activities: (page = 1, type = "") => ["activities", page, type] as const,
@@ -249,11 +249,14 @@ export function useAutoAssignTicket() {
 }
 
 // ── Users ───────────────────────────────────────────────────────────────────
-export function useUsers(page = 1, page_size = 20) {
+export function useUsers(page = 1, pageSize = 20, q = "", role = "") {
   const token = useAuthStore((s) => s.token);
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (q) params.set("q", q);
+  if (role) params.set("role", role);
   return useQuery({
-    queryKey: qk.users(page),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?page=${page}&page_size=${page_size}`, token ?? undefined),
+    queryKey: qk.users(page, q, role),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?${params}`, token ?? undefined),
     staleTime: 60 * 1000,
   });
 }
