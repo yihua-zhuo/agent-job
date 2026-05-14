@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
@@ -27,7 +28,7 @@ async def _require_admin_or_manager(ctx: AuthContext, session) -> None:
 @lead_routing_router.get("")
 async def list_routing_rules(
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """List all routing rules for the current tenant."""
     from sqlalchemy import select
@@ -46,6 +47,7 @@ async def list_routing_rules(
             "items": [r.to_dict() for r in rules],
             "total": len(rules),
         },
+        "message": "OK",
     }
 
 
@@ -53,7 +55,7 @@ async def list_routing_rules(
 async def create_routing_rule(
     body: RoutingRuleCreate,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Create a new routing rule."""
     await _require_admin_or_manager(ctx, session)
@@ -81,19 +83,19 @@ async def create_routing_rule(
 async def test_routing_rule(
     body: RuleTestRequest,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Test routing conditions without persisting any changes."""
     svc = LeadRoutingService(session)
     preview = await svc.preview_assign(body.conditions, body.customer_data, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": preview.model_dump()}
+    return {"success": True, "data": preview.model_dump(), "message": "OK"}
 
 
 @lead_routing_router.get("/{rule_id}")
 async def get_routing_rule(
     rule_id: int,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Get a single routing rule by ID."""
     from sqlalchemy import select
@@ -109,7 +111,7 @@ async def get_routing_rule(
     rule = result.scalar_one_or_none()
     if rule is None:
         raise NotFoundException("路由规则")
-    return {"success": True, "data": rule.to_dict()}
+    return {"success": True, "data": rule.to_dict(), "message": "OK"}
 
 
 @lead_routing_router.put("/{rule_id}")
@@ -117,7 +119,7 @@ async def update_routing_rule(
     rule_id: int,
     body: RoutingRuleUpdate,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Update an existing routing rule."""
     await _require_admin_or_manager(ctx, session)
@@ -169,7 +171,7 @@ async def update_routing_rule(
 async def delete_routing_rule(
     rule_id: int,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Delete a routing rule."""
     await _require_admin_or_manager(ctx, session)
@@ -189,12 +191,11 @@ async def delete_routing_rule(
     return {"success": True, "data": {"id": rule_id}, "message": "路由规则删除成功"}
 
 
-@lead_routing_router.put("/{rule_id}/priority")
+@lead_routing_router.put("/priority")
 async def reorder_routing_rules(
-    rule_id: int,
     body: RoutingRulePriorityUpdate,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Bulk reorder routing rules by priority.
 
@@ -225,7 +226,7 @@ async def reorder_routing_rules(
 async def toggle_routing_rule(
     rule_id: int,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Toggle is_active status of a routing rule."""
     await _require_admin_or_manager(ctx, session)

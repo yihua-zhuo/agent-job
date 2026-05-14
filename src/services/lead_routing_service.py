@@ -98,9 +98,8 @@ async def _get_load_balanced_assignee(
     if rule.assignee_type == "user" and rule.assignee_id:
         base_conditions.append(UserModel.id == rule.assignee_id)
     elif rule.assignee_type == "team" and rule.assignee_id:
-        # team: assignee_id is the team/role id — include all users with matching role
-        # Here we treat it as: all active users of the tenant (simple team approach)
-        pass
+        # team: assignee_id is the team/role id — include all users with the matching role
+        base_conditions.append(UserModel.role == rule.assignee_id)
 
     result = await session.execute(select(UserModel).where(and_(*base_conditions)))
     users = result.scalars().all()
@@ -190,6 +189,7 @@ class LeadRoutingService:
             "created_date": customer.created_at,
             "status": customer.status,
             "owner_id": customer.owner_id,
+            "company": customer.company,
         }
 
         rule = await self.get_matching_rule(tenant_id, customer_dict)
@@ -346,26 +346,30 @@ class LeadRoutingService:
                 raise ValidationException(f"Unsupported field in test: {cond.field}")
 
         matched_rule: RoutingRuleModel | None = None
-        for rule in (
-            (
-                await self.session.execute(
-                    select(RoutingRuleModel)
-                    .where(
-                        and_(
-                            RoutingRuleModel.tenant_id == tenant_id,
-                            RoutingRuleModel.is_active == True,  # noqa: E712
+
+        # First: check if input conditions match (rule-test flow)
+        if evaluate_conditions(conditions, customer_data):
+            # Use highest-priority active rule as the preview basis
+            for rule in (
+                (
+                    await self.session.execute(
+                        select(RoutingRuleModel)
+                        .where(
+                            and_(
+                                RoutingRuleModel.tenant_id == tenant_id,
+                                RoutingRuleModel.is_active == True,  # noqa: E712
+                            )
                         )
+                        .order_by(RoutingRuleModel.priority.desc())
                     )
-                    .order_by(RoutingRuleModel.priority.desc())
                 )
-            )
-            .scalars()
-            .all()
-        ):
-            conds = [RuleCondition.model_validate(c) for c in (rule.conditions_json or [])]
-            if evaluate_conditions(conds, customer_data):
-                matched_rule = rule
-                break
+                .scalars()
+                .all()
+            ):
+                conds = [RuleCondition.model_validate(c) for c in (rule.conditions_json or [])]
+                if evaluate_conditions(conds, customer_data):
+                    matched_rule = rule
+                    break
 
         if matched_rule:
             assignee_id = await self.select_assignee(matched_rule, tenant_id)

@@ -261,7 +261,7 @@ async def bulk_import(
 # ---------------------------------------------------------------------------
 
 
-@customers_router.get("/api/v1/sales/leads")
+@customers_router.get("/leads")
 async def list_sales_leads(
     status: str = Query("unassigned", pattern="^(unassigned|assigned|recycled)$"),
     page: int = Query(1, ge=1),
@@ -278,25 +278,28 @@ async def list_sales_leads(
     elif status == "assigned":
         items, total = await service.get_leads_by_owner(ctx.user_id, ctx.tenant_id, page=page, page_size=page_size)
     else:  # recycled
-        from sqlalchemy import and_, select
+        from sqlalchemy import and_, func, select
 
         from db.models.customer import CustomerModel
 
+        conditions = and_(
+            CustomerModel.tenant_id == ctx.tenant_id,
+            CustomerModel.status == "lead",
+            CustomerModel.recycle_count > 0,
+        )
+        count_result = await session.execute(
+            select(func.count(CustomerModel.id)).where(conditions)
+        )
+        total = count_result.scalar() or 0
+
         result = await session.execute(
             select(CustomerModel)
-            .where(
-                and_(
-                    CustomerModel.tenant_id == ctx.tenant_id,
-                    CustomerModel.status == "lead",
-                    CustomerModel.recycle_count > 0,
-                )
-            )
+            .where(conditions)
             .order_by(CustomerModel.updated_at.desc())
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
         items = result.scalars().all()
-        total = len(items)
 
     enriched = []
     for lead in items:
@@ -332,11 +335,15 @@ async def get_customer_assignment(
     # Fetch assigned user name if owner_id != 0
     assigned_to_name = None
     if customer.owner_id and customer.owner_id > 0:
-        from sqlalchemy import select
+        from sqlalchemy import and_, select
 
         from db.models.user import UserModel
 
-        user_result = await session.execute(select(UserModel.full_name).where(UserModel.id == customer.owner_id))
+        user_result = await session.execute(
+            select(UserModel.full_name).where(
+                and_(UserModel.id == customer.owner_id, UserModel.tenant_id == ctx.tenant_id)
+            )
+        )
         assigned_to_name = user_result.scalar_one_or_none()
 
     return {
@@ -384,7 +391,7 @@ async def reassign_lead(
     return {"success": True, "data": result.to_dict(), "message": "负责人变更成功"}
 
 
-@customers_router.post("/api/v1/sales/leads/recycle")
+@customers_router.post("/leads/recycle")
 async def trigger_lead_recycle(
     body: ManualRecycle,
     ctx: AuthContext = Depends(require_auth),

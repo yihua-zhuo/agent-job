@@ -354,7 +354,11 @@ async def _seed_routing_rule(
     rule = RoutingRuleModel(
         tenant_id=tenant_id,
         name=name,
-        conditions_json=conditions or [{"field": "region", "operator": "in", "value": ["APAC"]}],
+        conditions_json=(
+            conditions
+            if conditions is not None
+            else [{"field": "region", "operator": "in", "value": ["APAC"]}]
+        ),
         assignee_type=assignee_type,
         assignee_id=assignee_id,
         priority=priority,

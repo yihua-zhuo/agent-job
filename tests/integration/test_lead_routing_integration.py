@@ -85,8 +85,8 @@ class TestLeadRoutingServiceIntegration:
 
         rule = RoutingRuleModel(
             tenant_id=tenant_id,
-            name="APAC Rule",
-            conditions_json=[{"field": "region", "operator": "in", "value": ["APAC"]}],
+            name="ACME Corp Rule",
+            conditions_json=[{"field": "company", "operator": "equals", "value": "ACME Corp"}],
             assignee_type="user",
             assignee_id=uid,
             priority=100,
@@ -99,7 +99,7 @@ class TestLeadRoutingServiceIntegration:
 
         cust_svc = CustomerService(async_session)
         lead = await cust_svc.create_customer(
-            {"name": "APAC Lead", "status": "lead", "owner_id": 0},
+            {"name": "ACME Lead", "status": "lead", "owner_id": 0, "company": "ACME Corp"},
             tenant_id=tenant_id,
         )
         routing_svc = LeadRoutingService(async_session)
@@ -114,8 +114,8 @@ class TestLeadRoutingServiceIntegration:
 
         rule = RoutingRuleModel(
             tenant_id=tenant_id,
-            name="Inactive Rule",
-            conditions_json=[{"field": "region", "operator": "in", "value": ["APAC"]}],
+            name="ACME Inactive Rule",
+            conditions_json=[{"field": "company", "operator": "equals", "value": "ACME Corp"}],
             assignee_type="user",
             assignee_id=uid,
             priority=100,
@@ -128,7 +128,7 @@ class TestLeadRoutingServiceIntegration:
 
         cust_svc = CustomerService(async_session)
         lead = await cust_svc.create_customer(
-            {"name": "APAC Lead", "status": "lead", "owner_id": 0},
+            {"name": "ACME Inactive Lead", "status": "lead", "owner_id": 0, "company": "ACME Corp"},
             tenant_id=tenant_id,
         )
         routing_svc = LeadRoutingService(async_session)

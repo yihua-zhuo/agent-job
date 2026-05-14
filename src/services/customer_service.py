@@ -364,6 +364,7 @@ class CustomerService:
                     assigned_at=None,
                     recycle_count=lead.recycle_count + 1,
                     recycle_history=history,
+                    updated_at=now,
                 )
             )
             recycled_ids.append(lead.id)

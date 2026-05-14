@@ -19,7 +19,7 @@ class ConditionOperator(StrEnum):
     BETWEEN = "between"
 
 
-SUPPORTED_FIELDS = {"region", "industry", "employee_count", "source", "created_date"}
+SUPPORTED_FIELDS = {"region", "industry", "employee_count", "source", "created_date", "company"}
 
 
 class RuleCondition(BaseModel):

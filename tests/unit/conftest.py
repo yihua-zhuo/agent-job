@@ -644,7 +644,7 @@ def make_routing_rule_handler(state: MockState):
                 "id": rid,
                 "tenant_id": params.get("tenant_id", 0),
                 "name": params.get("name", "Rule"),
-                "conditions_json": _json.dumps(params.get("conditions_json", [])),
+                "conditions_json": params.get("conditions_json", []),
                 "assignee_type": params.get("assignee_type", "round_robin"),
                 "assignee_id": params.get("assignee_id"),
                 "priority": params.get("priority", 0),
@@ -658,7 +658,11 @@ def make_routing_rule_handler(state: MockState):
         # UPDATE
         if sql_text.startswith("update") and "routing_rules" in sql_text:
             rid = params.get("id")
-            if rid in state.routing_rules:
+            tenant_id = params.get("tenant_id")
+            if (
+                rid in state.routing_rules
+                and state.routing_rules[rid].get("tenant_id") == tenant_id
+            ):
                 rec = state.routing_rules[rid]
                 for k, v in params.items():
                     if k not in ("id", "tenant_id"):
@@ -669,9 +673,14 @@ def make_routing_rule_handler(state: MockState):
         # DELETE
         if sql_text.startswith("delete") and "routing_rules" in sql_text:
             rid = params.get("id")
-            if rid in state.routing_rules:
+            tenant_id = params.get("tenant_id")
+            if (
+                rid in state.routing_rules
+                and state.routing_rules[rid].get("tenant_id") == tenant_id
+            ):
                 del state.routing_rules[rid]
-            return MockResult([MockRow({"id": rid})])
+                return MockResult([MockRow({"id": rid})])
+            return MockResult([])
 
         # COUNT
         if "select" in sql_text and "count" in sql_text and "from routing_rules" in sql_text:
@@ -684,11 +693,15 @@ def make_routing_rule_handler(state: MockState):
         # SELECT by id
         if "from routing_rules" in sql_text and "where id" in sql_text:
             rid = params.get("id")
-            if rid in state.routing_rules:
+            tenant_id = params.get("tenant_id")
+            if (
+                rid in state.routing_rules
+                and state.routing_rules[rid].get("tenant_id") == tenant_id
+            ):
                 return MockResult([MockRow(state.routing_rules[rid].copy())])
             fixtures = {
                 1: {"id": 1, "tenant_id": 1, "name": "APAC Rule",
-                    "conditions_json": _json.dumps([{"field": "region", "operator": "in", "value": ["APAC"]}]),
+                    "conditions_json": [{"field": "region", "operator": "in", "value": ["APAC"]}],
                     "assignee_type": "user", "assignee_id": 5,
                     "priority": 100, "is_active": True,
                     "created_at": None, "updated_at": None},
@@ -708,7 +721,7 @@ def make_routing_rule_handler(state: MockState):
                 rows.append(MockRow({
                     "id": 1, "tenant_id": tenant_id,
                     "name": "APAC Rule",
-                    "conditions_json": _json.dumps([{"field": "region", "operator": "in", "value": ["APAC"]}]),
+                    "conditions_json": [{"field": "region", "operator": "in", "value": ["APAC"]}],
                     "assignee_type": "user", "assignee_id": 5,
                     "priority": 100, "is_active": True,
                     "created_at": None, "updated_at": None,
