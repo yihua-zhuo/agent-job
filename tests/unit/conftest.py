@@ -158,6 +158,8 @@ class MockState:
         self.users: dict[int, dict] = {}
         self.users_next_id: int = 1
         self.deleted_user_ids: set[int] = set()
+        self.activities: dict[int, dict] = {}
+        self.activities_next_id: int = 1
 
 
 # ---------------------------------------------------------------------------
@@ -614,6 +616,82 @@ def campaign_handler(sql_text, params):
     return None
 
 
+def make_activity_handler(state: MockState):
+    """Handle all activity-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
+
+    def handler(sql_text, params):
+        # INSERT
+        if "insert into activities" in sql_text:
+            aid = state.activities_next_id
+            state.activities_next_id += 1
+            record = {
+                "id": aid,
+                "tenant_id": params.get("tenant_id", 0),
+                "customer_id": params.get("customer_id", 0),
+                "opportunity_id": params.get("opportunity_id"),
+                "type": params.get("type", "call"),
+                "content": params.get("content", ""),
+                "created_by": params.get("created_by", 0),
+                "created_at": params.get("created_at"),
+            }
+            state.activities[aid] = record
+            return MockResult([MockRow(record.copy())])
+
+        # Guard: only handle queries that reference the activities table
+        is_activity_query = (
+            "from activities" in sql_text
+            or (sql_text.startswith("update") and "activities" in sql_text)
+            or (sql_text.startswith("delete") and "activities" in sql_text)
+        )
+        if not is_activity_query:
+            return None
+
+        # UPDATE
+        if sql_text.startswith("update") and "activities" in sql_text:
+            activity_id = params.get("id")
+            if activity_id in state.activities:
+                rec = state.activities[activity_id]
+                for k, v in params.items():
+                    if k not in ("id", "tenant_id"):
+                        rec[k] = v
+                return MockResult([MockRow(rec.copy())])
+            return MockResult([])
+
+        # DELETE
+        if sql_text.startswith("delete") and "activities" in sql_text:
+            activity_id = params.get("id")
+            if activity_id in state.activities:
+                return MockResult([MockRow({"id": activity_id})])
+            return MockResult([])
+
+        # COUNT
+        if "select" in sql_text and "count" in sql_text and "from activities" in sql_text:
+            tenant_id = params.get("tenant_id")
+            count_val = len([r for r in state.activities.values() if r.get("tenant_id") == tenant_id])
+            return MockResult([[count_val]])
+
+        # SELECT by id
+        if "where id" in sql_text:
+            activity_id = params.get("id")
+            if activity_id in state.activities:
+                return MockResult([MockRow(state.activities[activity_id].copy())])
+            return MockResult([])
+
+        # SELECT list
+        if state.activities:
+            tenant_id = params.get("tenant_id", 0)
+            rows = [
+                MockRow(r.copy())
+                for r in state.activities.values()
+                if r.get("tenant_id") == tenant_id
+            ]
+            return MockResult(rows)
+
+        return MockResult([])
+
+    return handler
+
+
 def make_count_handler(state: MockState):
     """Fallback COUNT handler for queries not caught by domain handlers."""
 
@@ -642,6 +720,7 @@ def all_handlers(state: MockState):
         opportunity_handler,
         ticket_sql_handler,
         campaign_handler,
+        make_activity_handler(state),
         make_count_handler(state),
     ]
 
