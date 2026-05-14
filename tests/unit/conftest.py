@@ -118,10 +118,24 @@ class MockResult:
         return MappingResult(self._rows)
 
     def scalars(self):
-        return MagicMock(
-            first=MagicMock(return_value=self._rows[0] if self._rows else None),
-            all=MagicMock(return_value=self._rows),
-        )
+        class _Scalars:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def first(self):
+                return self._rows[0] if self._rows else None
+
+            def all(self):
+                return self._rows
+
+            def one_or_none(self):
+                if not self._rows:
+                    return None
+                if len(self._rows) == 1:
+                    return self._rows[0]
+                raise MultipleResultsFound("one_or_none() expected 0 or 1 rows, got multiple")
+
+        return _Scalars(self._rows)
 
     def scalar_one_or_none(self):
         return self._rows[0] if self._rows else None
@@ -612,6 +626,122 @@ def campaign_handler(sql_text, params):
         })])
 
     return None
+
+
+def dashboard_handler(sql_text, params):
+    """Handle dashboard-related SQL (stateless)."""
+
+    if "insert into dashboards" in sql_text:
+        return MockResult([MockRow({
+            "id": 1,
+            "tenant_id": params.get("tenant_id", 0),
+            "name": params.get("name", "Dashboard"),
+            "description": params.get("description"),
+            "widgets": "[]",
+            "owner_id": params.get("owner_id", 0),
+            "is_default": False,
+            "created_at": params.get("created_at"),
+            "updated_at": params.get("updated_at"),
+        })])
+
+    if "from dashboards where id" in sql_text:
+        dashboard_id = params.get("id")
+        fixtures = {
+            1: {
+                "id": 1, "tenant_id": 1,
+                "name": "Dashboard 1", "description": "Test dashboard",
+                "widgets": "[]", "owner_id": 1,
+                "is_default": False,
+                "created_at": None, "updated_at": None,
+            },
+        }
+        if dashboard_id in fixtures:
+            return MockResult([MockRow(fixtures[dashboard_id].copy())])
+        return MockResult([])
+
+    if "from dashboards" in sql_text:
+        return MockResult([
+            MockRow({
+                "id": 1, "tenant_id": 1,
+                "name": "Dashboard 1", "description": "First",
+                "widgets": "[]", "owner_id": 1,
+                "is_default": False,
+                "created_at": None, "updated_at": None,
+            }),
+            MockRow({
+                "id": 2, "tenant_id": 1,
+                "name": "Dashboard 2", "description": "Second",
+                "widgets": "[]", "owner_id": 1,
+                "is_default": False,
+                "created_at": None, "updated_at": None,
+            }),
+            MockRow({
+                "id": 3, "tenant_id": 1,
+                "name": "Dashboard 3", "description": "Third",
+                "widgets": "[]", "owner_id": 1,
+                "is_default": False,
+                "created_at": None, "updated_at": None,
+            }),
+        ])
+
+    return None
+
+
+def report_handler(sql_text, params):
+    """Handle report-related SQL (stateless)."""
+
+    if "insert into reports" in sql_text:
+        return MockResult([MockRow({
+            "id": 1,
+            "tenant_id": params.get("tenant_id", 0),
+            "name": params.get("name", "Report"),
+            "type": params.get("type", "sales_revenue"),
+            "config": "{}",
+            "date_range": "{}",
+            "created_by": params.get("created_by", 0),
+            "last_run_at": None,
+            "created_at": params.get("created_at"),
+        })])
+
+    if "from reports where id" in sql_text:
+        report_id = params.get("id")
+        fixtures = {
+            1: {
+                "id": 1, "tenant_id": 1,
+                "name": "Sales Revenue Report",
+                "type": "sales_revenue",
+                "config": "{}", "date_range": "{}",
+                "created_by": 1,
+                "last_run_at": None,
+                "created_at": None,
+            },
+        }
+        if report_id in fixtures:
+            return MockResult([MockRow(fixtures[report_id].copy())])
+        return MockResult([])
+
+    if "from reports" in sql_text:
+        return MockResult([MockRow({
+            "id": 1, "tenant_id": 1,
+            "name": "Sales Revenue Report",
+            "type": "sales_revenue",
+            "config": "{}", "date_range": "{}",
+            "created_by": 1,
+            "last_run_at": None,
+            "created_at": None,
+        })])
+
+    return None
+
+
+def make_analytics_handlers(state: MockState):
+    """Return handlers needed by AnalyticsService unit tests."""
+    return [
+        dashboard_handler,
+        report_handler,
+        opportunity_handler,
+        make_count_handler(state),
+    ]
 
 
 def make_count_handler(state: MockState):
