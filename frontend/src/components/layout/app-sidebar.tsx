@@ -5,8 +5,7 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import { useQuickAddTask } from "@/lib/store/task-store";
 import {
   Users, TrendingUp, Ticket, BarChart3, Sparkles, CheckSquare, Bell,
-  Activity, UsersRound, Settings as SettingsIcon, Shield, Upload,
-  LogOut, UserCog, ChevronLeft, ChevronRight, Plus,
+  Activity, UsersRound, Settings, LogOut, UserCog, ChevronLeft, ChevronRight, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -31,7 +30,7 @@ const crmItems = [
 ];
 
 const systemItems = [
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
+  { href: "/settings", label: "Settings", icon: Settings },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/ai", label: "AI", icon: Sparkles },
   { href: "/import-export", label: "Import/Export", icon: Upload },
@@ -86,7 +85,7 @@ function NavGroup({
 export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { user, clearAuth } = useAuthStore();
   const router = useRouter();
-  const { data: notifData } = useNotifications(1, true);
+  const { data: notifData } = useNotifications(1, false);
   const unreadCount = (notifData?.data?.unread_count as number) ?? 0;
   const quickAdd = useQuickAddTask();
 

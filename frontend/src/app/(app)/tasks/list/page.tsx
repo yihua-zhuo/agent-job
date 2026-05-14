@@ -30,10 +30,6 @@ const PRIORITY_COLORS: Record<string, string> = {
 };
 const PRIORITY_ORDER: Record<string, number> = { urgent: 0, high: 1, normal: 2, low: 3 };
 
-function SortIconStatic() {
-  return <span className="text-muted-foreground">↕</span>;
-}
-
 export default function TaskListPage() {
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("");
@@ -46,11 +42,9 @@ export default function TaskListPage() {
   const [editTask, setEditTask] = useState<Record<string, unknown> | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
-  const { data: allData, isLoading, isError } = useTasks(1, "");
-  const { data: filteredData } = useTasks(page, statusFilter);
-  const { data: usersData } = useUsers(1, 100);
-  const items = (allData?.data?.items ?? []) as Record<string, unknown>[];
-  const info = filteredData?.data;
+  const { data, isLoading, isError } = useTasks(page, statusFilter, priorityFilter, assigneeFilter, createdAfter, createdBefore);
+  const items = (data?.data?.items ?? []) as Record<string, unknown>[];
+  const info = data?.data;
   const users = (usersData?.data?.items ?? []) as Record<string, unknown>[];
 
   const complete = useCompleteTask();

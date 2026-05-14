@@ -879,6 +879,7 @@ def task_handler(sql_text, params):
                 )
             ]
         )
+        return MockResult([])
 
     if "from tasks where id" in sql_text:
         task_id = params.get("id")

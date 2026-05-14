@@ -307,10 +307,14 @@ export function useCreateUser() {
 }
 // ── Tasks ───────────────────────────────────────────────────────────────────
 
-export function useTasks(page = 1, status = "") {
+export function useTasks(page = 1, status = "", priority = "", assigned_to = "", createdAfter = "", createdBefore = "") {
   const token = useAuthStore((s) => s.token);
   const params = new URLSearchParams({ page: String(page), page_size: "20" });
   if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
+  if (assigned_to) params.set("assigned_to", assigned_to);
+  if (createdAfter) params.set("created_after", createdAfter);
+  if (createdBefore) params.set("created_before", createdBefore);
   return useQuery({
     queryKey: qk.tasks(page, status),
     queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tasks?${params}`, token ?? undefined),

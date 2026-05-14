@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import {
   Dialog,
   DialogContent,
@@ -66,12 +67,13 @@ export function TaskModal({
     return () => clearTimeout(timer);
   }, [customerSearch]);
 
-  // Sync initialStatus into form status when task is not being edited
+  // Sync initialStatus into form.status on mount only (task is null throughout the form lifecycle).
   useEffect(() => {
     if (!task && initialStatus) {
       setForm((f) => ({ ...f, status: initialStatus }));
     }
-  }, [task, initialStatus]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: customerData } = useSearchCustomers(debouncedSearch);
 
@@ -146,7 +148,7 @@ export function TaskModal({
             {previewDesc ? (
               <div className="rounded-md border bg-muted/30 p-3 min-h-[80px] text-sm prose prose-sm dark:prose-invert max-w-none">
                 {form.description ? (
-                  <ReactMarkdown>{form.description}</ReactMarkdown>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{form.description}</ReactMarkdown>
                 ) : (
                   <span className="text-muted-foreground italic">No description</span>
                 )}

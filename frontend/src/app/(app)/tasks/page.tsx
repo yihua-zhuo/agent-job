@@ -197,6 +197,7 @@ export default function TasksPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [createStatus, setCreateStatus] = useState("pending");
   const [activeTaskId, setActiveTaskId] = useState<string | number | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
   const [tasksPage, setTasksPage] = useState(1);
   const [tasksSearch, setTasksSearch] = useState("");
 
@@ -240,9 +241,14 @@ export default function TasksPage() {
   async function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over) return;
+    setIsDragging(false);
     const taskId = Number(active.id);
     const newStatus = over.id as string;
-    await update.mutateAsync({ id: taskId, data: { status: newStatus } });
+    try {
+      await update.mutateAsync({ id: taskId, data: { status: newStatus } });
+    } catch {
+      // update failed — mutation hook handles error feedback
+    }
   }
 
   async function handleCreate(data: Record<string, unknown>) {
@@ -333,7 +339,8 @@ export default function TasksPage() {
                   data-column={col.id}
                   className={cn(
                     "flex-1 space-y-2 rounded-b-md border p-2 overflow-y-auto",
-                    col.borderColor
+                    col.borderColor,
+                    (isDragging || update.isPending) && "pointer-events-none opacity-50"
                   )}
                   style={{ maxHeight: "calc(100vh - 240px)" }}
                 >

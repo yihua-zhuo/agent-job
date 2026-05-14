@@ -181,7 +181,7 @@ class TestTaskEndpoints:
         resp = await api_client.post("/api/v1/tasks/999999999/complete")
         assert resp.status_code == 404
 
-    async def test_delete_task(self, api_client: AsyncClient):
+    async def test_delete_task(self, api_client: AsyncClient, tenant_id_web: int):
         create_resp = await api_client.post(
             "/api/v1/tasks",
             json={"title": "Task to Delete"},
@@ -197,7 +197,7 @@ class TestTaskEndpoints:
         get_resp = await api_client.get(f"/api/v1/tasks/{created_id}")
         assert get_resp.status_code == 404
 
-    async def test_delete_task_not_found(self, api_client: AsyncClient):
+    async def test_delete_task_not_found(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.delete("/api/v1/tasks/999999999")
         assert resp.status_code == 404
 

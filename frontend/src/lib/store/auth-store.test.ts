@@ -30,6 +30,10 @@ describe("auth-store", () => {
     useAuthStore.setState({ token: null, user: null, isHydrated: true });
   });
 
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   const mockUser = {
     id: 1,
     tenant_id: 1,
@@ -76,6 +80,14 @@ describe("auth-store", () => {
       const store = useAuthStore.getState();
       store.setAuth("test-token-abc", mockUser);
       store.clearAuth();
+      expect(store.isAuthenticated()).toBe(false);
+    });
+
+    it("is idempotent — safe to call without prior setAuth", () => {
+      const store = useAuthStore.getState();
+      store.clearAuth(); // no prior setAuth
+      expect(store.token).toBeNull();
+      expect(store.user).toBeNull();
       expect(store.isAuthenticated()).toBe(false);
     });
   });

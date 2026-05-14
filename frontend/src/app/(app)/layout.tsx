@@ -82,8 +82,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           onClose={quickAdd.close}
           initialStatus={quickAdd.initialStatus}
           onSubmit={async (data) => {
-            await create.mutateAsync({ ...data, status: (data.status as string | undefined) ?? quickAdd.initialStatus });
-            quickAdd.close();
+            try {
+              await create.mutateAsync({ ...data, status: (data.status as string | undefined) ?? quickAdd.initialStatus });
+              quickAdd.close();
+            } catch {
+              // error is handled by the mutation hook (e.g. toast)
+            }
           }}
           isSubmitting={create.isPending}
         />
