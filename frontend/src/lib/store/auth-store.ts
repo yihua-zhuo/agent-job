@@ -3,7 +3,7 @@ import { persist } from "zustand/middleware";
 import CryptoJS from "crypto-js";
 
 const STORAGE_KEY = "crm_auth";
-const ENCRYPT_KEY = process.env.NEXT_PUBLIC_AUTH_SECRET ?? "dev-auth-secret-change-in-prod";
+const ENCRYPT_KEY = process.env.NEXT_PUBLIC_AUTH_KEY ?? "dev-auth-key-change-in-prod";
 
 export interface AuthUser {
   id: number;

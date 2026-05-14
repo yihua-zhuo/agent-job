@@ -53,7 +53,7 @@ cp .env.local.example .env.local
 
 Edit `.env.local` and fill in the required values:
 - `NEXT_PUBLIC_API_BASE_URL` — set to `http://localhost:8000` for local development
-- `NEXT_PUBLIC_AUTH_SECRET` — a random 32-character hex string used to AES-encrypt auth tokens. Generate one with:
+- `NEXT_PUBLIC_AUTH_KEY` — a random 32-character hex string for client-side obfuscation of auth tokens in localStorage. Generate one with:
 
 ```bash
 node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"

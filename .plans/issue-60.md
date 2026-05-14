@@ -31,9 +31,9 @@ Validate and complete the existing frontend scaffold at `frontend/` — currentl
 4. **Add Prettier to package.json scripts.** Update `format` script to `"prettier --write ."`. Add a `"format:check"` script as `"prettier --check ."` for CI. Update the existing `lint` script to run both ESLint and Prettier check: `"eslint . && prettier --check ."`.
 
 5. **Create `frontend/.env.local.example`.** Document the three required environment variables:
-   ```
+   ```env
    NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
-   NEXT_PUBLIC_AUTH_SECRET=<random 32-char hex string for AES encryption>
+   NEXT_PUBLIC_AUTH_KEY=<random 32-char hex string for client-side token obfuscation>
    ```
    Add a comment noting that `NEXT_PUBLIC_API_BASE_URL` is only needed in development; in production the `next.config.ts` rewrite handles routing.
 
@@ -61,7 +61,7 @@ Validate and complete the existing frontend scaffold at `frontend/` — currentl
 - Visiting `/login` shows the sign-in form; submitting valid credentials redirects to `/customers`
 - Visiting any `/customers`, `/sales`, `/tickets`, `/analytics`, `/ai` route while unauthenticated redirects to `/login`
 - The sidebar shows navigation links for all five CRM modules
-- `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_AUTH_SECRET` are documented in `frontend/.env.local.example`
+- `NEXT_PUBLIC_API_BASE_URL` and `NEXT_PUBLIC_AUTH_KEY` are documented in `frontend/.env.local.example`
 - `components.json` aliases (`@/components`, `@/lib/utils`, `@/components/ui`) are present and correct
 - TypeScript compiles with `strict: true` and no type errors
 
