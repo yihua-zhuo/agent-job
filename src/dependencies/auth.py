@@ -16,11 +16,12 @@ import jwt
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
+from configs.settings import settings
 from internal.middleware.fastapi_auth import AuthContext
 
 security = HTTPBearer(auto_error=False)
 
-JWT_SECRET = os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET") or "dev-jwt-secret"
+JWT_SECRET = settings.jwt_secret or os.environ.get("JWT_SECRET_KEY") or os.environ.get("JWT_SECRET") or "dev-jwt-secret"
 if os.environ.get("FLASK_ENV") == "production" and not (
     os.environ.get("JWT_SECRET") or os.environ.get("JWT_SECRET_KEY")
 ):
