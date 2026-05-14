@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { use } from "react";
+import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
-import { useTicket, useTicketReplies, useTicketActivity, useAddReply, useUpdateTicket, useDeleteTicket } from "@/lib/api/queries";
+import { useTicket, useTicketReplies, useTicketActivity, useAddReply, useUpdateTicket, useDeleteTicket, useCustomers } from "@/lib/api/queries";
 import { SLATimer } from "@/components/tickets/sla-timer";
 import { TicketFormDialog } from "@/components/tickets/ticket-form-dialog";
 import { Button } from "@/components/ui/button";
@@ -63,9 +65,14 @@ function initials(name: string): string {
     .slice(0, 2);
 }
 
-export default function TicketDetailPage({ params }: { params: { id: string } }) {
-  const ticketId = Number(params.id);
+export default function TicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
+  const { id } = use(params);
+  const ticketId = Number(id);
+  if (isNaN(ticketId)) {
+    router.push("/tickets");
+    return null;
+  }
 
   const { data: ticketData, isLoading: ticketLoading } = useTicket(ticketId);
   const { data: repliesData } = useTicketReplies(ticketId);
@@ -73,6 +80,10 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
   const addReply = useAddReply();
   const updateTicket = useUpdateTicket();
   const deleteTicket = useDeleteTicket();
+
+  const { data: customersData } = useCustomers(1, 100);
+  const customers = (customersData?.data?.items ?? []) as Array<{ id: number; name: string }>;
+  const customerName = customers.find((c) => c.id === Number(ticket.customer_id))?.name;
 
   const [replyContent, setReplyContent] = useState("");
   const [isInternal, setIsInternal] = useState(false);
@@ -149,9 +160,12 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
             <h1 className="text-xl font-bold">
               #{ticketId} — {ticket.subject as string}
             </h1>
-            <Badge colorClass={STATUS_COLORS[ticket.status as string] ?? "bg-gray-100 text-gray-600"}>
+            <span className={cn(
+              "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
+              STATUS_COLORS[ticket.status as string] ?? "bg-gray-100 text-gray-600"
+            )}>
               {STATUS_LABELS[ticket.status as string] ?? ticket.status}
-            </Badge>
+            </span>
             <span className={cn(
               "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-semibold",
               PRIORITY_COLORS[ticket.priority as string] ?? "bg-gray-100 text-gray-600"
@@ -181,7 +195,7 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
               <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Description</h2>
               <div className="prose prose-sm max-w-none text-sm">
                 {ticket.description ? (
-                  <p className="whitespace-pre-wrap">{ticket.description as string}</p>
+                  <ReactMarkdown>{ticket.description as string}</ReactMarkdown>
                 ) : (
                   <p className="text-muted-foreground italic">No description provided.</p>
                 )}
@@ -199,7 +213,7 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
                 <p className="text-sm text-muted-foreground italic py-2">No replies yet.</p>
               )}
               {replies.map((reply) => (
-                <div key={reply.id as number} className="flex gap-3">
+                <div key={String(reply.id)} className="flex gap-3">
                   <Avatar size="sm" className="mt-0.5 shrink-0">
                     <AvatarFallback>{initials(`Agent ${reply.created_by}`)}</AvatarFallback>
                   </Avatar>
@@ -279,11 +293,16 @@ export default function TicketDetailPage({ params }: { params: { id: string } })
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Channel</span>
-                  <span className="font-medium capitalize">{(ticket.channel as string) ?? "—"}</span>
+                  <span className="font-medium capitalize">{ticket.channel ? (ticket.channel as string) : "—"}</span>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Customer</span>
-                  <span className="font-medium">#{ticket.customer_id ?? "—"}</span>
+                  <a
+                    href={`/customers/${ticket.customer_id}`}
+                    className="font-medium hover:underline text-primary"
+                  >
+                    {customerName ?? `#${ticket.customer_id ?? "—"}`}
+                  </a>
                 </div>
                 <div className="flex items-center justify-between text-sm">
                   <span className="text-muted-foreground">Created</span>

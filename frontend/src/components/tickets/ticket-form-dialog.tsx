@@ -41,7 +41,7 @@ interface TicketFormDialogProps {
 
 export function TicketFormDialog({ open, onOpenChange, initialData }: TicketFormDialogProps) {
   const isEditing = !!initialData?.id;
-  const { data: customersData } = useCustomers(1, 100);
+  const { data: customersData } = useCustomers(undefined, 20);
   const createTicket = useCreateTicket();
   const updateTicket = useUpdateTicket();
 
@@ -55,7 +55,7 @@ export function TicketFormDialog({ open, onOpenChange, initialData }: TicketForm
     defaultValues: {
       subject: initialData?.subject ?? "",
       description: initialData?.description ?? "",
-      customer_id: initialData?.customer_id ?? 0,
+      customer_id: initialData?.customer_id ?? undefined,
       channel: initialData?.channel ?? "email",
       priority: initialData?.priority ?? "medium",
       sla_level: initialData?.sla_level ?? "standard",
@@ -66,7 +66,7 @@ export function TicketFormDialog({ open, onOpenChange, initialData }: TicketForm
     reset({
       subject: initialData?.subject ?? "",
       description: initialData?.description ?? "",
-      customer_id: initialData?.customer_id ?? 0,
+      customer_id: initialData?.customer_id ?? undefined,
       channel: initialData?.channel ?? "email",
       priority: initialData?.priority ?? "medium",
       sla_level: initialData?.sla_level ?? "standard",
@@ -101,7 +101,8 @@ export function TicketFormDialog({ open, onOpenChange, initialData }: TicketForm
       }
       onOpenChange(false);
       reset();
-    } catch {
+    } catch (e) {
+      console.error("Ticket submit error:", e);
       toast.error(isEditing ? "Failed to update ticket" : "Failed to create ticket");
     }
   }

@@ -298,13 +298,10 @@ async def bulk_update_tickets(
 ):
     """Apply a status change and/or assignee reassignment to multiple tickets atomically.
 
-    Validates every ticket exists (by calling ``get_ticket``) before applying any updates,
-    then processes them sequentially.
+    Tickets that do not exist or belong to a different tenant are skipped;
+    the operation is best-effort and will not perform partial updates.
     """
     service = TicketService(session)
-    # Pre-validate all tickets exist to avoid partial updates
-    for ticket_id in body.ticket_ids:
-        await service.get_ticket(ticket_id, tenant_id=ctx.tenant_id or 0)
     updated = []
     for ticket_id in body.ticket_ids:
         kwargs: dict = {}

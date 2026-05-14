@@ -82,24 +82,18 @@ class MockActivityModel:
         }
 
 
-class MockRow:
-    def __init__(self, mapping):
-        self._mapping = mapping
-
-    def __getitem__(self, key):
-        return self._mapping[key]
-
-    def keys(self):
-        return self._mapping.keys()
-
-
 class MockResult:
     def __init__(self, rows=None):
         self._rows = rows or []
         self._call_count = 0
 
     def scalars(self):
-        return MagicMock(all=MagicMock(return_value=self._rows))
+        class _Scalars:
+            def __init__(self, rows):
+                self._rows = rows
+            def all(self):
+                return self._rows
+        return _Scalars(self._rows)
 
     def scalar_one_or_none(self):
         self._call_count += 1
@@ -113,6 +107,8 @@ def mock_session():
     session.flush = AsyncMock()
     session.refresh = AsyncMock()
     session.add = MagicMock()
+    session.__aenter__ = AsyncMock(return_value=session)
+    session.__aexit__ = AsyncMock(return_value=None)
     return session
 
 
@@ -129,15 +125,17 @@ class TestGetTicketReplies:
     async def test_returns_replies_ordered_by_created_at_asc(self, ticket_service, mock_session):
         reply1 = MockReplyModel(id=1, ticket_id=1, content="First reply")
         reply2 = MockReplyModel(id=2, ticket_id=1, content="Second reply")
-        mock_session.execute.return_value = MockResult([reply1, reply2])
+        ticket_row = MockTicketModel(id=1)
+        # First call: _fetch (existence check); Second call: replies query
+        mock_session.execute.side_effect = [MockResult([ticket_row]), MockResult([reply1, reply2])]
 
         result = await ticket_service.get_ticket_replies(ticket_id=1, tenant_id=1)
 
         assert len(result) == 2
         assert result[0].id == 1
         assert result[1].id == 2
-        mock_session.execute.assert_called()
-        # Verify last call contains order by asc
+        assert mock_session.execute.call_count == 2
+        # Verify last call (replies query) contains order by asc
         calls = mock_session.execute.call_args_list
         last_call = calls[-1]
         sql_str = str(last_call[0][0]).lower()
@@ -145,7 +143,7 @@ class TestGetTicketReplies:
         assert "asc" in sql_str
 
     async def test_raises_not_found_for_invalid_ticket(self, ticket_service, mock_session):
-        mock_session.execute.return_value = MockResult([])
+        mock_session.execute.side_effect = [MockResult([]), MockResult([])]
 
         from pkg.errors.app_exceptions import NotFoundException
         with pytest.raises(NotFoundException):
@@ -160,13 +158,14 @@ class TestGetTicketActivity:
     async def test_returns_activity_ordered_by_created_at_desc(self, ticket_service, mock_session):
         activity1 = MockActivityModel(id=1, content="ticket#1 updated")
         activity2 = MockActivityModel(id=2, content="ticket#1 assigned")
-        mock_session.execute.return_value = MockResult([activity1, activity2])
+        ticket_row = MockTicketModel(id=1)
+        mock_session.execute.side_effect = [MockResult([ticket_row]), MockResult([activity1, activity2])]
 
         result = await ticket_service.get_ticket_activity(ticket_id=1, tenant_id=1)
 
         assert len(result) == 2
-        mock_session.execute.assert_called()
-        # Verify last call contains order by desc
+        assert mock_session.execute.call_count == 2
+        # Verify last call (activity query) contains order by desc
         calls = mock_session.execute.call_args_list
         last_call = calls[-1]
         sql_str = str(last_call[0][0]).lower()
@@ -174,7 +173,7 @@ class TestGetTicketActivity:
         assert "desc" in sql_str
 
     async def test_raises_not_found_for_invalid_ticket(self, ticket_service, mock_session):
-        mock_session.execute.return_value = MockResult([])
+        mock_session.execute.side_effect = [MockResult([]), MockResult([])]
 
         from pkg.errors.app_exceptions import NotFoundException
         with pytest.raises(NotFoundException):

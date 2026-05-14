@@ -192,7 +192,10 @@ export function useAddReply() {
   return useMutation({
     mutationFn: ({ ticketId, data }: { ticketId: number; data: Record<string, unknown> }) =>
       apiClient.post(`/api/v1/tickets/${ticketId}/replies`, data, token ?? undefined),
-    onSuccess: (_res, vars) => qc.invalidateQueries({ queryKey: qk.ticketReplies(vars.ticketId) }),
+    onSuccess: (_res, vars) => {
+      qc.invalidateQueries({ queryKey: qk.ticketReplies(vars.ticketId) });
+      qc.invalidateQueries({ queryKey: qk.ticketActivity(vars.ticketId) });
+    },
   });
 }
 
@@ -246,11 +249,11 @@ export function useAutoAssignTicket() {
 }
 
 // ── Users ───────────────────────────────────────────────────────────────────
-export function useUsers(page = 1) {
+export function useUsers(page = 1, page_size = 20) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.users(page),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?page=${page}&page_size=20`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?page=${page}&page_size=${page_size}`, token ?? undefined),
     staleTime: 60 * 1000,
   });
 }
