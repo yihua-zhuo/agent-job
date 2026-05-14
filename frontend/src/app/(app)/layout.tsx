@@ -24,11 +24,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   const create = useCreateTask();
   const update = useUpdateTask();
 
-  /* eslint-disable react-hooks/set-state-in-effect -- intentional: synchronizing sidebar open state with pathname change */
   useEffect(() => {
     if (sidebarOpen) setSidebarOpen(false);
-  }, [pathname]);
-  /* eslint-enable react-hooks/set-state-in-effect */
+  }, [pathname, sidebarOpen]);
 
   function toggleSidebar() {
     setCollapsed((c) => !c);

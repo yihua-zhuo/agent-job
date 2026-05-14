@@ -27,7 +27,7 @@ const COLUMNS = [
   { id: "completed", label: "Done", color: "text-green-600", borderColor: "border-green-400" },
 ] as const;
 
-const PRIORITY_COLORS: Record<string, string> = {
+const PRIORITY_COLORS = {
   high: "bg-red-100 text-red-800",
   urgent: "bg-red-100 text-red-800",
   normal: "bg-blue-100 text-blue-800",
@@ -197,8 +197,10 @@ export default function TasksPage() {
   const [showCreate, setShowCreate] = useState(false);
   const [createStatus, setCreateStatus] = useState("pending");
   const [activeTaskId, setActiveTaskId] = useState<string | number | null>(null);
+  const [tasksPage, setTasksPage] = useState(1);
+  const [tasksSearch, setTasksSearch] = useState("");
 
-  const { data: allData, isLoading } = useTasks(1, "");
+  const { data: allData, isLoading } = useTasks(tasksPage, tasksSearch);
 
   const create = useCreateTask();
   const update = useUpdateTask();

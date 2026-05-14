@@ -1,31 +1,32 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useAuthStore } from "./auth-store";
 
+vi.mock("crypto-js", () => ({
+  default: {
+    AES: {
+      encrypt: (data: string, _key: string) => ({
+        toString: () =>
+          btoa(JSON.stringify({ encrypted: true, data })),
+      }),
+      decrypt: (ciphertext: string, _key: string) => ({
+        toString: () => {
+          try {
+            const decoded = JSON.parse(atob(ciphertext));
+            return decoded.data ?? "";
+          } catch {
+            return "";
+          }
+        },
+      }),
+    },
+    enc: {
+      Utf8: {},
+    },
+  },
+}));
+
 describe("auth-store", () => {
   beforeEach(() => {
-    vi.mock("crypto-js", () => ({
-      default: {
-        AES: {
-          encrypt: (data: string, _key: string) => ({
-            toString: () =>
-              btoa(JSON.stringify({ encrypted: true, data })),
-          }),
-          decrypt: (ciphertext: string, _key: string) => ({
-            toString: () => {
-              try {
-                const decoded = JSON.parse(atob(ciphertext));
-                return decoded.data ?? "";
-              } catch {
-                return "";
-              }
-            },
-          }),
-        },
-        enc: {
-          Utf8: {},
-        },
-      },
-    }));
     useAuthStore.setState({ token: null, user: null, isHydrated: true });
   });
 

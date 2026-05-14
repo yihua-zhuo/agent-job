@@ -48,7 +48,7 @@ export function TaskModal({
     title: task ? String(task.title ?? "") : "",
     description: task ? String(task.description ?? "") : "",
     priority: task ? String(task.priority ?? "normal") : "normal",
-    status: task ? String(task.status ?? "pending") : initialStatus ?? "pending",
+    status: task ? String(task.status ?? "pending") : (initialStatus ?? "pending"),
     due_date: task && task.due_date ? String(task.due_date).slice(0, 10) : "",
     assigned_to: task ? String(task.assigned_to ?? "0") : "0",
     customer_id: task ? String(task.customer_id ?? "") : "",

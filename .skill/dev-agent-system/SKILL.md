@@ -111,7 +111,7 @@ mypy src/
 ## Do / Don't Checklist
 
 ### ✅ Do
-- Services return domain objects (ORM models / dicts from rows).
+- Services return domain objects (ORM models).
 - Services raise `AppException` subclasses on errors.
 - Routers call `.to_dict()` and wrap in `{"success": True, "data": ..., "message": ...}`.
 - Routers inject session via `session: AsyncSession = Depends(get_db)`.

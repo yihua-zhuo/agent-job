@@ -87,7 +87,7 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
   const { user, clearAuth } = useAuthStore();
   const router = useRouter();
   const { data: notifData } = useNotifications(1, true);
-  const unreadCount = (notifData?.data?.total as number) ?? 0;
+  const unreadCount = (notifData?.data?.unread_count as number) ?? 0;
   const quickAdd = useQuickAddTask();
 
   const initials = user
