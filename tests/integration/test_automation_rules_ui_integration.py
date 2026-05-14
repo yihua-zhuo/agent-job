@@ -15,7 +15,6 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
-@pytest.mark.integration
 class TestAutomationRulesUIIntegration:
     """Full rule CRUD cycle via the automation API endpoints."""
 

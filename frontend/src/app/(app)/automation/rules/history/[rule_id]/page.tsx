@@ -4,7 +4,8 @@ import { useParams } from "next/navigation";
 import { useAutomationLogs } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, History } from "lucide-react";
+import { AuthGuard } from "@/lib/components/auth-guard";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -116,7 +117,7 @@ function PerRuleHistoryContent() {
                     <span className="text-xs font-mono text-muted-foreground">{log.trigger_event}</span>
                   </td>
                   <td className="px-3 py-3">
-                    <Badge colorClass={STATUS_COLORS[log.status] ?? "bg-gray-100 text-gray-600"}>
+                    <Badge variant={(log.status as "success" | "failed" | "skipped") ?? "gray"}>
                       {log.status}
                     </Badge>
                   </td>
@@ -158,10 +159,12 @@ function PerRuleHistoryContent() {
 
 export default function PerRuleHistoryPage() {
   return (
-    <div className="space-y-6">
-      <Suspense fallback={<div className="space-y-4">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-12 bg-muted rounded animate-pulse" />)}</div>}>
-        <PerRuleHistoryContent />
-      </Suspense>
-    </div>
+    <AuthGuard>
+      <div className="space-y-6">
+        <Suspense fallback={<div className="space-y-4">{Array.from({ length: 5 }).map((_, i) => <div key={i} className="h-12 bg-muted rounded animate-pulse" />)}</div>}>
+          <PerRuleHistoryContent />
+        </Suspense>
+      </div>
+    </AuthGuard>
   );
 }

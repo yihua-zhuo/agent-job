@@ -1,11 +1,12 @@
 "use client";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import { useAutomationRule } from "@/lib/api/queries";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Pencil, History } from "lucide-react";
+import { AuthGuard } from "@/lib/components/auth-guard";
 
 const TRIGGER_LABELS: Record<string, string> = {
   "ticket.created": "Ticket Created",
@@ -19,8 +20,17 @@ const TRIGGER_LABELS: Record<string, string> = {
   "lead.created": "Lead Created",
 };
 
-export default function RuleDetailPage({ params }: { params: { id: string } }) {
+export default function RuleDetailPage() {
+  return (
+    <AuthGuard>
+      <RuleDetailPageInner />
+    </AuthGuard>
+  );
+}
+
+function RuleDetailPageInner() {
   const router = useRouter();
+  const params = useParams<{ id: string }>();
   const ruleId = Number(params.id);
   const { data, isLoading, isError } = useAutomationRule(ruleId);
 
@@ -94,11 +104,11 @@ export default function RuleDetailPage({ params }: { params: { id: string } }) {
       <div className="flex flex-wrap gap-4 items-center">
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Trigger:</span>
-          <Badge colorClass="bg-blue-100 text-blue-800">{triggerLabel}</Badge>
+          <Badge variant="blue">{triggerLabel}</Badge>
         </div>
         <div className="flex items-center gap-2">
           <span className="text-sm text-muted-foreground">Status:</span>
-          <Badge colorClass={rule.enabled ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-500"}>
+          <Badge variant={rule.enabled ? "green" : "gray"}>
             {rule.enabled ? "Active" : "Disabled"}
           </Badge>
         </div>

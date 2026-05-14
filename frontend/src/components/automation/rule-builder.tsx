@@ -17,6 +17,14 @@ export interface RuleBuilderValues {
   enabled: boolean;
 }
 
+interface RuleBuilderCondition extends ConditionRowValue {
+  id: string;
+}
+
+interface RuleBuilderAction extends ActionRowValue {
+  id: string;
+}
+
 interface RuleBuilderProps {
   initialValues?: Partial<RuleBuilderValues>;
   onSubmit: (values: RuleBuilderValues) => Promise<void>;
@@ -25,12 +33,12 @@ interface RuleBuilderProps {
   disabled?: boolean;
 }
 
-function makeCondition(): ConditionRowValue {
-  return { field: "", operator: "eq", value: "" };
+function makeCondition(): ConditionRowValue & { id: string } {
+  return { id: crypto.randomUUID(), field: "", operator: "eq", value: "" };
 }
 
-function makeAction(): ActionRowValue {
-  return { type: "", params: {} };
+function makeAction(): ActionRowValue & { id: string } {
+  return { id: crypto.randomUUID(), type: "", params: {} };
 }
 
 export function RuleBuilder({
@@ -43,11 +51,15 @@ export function RuleBuilder({
   const [name, setName] = useState(initialValues?.name ?? "");
   const [description, setDescription] = useState(initialValues?.description ?? "");
   const [trigger, setTrigger] = useState(initialValues?.trigger_event ?? "");
-  const [conditions, setConditions] = useState<ConditionRowValue[]>(
-    initialValues?.conditions?.length ? initialValues.conditions : []
+  const [conditions, setConditions] = useState<RuleBuilderCondition[]>(
+    initialValues?.conditions && initialValues.conditions.length > 0
+      ? initialValues.conditions.map((c) => ({ id: crypto.randomUUID(), ...c }))
+      : []
   );
-  const [actions, setActions] = useState<ActionRowValue[]>(
-    initialValues?.actions?.length ? initialValues.actions : [makeAction()]
+  const [actions, setActions] = useState<RuleBuilderAction[]>(
+    initialValues?.actions && initialValues.actions.length > 0
+      ? initialValues.actions.map((a) => ({ id: crypto.randomUUID(), ...a }))
+      : [makeAction()]
   );
   const [enabled, setEnabled] = useState(initialValues?.enabled ?? false);
   const [validationError, setValidationError] = useState("");
@@ -56,28 +68,27 @@ export function RuleBuilder({
     setConditions((prev) => [...prev, makeCondition()]);
   }, []);
 
-  const removeCondition = useCallback((index: number) => {
-    setConditions((prev) => prev.filter((_, i) => i !== index));
+  const removeCondition = useCallback((id: string) => {
+    setConditions((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
-  const updateCondition = useCallback((index: number, val: ConditionRowValue) => {
-    setConditions((prev) => prev.map((c, i) => (i === index ? val : c)));
+  const updateCondition = useCallback((id: string, val: ConditionRowValue) => {
+    setConditions((prev) => prev.map((c) => (c.id === id ? { ...val, id } : c)));
   }, []);
 
   const addAction = useCallback(() => {
     setActions((prev) => [...prev, makeAction()]);
   }, []);
 
-  const removeAction = useCallback((index: number) => {
-    setActions((prev) => prev.filter((_, i) => i !== index));
+  const removeAction = useCallback((id: string) => {
+    setActions((prev) => prev.filter((a) => a.id !== id));
   }, []);
 
-  const updateAction = useCallback((index: number, val: ActionRowValue) => {
-    setActions((prev) => prev.map((a, i) => (i === index ? val : a)));
+  const updateAction = useCallback((id: string, val: ActionRowValue) => {
+    setActions((prev) => prev.map((a) => (a.id === id ? { ...val, id } : a)));
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
+  async function doSubmit() {
     setValidationError("");
 
     const filledActions = actions.filter((a) => a.type.trim() !== "");
@@ -104,6 +115,11 @@ export function RuleBuilder({
     };
 
     await onSubmit(payload);
+  }
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    await doSubmit();
   }
 
   return (
@@ -159,12 +175,12 @@ export function RuleBuilder({
           <p className="text-sm text-muted-foreground">No conditions — rule runs on every trigger event.</p>
         )}
         <div className="space-y-2">
-          {conditions.map((cond, i) => (
+          {conditions.map((cond) => (
             <ConditionRow
-              key={i}
+              key={cond.id}
               value={cond}
-              onChange={(val) => updateCondition(i, val)}
-              onRemove={() => removeCondition(i)}
+              onChange={(val) => updateCondition(cond.id, val)}
+              onRemove={() => removeCondition(cond.id)}
               disabled={disabled}
             />
           ))}
@@ -185,12 +201,12 @@ export function RuleBuilder({
       <div className="space-y-3">
         <span className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70">THEN perform these actions *</span>
         <div className="space-y-2">
-          {actions.map((action, i) => (
+          {actions.map((action) => (
             <ActionRow
-              key={i}
+              key={action.id}
               value={action}
-              onChange={(val) => updateAction(i, val)}
-              onRemove={() => removeAction(i)}
+              onChange={(val) => updateAction(action.id, val)}
+              onRemove={() => removeAction(action.id)}
               disabled={disabled}
             />
           ))}
@@ -214,6 +230,7 @@ export function RuleBuilder({
             type="button"
             role="switch"
             aria-checked={enabled}
+            aria-label="Enable rule"
             onClick={() => setEnabled((v) => !v)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring cursor-pointer ${
               enabled ? "bg-green-500" : "bg-gray-300"
@@ -235,7 +252,7 @@ export function RuleBuilder({
           </div>
         </div>
         <div className="flex gap-3">
-          <Button type="button" onClick={() => handleSubmit(new Event("submit"))} disabled={disabled}>
+          <Button type="button" onClick={doSubmit} disabled={disabled}>
             {enabled ? "Activate Rule" : "Save as Draft"}
           </Button>
           {onCancel && (

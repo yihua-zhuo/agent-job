@@ -49,7 +49,7 @@ const TRIGGER_LABELS: Record<string, string> = {
 function TriggerBadge({ trigger }: { trigger: string }) {
   const label = TRIGGER_LABELS[trigger] ?? trigger;
   return (
-    <Badge colorClass="bg-blue-100 text-blue-800">
+    <Badge variant="blue">
       {label}
     </Badge>
   );

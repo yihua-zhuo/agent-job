@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Zap, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, Zap } from "lucide-react";
 import Link from "next/link";
 import { useCreateAutomationRule } from "@/lib/api/queries";
 
@@ -69,9 +69,10 @@ interface TemplateCardProps {
   template: (typeof TEMPLATES)[number];
   onActivate: (template: (typeof TEMPLATES)[number]) => void;
   activating: boolean;
+  disabled: boolean;
 }
 
-function TemplateCard({ template, onActivate, activating }: TemplateCardProps) {
+function TemplateCard({ template, onActivate, activating, disabled }: TemplateCardProps) {
   return (
     <Card className="flex flex-col">
       <CardHeader>
@@ -80,7 +81,7 @@ function TemplateCard({ template, onActivate, activating }: TemplateCardProps) {
             <Zap className="h-4 w-4 text-primary" />
             <CardTitle className="text-base">{template.name}</CardTitle>
           </div>
-          <Badge colorClass="bg-blue-100 text-blue-800">
+          <Badge variant="blue">
             {TRIGGER_LABELS[template.trigger] ?? template.trigger}
           </Badge>
         </div>
@@ -116,7 +117,7 @@ function TemplateCard({ template, onActivate, activating }: TemplateCardProps) {
             size="sm"
             className="w-full"
             onClick={() => onActivate(template)}
-            disabled={activating}
+            disabled={disabled}
           >
             {activating ? "Activating…" : "Activate"}
           </Button>
@@ -130,10 +131,9 @@ export default function TemplatesPage() {
   const router = useRouter();
   const createRule = useCreateAutomationRule();
   const [activatingTemplate, setActivatingTemplate] = useState<string | null>(null);
-  const [error, setError] = useState("");
 
   async function handleActivate(template: (typeof TEMPLATES)[number]) {
-    setError("");
+    if (createRule.isPending || activatingTemplate !== null) return;
     setActivatingTemplate(template.name);
     try {
       await createRule.mutateAsync({
@@ -145,8 +145,6 @@ export default function TemplatesPage() {
         enabled: true,
       });
       router.push("/automation/rules");
-    } catch {
-      setError("Failed to activate template. Please try again.");
     } finally {
       setActivatingTemplate(null);
     }
@@ -167,9 +165,13 @@ export default function TemplatesPage() {
         </p>
       </div>
 
-      {error && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {error}
+      {createRule.isError && (
+        <div
+          role="alert"
+          aria-live="polite"
+          className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          {String(createRule.error?.message ?? "Failed to activate template. Please try again.")}
         </div>
       )}
 
@@ -180,6 +182,7 @@ export default function TemplatesPage() {
             template={template}
             onActivate={handleActivate}
             activating={activatingTemplate === template.name}
+            disabled={activatingTemplate !== null}
           />
         ))}
       </div>

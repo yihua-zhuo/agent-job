@@ -11,7 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, History, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
@@ -20,6 +20,11 @@ const STATUS_COLORS: Record<string, string> = {
   failed: "bg-red-100 text-red-800",
   skipped: "bg-yellow-100 text-yellow-800",
 };
+
+function getStatusVariant(status: string): "success" | "failed" | "skipped" | "gray" {
+  if (status === "success" || status === "failed" || status === "skipped") return status;
+  return "gray";
+}
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "—";
@@ -71,7 +76,7 @@ function LogsTable({ logs }: { logs: LogRow[] }) {
               <span className="text-xs font-mono text-muted-foreground">{log.trigger_event}</span>
             </td>
             <td className="px-3 py-3">
-              <Badge colorClass={STATUS_COLORS[log.status] ?? "bg-gray-100 text-gray-600"}>
+              <Badge variant={getStatusVariant(log.status)}>
                 {log.status}
               </Badge>
             </td>

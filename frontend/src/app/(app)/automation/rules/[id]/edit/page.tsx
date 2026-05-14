@@ -1,46 +1,65 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
-import { useAutomationRule } from "@/lib/api/queries";
+import { useRouter, useParams } from "next/navigation";
+import { useAutomationRule, useUpdateAutomationRule } from "@/lib/api/queries";
 import { RuleBuilder } from "@/components/automation/rule-builder";
 import type { RuleBuilderValues } from "@/components/automation/rule-builder";
-import { useUpdateAutomationRule } from "@/lib/api/queries";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import type { ConditionRowValue } from "@/components/automation/condition-row";
 import type { ActionRowValue } from "@/components/automation/action-row";
+import { AuthGuard } from "@/lib/components/auth-guard";
 
-export default function EditRulePage({ params }: { params: { id: string } }) {
+export default function EditRulePage() {
+  return (
+    <AuthGuard>
+      <EditRulePageInner />
+    </AuthGuard>
+  );
+}
+
+function toRuleBuilderValues(raw: Record<string, unknown>): Partial<RuleBuilderValues> {
+  const safeConditions = Array.isArray(raw.conditions)
+    ? raw.conditions.map((c): ConditionRowValue => {
+        const obj = typeof c === "object" && c !== null ? c as Record<string, unknown> : {};
+        return {
+          field: String(obj.field ?? ""),
+          operator: String(obj.operator ?? "eq"),
+          value: String(obj.value ?? ""),
+        };
+      })
+    : [];
+
+  const safeActions = Array.isArray(raw.actions)
+    ? raw.actions.map((a): ActionRowValue => {
+        const obj = typeof a === "object" && a !== null ? a as Record<string, unknown> : {};
+        return {
+          type: String(obj.type ?? ""),
+          params: (typeof obj.params === "object" && obj.params !== null ? obj.params : {}) as Record<string, string>,
+        };
+      })
+    : [];
+
+  return {
+    name: String(raw.name ?? ""),
+    description: String(raw.description ?? ""),
+    trigger_event: String(raw.trigger_event ?? ""),
+    conditions: safeConditions,
+    actions: safeActions,
+    enabled: Boolean(raw.enabled),
+  };
+}
+
+function EditRulePageInner() {
   const router = useRouter();
+  const params = useParams<{ id: string }>();
   const ruleId = Number(params.id);
   const { data, isLoading, isError } = useAutomationRule(ruleId);
   const updateRule = useUpdateAutomationRule();
   const [submitError, setSubmitError] = useState("");
 
   const raw = data?.data;
-
-  function toRuleBuilderValues(raw: Record<string, unknown>): Partial<RuleBuilderValues> {
-    return {
-      name: String(raw.name ?? ""),
-      description: String(raw.description ?? ""),
-      trigger_event: String(raw.trigger_event ?? ""),
-      conditions: ((raw.conditions as Array<Record<string, string>>) ?? []).map(
-        (c: Record<string, string>): ConditionRowValue => ({
-          field: String(c.field ?? ""),
-          operator: String(c.operator ?? "eq"),
-          value: String(c.value ?? ""),
-        })
-      ),
-      actions: ((raw.actions as Array<{ type: string; params: Record<string, string> }>) ?? []).map(
-        (a): ActionRowValue => ({
-          type: String(a.type ?? ""),
-          params: (a.params ?? {}) as Record<string, string>,
-        })
-      ),
-      enabled: Boolean(raw.enabled),
-    };
-  }
 
   async function handleSubmit(values: RuleBuilderValues) {
     setSubmitError("");

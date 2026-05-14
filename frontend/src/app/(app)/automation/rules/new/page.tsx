@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { RuleBuilder } from "@/components/automation/rule-builder";
 import type { RuleBuilderValues } from "@/components/automation/rule-builder";
@@ -10,10 +9,8 @@ import Link from "next/link";
 export default function NewRulePage() {
   const router = useRouter();
   const createRule = useCreateAutomationRule();
-  const [submitError, setSubmitError] = useState("");
 
   async function handleSubmit(values: RuleBuilderValues) {
-    setSubmitError("");
     try {
       await createRule.mutateAsync({
         name: values.name,
@@ -28,7 +25,7 @@ export default function NewRulePage() {
       });
       router.push("/automation/rules");
     } catch {
-      setSubmitError("Failed to create rule. Please try again.");
+      // mutateAsync throws; callers can use createRule.isError / createRule.error
     }
   }
 
@@ -49,11 +46,6 @@ export default function NewRulePage() {
           Define a trigger, conditions, and actions to automate your workflow.
         </p>
       </div>
-      {submitError && (
-        <div className="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-          {submitError}
-        </div>
-      )}
       <RuleBuilder
         onSubmit={handleSubmit}
         onCancel={() => router.push("/automation/rules")}

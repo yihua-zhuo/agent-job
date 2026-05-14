@@ -392,7 +392,10 @@ export function useCreateAutomationRule() {
   return useMutation({
     mutationFn: (data: Record<string, unknown>) =>
       apiClient.post("/api/v1/automation/rules", data, token ?? undefined),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["automation_rules"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["automation_rules"] });
+      qc.invalidateQueries({ queryKey: ["automation_logs"] });
+    },
   });
 }
 
@@ -402,7 +405,10 @@ export function useUpdateAutomationRule() {
   return useMutation({
     mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
       apiClient.put(`/api/v1/automation/rules/${id}`, data, token ?? undefined),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["automation_rules"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["automation_rules"] });
+      qc.invalidateQueries({ queryKey: ["automation_logs"] });
+    },
   });
 }
 
@@ -412,7 +418,10 @@ export function useDeleteAutomationRule() {
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.delete(`/api/v1/automation/rules/${id}`, token ?? undefined),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["automation_rules"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["automation_rules"] });
+      qc.invalidateQueries({ queryKey: ["automation_logs"] });
+    },
   });
 }
 
@@ -422,7 +431,10 @@ export function useToggleAutomationRule() {
   return useMutation({
     mutationFn: (id: number) =>
       apiClient.post(`/api/v1/automation/rules/${id}/toggle`, {}, token ?? undefined),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["automation_rules"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["automation_rules"] });
+      qc.invalidateQueries({ queryKey: ["automation_logs"] });
+    },
   });
 }
 

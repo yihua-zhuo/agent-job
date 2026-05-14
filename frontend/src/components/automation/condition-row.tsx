@@ -20,7 +20,11 @@ const OPERATORS = [
   { value: "contains", label: "contains" },
   { value: "startswith", label: "starts with" },
   { value: "endswith", label: "ends with" },
-];
+] as const;
+
+export type OperatorValue = (typeof OPERATORS)[number]["value"];
+
+const DEFAULT_OPERATOR: OperatorValue = "eq";
 
 export interface ConditionRowValue {
   field: string;
@@ -55,7 +59,7 @@ export function ConditionRow({ value, onChange, onRemove, disabled }: ConditionR
         disabled={disabled}
         className="flex-shrink-0 w-40"
       />
-      <Select value={value.operator || "eq"} onValueChange={updateOperator} disabled={disabled}>
+      <Select value={value.operator || DEFAULT_OPERATOR} onValueChange={updateOperator} disabled={disabled}>
         <SelectTrigger className="flex-shrink-0 w-40">
           <SelectValue />
         </SelectTrigger>

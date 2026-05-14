@@ -14,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 
 from services.automation_service import AutomationService
+from pkg.errors.app_exceptions import NotFoundException
 
 
 @pytest.fixture
@@ -161,9 +162,8 @@ class TestAutomationServiceRuleBuilder:
         session.execute = AsyncMock(side_effect=execute_side_effect)
 
         svc = AutomationService(session)
-        with pytest.raises(Exception) as exc_info:
+        with pytest.raises(NotFoundException):
             await svc.get_rule(rule_id=9999, tenant_id=1)
-        assert "规则" in str(exc_info.value)
 
     async def test_update_rule_calls_update_stmt(self, mock_db_session):
         """AutomationService.update_rule calls UPDATE and returns the updated row."""
@@ -470,7 +470,5 @@ class TestAutomationServiceRuleBuilder:
 
         svc = AutomationService(session)
         updated = await svc.update_rule(rule_id=12, tenant_id=1, name="New Name")
-        assert updated.name == "New Name"
-        assert hasattr(updated, "to_dict")
         assert updated.name == "New Name"
         assert hasattr(updated, "to_dict")
