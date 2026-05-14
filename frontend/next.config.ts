@@ -2,15 +2,15 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   async rewrites() {
-    const backendOrigin =
-      process.env.NEXT_PUBLIC_BACKEND_ORIGIN ??
-      (process.env.NODE_ENV === "development"
-        ? "http://localhost:8000"
-        : "https://agent-job-production.up.railway.app");
+    if (!process.env.NEXT_PUBLIC_BACKEND_ORIGIN) {
+      throw new Error(
+        "NEXT_PUBLIC_BACKEND_ORIGIN is not set. Set it in .env.local (or your deployment environment) before starting the app."
+      );
+    }
     return [
       {
         source: "/api/:path*",
-        destination: `${backendOrigin}/api/:path*`,
+        destination: `${process.env.NEXT_PUBLIC_BACKEND_ORIGIN}/api/:path*`,
       },
     ];
   },

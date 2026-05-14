@@ -18,7 +18,7 @@ Open [http://localhost:3000](http://localhost:3000) with your browser to see the
 
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font) - a new font family for Vercel.
 
 ## Learn More
 
@@ -59,15 +59,21 @@ Edit `.env.local` and fill in the required values:
 node -e "console.log(require('crypto').randomBytes(16).toString('hex'))"
 ```
 
-> **Note:** In production, the `next.config.ts` rewrite handles routing automatically and `NEXT_PUBLIC_API_BASE_URL` is not required.
-
 3. **Start the dev server**
 
 ```bash
 npm run dev
 ```
 
-The app runs at `http://localhost:3000`. All `/api/*` requests are proxied to the backend (`http://localhost:8000` in development).
+The app runs at `http://localhost:3000`. All `/api/*` requests are proxied to the backend via `next.config.ts` rewrites.
+
+## Environment Variables
+
+| Variable | Required | Description |
+|---|---|---|
+| `NEXT_PUBLIC_API_BASE_URL` | Yes (dev) | Backend API base URL (e.g. `http://localhost:8000`) |
+| `NEXT_PUBLIC_AUTH_KEY` | Yes | 32-char hex string for client-side auth token obfuscation |
+| `NEXT_PUBLIC_BACKEND_ORIGIN` | Yes | Backend origin used for API rewrites in production (e.g. `https://api.example.com`) |
 
 ## Scripts
 
@@ -81,3 +87,4 @@ The app runs at `http://localhost:3000`. All `/api/*` requests are proxied to th
 | `npm run format:check` | Check formatting (no changes) |
 | `npm run test` | Run unit tests (Vitest) |
 | `npm run test:watch` | Run tests in watch mode |
+| `npm run test:coverage` | Run tests with coverage report |

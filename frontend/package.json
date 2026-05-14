@@ -45,7 +45,6 @@
     "tailwindcss": "^4.2.4",
     "typescript": "5.9.3",
     "vitest": "^3",
-    "@vitejs/plugin-react": "^4",
     "@testing-library/react": "^19",
     "jsdom": "^28"
   }

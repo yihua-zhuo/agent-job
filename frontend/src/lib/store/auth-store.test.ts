@@ -1,69 +1,59 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useAuthStore } from "./auth-store";
 
-// Mock CryptoJS
-vi.mock("crypto-js", () => ({
-  default: {
-    AES: {
-      encrypt: (data: string, _key: string) => ({
-        toString: () =>
-          // Return a JSON representation so we can parse it in the test
-          btoa(JSON.stringify({ encrypted: true, data })),
-      }),
-      decrypt: (ciphertext: string, _key: string) => ({
-        toString: () => {
-          try {
-            const decoded = JSON.parse(atob(ciphertext));
-            return decoded.data ?? "";
-          } catch {
-            return "";
-          }
-        },
-      }),
-    },
-    enc: {
-      Utf8: {},
-    },
-  },
-}));
-
-const mockUser = {
-  id: 1,
-  tenant_id: 1,
-  username: "testuser",
-  email: "test@example.com",
-  role: "admin",
-  status: "active",
-  full_name: "Test User",
-};
-
-function createStore() {
-  const store = useAuthStore.getState();
-  store.clearAuth();
-  return store;
-}
-
 describe("auth-store", () => {
   beforeEach(() => {
+    vi.mock("crypto-js", () => ({
+      default: {
+        AES: {
+          encrypt: (data: string, _key: string) => ({
+            toString: () =>
+              btoa(JSON.stringify({ encrypted: true, data })),
+          }),
+          decrypt: (ciphertext: string, _key: string) => ({
+            toString: () => {
+              try {
+                const decoded = JSON.parse(atob(ciphertext));
+                return decoded.data ?? "";
+              } catch {
+                return "";
+              }
+            },
+          }),
+        },
+        enc: {
+          Utf8: {},
+        },
+      },
+    }));
     useAuthStore.setState({ token: null, user: null, isHydrated: true });
   });
 
+  const mockUser = {
+    id: 1,
+    tenant_id: 1,
+    username: "testuser",
+    email: "test@example.com",
+    role: "admin",
+    status: "active",
+    full_name: "Test User",
+  };
+
   describe("setAuth", () => {
     it("sets token and user", () => {
-      const store = createStore();
-      store.setAuth("test-token-abc", mockUser);
+      useAuthStore.getState().setAuth("test-token-abc", mockUser);
       expect(useAuthStore.getState().token).toBe("test-token-abc");
       expect(useAuthStore.getState().user).toEqual(mockUser);
     });
 
     it("isAuthenticated returns true after setAuth", () => {
-      const store = createStore();
+      const store = useAuthStore.getState();
       store.setAuth("test-token-abc", mockUser);
       expect(store.isAuthenticated()).toBe(true);
     });
 
     it("overwrites previous token and user", () => {
-      const store = createStore();
+      const store = useAuthStore.getState();
       store.setAuth("token-1", mockUser);
       const newUser = { ...mockUser, id: 2, username: "other" };
       store.setAuth("token-2", newUser);
@@ -74,7 +64,7 @@ describe("auth-store", () => {
 
   describe("clearAuth", () => {
     it("removes token and user", () => {
-      const store = createStore();
+      const store = useAuthStore.getState();
       store.setAuth("test-token-abc", mockUser);
       store.clearAuth();
       expect(useAuthStore.getState().token).toBeNull();
@@ -82,7 +72,7 @@ describe("auth-store", () => {
     });
 
     it("isAuthenticated returns false after clearAuth", () => {
-      const store = createStore();
+      const store = useAuthStore.getState();
       store.setAuth("test-token-abc", mockUser);
       store.clearAuth();
       expect(store.isAuthenticated()).toBe(false);
@@ -91,8 +81,7 @@ describe("auth-store", () => {
 
   describe("isAuthenticated", () => {
     it("returns false when token is null", () => {
-      const store = createStore();
-      expect(store.isAuthenticated()).toBe(false);
+      expect(useAuthStore.getState().isAuthenticated()).toBe(false);
     });
 
     it("returns false when token is empty string", () => {
@@ -101,9 +90,8 @@ describe("auth-store", () => {
     });
 
     it("returns true when token is present", () => {
-      const store = createStore();
-      store.setAuth("valid-token", mockUser);
-      expect(store.isAuthenticated()).toBe(true);
+      useAuthStore.getState().setAuth("valid-token", mockUser);
+      expect(useAuthStore.getState().isAuthenticated()).toBe(true);
     });
   });
 });
