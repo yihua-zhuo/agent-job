@@ -59,27 +59,16 @@ export default function TeamPage() {
   const [deletingUser, setDeletingUser] = useState<Record<string, unknown> | null>(null);
   const [showDelete, setShowDelete] = useState(false);
 
-  const { data, isLoading } = useUsers(page);
+  const { data, isLoading } = useUsers(page, 20, search, roleFilter !== "all" ? roleFilter : "");
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
   const create = useCreateUser();
   const updateUser = useUpdateUser();
   const deleteUser = useDeleteUser();
 
-  const filtered = items.filter((u) => {
-    const matchRole = roleFilter === "all" || u.role === roleFilter;
-    const q = search.toLowerCase();
-    const matchSearch =
-      !q ||
-      String(u.full_name ?? u.username ?? "").toLowerCase().includes(q) ||
-      String(u.email ?? "").toLowerCase().includes(q);
-    return matchRole && matchSearch;
-  });
-
-  const hasFilter = roleFilter !== "all" || search !== "";
-  const totalShown = hasFilter ? filtered.length : (info?.total ?? 0);
-  const startShown = hasFilter ? (filtered.length === 0 ? 0 : 1) : (info?.total === 0 ? 0 : ((page - 1) * (info?.page_size ?? 20)) + 1);
-  const endShown = hasFilter ? filtered.length : Math.min(page * (info?.page_size ?? 20), info?.total ?? 0);
+  const totalShown = info?.total ?? 0;
+  const startShown = info?.total === 0 ? 0 : ((page - 1) * (info?.page_size ?? 20)) + 1;
+  const endShown = Math.min(page * (info?.page_size ?? 20), info?.total ?? 0);
 
   // Create
   async function handleCreate() {
@@ -183,14 +172,14 @@ export default function TeamPage() {
                 <td className="px-3 py-2.5" />
               </tr>
             ))}
-            {!isLoading && filtered.length === 0 && (
+            {!isLoading && items.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-3 py-10 text-center text-muted-foreground">
                   No team members found
                 </td>
               </tr>
             )}
-            {filtered.map((u) => (
+            {items.map((u) => (
               <tr key={String(u.id)} className="border-b hover:bg-muted/40 transition-colors">
                 <td className="px-3 py-2.5">
                   <div className="font-medium">{String(u.full_name ?? u.username ?? "")}</div>
