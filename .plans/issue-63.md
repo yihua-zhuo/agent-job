@@ -1,5 +1,3 @@
-Now I have a thorough picture of the codebase. Let me compile the implementation plan.
-
 # Implementation Plan — Issue #63
 
 ## Goal

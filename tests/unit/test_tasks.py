@@ -1,10 +1,11 @@
 """Unit tests for src/api/routers/tasks.py — /api/v1/tasks endpoints."""
 
+from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
-from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 
 from api.routers.tasks import tasks_router
 from db.connection import get_db
@@ -76,6 +77,8 @@ def client_with_service(monkeypatch):
     from starlette.responses import JSONResponse
 
     mock_service = MagicMock()
+    for attr in ("create_task", "list_tasks", "count_tasks", "get_task", "update_task", "complete_task", "delete_task"):
+        setattr(mock_service, attr, AsyncMock())
 
     monkeypatch.setattr(
         "api.routers.tasks.TaskService",
@@ -85,7 +88,12 @@ def client_with_service(monkeypatch):
     app = FastAPI()
     app.include_router(tasks_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+
+    @asynccontextmanager
+    async def mock_db_session():
+        yield MagicMock()
+
+    app.dependency_overrides[get_db] = lambda: mock_db_session()
 
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -94,7 +102,8 @@ def client_with_service(monkeypatch):
             content={"success": False, "message": exc.detail, "code": exc.code},
         )
 
-    client = TestClient(app, raise_server_exceptions=False)
+    transport = ASGITransport(app=app)
+    client = AsyncClient(transport=transport, base_url="http://test")
     return client, mock_service
 
 
@@ -104,11 +113,11 @@ def client_with_service(monkeypatch):
 
 
 class TestCreateTaskEndpoint:
-    def test_success_returns_201(self, client_with_service):
+    async def test_success_returns_201(self, client_with_service):
         client, svc = client_with_service
         mock_task = MockTask(TASK_ROW)
         svc.create_task = AsyncMock(return_value=mock_task)
-        resp = client.post(
+        resp = await client.post(
             "/api/v1/tasks",
             json={
                 "title": "Test Task",
@@ -123,44 +132,44 @@ class TestCreateTaskEndpoint:
         assert body["success"] is True
         assert body["data"]["title"] == "Test Task"
 
-    def test_service_error_returns_4xx(self, client_with_service):
+    async def test_service_error_returns_4xx(self, client_with_service):
         client, svc = client_with_service
         svc.create_task = AsyncMock(side_effect=NotFoundException("Task"))
-        resp = client.post(
+        resp = await client.post(
             "/api/v1/tasks",
             json={"title": "Task", "description": "Desc"},
         )
         assert resp.status_code == 404
 
-    def test_empty_title_rejected(self, client_with_service):
+    async def test_empty_title_rejected(self, client_with_service):
         client, _ = client_with_service
-        resp = client.post(
+        resp = await client.post(
             "/api/v1/tasks",
             json={"title": "", "description": "Desc"},
         )
         assert resp.status_code == 422
 
-    def test_invalid_priority_rejected(self, client_with_service):
+    async def test_invalid_priority_rejected(self, client_with_service):
         client, _ = client_with_service
-        resp = client.post(
+        resp = await client.post(
             "/api/v1/tasks",
             json={"title": "Task", "priority": "super-high"},
         )
         assert resp.status_code == 422
 
-    def test_invalid_status_rejected(self, client_with_service):
+    async def test_invalid_status_rejected(self, client_with_service):
         client, _ = client_with_service
-        resp = client.post(
+        resp = await client.post(
             "/api/v1/tasks",
             json={"title": "Task", "status": "invalid"},
         )
         assert resp.status_code == 422
 
-    def test_with_due_date(self, client_with_service):
+    async def test_with_due_date(self, client_with_service):
         client, svc = client_with_service
         mock_task = MockTask({**TASK_ROW, "due_date": "2025-12-31"})
         svc.create_task = AsyncMock(return_value=mock_task)
-        resp = client.post(
+        resp = await client.post(
             "/api/v1/tasks",
             json={"title": "Task", "due_date": "2025-12-31"},
         )
@@ -173,12 +182,12 @@ class TestCreateTaskEndpoint:
 
 
 class TestListTasksEndpoint:
-    def test_success(self, client_with_service):
+    async def test_success(self, client_with_service):
         client, svc = client_with_service
         mock_task = MockTask(TASK_ROW)
         svc.list_tasks = AsyncMock(return_value=[mock_task])
         svc.count_tasks = AsyncMock(return_value=1)
-        resp = client.get("/api/v1/tasks")
+        resp = await client.get("/api/v1/tasks")
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -186,23 +195,23 @@ class TestListTasksEndpoint:
         assert "total" in body["data"]
         assert "has_next" in body["data"]
 
-    def test_filter_by_status(self, client_with_service):
+    async def test_filter_by_status(self, client_with_service):
         client, svc = client_with_service
         svc.list_tasks = AsyncMock(return_value=[])
         svc.count_tasks = AsyncMock(return_value=0)
-        resp = client.get("/api/v1/tasks?status=pending")
+        resp = await client.get("/api/v1/tasks?status=pending")
         assert resp.status_code == 200
 
-    def test_filter_by_assignee(self, client_with_service):
+    async def test_filter_by_assignee(self, client_with_service):
         client, svc = client_with_service
         svc.list_tasks = AsyncMock(return_value=[])
         svc.count_tasks = AsyncMock(return_value=0)
-        resp = client.get("/api/v1/tasks?assigned_to=5")
+        resp = await client.get("/api/v1/tasks?assigned_to=5")
         assert resp.status_code == 200
 
-    def test_page_size_over_100_rejected(self, client_with_service):
+    async def test_page_size_over_100_rejected(self, client_with_service):
         client, _ = client_with_service
-        resp = client.get("/api/v1/tasks?page_size=101")
+        resp = await client.get("/api/v1/tasks?page_size=101")
         assert resp.status_code == 422
 
 
@@ -212,18 +221,18 @@ class TestListTasksEndpoint:
 
 
 class TestGetTaskEndpoint:
-    def test_success(self, client_with_service):
+    async def test_success(self, client_with_service):
         client, svc = client_with_service
         mock_task = MockTask(TASK_ROW)
         svc.get_task = AsyncMock(return_value=mock_task)
-        resp = client.get("/api/v1/tasks/1")
+        resp = await client.get("/api/v1/tasks/1")
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == 1
 
-    def test_not_found_returns_404(self, client_with_service):
+    async def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.get_task = AsyncMock(side_effect=NotFoundException("Task"))
-        resp = client.get("/api/v1/tasks/9999")
+        resp = await client.get("/api/v1/tasks/9999")
         assert resp.status_code == 404
 
 
@@ -233,34 +242,34 @@ class TestGetTaskEndpoint:
 
 
 class TestUpdateTaskEndpoint:
-    def test_success(self, client_with_service):
+    async def test_success(self, client_with_service):
         client, svc = client_with_service
         updated_row = {**TASK_ROW, "title": "Updated Task"}
         mock_task = MockTask(updated_row)
         svc.update_task = AsyncMock(return_value=mock_task)
-        resp = client.patch(
+        resp = await client.patch(
             "/api/v1/tasks/1",
             json={"title": "Updated Task"},
         )
         assert resp.status_code == 200
         assert resp.json()["data"]["title"] == "Updated Task"
 
-    def test_not_found_returns_404(self, client_with_service):
+    async def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.update_task = AsyncMock(side_effect=NotFoundException("Task"))
-        resp = client.patch("/api/v1/tasks/9999", json={"title": "X"})
+        resp = await client.patch("/api/v1/tasks/9999", json={"title": "X"})
         assert resp.status_code == 404
 
-    def test_invalid_priority_rejected(self, client_with_service):
+    async def test_invalid_priority_rejected(self, client_with_service):
         client, _ = client_with_service
-        resp = client.patch("/api/v1/tasks/1", json={"priority": "bad"})
+        resp = await client.patch("/api/v1/tasks/1", json={"priority": "bad"})
         assert resp.status_code == 422
 
-    def test_partial_update(self, client_with_service):
+    async def test_partial_update(self, client_with_service):
         client, svc = client_with_service
         mock_task = MockTask(TASK_ROW)
         svc.update_task = AsyncMock(return_value=mock_task)
-        resp = client.patch("/api/v1/tasks/1", json={"status": "completed"})
+        resp = await client.patch("/api/v1/tasks/1", json={"status": "completed"})
         assert resp.status_code == 200
 
 
@@ -270,21 +279,21 @@ class TestUpdateTaskEndpoint:
 
 
 class TestCompleteTaskEndpoint:
-    def test_success(self, client_with_service):
+    async def test_success(self, client_with_service):
         client, svc = client_with_service
         completed_row = {**TASK_ROW, "status": "completed"}
         mock_task = MockTask(completed_row)
         svc.complete_task = AsyncMock(return_value=mock_task)
-        resp = client.post("/api/v1/tasks/1/complete")
+        resp = await client.post("/api/v1/tasks/1/complete")
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["status"] == "completed"
 
-    def test_not_found_returns_404(self, client_with_service):
+    async def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.complete_task = AsyncMock(side_effect=NotFoundException("Task"))
-        resp = client.post("/api/v1/tasks/9999/complete")
+        resp = await client.post("/api/v1/tasks/9999/complete")
         assert resp.status_code == 404
 
 
@@ -294,16 +303,16 @@ class TestCompleteTaskEndpoint:
 
 
 class TestDeleteTaskEndpoint:
-    def test_success(self, client_with_service):
+    async def test_success(self, client_with_service):
         client, svc = client_with_service
         svc.delete_task = AsyncMock(return_value=MockTask(TASK_ROW))
-        resp = client.delete("/api/v1/tasks/1")
+        resp = await client.delete("/api/v1/tasks/1")
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
 
-    def test_not_found_returns_404(self, client_with_service):
+    async def test_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
         svc.delete_task = AsyncMock(side_effect=NotFoundException("Task"))
-        resp = client.delete("/api/v1/tasks/9999")
+        resp = await client.delete("/api/v1/tasks/9999")
         assert resp.status_code == 404

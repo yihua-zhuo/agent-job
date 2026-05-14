@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -207,12 +207,20 @@ export default function TasksPage() {
 
   const allTasks = (allData?.data?.items ?? []) as TaskData[];
 
+  const statusCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const t of allTasks) {
+      counts[t.status] = (counts[t.status] ?? 0) + 1;
+    }
+    return counts;
+  }, [allTasks]);
+
   function tasksByStatus(status: string) {
     return allTasks.filter((t) => t.status === status);
   }
 
   function countByStatus(status: string) {
-    return allTasks.filter((t) => t.status === status).length;
+    return statusCounts[status] ?? 0;
   }
 
   const sensors = useSensors(
@@ -223,27 +231,6 @@ export default function TasksPage() {
 
   function handleDragStart(event: DragStartEvent) {
     setActiveTaskId(event.active.id);
-  }
-
-  async function handleDragEnd(event: DragEndEvent) {
-    setActiveTaskId(null);
-    const { active, over } = event;
-    if (!over) return;
-
-    const taskId = active.id as string;
-    const targetColumnId = over.id as string;
-    const task = allTasks.find((t) => String(t.id) === taskId);
-    if (!task || task.status === targetColumnId) return;
-    if (!COLUMNS.some((c) => c.id === targetColumnId)) return;
-
-    try {
-      await update.mutateAsync({
-        id: Number(taskId),
-        data: { status: targetColumnId },
-      });
-    } catch {
-      // Error is handled by React Query onError callback
-    }
   }
 
   async function handleCreate(data: Record<string, unknown>) {
@@ -327,7 +314,6 @@ export default function TasksPage() {
                 </div>
               </div>
               <SortableContext
-                id={col.id}
                 items={tasksByStatus(col.id).map((t) => String(t.id))}
                 strategy={verticalListSortingStrategy}
               >

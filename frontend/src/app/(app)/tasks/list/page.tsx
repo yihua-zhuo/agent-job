@@ -73,7 +73,7 @@ export default function TaskListPage() {
       });
     }
     if (createdBefore) {
-      const beforeMs = new Date(createdBefore).getTime() + 86400000;
+      const beforeMs = new Date(createdBefore + "T23:59:59").getTime();
       result = result.filter((t) => {
         if (!t.created_at) return false;
         return new Date(String(t.created_at)).getTime() <= beforeMs;
@@ -129,17 +129,13 @@ export default function TaskListPage() {
   }
 
   async function bulkComplete() {
-    for (const id of selectedIds) {
-      await complete.mutateAsync(id);
-    }
+    await Promise.all([...selectedIds].map((id) => complete.mutateAsync(id)));
     setSelectedIds(new Set());
   }
 
   async function bulkDelete() {
     if (!window.confirm(`Delete ${selectedIds.size} task(s)?`)) return;
-    for (const id of selectedIds) {
-      await remove.mutateAsync(id);
-    }
+    await Promise.all([...selectedIds].map((id) => remove.mutateAsync(id)));
     setSelectedIds(new Set());
   }
 

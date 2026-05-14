@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   Dialog,
@@ -58,8 +58,15 @@ export function TaskModal({
   const [customerSearch, setCustomerSearch] = useState<string | undefined>(undefined);
 
   const { data: usersData } = useUsers(1);
-  const { data: customerData } = useSearchCustomers(customerSearch);
   const { data: opportunitiesData } = useOpportunities(1);
+
+  const [debouncedSearch, setDebouncedSearch] = useState<string | undefined>(undefined);
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(customerSearch), 300);
+    return () => clearTimeout(timer);
+  }, [customerSearch]);
+
+  const { data: customerData } = useSearchCustomers(debouncedSearch);
 
   const isEdit = !!task;
 

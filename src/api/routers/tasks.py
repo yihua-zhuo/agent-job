@@ -83,8 +83,8 @@ async def create_task(
         title=body.title,
         description=body.description,
         priority=body.priority,
-        tenant_id=ctx.tenant_id or 0,
-        created_by=ctx.user_id or 0,
+        tenant_id=ctx.tenant_id,
+        created_by=ctx.user_id,
         assigned_to=body.assigned_to or 0,
         due_date=_parse_due_date(body.due_date),
     )
@@ -106,10 +106,10 @@ async def list_tasks(
         page_size=page_size,
         status=status,
         assigned_to=assigned_to,
-        tenant_id=ctx.tenant_id or 0,
+        tenant_id=ctx.tenant_id,
     )
     total = await service.count_tasks(
-        tenant_id=ctx.tenant_id or 0,
+        tenant_id=ctx.tenant_id,
         status=status,
         assigned_to=assigned_to,
     )
@@ -123,7 +123,7 @@ async def get_task(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    task = await service.get_task(tenant_id=ctx.tenant_id or 0, task_id=task_id)
+    task = await service.get_task(tenant_id=ctx.tenant_id, task_id=task_id)
     return {"success": True, "data": task.to_dict()}
 
 
@@ -138,7 +138,7 @@ async def update_task(
     update_data = body.model_dump(exclude_none=True)
     if "due_date" in update_data:
         update_data["due_date"] = _parse_due_date(update_data["due_date"])
-    task = await service.update_task(tenant_id=ctx.tenant_id or 0, task_id=task_id, **update_data)
+    task = await service.update_task(tenant_id=ctx.tenant_id, task_id=task_id, **update_data)
     return {"success": True, "data": task.to_dict(), "message": "Task updated"}
 
 
@@ -149,7 +149,7 @@ async def complete_task(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    task = await service.complete_task(tenant_id=ctx.tenant_id or 0, task_id=task_id)
+    task = await service.complete_task(tenant_id=ctx.tenant_id, task_id=task_id)
     return {"success": True, "data": task.to_dict(), "message": "Task completed"}
 
 
@@ -160,5 +160,5 @@ async def delete_task(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    await service.delete_task(tenant_id=ctx.tenant_id or 0, task_id=task_id)
+    await service.delete_task(tenant_id=ctx.tenant_id, task_id=task_id)
     return {"success": True, "data": None, "message": "Task deleted"}

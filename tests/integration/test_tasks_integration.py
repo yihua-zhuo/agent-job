@@ -44,7 +44,7 @@ class TestTaskEndpoints:
         assert data["data"]["tenant_id"] == tenant_id_web
         assert data["data"]["status"] == "pending"
 
-    async def test_create_task_with_due_date(self, api_client: AsyncClient):
+    async def test_create_task_with_due_date(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.post(
             "/api/v1/tasks",
             json={
@@ -56,21 +56,21 @@ class TestTaskEndpoints:
         data = resp.json()
         assert data["data"]["title"] == "Task With Due Date"
 
-    async def test_create_task_validation_empty_title(self, api_client: AsyncClient):
+    async def test_create_task_validation_empty_title(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.post(
             "/api/v1/tasks",
             json={"title": "", "description": "Desc"},
         )
         assert resp.status_code == 422
 
-    async def test_create_task_invalid_priority(self, api_client: AsyncClient):
+    async def test_create_task_invalid_priority(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.post(
             "/api/v1/tasks",
             json={"title": "Task", "priority": "super-urgent"},
         )
         assert resp.status_code == 422
 
-    async def test_get_task(self, api_client: AsyncClient):
+    async def test_get_task(self, api_client: AsyncClient, tenant_id_web: int):
         create_resp = await api_client.post(
             "/api/v1/tasks",
             json={"title": "Get Test Task", "description": "Desc"},
@@ -84,11 +84,11 @@ class TestTaskEndpoints:
         assert data["data"]["id"] == created_id
         assert data["data"]["title"] == "Get Test Task"
 
-    async def test_get_task_not_found(self, api_client: AsyncClient):
+    async def test_get_task_not_found(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.get("/api/v1/tasks/999999999")
         assert resp.status_code == 404
 
-    async def test_list_tasks(self, api_client: AsyncClient):
+    async def test_list_tasks(self, api_client: AsyncClient, tenant_id_web: int):
         # Create a few tasks
         for title in ["List Task A", "List Task B"]:
             await api_client.post(
@@ -104,25 +104,27 @@ class TestTaskEndpoints:
         assert "total" in data["data"]
         assert "has_next" in data["data"]
         assert data["data"]["total"] >= 2
+        for item in data["data"]["items"]:
+            assert item["tenant_id"] == tenant_id_web, "cross-tenant leak detected"
 
-    async def test_list_tasks_filter_by_status(self, api_client: AsyncClient):
+    async def test_list_tasks_filter_by_status(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.get("/api/v1/tasks?status=pending")
         assert resp.status_code == 200
         data = resp.json()
         assert data["success"] is True
 
-    async def test_list_tasks_pagination(self, api_client: AsyncClient):
+    async def test_list_tasks_pagination(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.get("/api/v1/tasks?page=1&page_size=5")
         assert resp.status_code == 200
         data = resp.json()
         assert data["data"]["page"] == 1
         assert data["data"]["page_size"] == 5
 
-    async def test_list_tasks_page_size_over_100(self, api_client: AsyncClient):
+    async def test_list_tasks_page_size_over_100(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.get("/api/v1/tasks?page_size=101")
         assert resp.status_code == 422
 
-    async def test_update_task(self, api_client: AsyncClient):
+    async def test_update_task(self, api_client: AsyncClient, tenant_id_web: int):
         create_resp = await api_client.post(
             "/api/v1/tasks",
             json={"title": "Update Test Task", "priority": "normal"},
@@ -138,15 +140,16 @@ class TestTaskEndpoints:
         assert data["success"] is True
         assert data["data"]["title"] == "Updated Title"
         assert data["data"]["priority"] == "high"
+        assert data["data"]["tenant_id"] == tenant_id_web
 
-    async def test_update_task_not_found(self, api_client: AsyncClient):
+    async def test_update_task_not_found(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.patch(
             "/api/v1/tasks/999999999",
             json={"title": "Updated"},
         )
         assert resp.status_code == 404
 
-    async def test_update_task_partial(self, api_client: AsyncClient):
+    async def test_update_task_partial(self, api_client: AsyncClient, tenant_id_web: int):
         create_resp = await api_client.post(
             "/api/v1/tasks",
             json={"title": "Partial Update Task", "status": "pending"},
@@ -161,7 +164,7 @@ class TestTaskEndpoints:
         data = resp.json()
         assert data["data"]["status"] == "in_progress"
 
-    async def test_complete_task(self, api_client: AsyncClient):
+    async def test_complete_task(self, api_client: AsyncClient, tenant_id_web: int):
         create_resp = await api_client.post(
             "/api/v1/tasks",
             json={"title": "Task to Complete", "status": "pending"},
@@ -174,7 +177,7 @@ class TestTaskEndpoints:
         assert data["success"] is True
         assert data["data"]["status"] == "completed"
 
-    async def test_complete_task_not_found(self, api_client: AsyncClient):
+    async def test_complete_task_not_found(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.post("/api/v1/tasks/999999999/complete")
         assert resp.status_code == 404
 

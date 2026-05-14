@@ -84,8 +84,12 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
           onClose={quickAdd.close}
           initialStatus={quickAdd.initialStatus}
           onSubmit={async (data) => {
-            await create.mutateAsync({ ...data, status: (data.status as string | undefined) ?? quickAdd.initialStatus });
-            quickAdd.close();
+            try {
+              await create.mutateAsync({ ...data, status: (data.status as string | undefined) ?? quickAdd.initialStatus });
+              quickAdd.close();
+            } catch {
+              // Error surfaced via React Query onError callback
+            }
           }}
           isSubmitting={create.isPending}
         />
