@@ -1,7 +1,7 @@
 """Customer service — CRUD + tagging + status management via SQLAlchemy ORM."""
 
 from datetime import UTC, datetime
-from typing import Any, Dict
+from typing import Any
 
 from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -15,7 +15,7 @@ from pkg.errors.app_exceptions import NotFoundException, ValidationException
 class CustomerService:
     """Customer CRUD and management — backed by PostgreSQL via SQLAlchemy async ORM."""
 
-    VALID_STATUSES = {"lead", "customer", "partner", "prospect", "active", "inactive", "blocked"}
+    VALID_STATUSES = {status.value for status in CustomerStatus}
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -133,27 +133,39 @@ class CustomerService:
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("客户")
-        await self.session.flush()
         return {"id": customer_id}
 
-    async def count_by_status(self, tenant_id: int) -> Dict[CustomerStatus, int]:
+    async def count_by_status(self, tenant_id: int) -> dict[CustomerStatus, int]:
         """Count customers grouped by status."""
         result = await self.session.execute(
             select(CustomerModel.status, func.count(CustomerModel.id))
             .where(CustomerModel.tenant_id == tenant_id)
             .group_by(CustomerModel.status)
         )
-        return {CustomerStatus(row[0]): row[1] for row in result.all()}
+        counts: dict[CustomerStatus, int] = {}
+        for raw_status, count in result.all():
+            try:
+                status = CustomerStatus(raw_status)
+            except ValueError as exc:
+                raise ValidationException(f"Invalid customer status in DB: {raw_status}") from exc
+            counts[status] = int(count)
+        return counts
 
     async def search_customers(self, keyword: str, tenant_id: int) -> list[CustomerModel]:
         """Search customers by name or email (case-insensitive)."""
-        kw = f"%{keyword}%"
+        if not keyword:
+            return []
+        escaped_keyword = keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        kw = f"%{escaped_keyword}%"
         result = await self.session.execute(
             select(CustomerModel)
             .where(
                 and_(
                     CustomerModel.tenant_id == tenant_id,
-                    or_(CustomerModel.name.ilike(kw), CustomerModel.email.ilike(kw)),
+                    or_(
+                        CustomerModel.name.ilike(kw, escape="\\"),
+                        CustomerModel.email.ilike(kw, escape="\\"),
+                    ),
                 )
             )
             .order_by(CustomerModel.created_at.desc())

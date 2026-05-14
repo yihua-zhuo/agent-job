@@ -1,15 +1,12 @@
 """Unit tests for CustomerService — focus on CustomerCreateDTO integration."""
 
-import sys
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 from models.customer import CustomerStatus
 from models.customer_create_dto import CustomerCreateDTO
+from pkg.errors.app_exceptions import ValidationException
 from services.customer_service import CustomerService
 
 
@@ -28,7 +25,7 @@ def mock_db_session():
     mock_result.scalar = AsyncMock(return_value=0)
     mock_result.scalars = MagicMock(return_value=MagicMock(all=MagicMock(return_value=[])))
     mock_result.fetchall = MagicMock(return_value=[])
-    mock_result.all = AsyncMock(return_value=[])
+    mock_result.all = MagicMock(return_value=[])
     mock_result.rowcount = 0
     session.execute = AsyncMock(return_value=mock_result)
 
@@ -253,6 +250,11 @@ class TestCountByStatus:
         session.execute = AsyncMock(return_value=mock_result)
         service = CustomerService(session)
         result = await service.count_by_status(tenant_id=999)
+        session.execute.assert_awaited_once()
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile(compile_kwargs={"literal_binds": True})
+        assert "tenant_id" in str(compiled)
+        assert "999" in str(compiled)
         assert result[CustomerStatus.LEAD] == 7
         assert CustomerStatus.OPPORTUNITY not in result
         assert CustomerStatus.CUSTOMER not in result
@@ -267,3 +269,44 @@ class TestCountByStatus:
         result = await service.count_by_status(tenant_id=1)
         assert len(result) == 1
         assert result[CustomerStatus.INACTIVE] == 10
+
+    async def test_count_by_status_invalid_db_status_raises_validation(self):
+        """Raises a service exception instead of leaking raw enum ValueError."""
+        session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.all = MagicMock(return_value=[("legacy_unknown", 1)])
+        session.execute = AsyncMock(return_value=mock_result)
+        service = CustomerService(session)
+
+        with pytest.raises(ValidationException, match="Invalid customer status"):
+            await service.count_by_status(tenant_id=1)
+
+
+@pytest.mark.asyncio
+class TestSearchCustomers:
+    """Unit tests for CustomerService.search_customers."""
+
+    async def test_search_customers_empty_keyword_returns_empty_without_query(self):
+        session = MagicMock()
+        session.execute = AsyncMock()
+        service = CustomerService(session)
+
+        result = await service.search_customers("", tenant_id=1)
+
+        assert result == []
+        session.execute.assert_not_called()
+
+    async def test_search_customers_escapes_sql_wildcards(self):
+        session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.scalars.return_value.all.return_value = []
+        session.execute = AsyncMock(return_value=mock_result)
+        service = CustomerService(session)
+
+        await service.search_customers(r"100%_fit\\", tenant_id=1)
+
+        stmt = session.execute.await_args.args[0]
+        compiled = stmt.compile(compile_kwargs={"literal_binds": True})
+        sql = str(compiled)
+        assert r"100\%\_fit\\\\" in sql
+        assert "ESCAPE" in sql

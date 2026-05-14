@@ -13,8 +13,8 @@ import uuid
 
 import pytest
 
-from pkg.errors.app_exceptions import NotFoundException
 from models.customer import CustomerStatus
+from pkg.errors.app_exceptions import NotFoundException
 from services.customer_service import CustomerService
 from services.pipeline_service import PipelineService
 from services.sales_service import SalesService
@@ -51,6 +51,7 @@ async def _seed_customer(async_session, tenant_id: int = 1, **overrides):
 #  CustomerService integration tests
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestCustomerServiceIntegration:
     """Full customer lifecycle via the real DB using the shared async_session fixture."""
 
@@ -222,6 +223,7 @@ class TestCustomerServiceIntegration:
 #  PipelineService integration tests
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestPipelineServiceIntegration:
     """Full pipeline lifecycle via the real DB using the shared async_session fixture."""
 
@@ -300,6 +302,7 @@ class TestPipelineServiceIntegration:
 #  SalesService integration tests
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestSalesServiceIntegration:
     """Full opportunity lifecycle + pipeline stats via the real DB."""
 
@@ -415,6 +418,7 @@ class TestSalesServiceIntegration:
 
 
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestCustomerCountByStatusIntegration:
     """Integration tests for CustomerService.count_by_status via real DB + REST API.
 
@@ -424,12 +428,32 @@ class TestCustomerCountByStatusIntegration:
     """
 
     async def test_count_by_status_empty(
-        self, db_schema, tenant_id, async_session
+        self, db_schema, tenant_id_web, async_session
     ):
         """Returns empty dict when no customers exist for the tenant."""
         cust_svc = CustomerService(async_session)
-        result = await cust_svc.count_by_status(tenant_id=tenant_id)
+        result = await cust_svc.count_by_status(tenant_id=tenant_id_web)
         assert result == {}
+
+    async def test_count_by_status_single_status(
+        self, db_schema, tenant_id_web, async_session
+    ):
+        """Returns one exact enum-keyed count when all customers share a status."""
+        cust_svc = CustomerService(async_session)
+        suffix = uuid.uuid4().hex[:8]
+        for i in range(3):
+            await cust_svc.create_customer(
+                data={
+                    "name": f"Lead {suffix}-{i}",
+                    "email": f"lead_{suffix}_{i}@example.com",
+                    "status": "lead",
+                },
+                tenant_id=tenant_id_web,
+            )
+
+        result = await cust_svc.count_by_status(tenant_id=tenant_id_web)
+
+        assert result == {CustomerStatus.LEAD: 3}
 
     async def test_count_by_status_returns_correct_counts(
         self, db_schema, tenant_id_web, api_client, async_session
@@ -514,6 +538,7 @@ class TestCustomerCountByStatusIntegration:
         # Verify counts via service layer using tenant sessions
         cust_svc = CustomerService(async_session)
         result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id_web)
+        await async_session.commit()
         result_t2 = await cust_svc.count_by_status(tenant_id=tenant_id_2_web)
 
         assert result_t1[CustomerStatus.LEAD] == 2
