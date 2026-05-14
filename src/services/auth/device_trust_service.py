@@ -8,13 +8,11 @@ This module implements P3 from issue #163:
 
 import hashlib
 from datetime import UTC, datetime
-from typing import Literal
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.device_trust import DeviceTrustModel
-from pkg.errors.app_exceptions import ForbiddenException, NotFoundException, ValidationException
 
 
 class SuspiciousActivityReason:
@@ -46,7 +44,7 @@ def generate_device_fingerprint(
         accept_language or "",
     ]
     raw = "|".join(parts)
-    return hashlib.sha256(raw.encode()).hexdigest()[:32]
+    return hashlib.sha256(raw.encode()).hexdigest()
 
 
 class DeviceTrustService:
@@ -55,11 +53,12 @@ class DeviceTrustService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def is_device_trusted(self, user_id: int, device_fingerprint: str) -> bool:
+    async def is_device_trusted(self, user_id: int, tenant_id: int, device_fingerprint: str) -> bool:
         """Check if a device is currently trusted for the given user."""
         result = await self.session.execute(
             select(DeviceTrustModel).where(
                 DeviceTrustModel.user_id == user_id,
+                DeviceTrustModel.tenant_id == tenant_id,
                 DeviceTrustModel.device_fingerprint == device_fingerprint,
                 DeviceTrustModel.trusted == True,  # noqa: E712
             )
@@ -69,6 +68,7 @@ class DeviceTrustService:
     async def trust_device(
         self,
         user_id: int,
+        tenant_id: int,
         device_fingerprint: str,
         ip_address: str | None = None,
         device_name: str | None = None,
@@ -78,6 +78,7 @@ class DeviceTrustService:
         existing = await self.session.execute(
             select(DeviceTrustModel).where(
                 DeviceTrustModel.user_id == user_id,
+                DeviceTrustModel.tenant_id == tenant_id,
                 DeviceTrustModel.device_fingerprint == device_fingerprint,
             )
         )
@@ -86,12 +87,15 @@ class DeviceTrustService:
         if model is None:
             model = DeviceTrustModel(
                 user_id=user_id,
+                tenant_id=tenant_id,
                 device_fingerprint=device_fingerprint,
                 device_name=device_name,
                 trusted_ip=ip_address,
                 last_ip=ip_address,
                 last_location=location,
                 trusted=True,
+                trusted_at=datetime.now(UTC),
+                last_used_at=datetime.now(UTC),
             )
             self.session.add(model)
         else:
@@ -105,12 +109,13 @@ class DeviceTrustService:
         await self.session.flush()
         return model
 
-    async def distrust_device(self, user_id: int, device_fingerprint: str) -> bool:
+    async def distrust_device(self, user_id: int, tenant_id: int, device_fingerprint: str) -> bool:
         """Revoke trust for a specific device."""
         result = await self.session.execute(
             update(DeviceTrustModel)
             .where(
                 DeviceTrustModel.user_id == user_id,
+                DeviceTrustModel.tenant_id == tenant_id,
                 DeviceTrustModel.device_fingerprint == device_fingerprint,
             )
             .values(trusted=False)
@@ -118,12 +123,13 @@ class DeviceTrustService:
         await self.session.flush()
         return result.rowcount > 0
 
-    async def distrust_all_devices(self, user_id: int) -> int:
+    async def distrust_all_devices(self, user_id: int, tenant_id: int) -> int:
         """Revoke trust for all devices of a user (e.g. after password change)."""
         result = await self.session.execute(
             update(DeviceTrustModel)
             .where(
                 DeviceTrustModel.user_id == user_id,
+                DeviceTrustModel.tenant_id == tenant_id,
                 DeviceTrustModel.trusted == True,  # noqa: E712
             )
             .values(trusted=False)
@@ -134,6 +140,7 @@ class DeviceTrustService:
     async def update_device_usage(
         self,
         user_id: int,
+        tenant_id: int,
         device_fingerprint: str,
         ip_address: str | None = None,
         location: str | None = None,
@@ -142,6 +149,7 @@ class DeviceTrustService:
         result = await self.session.execute(
             select(DeviceTrustModel).where(
                 DeviceTrustModel.user_id == user_id,
+                DeviceTrustModel.tenant_id == tenant_id,
                 DeviceTrustModel.device_fingerprint == device_fingerprint,
             )
         )
@@ -155,6 +163,7 @@ class DeviceTrustService:
     async def check_suspicious_activity(
         self,
         user_id: int,
+        tenant_id: int,
         device_fingerprint: str,
         ip_address: str | None = None,
     ) -> tuple[bool, list[str]]:
@@ -172,6 +181,7 @@ class DeviceTrustService:
         result = await self.session.execute(
             select(DeviceTrustModel).where(
                 DeviceTrustModel.user_id == user_id,
+                DeviceTrustModel.tenant_id == tenant_id,
                 DeviceTrustModel.device_fingerprint == device_fingerprint,
                 DeviceTrustModel.trusted == True,  # noqa: E712
             )
@@ -186,12 +196,13 @@ class DeviceTrustService:
 
         return bool(reasons), reasons
 
-    async def get_trusted_devices(self, user_id: int) -> list[DeviceTrustModel]:
+    async def get_trusted_devices(self, user_id: int, tenant_id: int) -> list[DeviceTrustModel]:
         """List all trusted devices for a user."""
         result = await self.session.execute(
             select(DeviceTrustModel)
             .where(
                 DeviceTrustModel.user_id == user_id,
+                DeviceTrustModel.tenant_id == tenant_id,
                 DeviceTrustModel.trusted == True,  # noqa: E712
             )
             .order_by(DeviceTrustModel.last_used_at.desc().nullsfirst(), DeviceTrustModel.trusted_at.desc())

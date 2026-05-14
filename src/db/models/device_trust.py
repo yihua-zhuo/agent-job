@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -15,6 +15,7 @@ class DeviceTrustModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     device_fingerprint: Mapped[str] = mapped_column(String(255), nullable=False)
     device_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     trusted_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
@@ -22,18 +23,23 @@ class DeviceTrustModel(Base):
     last_location: Mapped[str | None] = mapped_column(String(255), nullable=True)
     last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     trusted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    trusted: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    trusted: Mapped[bool] = mapped_column(Boolean, default=True, server_default=text("true"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    __table_args__ = (Index("ix_device_trust_fingerprint", "device_fingerprint"),)
+    __table_args__ = (
+        UniqueConstraint("tenant_id", "user_id", "device_fingerprint", name="uq_device_trust_tenant_user_fingerprint"),
+        Index("ix_device_trust_lookup", "tenant_id", "user_id", "trusted"),
+        Index("ix_device_trust_suspicious", "tenant_id", "user_id", "trusted", "last_ip"),
+    )
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "user_id": self.user_id,
+            "tenant_id": self.tenant_id,
             "device_fingerprint": self.device_fingerprint,
             "device_name": self.device_name,
             "trusted_ip": self.trusted_ip,
@@ -43,4 +49,5 @@ class DeviceTrustModel(Base):
             "trusted_at": self.trusted_at.isoformat() if self.trusted_at else None,
             "trusted": bool(self.trusted),
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

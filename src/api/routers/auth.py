@@ -8,7 +8,6 @@ Implements issue #163:
 """
 
 from typing import Any
-import math
 
 from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, Response
 from fastapi.security import OAuth2PasswordRequestForm
@@ -16,6 +15,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from configs.settings import settings
 from db.connection import get_db
 from db.models import UserModel
 from dependencies.auth import get_current_user
@@ -37,6 +37,37 @@ auth_router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
 
 COOKIE_NAME = "refresh_token"
 COOKIE_MAX_AGE = 60 * 60 * 24 * 7  # 7 days in seconds
+AUTH_SCHEME = "bearer"
+
+
+def _jwt_secret() -> str:
+    return settings.jwt_secret or "dev-jwt-secret"
+
+
+def _access_token_expires_seconds() -> int:
+    return settings.access_token_expire_minutes * 60
+
+
+def _set_refresh_cookie(response: Response, value: str, max_age: int = COOKIE_MAX_AGE) -> None:
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=value,
+        httponly=True,
+        secure=settings.env == "production",
+        samesite="strict",
+        max_age=max_age,
+        path="/",
+    )
+
+
+def _clear_refresh_cookie(response: Response) -> None:
+    _set_refresh_cookie(response, "", max_age=0)
+
+
+def _require_tenant_id(current_user: AuthContext) -> int:
+    if current_user.tenant_id is None:
+        raise HTTPException(status_code=401, detail="Token 缺少 tenant_id")
+    return current_user.tenant_id
 
 
 def _get_client_info(request: Request) -> tuple[str | None, str | None, str | None]:
@@ -47,6 +78,34 @@ def _get_client_info(request: Request) -> tuple[str | None, str | None, str | No
     return ip, ua, lang
 
 
+def _device_fingerprint(request: Request) -> str:
+    ip, ua, lang = _get_client_info(request)
+    return generate_device_fingerprint(ip_address=ip, user_agent=ua, accept_language=lang)
+
+
+async def _get_user_by_id(
+    session: AsyncSession,
+    user_id: int,
+    tenant_id: int | None = None,
+) -> UserModel:
+    query = select(UserModel).where(UserModel.id == user_id)
+    if tenant_id is not None:
+        query = query.where(UserModel.tenant_id == tenant_id)
+    result = await session.execute(query)
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="用户不存在")
+    return user
+
+
+async def _get_user_by_username(session: AsyncSession, username: str) -> UserModel:
+    result = await session.execute(select(UserModel).where(UserModel.username == username))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise HTTPException(status_code=401, detail="用户不存在")
+    return user
+
+
 # ---------------------------------------------------------------------------
 # Request / response schemas
 # ---------------------------------------------------------------------------
@@ -54,13 +113,13 @@ def _get_client_info(request: Request) -> tuple[str | None, str | None, str | No
 
 class LoginResponse(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = AUTH_SCHEME
     expires_in: int = Field(description="Access token lifetime in seconds")
 
 
 class RefreshResponse(BaseModel):
     access_token: str
-    token_type: str = "bearer"
+    token_type: str = AUTH_SCHEME
     expires_in: int
 
 
@@ -111,29 +170,30 @@ class TrustedDevicesResponse(BaseModel):
 
 @auth_router.post("/login", response_model=LoginResponse)
 async def login(
+    request: Request,
+    response: Response,
     form_data: OAuth2PasswordRequestForm = Depends(),
-    request: Request = None,
     session: AsyncSession = Depends(get_db),
-):
+) -> LoginResponse:
     """OAuth2 password flow — issues access token + refresh token cookie.
 
     - Access token: short-lived (10 min), returned as JSON (client stores in memory)
     - Refresh token: stored hashed in DB, sent via HttpOnly cookie
     - On known trusted device: WebAuthn may be skipped (handled by client)
     """
-    from configs.settings import settings
+    ip, ua, _ = _get_client_info(request)
 
-    ip, ua, _ = _get_client_info(request) if request else (None, None, None)
-
-    auth_svc = AuthService(session, secret_key=settings.jwt_secret)
-    token_svc = TokenService(session, secret_key=settings.jwt_secret)
+    auth_svc = AuthService(session, secret_key=_jwt_secret())
+    token_svc = TokenService(
+        session,
+        secret_key=_jwt_secret(),
+        access_token_expiry_minutes=settings.access_token_expire_minutes,
+    )
     device_svc = DeviceTrustService(session)
 
     user = await auth_svc.authenticate_user(form_data.username, form_data.password)
 
-    fp = generate_device_fingerprint(
-        ip, ua, request.headers.get("accept-language") if request else None
-    )
+    fp = _device_fingerprint(request)
 
     access_token = token_svc.create_access_token(
         user_id=user.id,
@@ -144,57 +204,51 @@ async def login(
 
     raw_refresh, _ = await token_svc.create_refresh_token(
         user_id=user.id,
+        tenant_id=user.tenant_id,
         device_fingerprint=fp,
         user_agent=ua,
         ip_address=ip,
     )
 
-    await device_svc.update_device_usage(user.id, fp, ip_address=ip)
+    requires_webauthn, _ = await device_svc.check_suspicious_activity(user.id, user.tenant_id, fp, ip)
+    await device_svc.update_device_usage(user.id, user.tenant_id, fp, ip_address=ip)
 
-    requires_webauthn, _ = await device_svc.check_suspicious_activity(user.id, fp, ip)
-
-    response = Response(
-        content=LoginResponse(
-            access_token=access_token,
-            token_type="bearer",
-            expires_in=600,
-        ).model_dump_json(),
-        media_type="application/json",
-        headers={
-            "Set-Cookie": f"{COOKIE_NAME}={raw_refresh}; HttpOnly; Secure; SameSite=Strict; Max-Age={COOKIE_MAX_AGE}; Path=/"
-        },
-    )
-
+    _set_refresh_cookie(response, raw_refresh)
     if requires_webauthn:
         response.headers["X-Require-WebAuthn"] = "1"
 
-    return response
+    return LoginResponse(
+        access_token=access_token,
+        token_type=AUTH_SCHEME,
+        expires_in=_access_token_expires_seconds(),
+    )
 
 
 @auth_router.post("/refresh", response_model=RefreshResponse)
 async def refresh_token(
     request: Request,
     response: Response,
-    refresh_token: str | None = Cookie(alias=COOKIE_NAME),
+    refresh_token: str | None = Cookie(default=None, alias=COOKIE_NAME),
     session: AsyncSession = Depends(get_db),
-):
+) -> RefreshResponse:
     """Exchange a valid refresh token (from HttpOnly cookie) for a new access token.
 
     Performs silent rotation: revokes old token, issues new one with remaining TTL.
     """
-    from configs.settings import settings
-
     if not refresh_token:
         raise HTTPException(status_code=401, detail="缺少刷新令牌")
 
     ip, ua, _ = _get_client_info(request)
 
-    token_svc = TokenService(session, secret_key=settings.jwt_secret)
-    auth_svc = AuthService(session, secret_key=settings.jwt_secret)
+    token_svc = TokenService(
+        session,
+        secret_key=_jwt_secret(),
+        access_token_expiry_minutes=settings.access_token_expire_minutes,
+    )
 
     rotated = await token_svc.rotate_refresh_token(
         refresh_token,
-        device_fingerprint=generate_device_fingerprint(ip, ua),
+        device_fingerprint=_device_fingerprint(request),
         user_agent=ua,
         ip_address=ip,
     )
@@ -202,59 +256,40 @@ async def refresh_token(
     if rotated is None:
         raise HTTPException(status_code=401, detail="刷新令牌无效或已过期")
 
-    new_raw, _ = rotated
-
-    result = await token_svc.verify_refresh_token(new_raw)
-    if result is None:
-        raise HTTPException(status_code=401, detail="刷新令牌无效")
-
-    user_model = await auth_svc.get_current_user(
-        await auth_svc.create_token(result.user_id, result.username or "", "", result.tenant_id or None)
-    )
+    new_raw, new_model = rotated
+    user_model = await _get_user_by_id(session, new_model.user_id, new_model.tenant_id)
 
     access_token = token_svc.create_access_token(
-        user_id=result.user_id,
+        user_id=user_model.id,
         username=user_model.username,
         role=user_model.role,
         tenant_id=user_model.tenant_id,
     )
 
-    response = Response(
-        content=RefreshResponse(
-            access_token=access_token,
-            token_type="bearer",
-            expires_in=600,
-        ).model_dump_json(),
-        media_type="application/json",
-        headers={
-            "Set-Cookie": f"{COOKIE_NAME}={new_raw}; HttpOnly; Secure; SameSite=Strict; Max-Age={COOKIE_MAX_AGE}; Path=/"
-        },
+    _set_refresh_cookie(response, new_raw)
+    return RefreshResponse(
+        access_token=access_token,
+        token_type=AUTH_SCHEME,
+        expires_in=_access_token_expires_seconds(),
     )
-    return response
 
 
 @auth_router.post("/logout")
 async def logout(
     request: Request,
     response: Response,
-    refresh_token: str | None = Cookie(alias=COOKIE_NAME),
+    current_user: AuthContext = Depends(get_current_user),
+    refresh_token: str | None = Cookie(default=None, alias=COOKIE_NAME),
     session: AsyncSession = Depends(get_db),
-):
+) -> dict[str, bool | str]:
     """Revoke the current refresh token (logout)."""
-    from configs.settings import settings
-
-    token_svc = TokenService(session, secret_key=settings.jwt_secret)
+    _require_tenant_id(current_user)
+    token_svc = TokenService(session, secret_key=_jwt_secret())
     if refresh_token:
         await token_svc.revoke_refresh_token(refresh_token)
 
-    response = Response(
-        content='{"success":true,"message":"已退出登录"}',
-        media_type="application/json",
-        headers={
-            "Set-Cookie": f"{COOKIE_NAME}=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/"
-        },
-    )
-    return response
+    _clear_refresh_cookie(response)
+    return {"success": True, "message": "已退出登录"}
 
 
 @auth_router.post("/logout-all")
@@ -263,21 +298,14 @@ async def logout_all(
     response: Response,
     current_user: AuthContext = Depends(get_current_user),
     session: AsyncSession = Depends(get_db),
-):
+) -> dict[str, bool | str]:
     """Revoke all refresh tokens for the current user (logout everywhere)."""
-    from configs.settings import settings
+    tenant_id = _require_tenant_id(current_user)
+    token_svc = TokenService(session, secret_key=_jwt_secret())
+    await token_svc.revoke_all_user_tokens(current_user.user_id, tenant_id)
 
-    token_svc = TokenService(session, secret_key=settings.jwt_secret)
-    await token_svc.revoke_all_user_tokens(current_user.user_id)
-
-    response = Response(
-        content='{"success":true,"message":"所有设备已退出登录"}',
-        media_type="application/json",
-        headers={
-            "Set-Cookie": f"{COOKIE_NAME}=; HttpOnly; Secure; SameSite=Strict; Max-Age=0; Path=/"
-        },
-    )
-    return response
+    _clear_refresh_cookie(response)
+    return {"success": True, "message": "所有设备已退出登录"}
 
 
 # ---------------------------------------------------------------------------
@@ -296,20 +324,10 @@ async def webauthn_register_start(
     Stores challenge in webauthn_challenges table (PG) with 60s TTL.
     Client calls POST /auth/webauthn/register/finish with authenticator response.
     """
-    from configs.settings import settings
+    fp = _device_fingerprint(request)
 
-    ip, ua, _ = _get_client_info(request)
-    fp = generate_device_fingerprint(ip, ua, request.headers.get("accept-language"))
-
-    auth_svc = AuthService(session, secret_key=settings.jwt_secret)
-    user = await auth_svc.get_current_user(
-        auth_svc.create_token(
-            current_user.user_id,
-            "",
-            current_user.roles[0] if current_user.roles else "",
-            current_user.tenant_id,
-        )
-    )
+    tenant_id = _require_tenant_id(current_user)
+    user = await _get_user_by_id(session, current_user.user_id, tenant_id)
 
     webauthn_svc = WebAuthnService(
         session,
@@ -318,6 +336,7 @@ async def webauthn_register_start(
     )
     result = await webauthn_svc.start_registration(
         user.id,
+        user.tenant_id,
         user.username,
         device_fingerprint=fp,
     )
@@ -340,14 +359,9 @@ async def webauthn_register_finish(
 
     After this the device can authenticate using WebAuthn instead of password.
     """
-    from configs.settings import settings
+    ip, _, _ = _get_client_info(request)
+    fp = body.device_fingerprint or _device_fingerprint(request)
 
-    ip, ua, _ = _get_client_info(request)
-    fp = body.device_fingerprint or generate_device_fingerprint(
-        ip, ua, request.headers.get("accept-language")
-    )
-
-    auth_svc = AuthService(session, secret_key=settings.jwt_secret)
     webauthn_svc = WebAuthnService(
         session,
         rp_id=settings.webauthn_rp_id or "localhost",
@@ -355,28 +369,21 @@ async def webauthn_register_finish(
     )
     device_svc = DeviceTrustService(session)
 
-    user = await auth_svc.get_current_user(
-        auth_svc.create_token(
-            current_user.user_id,
-            "",
-            current_user.roles[0] if current_user.roles else "",
-            current_user.tenant_id,
-        )
-    )
+    tenant_id = _require_tenant_id(current_user)
+    user = await _get_user_by_id(session, current_user.user_id, tenant_id)
 
-    try:
-        credential = await webauthn_svc.finish_registration(
-            user_id=user.id,
-            username=user.username,
-            registration_response=body.registration_response,
-            device_fingerprint=fp,
-            credential_nickname=body.credential_nickname,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+    credential = await webauthn_svc.finish_registration(
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        username=user.username,
+        registration_response=body.registration_response,
+        device_fingerprint=fp,
+        credential_nickname=body.credential_nickname,
+    )
 
     await device_svc.trust_device(
         user_id=user.id,
+        tenant_id=user.tenant_id,
         device_fingerprint=fp,
         ip_address=ip,
         device_name=body.credential_nickname,
@@ -397,23 +404,16 @@ async def webauthn_assertion_start(
 ):
     """Start WebAuthn assertion (authentication step 1).
 
+    Intentionally unauthenticated: this is the WebAuthn login bootstrap.
     Looks up user by username, stores challenge in DB with 5min TTL.
     Client calls POST /auth/webauthn/verify with the authenticator response.
     """
-    from configs.settings import settings
-
     if not body.username:
         raise HTTPException(status_code=400, detail="需要用户名")
 
-    result = await session.execute(
-        select(UserModel).where(UserModel.username == body.username)
-    )
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=401, detail="用户不存在")
+    user = await _get_user_by_username(session, body.username)
 
-    ip, ua, _ = _get_client_info(request)
-    fp = body.device_fingerprint or generate_device_fingerprint(ip, ua, request.headers.get("accept-language"))
+    fp = body.device_fingerprint or _device_fingerprint(request)
 
     webauthn_svc = WebAuthnService(
         session,
@@ -424,6 +424,7 @@ async def webauthn_assertion_start(
     credential_id = body.assertion_response.get("credentialId", "")
     result = await webauthn_svc.start_assertion(
         user_id=user.id,
+        tenant_id=user.tenant_id,
         credential_id=credential_id,
         device_fingerprint=fp,
     )
@@ -439,52 +440,48 @@ async def webauthn_assertion_start(
 async def webauthn_verify(
     body: WebAuthnAssertionRequest,
     request: Request,
+    response: Response,
     session: AsyncSession = Depends(get_db),
-):
+) -> LoginResponse:
     """Verify WebAuthn assertion (authentication step 2), issue tokens.
 
     Returns access token + refresh token cookie on success.
     """
-    from configs.settings import settings
-
     if not body.username:
         raise HTTPException(status_code=400, detail="需要用户名")
 
     ip, ua, _ = _get_client_info(request)
-    fp = body.device_fingerprint or generate_device_fingerprint(ip, ua, request.headers.get("accept-language"))
+    fp = body.device_fingerprint or _device_fingerprint(request)
 
     webauthn_svc = WebAuthnService(
         session,
         rp_id=settings.webauthn_rp_id or "localhost",
         rp_name=settings.webauthn_rp_name or "AgentJob",
     )
-    token_svc = TokenService(session, secret_key=settings.jwt_secret)
+    token_svc = TokenService(
+        session,
+        secret_key=_jwt_secret(),
+        access_token_expiry_minutes=settings.access_token_expire_minutes,
+    )
     device_svc = DeviceTrustService(session)
 
-    result = await session.execute(
-        select(UserModel).where(UserModel.username == body.username)
+    user = await _get_user_by_username(session, body.username)
+
+    await webauthn_svc.verify_assertion(
+        user_id=user.id,
+        tenant_id=user.tenant_id,
+        assertion_response=body.assertion_response,
+        device_fingerprint=fp,
     )
-    user = result.scalar_one_or_none()
-    if not user:
-        raise HTTPException(status_code=401, detail="用户不存在")
 
-    try:
-        credential, _ = await webauthn_svc.verify_assertion(
-            user_id=user.id,
-            assertion_response=body.assertion_response,
-            device_fingerprint=fp,
-        )
-    except ValueError as e:
-        raise HTTPException(status_code=401, detail=str(e))
-
-    await device_svc.update_device_usage(user.id, fp, ip_address=ip)
-
-    requires_reauth, reasons = await device_svc.check_suspicious_activity(user.id, fp, ip)
+    requires_reauth, reasons = await device_svc.check_suspicious_activity(user.id, user.tenant_id, fp, ip)
     if requires_reauth:
         raise HTTPException(
             status_code=403,
             detail=f"检测到可疑活动: {', '.join(reasons)}，请先通过密码验证",
         )
+
+    await device_svc.update_device_usage(user.id, user.tenant_id, fp, ip_address=ip)
 
     access_token = token_svc.create_access_token(
         user_id=user.id,
@@ -495,23 +492,18 @@ async def webauthn_verify(
 
     raw_refresh, _ = await token_svc.create_refresh_token(
         user_id=user.id,
+        tenant_id=user.tenant_id,
         device_fingerprint=fp,
         user_agent=ua,
         ip_address=ip,
     )
 
-    response = Response(
-        content=LoginResponse(
-            access_token=access_token,
-            token_type="bearer",
-            expires_in=600,
-        ).model_dump_json(),
-        media_type="application/json",
-        headers={
-            "Set-Cookie": f"{COOKIE_NAME}={raw_refresh}; HttpOnly; Secure; SameSite=Strict; Max-Age={COOKIE_MAX_AGE}; Path=/"
-        },
+    _set_refresh_cookie(response, raw_refresh)
+    return LoginResponse(
+        access_token=access_token,
+        token_type=AUTH_SCHEME,
+        expires_in=_access_token_expires_seconds(),
     )
-    return response
 
 
 # ---------------------------------------------------------------------------
@@ -525,8 +517,9 @@ async def list_trusted_devices(
     session: AsyncSession = Depends(get_db),
 ):
     """List all trusted devices for the current user."""
+    tenant_id = _require_tenant_id(current_user)
     device_svc = DeviceTrustService(session)
-    devices = await device_svc.get_trusted_devices(current_user.user_id)
+    devices = await device_svc.get_trusted_devices(current_user.user_id, tenant_id)
     return TrustedDevicesResponse(
         devices=[
             DeviceResponse(
@@ -551,8 +544,9 @@ async def revoke_device(
     session: AsyncSession = Depends(get_db),
 ):
     """Revoke trust for a specific device."""
+    tenant_id = _require_tenant_id(current_user)
     device_svc = DeviceTrustService(session)
-    ok = await device_svc.distrust_device(current_user.user_id, device_fingerprint)
+    ok = await device_svc.distrust_device(current_user.user_id, tenant_id, device_fingerprint)
     if not ok:
         raise HTTPException(status_code=404, detail="设备未找到")
     return {"success": True, "message": "设备已取消信任"}
@@ -564,8 +558,9 @@ async def revoke_all_devices(
     session: AsyncSession = Depends(get_db),
 ):
     """Revoke trust for all devices (e.g. after password change)."""
+    tenant_id = _require_tenant_id(current_user)
     device_svc = DeviceTrustService(session)
-    count = await device_svc.distrust_all_devices(current_user.user_id)
+    count = await device_svc.distrust_all_devices(current_user.user_id, tenant_id)
     return {"success": True, "message": f"已取消信任 {count} 台设备", "revoked_count": count}
 
 
@@ -585,12 +580,13 @@ async def check_suspicious(
     Returns requires_reauth=true if new IP/device detected.
     The client should trigger password + WebAuthn re-verification.
     """
-    ip, ua, _ = _get_client_info(request)
-    fp = generate_device_fingerprint(ip, ua, request.headers.get("accept-language"))
+    ip, _, _ = _get_client_info(request)
+    fp = _device_fingerprint(request)
 
+    tenant_id = _require_tenant_id(current_user)
     device_svc = DeviceTrustService(session)
     requires_reauth, reasons = await device_svc.check_suspicious_activity(
-        current_user.user_id, fp, ip
+        current_user.user_id, tenant_id, fp, ip
     )
 
     return {

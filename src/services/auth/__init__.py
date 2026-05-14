@@ -6,8 +6,8 @@ Modules:
 - device_trust_service: Device trust + suspicious activity detection (P3)
 """
 
-from services.auth.token_service import TokenService
 from services.auth.device_trust_service import DeviceTrustService, SuspiciousActivityReason, generate_device_fingerprint
+from services.auth.token_service import TokenService
 from services.auth.webauthn_service import WebAuthnService
 
 __all__ = [

@@ -9,10 +9,12 @@ Challenges are stored in PostgreSQL (webauthn_challenges table) with TTL.
 """
 
 import base64
+import binascii
 import json
 import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from urllib.parse import urlparse
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,7 +24,6 @@ from db.models.webauthn_challenge import WebAuthnChallengeModel
 from pkg.errors.app_exceptions import (
     ConflictException,
     NotFoundException,
-    UnauthorizedException,
     ValidationException,
 )
 
@@ -59,6 +60,21 @@ class WebAuthnService:
         self.rp_id = rp_id or self.DEFAULT_RP_ID
         self.rp_name = rp_name or self.DEFAULT_RP_NAME
 
+    def _validate_origin(self, origin: str) -> None:
+        """Validate clientDataJSON origin against the configured RP ID."""
+        parsed = urlparse(origin)
+        host = parsed.hostname or ""
+        if not host:
+            raise ValidationException("Invalid WebAuthn origin")
+        if self.rp_id == "localhost":
+            valid_host = host in {"localhost", "127.0.0.1", "::1"}
+        else:
+            valid_host = host == self.rp_id or host.endswith(f".{self.rp_id}")
+        if not valid_host:
+            raise ValidationException("WebAuthn origin does not match relying party")
+        if self.rp_id != "localhost" and parsed.scheme != "https":
+            raise ValidationException("WebAuthn origin must use HTTPS")
+
     # -------------------------------------------------------------------------
     # Challenge management (PostgreSQL-backed, TTL expiry)
     # -------------------------------------------------------------------------
@@ -66,6 +82,7 @@ class WebAuthnService:
     async def _create_challenge(
         self,
         user_id: int,
+        tenant_id: int,
         purpose: str,
         credential_id: str | None = None,
         device_fingerprint: str | None = None,
@@ -77,6 +94,7 @@ class WebAuthnService:
 
         model = WebAuthnChallengeModel(
             user_id=user_id,
+            tenant_id=tenant_id,
             challenge=challenge,
             purpose=purpose,
             credential_id=credential_id,
@@ -91,6 +109,7 @@ class WebAuthnService:
     async def _consume_challenge(
         self,
         user_id: int,
+        tenant_id: int,
         challenge: str,
         purpose: str,
         consume: bool = True,
@@ -103,6 +122,7 @@ class WebAuthnService:
         result = await self.session.execute(
             select(WebAuthnChallengeModel).where(
                 WebAuthnChallengeModel.user_id == user_id,
+                WebAuthnChallengeModel.tenant_id == tenant_id,
                 WebAuthnChallengeModel.challenge == challenge,
                 WebAuthnChallengeModel.purpose == purpose,
                 WebAuthnChallengeModel.consumed == False,  # noqa: E712
@@ -122,11 +142,12 @@ class WebAuthnService:
 
         return model
 
-    async def _cleanup_expired_challenges(self) -> int:
+    async def _cleanup_expired_challenges(self, tenant_id: int) -> int:
         """Delete all consumed-and-expired challenges. Call periodically to keep table small."""
         result = await self.session.execute(
             delete(WebAuthnChallengeModel).where(
                 WebAuthnChallengeModel.expires_at < datetime.now(UTC),
+                WebAuthnChallengeModel.tenant_id == tenant_id,
                 WebAuthnChallengeModel.consumed == True,  # noqa: E712
             )
         )
@@ -140,6 +161,7 @@ class WebAuthnService:
     async def start_registration(
         self,
         user_id: int,
+        tenant_id: int,
         username: str,
         credential_nickname: str | None = None,
         device_fingerprint: str | None = None,
@@ -150,6 +172,7 @@ class WebAuthnService:
         """
         challenge = await self._create_challenge(
             user_id=user_id,
+            tenant_id=tenant_id,
             purpose="registration",
             device_fingerprint=device_fingerprint,
             ttl_seconds=REGISTRATION_CHALLENGE_TTL_SECONDS,
@@ -192,6 +215,7 @@ class WebAuthnService:
     async def finish_registration(
         self,
         user_id: int,
+        tenant_id: int,
         username: str,
         registration_response: dict[str, Any],
         device_fingerprint: str | None = None,
@@ -201,7 +225,7 @@ class WebAuthnService:
 
         Raises:
             ValidationException: If challenge is expired/already-used/invalid.
-            ValueError: For malformed attestation data.
+            ValidationException: For malformed attestation data.
         """
         client_data = registration_response.get("response", {}).get("clientDataJSON", "")
         attestation_object = registration_response.get("response", {}).get("attestationObject", "")
@@ -213,20 +237,18 @@ class WebAuthnService:
             else:
                 client_data_bytes = base64.b64decode(client_data)
             client_data_json = json.loads(client_data_bytes)
-        except json.JSONDecodeError as e:
+        except (binascii.Error, UnicodeDecodeError, ValueError, json.JSONDecodeError) as e:
             raise ValidationException(f"Invalid client data JSON: {e}")
 
         presented_challenge = client_data_json.get("challenge", "")
         origin = client_data_json.get("origin", "")
 
         # Consume challenge from DB (validates existence, TTL, not reused)
-        db_challenge = await self._consume_challenge(user_id, presented_challenge, purpose="registration")
+        db_challenge = await self._consume_challenge(user_id, tenant_id, presented_challenge, purpose="registration")
         if db_challenge is None:
             raise ValidationException("Challenge expired, already used, or invalid")
 
-        # Verify origin matches expected rpId
-        # TODO: full origin/rpId validation in production
-        _ = origin
+        self._validate_origin(origin)
 
         # Extract credential ID
         credential_id_raw = registration_response.get("credential", {}).get("id", "")
@@ -242,14 +264,15 @@ class WebAuthnService:
             else:
                 pk_bytes = base64.b64decode(attestation_object)
             public_key_b64 = base64.b64encode(pk_bytes).decode()
-        except Exception:
-            public_key_b64 = attestation_object
+        except (binascii.Error, ValueError) as e:
+            raise ValidationException(f"Invalid attestation object: {e}")
 
         transports = registration_response.get("transports", [])
         transports_str = ",".join(transports) if transports else None
 
         model = UserCredentialModel(
             user_id=user_id,
+            tenant_id=tenant_id,
             credential_id=credential_id,
             public_key=public_key_b64,
             device_fingerprint=device_fingerprint or db_challenge.device_fingerprint,
@@ -270,6 +293,7 @@ class WebAuthnService:
     async def start_assertion(
         self,
         user_id: int,
+        tenant_id: int,
         credential_id: str,
         device_fingerprint: str | None = None,
     ) -> dict[str, Any]:
@@ -279,6 +303,7 @@ class WebAuthnService:
         """
         challenge = await self._create_challenge(
             user_id=user_id,
+            tenant_id=tenant_id,
             purpose="assertion",
             credential_id=credential_id,
             device_fingerprint=device_fingerprint,
@@ -295,6 +320,7 @@ class WebAuthnService:
     async def verify_assertion(
         self,
         user_id: int,
+        tenant_id: int,
         assertion_response: dict[str, Any],
         device_fingerprint: str | None = None,
     ) -> tuple[UserCredentialModel, bool]:
@@ -318,15 +344,15 @@ class WebAuthnService:
             else:
                 client_data_bytes = base64.b64decode(client_data_json_b64)
             client_data = json.loads(client_data_bytes)
-        except json.JSONDecodeError as e:
+        except (binascii.Error, UnicodeDecodeError, ValueError, json.JSONDecodeError) as e:
             raise ValidationException(f"Invalid client data: {e}")
 
         presented_challenge = client_data.get("challenge", "")
         origin = client_data.get("origin", "")
-        # TODO: validate origin matches rpId in production
+        self._validate_origin(origin)
 
         # Consume challenge from DB
-        db_challenge = await self._consume_challenge(user_id, presented_challenge, purpose="assertion")
+        db_challenge = await self._consume_challenge(user_id, tenant_id, presented_challenge, purpose="assertion")
         if db_challenge is None:
             raise ValidationException("Challenge expired, already used, or invalid")
 
@@ -339,6 +365,7 @@ class WebAuthnService:
             select(UserCredentialModel).where(
                 UserCredentialModel.credential_id == credential_id,
                 UserCredentialModel.user_id == user_id,
+                UserCredentialModel.tenant_id == tenant_id,
                 UserCredentialModel.enabled == True,  # noqa: E712
             )
         )
@@ -355,8 +382,8 @@ class WebAuthnService:
                 auth_data_bytes = base64.b64decode(authenticator_data_b64)
             if len(auth_data_bytes) >= 41:
                 sign_count = int.from_bytes(auth_data_bytes[37:41], byteorder="big")
-        except Exception:
-            pass  # best-effort parsing
+        except (binascii.Error, ValueError):
+            sign_count = 0
 
         # Anti-cloning: reject if reported counter <= stored counter
         if credential.sign_count > 0 and sign_count <= credential.sign_count:
@@ -365,7 +392,7 @@ class WebAuthnService:
         # Update counter
         await self.session.execute(
             update(UserCredentialModel)
-            .where(UserCredentialModel.id == credential.id)
+            .where(UserCredentialModel.id == credential.id, UserCredentialModel.tenant_id == tenant_id)
             .values(sign_count=sign_count, last_used_at=datetime.now(UTC))
         )
         await self.session.flush()
@@ -375,31 +402,33 @@ class WebAuthnService:
     # Credential management
     # -------------------------------------------------------------------------
 
-    async def get_user_credentials(self, user_id: int) -> list[UserCredentialModel]:
+    async def get_user_credentials(self, user_id: int, tenant_id: int) -> list[UserCredentialModel]:
         """List all WebAuthn credentials for a user."""
         result = await self.session.execute(
             select(UserCredentialModel)
             .where(
                 UserCredentialModel.user_id == user_id,
+                UserCredentialModel.tenant_id == tenant_id,
                 UserCredentialModel.enabled == True,  # noqa: E712
             )
             .order_by(UserCredentialModel.created_at.desc())
         )
         return list(result.scalars().all())
 
-    async def delete_credential(self, user_id: int, credential_id: str) -> bool:
+    async def delete_credential(self, user_id: int, tenant_id: int, credential_id: str) -> bool:
         """Delete a credential (user removing a device)."""
         result = await self.session.execute(
             update(UserCredentialModel)
             .where(
                 UserCredentialModel.credential_id == credential_id,
                 UserCredentialModel.user_id == user_id,
+                UserCredentialModel.tenant_id == tenant_id,
             )
             .values(enabled=False)
         )
         await self.session.flush()
         return result.rowcount > 0
 
-    async def disable_credential(self, user_id: int, credential_id: str) -> bool:
+    async def disable_credential(self, user_id: int, tenant_id: int, credential_id: str) -> bool:
         """Disable a credential (temporary, can be re-enabled)."""
-        return await self.delete_credential(user_id, credential_id)
+        return await self.delete_credential(user_id, tenant_id, credential_id)
