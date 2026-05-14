@@ -15,12 +15,6 @@ import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 
-const STATUS_COLORS: Record<string, string> = {
-  success: "bg-green-100 text-green-800",
-  failed: "bg-red-100 text-red-800",
-  skipped: "bg-yellow-100 text-yellow-800",
-};
-
 function getStatusVariant(status: string): "success" | "failed" | "skipped" | "gray" {
   if (status === "success" || status === "failed" || status === "skipped") return status;
   return "gray";
@@ -49,8 +43,7 @@ interface LogRow {
   error_message?: string;
 }
 
-function LogsTable({ logs }: { logs: LogRow[] }) {
-  const router = useRouter();
+function LogsTable({ logs, onView }: { logs: LogRow[]; onView: (ruleId: number) => void }) {
   return (
     <table className="w-full text-sm min-w-[640px]">
       <thead>
@@ -93,7 +86,7 @@ function LogsTable({ logs }: { logs: LogRow[] }) {
                 variant="ghost"
                 size="sm"
                 className="opacity-0 group-hover:opacity-100 transition-opacity text-xs h-7"
-                onClick={() => router.push(`/automation/rules/history/${log.rule_id}`)}
+                onClick={() => onView(log.rule_id)}
               >
                 View
               </Button>
@@ -140,6 +133,10 @@ function HistoryContent() {
   const total = info?.total ?? 0;
   const pageSize = info?.page_size ?? 20;
   const totalPages = Math.ceil(total / pageSize);
+
+  function handleView(ruleId: number) {
+    router.push(`/automation/rules/history/${ruleId}`);
+  }
 
   return (
     <div className="space-y-0">
@@ -195,7 +192,7 @@ function HistoryContent() {
             <p className="font-medium text-muted-foreground">No execution logs found</p>
           </div>
         )}
-        {!isLoading && !isError && logs.length > 0 && <LogsTable logs={logs} />}
+        {!isLoading && !isError && logs.length > 0 && <LogsTable logs={logs} onView={handleView} />}
       </div>
 
       {info && !isError && total > 0 && (

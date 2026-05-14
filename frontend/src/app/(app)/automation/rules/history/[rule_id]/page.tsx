@@ -7,7 +7,6 @@ import { Badge } from "@/components/ui/badge";
 import { AuthGuard } from "@/lib/components/auth-guard";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 
 const STATUS_COLORS: Record<string, string> = {
   success: "bg-green-100 text-green-800",
@@ -40,7 +39,6 @@ interface LogRow {
 
 function PerRuleHistoryContent() {
   const params = useParams<{ rule_id: string }>();
-  const router = useRouter();
   const parsedRuleId = Number(params.rule_id);
   const ruleId = Number.isFinite(parsedRuleId) ? parsedRuleId : undefined;
 

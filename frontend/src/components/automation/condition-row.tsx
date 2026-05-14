@@ -43,7 +43,7 @@ export function ConditionRow({ value, onChange, onRemove, disabled }: ConditionR
   function updateField(field: string) {
     onChange({ ...value, field });
   }
-  function updateOperator(operator: string) {
+  function updateOperator(operator: OperatorValue) {
     onChange({ ...value, operator });
   }
   function updateValue(newValue: string) {
@@ -53,9 +53,9 @@ export function ConditionRow({ value, onChange, onRemove, disabled }: ConditionR
   return (
     <div className="flex items-center gap-2">
       <Input
-        placeholder="field name"
+        placeholder="field_name"
         value={value.field}
-        onChange={(e) => updateField(e.target.value)}
+        onChange={(e) => updateField(e.target.value.replace(/[^a-zA-Z0-9._-]/g, ""))}
         disabled={disabled}
         className="flex-shrink-0 w-40"
       />

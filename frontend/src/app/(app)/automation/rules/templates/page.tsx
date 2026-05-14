@@ -1,5 +1,4 @@
 "use client";
-import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,7 +12,7 @@ const TEMPLATES = [
     name: "High-Value Ticket Alert",
     description: "Notify the team whenever a high-priority ticket is created.",
     trigger: "ticket.created",
-    conditions: [{ field: "priority", operator: "eq", value: "high" }],
+    conditions: [{ field: { key: "priority", label: "Priority" }, operator: "eq", value: "high" }],
     actions: [
       { type: "notification.send", params: { message: "High-priority ticket created — please review immediately." } },
     ],
@@ -22,7 +21,7 @@ const TEMPLATES = [
     name: "Win-Back Campaign",
     description: "Create a task and send an email when a customer's churn risk becomes high.",
     trigger: "customer.updated",
-    conditions: [{ field: "churn_risk", operator: "eq", value: "high" }],
+    conditions: [{ field: { key: "churn_risk", label: "Churn Risk" }, operator: "eq", value: "high" }],
     actions: [
       { type: "task.create", params: { title: "Reach out to at-risk customer" } },
       { type: "email.send", params: { subject: "We'd love your feedback" } },
@@ -41,7 +40,7 @@ const TEMPLATES = [
     name: "Ticket SLA Breach Warning",
     description: "Send a notification when a ticket's SLA is about to be breached.",
     trigger: "ticket.updated",
-    conditions: [{ field: "sla_breached", operator: "eq", value: "true" }],
+    conditions: [{ field: { key: "sla_breached", label: "SLA Breached" }, operator: "eq", value: "true" }],
     actions: [
       { type: "notification.send", params: { message: "Ticket SLA has been breached — immediate attention required." } },
     ],
@@ -95,7 +94,7 @@ function TemplateCard({ template, onActivate, activating, disabled }: TemplateCa
               <div className="mt-1 space-y-0.5">
                 {template.conditions.map((c, i) => (
                   <p key={i} className="text-xs text-muted-foreground font-mono">
-                    {c.field} {c.operator} {c.value}
+                    {typeof c.field === "object" ? c.field.key : c.field} {c.operator} {c.value}
                   </p>
                 ))}
               </div>
@@ -133,7 +132,7 @@ export default function TemplatesPage() {
   const [activatingTemplate, setActivatingTemplate] = useState<string | null>(null);
 
   async function handleActivate(template: (typeof TEMPLATES)[number]) {
-    if (createRule.isPending || activatingTemplate !== null) return;
+    if (activatingTemplate !== null) return;
     setActivatingTemplate(template.name);
     try {
       await createRule.mutateAsync({

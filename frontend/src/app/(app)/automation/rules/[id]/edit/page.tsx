@@ -76,7 +76,8 @@ function EditRulePageInner() {
         },
       });
       router.push("/automation/rules");
-    } catch {
+    } catch (err) {
+      console.error("[EditRulePage] failed to update rule:", err);
       setSubmitError("Failed to update rule. Please try again.");
     }
   }

@@ -341,7 +341,7 @@ export function useReminders(upcomingOnly = false) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.reminders(upcomingOnly),
-    queryFn: () => apiClient.get(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }

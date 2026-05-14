@@ -11,22 +11,18 @@ export default function NewRulePage() {
   const createRule = useCreateAutomationRule();
 
   async function handleSubmit(values: RuleBuilderValues) {
-    try {
-      await createRule.mutateAsync({
-        name: values.name,
-        description: values.description,
-        trigger_event: values.trigger_event,
-        conditions: values.conditions,
-        actions: values.actions.map((a) => ({
-          type: a.type,
-          params: a.params,
-        })),
-        enabled: values.enabled,
-      });
-      router.push("/automation/rules");
-    } catch {
-      // mutateAsync throws; callers can use createRule.isError / createRule.error
-    }
+    await createRule.mutateAsync({
+      name: values.name,
+      description: values.description,
+      trigger_event: values.trigger_event,
+      conditions: values.conditions,
+      actions: values.actions.map((a) => ({
+        type: a.type,
+        params: a.params,
+      })),
+      enabled: values.enabled,
+    });
+    router.push("/automation/rules");
   }
 
   return (

@@ -154,7 +154,7 @@ class TestAutomationRulesUIIntegration:
     async def test_trigger_event_executes_matching_rules(self, api_client, tenant_id_web):
         """POST /api/v1/automation/trigger fires matching rules and returns execution data."""
         # Create a rule that matches customer.created
-        await api_client.post(
+        create_resp = await api_client.post(
             "/api/v1/automation/rules",
             json={
                 "name": "Trigger Test Rule",
@@ -164,6 +164,8 @@ class TestAutomationRulesUIIntegration:
                 "enabled": True,
             },
         )
+        assert create_resp.status_code == 201
+        rule_id = create_resp.json()["data"]["id"]
 
         # Trigger the event
         trigger_resp = await api_client.post(
@@ -176,6 +178,17 @@ class TestAutomationRulesUIIntegration:
         assert trigger_resp.status_code == 200
         data = trigger_resp.json()
         assert data["success"] is True
+
+        # Verify an AutomationLogModel row was persisted
+        logs_resp = await api_client.get(f"/api/v1/automation/logs?rule_id={rule_id}")
+        assert logs_resp.status_code == 200
+        logs_data = logs_resp.json()
+        assert logs_data["success"] is True
+        assert len(logs_data["data"]["items"]) >= 1
+        log_entry = logs_data["data"]["items"][0]
+        assert log_entry["rule_id"] == rule_id
+        assert log_entry["status"] == "success"
+        assert len(log_entry["actions_executed"]) == 1
 
     async def test_list_logs(self, api_client, tenant_id_web):
         """GET /api/v1/automation/logs returns paginated execution logs."""
@@ -213,13 +226,70 @@ class TestAutomationRulesUIIntegration:
             assert log["rule_id"] == rule_id
 
     async def test_list_logs_filtered_by_status(self, api_client, tenant_id_web):
-        """GET /api/v1/automation/logs?status=failed returns only failed logs."""
+        """GET /api/v1/automation/logs?status=failed returns only failed logs seeded by an unknown action."""
+        # Create a rule with an unknown action that will produce a failed log
+        create_resp = await api_client.post(
+            "/api/v1/automation/rules",
+            json={
+                "name": "Rule That Fails",
+                "trigger_event": "ticket.updated",
+                "conditions": [],
+                "actions": [{"type": "nonexistent.action.type", "params": {}}],
+                "enabled": True,
+            },
+        )
+        assert create_resp.status_code == 201
+        rule_id = create_resp.json()["data"]["id"]
+
+        # Trigger the event — the unknown action will fail, producing a "failed" log
+        await api_client.post(
+            "/api/v1/automation/trigger",
+            json={
+                "event_type": "ticket.updated",
+                "context": {"ticket_id": 1, "title": "Test"},
+            },
+        )
+
+        # Also create a rule that succeeds (different trigger) to verify filter excludes it
+        success_resp = await api_client.post(
+            "/api/v1/automation/rules",
+            json={
+                "name": "Rule That Succeeds",
+                "trigger_event": "opportunity.created",
+                "conditions": [],
+                "actions": [{"type": "notification.send", "params": {"message": "ok"}}],
+                "enabled": True,
+            },
+        )
+        assert success_resp.status_code == 201
+        success_rule_id = success_resp.json()["data"]["id"]
+
+        # Trigger that one too
+        await api_client.post(
+            "/api/v1/automation/trigger",
+            json={
+                "event_type": "opportunity.created",
+                "context": {"opportunity_id": 1, "name": "Test Opp"},
+            },
+        )
+
+        # Filter by status=failed — should only return the failed log
         response = await api_client.get("/api/v1/automation/logs?status=failed")
         assert response.status_code == 200
         data = response.json()
         assert data["success"] is True
         for log in data["data"]["items"]:
             assert log["status"] == "failed"
+            assert log["rule_id"] == rule_id
+
+        # Filter by status=success — should only return success logs
+        response_ok = await api_client.get("/api/v1/automation/logs?status=success")
+        assert response_ok.status_code == 200
+        data_ok = response_ok.json()
+        assert data_ok["success"] is True
+        # Verify all returned logs have status=success (filter is correctly applied)
+        for log in data_ok["data"]["items"]:
+            assert log["status"] == "success"
 
     async def test_404_on_nonexistent_rule(self, api_client, tenant_id_web):
         """GET /api/v1/automation/rules/99999 returns 404."""

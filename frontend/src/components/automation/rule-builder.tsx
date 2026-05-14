@@ -114,7 +114,12 @@ export function RuleBuilder({
       enabled,
     };
 
-    await onSubmit(payload);
+    try {
+      await onSubmit(payload);
+    } catch (err) {
+      setValidationError(err instanceof Error ? err.message : "An unexpected error occurred. Please try again.");
+      throw err;
+    }
   }
 
   async function handleSubmit(e: React.FormEvent) {
@@ -252,7 +257,7 @@ export function RuleBuilder({
           </div>
         </div>
         <div className="flex gap-3">
-          <Button type="button" onClick={doSubmit} disabled={disabled}>
+          <Button type="submit" onClick={doSubmit} disabled={disabled}>
             {enabled ? "Activate Rule" : "Save as Draft"}
           </Button>
           {onCancel && (

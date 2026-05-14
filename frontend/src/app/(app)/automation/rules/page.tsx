@@ -78,6 +78,13 @@ function RuleRow({
   onHistory: (id: number) => void;
   onDelete: (id: number) => Promise<void>;
 }) {
+  function handleDeleteClick(e: React.MouseEvent) {
+    e.stopPropagation();
+    if (window.confirm(`Delete rule "${rule.name}"?`)) {
+      onDelete(rule.id);
+    }
+  }
+
   return (
     <tr className="border-b hover:bg-muted/40 transition-colors group">
       <td className="px-3 py-3">
@@ -132,14 +139,7 @@ function RuleRow({
               View history
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem
-              className="text-destructive"
-              onClick={() => {
-                if (window.confirm(`Delete rule "${rule.name}"?`)) {
-                  onDelete(rule.id);
-                }
-              }}
-            >
+            <DropdownMenuItem className="text-destructive" onClick={handleDeleteClick}>
               <Trash2 className="h-4 w-4 mr-2" />
               Delete
             </DropdownMenuItem>
@@ -176,7 +176,7 @@ export default function AutomationRulesPage() {
     router.push(`/automation/rules/${id}/edit`);
   }
   function handleHistory(id: number) {
-    router.push(`/automation/rules/history?rule_id=${id}`);
+    router.push(`/automation/rules/history/${id}`);
   }
   async function handleDelete(id: number) {
     await deleteRule.mutateAsync(id);

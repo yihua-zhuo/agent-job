@@ -10,6 +10,15 @@ import {
 } from "@/components/ui/select";
 import { X } from "lucide-react";
 
+function isValidUrl(value: string): boolean {
+  try {
+    const u = new URL(value);
+    return u.protocol === "http:" || u.protocol === "https:";
+  } catch {
+    return false;
+  }
+}
+
 const ACTION_TYPES = [
   { value: "notification.send", label: "Send Notification" },
   { value: "ticket.assign", label: "Assign Ticket" },
@@ -22,7 +31,7 @@ const ACTION_TYPES = [
 ];
 
 export interface ActionRowValue {
-  type: string;
+  type: 'notification.send' | 'ticket.assign' | 'ticket.update_priority' | 'opportunity.add_note' | 'task.create' | 'email.send' | 'webhook.call' | 'tag.add' | string;
   params: Record<string, string>;
 }
 
@@ -73,13 +82,21 @@ function ParamsForm({ value, onChange, disabled }: { value: ActionRowValue; onCh
     case "ticket.update_priority":
       return (
         <div className="flex gap-2 mt-2">
-          <Input
-            placeholder="priority (low/normal/high/urgent)"
+          <Select
             value={value.params.priority ?? ""}
-            onChange={(e) => updateParam("priority", e.target.value)}
+            onValueChange={(v) => updateParam("priority", v)}
             disabled={disabled}
-            className="flex-1"
-          />
+          >
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="Select priority…" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="low">low</SelectItem>
+              <SelectItem value="normal">normal</SelectItem>
+              <SelectItem value="high">high</SelectItem>
+              <SelectItem value="urgent">urgent</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       );
     case "task.create":
@@ -103,33 +120,45 @@ function ParamsForm({ value, onChange, disabled }: { value: ActionRowValue; onCh
       );
     case "email.send":
       return (
-        <div className="flex gap-2 mt-2">
-          <Input
-            placeholder="to"
-            value={value.params.to ?? ""}
-            onChange={(e) => updateParam("to", e.target.value)}
-            disabled={disabled}
-            className="flex-1"
-          />
-          <Input
-            placeholder="subject"
-            value={value.params.subject ?? ""}
-            onChange={(e) => updateParam("subject", e.target.value)}
-            disabled={disabled}
-            className="flex-1"
-          />
+        <div className="flex flex-col gap-2 mt-2">
+          <div className="flex gap-2">
+            <Input
+              placeholder="to"
+              type="email"
+              value={value.params.to ?? ""}
+              onChange={(e) => updateParam("to", e.target.value)}
+              disabled={disabled}
+              className="flex-1"
+            />
+            <Input
+              placeholder="subject"
+              value={value.params.subject ?? ""}
+              onChange={(e) => updateParam("subject", e.target.value)}
+              disabled={disabled}
+              className="flex-1"
+            />
+          </div>
+          {value.params.to && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.params.to) && (
+            <p className="text-xs text-red-600">Enter a valid email address.</p>
+          )}
         </div>
       );
     case "webhook.call":
       return (
-        <div className="flex gap-2 mt-2">
-          <Input
-            placeholder="url"
-            value={value.params.url ?? ""}
-            onChange={(e) => updateParam("url", e.target.value)}
-            disabled={disabled}
-            className="flex-1"
-          />
+        <div className="flex flex-col gap-2 mt-2">
+          <div className="flex gap-2">
+            <Input
+              placeholder="url"
+              type="url"
+              value={value.params.url ?? ""}
+              onChange={(e) => updateParam("url", e.target.value)}
+              disabled={disabled}
+              className="flex-1"
+            />
+          </div>
+          {value.params.url && !isValidUrl(value.params.url) && (
+            <p className="text-xs text-red-600">Enter a valid URL (e.g. https://example.com/webhook).</p>
+          )}
         </div>
       );
     case "tag.add":

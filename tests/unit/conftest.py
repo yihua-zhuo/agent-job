@@ -686,13 +686,15 @@ def make_automation_handler(state: MockState):
         # UPDATE automation_rules (toggle, general update)
         if "update" in sql_text and "automation_rules" in sql_text:
             rid = params.get("id")
-            if rid in state.automation_rules:
-                rec = state.automation_rules[rid]
-                for k, v in params.items():
-                    if k not in ("id", "tenant_id"):
-                        rec[k] = v
-                return MockResult([MockRow(rec.copy())], rowcount=1)
-            return MockResult([], rowcount=0)
+            if rid not in state.automation_rules:
+                return MockResult([], rowcount=0)
+            rec = state.automation_rules[rid]
+            if rec.get("tenant_id") != tenant_id:
+                return MockResult([], rowcount=0)
+            for k, v in params.items():
+                if k not in ("id", "tenant_id"):
+                    rec[k] = v
+            return MockResult([MockRow(rec.copy())], rowcount=1)
 
         # DELETE automation_rules
         if "delete" in sql_text and "automation_rules" in sql_text:
