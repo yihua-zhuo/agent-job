@@ -18,7 +18,7 @@ interface SLATimerProps {
 }
 
 function formatRemaining(totalMs: number): string {
-  const totalMinutes = Math.floor(Math.abs(totalMs) / 60000);
+  const totalMinutes = Math.floor(totalMs / 60000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   if (totalMs > 0) return `${hours}h ${minutes}m left`;
@@ -53,14 +53,21 @@ export function SLATimer({ responseDeadline, createdAt, slaLevel, className }: S
   const ratio = Math.min(elapsedMs / totalMs, 1);
   const breached = remainingMs < 0;
 
-  let colorClass = "bg-green-100 text-green-800 border-green-300";
-  if (ratio > 0.75) colorClass = "bg-red-100 text-red-800 border-red-300";
-  else if (ratio > 0.5) colorClass = "bg-yellow-100 text-yellow-800 border-yellow-300";
+  let colorClass: string;
+  if (breached) {
+    colorClass = "bg-red-100 text-red-800 border-red-300";
+  } else if (ratio > 0.75) {
+    colorClass = "bg-red-100 text-red-800 border-red-300";
+  } else if (ratio > 0.5) {
+    colorClass = "bg-yellow-100 text-yellow-800 border-yellow-300";
+  } else {
+    colorClass = "bg-green-100 text-green-800 border-green-300";
+  }
 
   const remaining = formatRemaining(remainingMs);
 
   return (
-    <Badge
+    <span
       className={
         breached
           ? `${colorClass} animate-pulse border-red-500`
@@ -68,6 +75,6 @@ export function SLATimer({ responseDeadline, createdAt, slaLevel, className }: S
       }
     >
       {remaining}
-    </Badge>
+    </span>
   );
 }

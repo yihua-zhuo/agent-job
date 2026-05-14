@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useTickets, useDeleteTicket, useSlaBreaches, useUsers } from "@/lib/api/queries";
@@ -195,9 +195,9 @@ export default function TicketsPage() {
   const users = (usersData?.data?.items ?? []) as Array<{ id: number; username: string; full_name?: string }>;
 
   const { data: slaBreachesData } = useSlaBreaches();
-  const breachedTicketIds = new Set(
+  const breachedTicketIds = useMemo(() => new Set(
     ((slaBreachesData?.data ?? []) as Array<{ id: number }>).map((t) => t.id)
-  );
+  ), [slaBreachesData]);
 
   const { data, isLoading, isError } = useTickets(
     page,
@@ -311,7 +311,6 @@ export default function TicketsPage() {
         setTimeout(() => toast.error(`SLA breached on ticket #${id}`), i * 500);
       });
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isLoading, breachedTicketIds]);
 
   const totalShown = info?.total ?? 0;

@@ -83,7 +83,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
 
   const { data: customersData } = useCustomers(1, 100);
   const customers = (customersData?.data?.items ?? []) as Array<{ id: number; name: string }>;
-  const customerName = customers.find((c) => c.id === Number(ticket.customer_id))?.name;
 
   const [replyContent, setReplyContent] = useState("");
   const [isInternal, setIsInternal] = useState(false);
@@ -92,6 +91,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const slaToastShownRef = useRef(false);
 
   const ticket = ticketData?.data as Record<string, unknown> | undefined;
+  const customerName = customers.find((c) => c.id === Number(ticket?.customer_id))?.name;
   const replies = (repliesData?.data ?? []) as Array<Record<string, unknown>>;
   const activities = (activityData?.data ?? []) as Array<Record<string, unknown>>;
 
@@ -104,7 +104,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
         toast.error(`SLA breached on ticket #${ticketId}`);
       }
     }
-  }, [ticket, ticketId]);
+  }, [ticket, ticketId, ticket?.resolved_at]);
 
   async function handleSendReply() {
     if (!replyContent.trim()) return;
@@ -357,10 +357,11 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
         onOpenChange={setEditDialogOpen}
         initialData={{
           id: ticketId,
-          subject: ticket.subject as string,
-          description: ticket.description as string,
-          channel: ticket.channel as string,
-          priority: ticket.priority as string,
+          subject: (ticket.subject as string) ?? "",
+          description: (ticket.description as string) ?? "",
+          channel: (ticket.channel as string) ?? "email",
+          priority: (ticket.priority as string) ?? "medium",
+          sla_level: (ticket.sla_level as string) ?? "standard",
         }}
       />
 

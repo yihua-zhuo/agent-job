@@ -177,10 +177,13 @@ export function KanbanBoard({ tickets, groupBy = "status" }: KanbanBoardProps) {
       medium: "Medium",
       low: "Low",
     };
+  const PRIORITY_COLOR_MAP: Record<string, string> = {
+    urgent: "bg-red-500", high: "bg-red-500", medium: "bg-blue-500", low: "bg-gray-400",
+  };
     const cols = Object.entries(groups).map(([key, label]) => ({
       key,
       label,
-      color: key === "urgent" || key === "high" ? "bg-red-500" : key === "medium" ? "bg-blue-500" : "bg-gray-400",
+      color: PRIORITY_COLOR_MAP[key] ?? "bg-gray-400",
       tickets: tickets.filter((t) => t.priority === key),
     }));
     return (
