@@ -77,6 +77,23 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Refresh fix-pipeline scripts from master
+        # Always run the freshest version of the pipeline scripts, regardless
+        # of how stale the PR branch is. Without this step, a long-lived PR
+        # branch would keep running an old (possibly buggy) fix_pr_comments.py
+        # forever — bug fixes to the script wouldn't reach in-flight PRs.
+        #
+        # The refreshed files land in the working tree; the final commit step
+        # explicitly excludes them from the staged diff so they're never
+        # committed back onto the PR branch.
+        run: |
+          set -e
+          git fetch origin master --depth=1
+          git checkout origin/master -- \
+            scripts/ci/fix_pr_comments.py \
+            scripts/ci/fetch_pr_test_failures.py
+          echo "Refreshed scripts/ci/fix_pr_comments.py and fetch_pr_test_failures.py from origin/master"
+
       - name: Install Python dependencies
         run: |
           set -e
@@ -143,6 +160,19 @@ jobs:
           HEAD_REF="${{ steps.pr.outputs.head_ref }}"
 
           git add -A
+          # The "Refresh fix-pipeline scripts from master" step earlier in
+          # this job overwrote these two files with master's version so the
+          # latest pipeline logic runs. Drop them from the staged diff here
+          # so the refresh never gets committed onto the PR branch.
+          git reset HEAD -- \
+            scripts/ci/fix_pr_comments.py \
+            scripts/ci/fetch_pr_test_failures.py 2>/dev/null || true
+          # Also restore the working-tree copies so subsequent steps see
+          # what the PR branch actually has, not master's version.
+          git checkout -- \
+            scripts/ci/fix_pr_comments.py \
+            scripts/ci/fetch_pr_test_failures.py 2>/dev/null || true
+
           if ! git diff --cached --quiet; then
             git commit \
               -m "fix: address PR #${PR_NUMBER} review comments" \
