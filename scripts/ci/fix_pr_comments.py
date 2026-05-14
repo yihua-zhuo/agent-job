@@ -23,14 +23,17 @@ import sys
 import time
 
 
-# Markers our other pipelines leave on bot-authored comments — skip them
-# so we don't ask Claude to "address" our own summaries.
+# Markers identifying SUMMARY-style bot comments we should NOT ask Claude to
+# "address" — they're status updates, not actionable feedback. Notably absent:
+# `agent-job-code-review-inline`. Those inline comments contain real
+# severity + issue + suggestion bodies and ARE exactly what fix-pr-comments
+# exists to address. Including that marker here was the bug behind PR #356's
+# "114 unresolved → 1 actionable" silent drop — keep it out.
 BOT_MARKERS = (
-    "<!-- agent-job-code-review-result -->",
-    "<!-- agent-job-code-review-line-comments -->",
-    "<!-- agent-job-code-review-inline -->",
-    "<!-- agent-job-issue-validator -->",
-    "<!-- agent-job-issue-preparer -->",
+    "<!-- agent-job-code-review-result -->",        # top-level review summary comment
+    "<!-- agent-job-code-review-line-comments -->", # top-level inline-comments summary
+    "<!-- agent-job-issue-validator -->",           # issue-triage verdict comment
+    "<!-- agent-job-issue-preparer -->",            # issue implementation plan comment
 )
 
 

@@ -3,7 +3,15 @@ import { persist } from "zustand/middleware";
 import CryptoJS from "crypto-js";
 
 const STORAGE_KEY = "crm_auth";
-const ENCRYPT_KEY = process.env.NEXT_PUBLIC_AUTH_SECRET ?? "dev-auth-secret-change-in-prod";
+const ENCRYPT_KEY = (() => {
+  const key = process.env.NEXT_PUBLIC_AUTH_KEY;
+  if (!key) {
+    throw new Error(
+      "NEXT_PUBLIC_AUTH_KEY is not set. Set it in .env.local before starting the app."
+    );
+  }
+  return key;
+})();
 
 export interface AuthUser {
   id: number;

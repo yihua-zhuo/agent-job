@@ -28,7 +28,7 @@ def _paginated(items, total, page, page_size):
             "page_size": page_size,
             "total_pages": total_pages,
         },
-        "message": "获取任务列表成功",
+        "message": "Task list retrieved",
     }
 
 
@@ -72,7 +72,7 @@ async def create_task(
         assigned_to=body.assigned_to,
         due_date=body.due_date,
         priority=body.priority,
-        tenant_id=ctx.tenant_id or 0,
+        tenant_id=ctx.tenant_id,
     )
     return {"success": True, "data": task.to_dict(), "message": "任务创建成功"}
 
@@ -87,14 +87,13 @@ async def list_tasks(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    items = await service.list_tasks(
-        tenant_id=ctx.tenant_id or 0,
+    items, total = await service.list_tasks(
+        tenant_id=ctx.tenant_id,
         status=status,
         assigned_to=assigned_to,
         page=page,
         page_size=page_size,
     )
-    total = len(items)
     return _paginated(items, total, page, page_size)
 
 
@@ -105,7 +104,7 @@ async def get_task(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    task = await service.get_task(tenant_id=ctx.tenant_id or 0, task_id=task_id)
+    task = await service.get_task(tenant_id=ctx.tenant_id, task_id=task_id)
     return {"success": True, "data": task.to_dict(), "message": "获取任务成功"}
 
 
@@ -118,7 +117,7 @@ async def update_task(
 ):
     service = TaskService(session)
     update_data = body.model_dump(exclude_unset=True)
-    task = await service.update_task(tenant_id=ctx.tenant_id or 0, task_id=task_id, **update_data)
+    task = await service.update_task(tenant_id=ctx.tenant_id, task_id=task_id, **update_data)
     return {"success": True, "data": task.to_dict(), "message": "任务更新成功"}
 
 
@@ -129,7 +128,7 @@ async def complete_task(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    task = await service.complete_task(tenant_id=ctx.tenant_id or 0, task_id=task_id)
+    task = await service.complete_task(tenant_id=ctx.tenant_id, task_id=task_id)
     return {"success": True, "data": task.to_dict(), "message": "任务已完成"}
 
 
@@ -140,5 +139,5 @@ async def delete_task(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    await service.delete_task(tenant_id=ctx.tenant_id or 0, task_id=task_id)
+    await service.delete_task(tenant_id=ctx.tenant_id, task_id=task_id)
     return {"success": True, "data": None, "message": "任务已删除"}

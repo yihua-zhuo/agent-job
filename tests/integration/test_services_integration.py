@@ -310,10 +310,11 @@ class TestTaskIntegration:
             tenant_id=tenant_id,
         )
 
-        result = await svc.list_tasks(tenant_id)
+        result, total = await svc.list_tasks(tenant_id)
         titles = [t.title for t in result]
         assert any(f"List Task 1 {suffix}" in t for t in titles)
         assert any(f"List Task 2 {suffix}" in t for t in titles)
+        assert total >= 2
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

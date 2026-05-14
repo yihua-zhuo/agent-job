@@ -460,3 +460,83 @@ class TestSlaBreachTicketsEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert len(body["data"]) == 1
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/tickets/{ticket_id}/replies — get ticket replies
+# ---------------------------------------------------------------------------
+
+class TestGetTicketRepliesEndpoint:
+    def test_success(self, client_with_service):
+        client, svc, _ = client_with_service
+        mock_reply = MockReply(REPLY_ROW)
+        svc.get_ticket_replies = AsyncMock(return_value=[mock_reply])
+        resp = client.get("/api/v1/tickets/1/replies")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert len(body["data"]) == 1
+        assert body["data"][0]["content"] == "Here is the response"
+
+    def test_not_found_returns_404(self, client_with_service):
+        client, svc, _ = client_with_service
+        svc.get_ticket_replies = AsyncMock(
+            side_effect=NotFoundException("Ticket")
+        )
+        resp = client.get("/api/v1/tickets/9999/replies")
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/tickets/{ticket_id}/activity — get ticket activity log
+# ---------------------------------------------------------------------------
+
+class MockActivity:
+    def __init__(self, data=None):
+        for k, v in (data or {}).items():
+            setattr(self, k, v)
+
+    def to_dict(self):
+        return {
+            "id": getattr(self, "id", None),
+            "tenant_id": getattr(self, "tenant_id", None),
+            "customer_id": getattr(self, "customer_id", None),
+            "opportunity_id": getattr(self, "opportunity_id", None),
+            "type": getattr(self, "type", None),
+            "content": getattr(self, "content", None),
+            "created_by": getattr(self, "created_by", None),
+            "created_at": getattr(self, "created_at", None),
+        }
+
+
+ACTIVITY_ROW = {
+    "id": 1,
+    "tenant_id": 1,
+    "customer_id": 1,
+    "opportunity_id": None,
+    "type": "comment",
+    "content": "ticket#1 updated",
+    "created_by": 99,
+    "created_at": None,
+}
+
+
+class TestGetTicketActivityEndpoint:
+    def test_success(self, client_with_service):
+        client, svc, _ = client_with_service
+        mock_activity = MockActivity(ACTIVITY_ROW)
+        svc.get_ticket_activity = AsyncMock(return_value=[mock_activity])
+        resp = client.get("/api/v1/tickets/1/activity")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert len(body["data"]) == 1
+        assert body["data"][0]["type"] == "comment"
+
+    def test_not_found_returns_404(self, client_with_service):
+        client, svc, _ = client_with_service
+        svc.get_ticket_activity = AsyncMock(
+            side_effect=NotFoundException("Ticket")
+        )
+        resp = client.get("/api/v1/tickets/9999/activity")
+        assert resp.status_code == 404

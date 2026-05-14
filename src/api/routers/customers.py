@@ -12,9 +12,12 @@ from pydantic import BaseModel, Field, field_validator
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
+from models.customer import CustomerStatus
 from services.customer_service import CustomerService
 
 customers_router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
+CUSTOMER_STATUS_PATTERN = "^(" + "|".join(re.escape(status.value) for status in CustomerStatus) + ")$"
+STATUS_CHANGE_PATTERN = "^(active|inactive|blocked)$"
 
 
 def _is_valid_email(email: str) -> bool:
@@ -57,7 +60,7 @@ class CustomerCreate(BaseModel):
     email: str | None = Field(None, max_length=255, description="邮箱")
     phone: str | None = Field(None, max_length=50, description="电话")
     company: str | None = Field(None, max_length=200, description="公司")
-    status: str | None = Field(default="lead", pattern="^(lead|customer|partner|prospect)$")
+    status: str | None = Field(default="lead", pattern=CUSTOMER_STATUS_PATTERN)
     owner_id: int | None = Field(default=0, ge=0, description="负责人 ID")
     tags: list[str] | None = Field(default_factory=list, description="标签列表")
 
@@ -81,7 +84,7 @@ class TagOp(BaseModel):
 
 
 class StatusChange(BaseModel):
-    status: str = Field(..., pattern="^(active|inactive|blocked)$")
+    status: str = Field(..., pattern=STATUS_CHANGE_PATTERN)
 
 
 class OwnerChange(BaseModel):

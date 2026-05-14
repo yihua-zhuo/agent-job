@@ -66,18 +66,19 @@ class TestListTasks:
         assert "items" in data["data"]
         assert "total" in data["data"]
 
-    async def test_list_tasks_with_data(self, api_client: AsyncClient):
+    async def test_list_tasks_with_data(self, api_client: AsyncClient, tenant_id_web: int):
         # Create 3 tasks
         for i in range(3):
-            await api_client.post(
+            resp = await api_client.post(
                 "/api/v1/tasks",
                 json={"title": f"Task {i}"},
             )
+            assert resp.status_code == 201, f"Body: {resp.text}"
+            assert resp.json()["data"]["tenant_id"] == tenant_id_web
         resp = await api_client.get("/api/v1/tasks")
         assert resp.status_code == 200, f"Body: {resp.text}"
         data = resp.json()
-        assert data["success"] is True
-        assert data["data"]["total"] >= 3
+        assert data["data"]["total"] == 3
 
     async def test_list_tasks_with_status_filter(
         self, api_client: AsyncClient, tenant_id_web: int

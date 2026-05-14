@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, select, update
+from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.task import TaskModel
@@ -115,18 +115,22 @@ class TaskService:
         status: str | None = None,
         page: int = 1,
         page_size: int = 20,
-    ) -> list[TaskModel]:
+    ) -> tuple[list[TaskModel], int]:
         conditions = [TaskModel.tenant_id == tenant_id]
         if assigned_to is not None:
             conditions.append(TaskModel.assigned_to == assigned_to)
         if status:
             conditions.append(TaskModel.status == status)
 
+        count_stmt = select(func.count()).select_from(TaskModel).where(and_(*conditions))
+        count_result = await self.session.execute(count_stmt)
+        total = count_result.scalar_one()
+
         offset = (page - 1) * page_size
         stmt = select(TaskModel).order_by(TaskModel.created_at.desc()).offset(offset).limit(page_size)
         stmt = stmt.where(and_(*conditions))
         result = await self.session.execute(stmt)
-        return result.scalars().all()
+        return result.scalars().all(), total
 
     async def get_my_tasks(self, tenant_id: int, user_id: int, status: str | None = None) -> list[TaskModel]:
         conditions = [TaskModel.tenant_id == tenant_id, TaskModel.assigned_to == user_id]

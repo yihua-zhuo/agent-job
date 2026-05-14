@@ -80,3 +80,6 @@ migrate: ## Apply all alembic migrations to the test-db
 migrate-new: ## Autogenerate a new migration: make migrate-new MSG="..."
 	@if [ -z "$(MSG)" ]; then echo "Usage: make migrate-new MSG=\"describe change\""; exit 1; fi
 	alembic revision --autogenerate -m "$(MSG)"
+
+trigger-fix:
+	$(PYTHON) "scripts/ci/trigger_fix_for_issue.py" $(ISSUE)

@@ -9,6 +9,7 @@ from api.routers.tasks import tasks_router
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext
 from pkg.errors.app_exceptions import AppException, NotFoundException
+from tests.unit.conftest import MockState, make_mock_session, make_task_handler
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -74,6 +75,15 @@ def client_with_service(monkeypatch):
     from internal.middleware.fastapi_auth import require_auth
 
     mock_service = MagicMock()
+    mock_service.create_task = AsyncMock()
+    mock_service.list_tasks = AsyncMock()
+    mock_service.get_task = AsyncMock()
+    mock_service.update_task = AsyncMock()
+    mock_service.complete_task = AsyncMock()
+    mock_service.delete_task = AsyncMock()
+
+    state = MockState()
+    mock_db = make_mock_session([make_task_handler(state)])
 
     monkeypatch.setattr(
         "api.routers.tasks.TaskService",
@@ -83,7 +93,7 @@ def client_with_service(monkeypatch):
     app = FastAPI()
     app.include_router(tasks_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[get_db] = lambda: mock_db
 
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -148,7 +158,7 @@ class TestListTasksEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
         mock_task = MockTask(TASK_ROW)
-        svc.list_tasks = AsyncMock(return_value=[mock_task])
+        svc.list_tasks = AsyncMock(return_value=([mock_task], 1))
         resp = client.get("/api/v1/tasks")
         assert resp.status_code == 200
         body = resp.json()
@@ -158,7 +168,7 @@ class TestListTasksEndpoint:
 
     def test_status_filter(self, client_with_service):
         client, svc = client_with_service
-        svc.list_tasks = AsyncMock(return_value=[])
+        svc.list_tasks = AsyncMock(return_value=([], 0))
         resp = client.get("/api/v1/tasks?status=pending")
         assert resp.status_code == 200
         svc.list_tasks.assert_called_once()
@@ -172,7 +182,7 @@ class TestListTasksEndpoint:
 
     def test_page_defaults_to_1(self, client_with_service):
         client, svc = client_with_service
-        svc.list_tasks = AsyncMock(return_value=[])
+        svc.list_tasks = AsyncMock(return_value=([], 0))
         resp = client.get("/api/v1/tasks")
         assert resp.status_code == 200
         call_kwargs = svc.list_tasks.call_args[1]
