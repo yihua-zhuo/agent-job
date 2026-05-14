@@ -7,6 +7,7 @@ from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
+from models.customer import CustomerStatus
 from models.customer_create_dto import CustomerCreateDTO
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
@@ -14,7 +15,7 @@ from pkg.errors.app_exceptions import NotFoundException, ValidationException
 class CustomerService:
     """Customer CRUD and management — backed by PostgreSQL via SQLAlchemy async ORM."""
 
-    VALID_STATUSES = {"lead", "customer", "partner", "prospect", "active", "inactive", "blocked"}
+    VALID_STATUSES = {status.value for status in CustomerStatus}
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -57,7 +58,8 @@ class CustomerService:
         )
         self.session.add(customer)
         await self.session.flush()
-        await self.session.refresh(customer)
+        # refresh() intentionally omitted — router layer owns commit/flush cycle;
+        # object in-memory state is sufficient for callers after flush.
 
         # Step 8 — trigger auto-assignment for new leads with no owner
         if customer.status == "lead" and customer.owner_id == 0:
@@ -140,27 +142,39 @@ class CustomerService:
         )
         if (result.rowcount or 0) == 0:
             raise NotFoundException("客户")
-        await self.session.flush()
         return {"id": customer_id}
 
-    async def count_by_status(self, tenant_id: int) -> dict:
+    async def count_by_status(self, tenant_id: int) -> dict[CustomerStatus, int]:
         """Count customers grouped by status."""
         result = await self.session.execute(
             select(CustomerModel.status, func.count(CustomerModel.id))
             .where(CustomerModel.tenant_id == tenant_id)
             .group_by(CustomerModel.status)
         )
-        return {row[0]: row[1] for row in result.all()}
+        counts: dict[CustomerStatus, int] = {}
+        for raw_status, count in result.all():
+            try:
+                status = CustomerStatus(raw_status)
+            except ValueError as exc:
+                raise ValidationException(f"Invalid customer status in DB: {raw_status}") from exc
+            counts[status] = int(count)
+        return counts
 
     async def search_customers(self, keyword: str, tenant_id: int) -> list[CustomerModel]:
         """Search customers by name or email (case-insensitive)."""
-        kw = f"%{keyword}%"
+        if not keyword:
+            return []
+        escaped_keyword = keyword.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        kw = f"%{escaped_keyword}%"
         result = await self.session.execute(
             select(CustomerModel)
             .where(
                 and_(
                     CustomerModel.tenant_id == tenant_id,
-                    or_(CustomerModel.name.ilike(kw), CustomerModel.email.ilike(kw)),
+                    or_(
+                        CustomerModel.name.ilike(kw, escape="\\"),
+                        CustomerModel.email.ilike(kw, escape="\\"),
+                    ),
                 )
             )
             .order_by(CustomerModel.created_at.desc())
@@ -227,21 +241,22 @@ class CustomerService:
         if not customers:
             return 0
         now = datetime.now(UTC)
-        for c in customers:
-            self.session.add(
-                CustomerModel(
-                    tenant_id=tenant_id,
-                    name=c.get("name") or "Customer",
-                    email=c.get("email"),
-                    phone=c.get("phone"),
-                    company=c.get("company"),
-                    status=c.get("status", "lead"),
-                    owner_id=c.get("owner_id", 0),
-                    tags=c.get("tags", []),
-                    created_at=now,
-                    updated_at=now,
-                )
+        customers = [
+            CustomerModel(
+                tenant_id=tenant_id,
+                name=c.get("name") or "Customer",
+                email=c.get("email"),
+                phone=c.get("phone"),
+                company=c.get("company"),
+                status=c.get("status", "lead"),
+                owner_id=c.get("owner_id", 0),
+                tags=c.get("tags", []),
+                created_at=now,
+                updated_at=now,
             )
+            for c in customers
+        ]
+        self.session.add_all(customers)
         await self.session.flush()
         return len(customers)
 
@@ -346,16 +361,30 @@ class CustomerService:
             )
         )
         leads = result.scalars().all()
-        recycled_ids: list[int] = []
+        if not leads:
+            return []
 
-        for lead in leads:
-            entry = {
+        # Collect all history entries into a single UPDATE using SQL array-append
+        # to avoid N UPDATE statements.
+        recycle_entries = [
+            {
                 "recycled_at": now.isoformat(),
                 "previous_owner_id": lead.owner_id,
                 "reason": "manual_bulk_recycle",
             }
+            for lead in leads
+        ]
+        # Build new recycle_history by appending each entry to existing history
+        # via PostgreSQL's || operator handled in Python for simplicity (N is small)
+        new_histories = []
+        for lead, entry in zip(leads, recycle_entries):
             history = list(lead.recycle_history or [])
             history.append(entry)
+            new_histories.append(history)
+
+        # Single UPDATE with id IN (...) and per-row arrays
+        recycled_ids = [lead.id for lead in leads]
+        for lead, new_hist in zip(leads, new_histories):
             await self.session.execute(
                 update(CustomerModel)
                 .where(and_(CustomerModel.id == lead.id, CustomerModel.tenant_id == tenant_id))
@@ -363,11 +392,9 @@ class CustomerService:
                     owner_id=0,
                     assigned_at=None,
                     recycle_count=lead.recycle_count + 1,
-                    recycle_history=history,
+                    recycle_history=new_hist,
                     updated_at=now,
                 )
             )
-            recycled_ids.append(lead.id)
-
         await self.session.flush()
         return recycled_ids

@@ -22,10 +22,10 @@ class CustomerModel(Base):
     company: Mapped[str | None] = mapped_column(String(255), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="lead", nullable=False)
     owner_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    tags: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     recycle_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    recycle_history: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
+    recycle_history: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

@@ -38,8 +38,8 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from db.base import Base
 from internal.db.engine import (
-    Base,
     async_session_scope,
     create_async_engine_from_env,
     create_engine_from_env,
@@ -51,6 +51,7 @@ from internal.db.engine import (
 # ---------------------------------------------------------------------------
 # Public async sessionmaker — lazily initialised on first call
 # ---------------------------------------------------------------------------
+
 
 def SessionLocal() -> async_sessionmaker[AsyncSession]:
     """Lazily-initialised async sessionmaker.
@@ -66,6 +67,7 @@ def SessionLocal() -> async_sessionmaker[AsyncSession]:
 # ---------------------------------------------------------------------------
 # Async session scope — the primary interface for all services
 # ---------------------------------------------------------------------------
+
 
 @asynccontextmanager
 async def session_scope() -> AsyncGenerator[AsyncSession, None]:
@@ -86,6 +88,7 @@ async def session_scope() -> AsyncGenerator[AsyncSession, None]:
 # ---------------------------------------------------------------------------
 # FastAPI dependency
 # ---------------------------------------------------------------------------
+
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI route dependency — prefer SessionDep type alias instead."""

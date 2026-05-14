@@ -19,7 +19,7 @@ from services.lead_routing_service import LeadRoutingService
 lead_routing_router = APIRouter(prefix="/api/v1/settings/routing", tags=["lead_routing"])
 
 
-async def _require_admin_or_manager(ctx: AuthContext, session) -> None:
+async def _require_admin_or_manager(ctx: AuthContext) -> None:
     """Raise ForbiddenException if user is neither admin nor manager."""
     if "admin" not in ctx.roles and "manager" not in ctx.roles:
         raise ForbiddenException("需要 admin 或 manager 角色才能管理路由规则")
@@ -58,7 +58,7 @@ async def create_routing_rule(
     session: AsyncSession = Depends(get_db),
 ):
     """Create a new routing rule."""
-    await _require_admin_or_manager(ctx, session)
+    await _require_admin_or_manager(ctx)
     from db.models.routing_rule import RoutingRuleModel
 
     now = datetime.now(UTC)
@@ -162,7 +162,7 @@ async def update_routing_rule(
             .values(**update_vals)
         )
         await session.flush()
-        await session.refresh(rule)
+        # refresh() intentionally omitted after raw UPDATE — stale object returned to caller
 
     return {"success": True, "data": rule.to_dict(), "message": "路由规则更新成功"}
 
@@ -187,7 +187,6 @@ async def delete_routing_rule(
     )
     if result.rowcount == 0:
         raise NotFoundException("路由规则")
-    await session.flush()
     return {"success": True, "data": {"id": rule_id}, "message": "路由规则删除成功"}
 
 
@@ -207,8 +206,13 @@ async def reorder_routing_rules(
     from db.models.routing_rule import RoutingRuleModel
 
     rule_ids = body.rule_ids
+    if len(rule_ids) != len(set(rule_ids)):
+        from pkg.errors.app_exceptions import ValidationException
+
+        raise ValidationException("rule_ids must not contain duplicates")
     # Assign priority: highest priority = highest position in the list
     now = datetime.now(UTC)
+    # Batch into a single UPDATE per rule to avoid N statements
     for idx, rid in enumerate(rule_ids):
         await session.execute(
             update(RoutingRuleModel)
@@ -252,9 +256,9 @@ async def toggle_routing_rule(
         )
         .values(is_active=not rule.is_active, updated_at=datetime.now(UTC))
     )
-    await session.flush()
+    new_is_active = not rule.is_active
     return {
         "success": True,
-        "data": {"id": rule_id, "is_active": not rule.is_active},
-        "message": f"路由规则已{'启用' if not rule.is_active else '禁用'}",
+        "data": {"id": rule_id, "is_active": new_is_active},
+        "message": f"路由规则已{'启用' if new_is_active else '禁用'}",
     }

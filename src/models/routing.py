@@ -2,9 +2,9 @@
 
 from datetime import datetime
 from enum import StrEnum
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ConditionOperator(StrEnum):
@@ -29,9 +29,12 @@ class RuleCondition(BaseModel):
     operator: ConditionOperator = Field(..., description="Comparison operator")
     value: Any = Field(..., description="Value to compare against")
 
-    def model_post_init(self, _):
-        if self.field not in SUPPORTED_FIELDS:
-            raise ValueError(f"Unsupported field: {self.field}. Supported: {sorted(SUPPORTED_FIELDS)}")
+    @field_validator("field")
+    @classmethod
+    def check_field(cls, v: str) -> str:
+        if v not in SUPPORTED_FIELDS:
+            raise ValueError(f"Unsupported field: {v}. Supported: {sorted(SUPPORTED_FIELDS)}")
+        return v
 
 
 class RecycleHistoryEntry(BaseModel):
@@ -70,13 +73,13 @@ class RoutingRuleResponse(BaseModel):
     id: int
     tenant_id: int
     name: str
-    conditions_json: list[dict]
+    conditions_json: list["RuleCondition"]
     assignee_type: str
     assignee_id: int | None
     priority: int
     is_active: bool
-    created_at: str | None
-    updated_at: str | None
+    created_at: datetime | None
+    updated_at: datetime | None
 
 
 class RoutingRulePriorityUpdate(BaseModel):
@@ -91,7 +94,7 @@ class LeadAssignPreview(BaseModel):
     matched_rule_id: int | None
     matched_rule_name: str | None
     assignee_id: int | None
-    assignee_type: str
+    assignee_type: Literal["user", "team", "round_robin"]
     sla_status: str  # "green" | "yellow" | "red"
 
 

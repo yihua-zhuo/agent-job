@@ -1,5 +1,6 @@
 """Lead routing service — rule evaluation, auto-assignment, load balancing, and recycling."""
 
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -10,8 +11,12 @@ from db.models.customer import CustomerModel
 from db.models.routing_rule import RoutingRuleModel
 from db.models.tenant import TenantModel
 from db.models.user import UserModel
-from models.routing import ConditionOperator, LeadAssignPreview, RuleCondition
+from models.routing import SUPPORTED_FIELDS, ConditionOperator, LeadAssignPreview, RuleCondition
 from pkg.errors.app_exceptions import ValidationException
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_MAX_LOAD_PER_REP = 20
 
 
 def evaluate_conditions(conditions: list[RuleCondition], customer: dict[str, Any]) -> bool:
@@ -81,7 +86,7 @@ async def _get_load_balanced_assignee(
     session: AsyncSession,
     rule: RoutingRuleModel,
     tenant_id: int,
-    max_load_per_rep: int = 20,
+    max_load_per_rep: int = DEFAULT_MAX_LOAD_PER_REP,
 ) -> int | None:
     """Pick the eligible user with the lowest active lead count.
 
@@ -141,7 +146,7 @@ class LeadRoutingService:
         result = await self.session.execute(select(TenantModel.settings).where(TenantModel.id == tenant_id))
         row = result.scalar_one_or_none()
         settings = row or {}
-        return settings.get("lead_routing", {}).get("max_load_per_rep", 20)
+        return settings.get("lead_routing", {}).get("max_load_per_rep", DEFAULT_MAX_LOAD_PER_REP)
 
     async def get_matching_rule(self, tenant_id: int, customer: dict[str, Any]) -> RoutingRuleModel | None:
         """Find the highest-priority active rule whose conditions match."""
@@ -258,7 +263,7 @@ class LeadRoutingService:
                     CustomerModel.tenant_id == tenant_id,
                     CustomerModel.status == "lead",
                     CustomerModel.owner_id != 0,
-                    CustomerModel.assigned_at.is_(None).is_(False),  # assigned_at IS NOT NULL
+                    CustomerModel.assigned_at.isnot(None),  # assigned_at IS NOT NULL
                     CustomerModel.assigned_at < cutoff,
                     CustomerModel.recycle_count < max_recycle,
                 )
@@ -342,7 +347,7 @@ class LeadRoutingService:
     ) -> LeadAssignPreview:
         """Preview which rule and assignee would handle a lead. No side effects."""
         for cond in conditions:
-            if cond.field not in {"region", "industry", "employee_count", "source", "created_date"}:
+            if cond.field not in SUPPORTED_FIELDS:
                 raise ValidationException(f"Unsupported field in test: {cond.field}")
 
         matched_rule: RoutingRuleModel | None = None
@@ -420,9 +425,15 @@ async def check_and_recycle_leads(async_sessionmaker, stale_hours: int = 24, max
                             prev_owner = history[-1].get("previous_owner_id", 0)
                             try:
                                 notif_svc = NotificationService(session)
-                                await notif_svc.send_lead_recycled(cust_id, prev_owner)
-                            except Exception:  # noqa: S110
-                                pass
+                                await notif_svc.send_notification(
+                                    user_id=prev_owner,
+                                    notification_type="lead_recycled",
+                                    title="Lead Recycled",
+                                    content=f"Lead {cust_id} has been recycled",
+                                    tenant_id=tid,
+                                )
+                            except Exception as e:
+                                logger.warning("notification failed for tenant %s: %s", tid, e)
 
                 disqualified = await svc.disqualify_overcycled_leads(tid, max_recycle=max_recycle)
                 result["disqualified"] += len(disqualified)

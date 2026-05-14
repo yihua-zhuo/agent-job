@@ -9,13 +9,17 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
+from models.customer import CustomerStatus
 from services.customer_service import CustomerService
 from services.lead_routing_service import LeadRoutingService
 
 customers_router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
+CUSTOMER_STATUS_PATTERN = "^(" + "|".join(re.escape(status.value) for status in CustomerStatus) + ")$"
+STATUS_CHANGE_PATTERN = "^(active|inactive|blocked)$"
 
 
 def _is_valid_email(email: str) -> bool:
@@ -58,7 +62,7 @@ class CustomerCreate(BaseModel):
     email: str | None = Field(None, max_length=255, description="邮箱")
     phone: str | None = Field(None, max_length=50, description="电话")
     company: str | None = Field(None, max_length=200, description="公司")
-    status: str | None = Field(default="lead", pattern="^(lead|customer|partner|prospect)$")
+    status: str | None = Field(default="lead", pattern=CUSTOMER_STATUS_PATTERN)
     owner_id: int | None = Field(default=0, ge=0, description="负责人 ID")
     tags: list[str] | None = Field(default_factory=list, description="标签列表")
 
@@ -82,7 +86,7 @@ class TagOp(BaseModel):
 
 
 class StatusChange(BaseModel):
-    status: str = Field(..., pattern="^(active|inactive|blocked)$")
+    status: str = Field(..., pattern=STATUS_CHANGE_PATTERN)
 
 
 class OwnerChange(BaseModel):
@@ -121,7 +125,7 @@ class PaginationQuery(BaseModel):
 async def create_customer(
     body: CustomerCreate,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     result = await service.create_customer(body.model_dump(), tenant_id=ctx.tenant_id)
@@ -136,7 +140,7 @@ async def list_customers(
     owner_id: int | None = Query(None, ge=0),
     tags: str | None = None,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     items, total = await service.list_customers(
@@ -154,7 +158,7 @@ async def list_customers(
 async def search_customers(
     keyword: str = Query("", max_length=200),
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     items = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
@@ -165,7 +169,7 @@ async def search_customers(
 async def get_customer(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     result = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
@@ -177,7 +181,7 @@ async def update_customer(
     customer_id: int,
     body: dict,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     result = await service.update_customer(customer_id, body, tenant_id=ctx.tenant_id)
@@ -188,7 +192,7 @@ async def update_customer(
 async def delete_customer(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     result = await service.delete_customer(customer_id, tenant_id=ctx.tenant_id)
@@ -200,7 +204,7 @@ async def add_tag(
     customer_id: int,
     body: TagOp,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     result = await service.add_tag(customer_id, _sanitize(body.tag), tenant_id=ctx.tenant_id)
@@ -212,7 +216,7 @@ async def remove_tag(
     customer_id: int,
     tag: str,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     result = await service.remove_tag(customer_id, _sanitize(tag), tenant_id=ctx.tenant_id)
@@ -224,7 +228,7 @@ async def change_status(
     customer_id: int,
     body: StatusChange,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     result = await service.change_status(customer_id, body.status, tenant_id=ctx.tenant_id)
@@ -236,7 +240,7 @@ async def assign_owner(
     customer_id: int,
     body: OwnerChange,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     service = CustomerService(session)
     result = await service.assign_owner(customer_id, body.owner_id, tenant_id=ctx.tenant_id)
@@ -247,7 +251,7 @@ async def assign_owner(
 async def bulk_import(
     body: BulkImport,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     if len(body.customers) > 1000:
         raise HTTPException(status_code=400, detail="Maximum 1000 customers per import")
@@ -267,7 +271,7 @@ async def list_sales_leads(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Unassigned leads queue for the sales team."""
     service = CustomerService(session)
@@ -276,7 +280,7 @@ async def list_sales_leads(
     if status == "unassigned":
         items, total = await service.get_unassigned_leads(ctx.tenant_id, page=page, page_size=page_size)
     elif status == "assigned":
-        items, total = await service.get_leads_by_owner(ctx.user_id, ctx.tenant_id, page=page, page_size=page_size)
+        items, total = await service.get_leads_by_owner(ctx.tenant_id, ctx.user_id, page=page, page_size=page_size)
     else:  # recycled
         from sqlalchemy import and_, func, select
 
@@ -287,9 +291,7 @@ async def list_sales_leads(
             CustomerModel.status == "lead",
             CustomerModel.recycle_count > 0,
         )
-        count_result = await session.execute(
-            select(func.count(CustomerModel.id)).where(conditions)
-        )
+        count_result = await session.execute(select(func.count(CustomerModel.id)).where(conditions))
         total = count_result.scalar() or 0
 
         result = await session.execute(
@@ -324,7 +326,7 @@ async def list_sales_leads(
 async def get_customer_assignment(
     customer_id: int,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Current assignment info for a customer."""
     service = CustomerService(session)
@@ -334,7 +336,7 @@ async def get_customer_assignment(
 
     # Fetch assigned user name if owner_id != 0
     assigned_to_name = None
-    if customer.owner_id and customer.owner_id > 0:
+    if customer.owner_id is not None and customer.owner_id > 0:
         from sqlalchemy import and_, select
 
         from db.models.user import UserModel
@@ -365,7 +367,7 @@ async def manual_assign_customer(
     customer_id: int,
     body: ManualAssign,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Manually assign a customer to an owner, bypassing routing rules."""
     service = CustomerService(session)
@@ -378,7 +380,7 @@ async def reassign_lead(
     customer_id: int,
     body: ReassignLead,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Reassign a lead with reason logged to recycle_history."""
     service = CustomerService(session)
@@ -395,7 +397,7 @@ async def reassign_lead(
 async def trigger_lead_recycle(
     body: ManualRecycle,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     """Manually trigger lead recycle (admin/manager only)."""
     if "admin" not in ctx.roles and "manager" not in ctx.roles:

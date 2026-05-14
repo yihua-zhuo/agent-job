@@ -7,11 +7,11 @@ from logging.config import fileConfig
 # Ensure src/ is on the path so 'from db.base import Base' resolves
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from alembic import context
 from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+from alembic import context
 from db.base import Base
 from db.models import (
     ActivityModel,
@@ -20,18 +20,57 @@ from db.models import (
     CampaignModel,
     CustomerModel,
     DashboardModel,
+    DeviceTrustModel,
     NotificationModel,
     OpportunityModel,
+    PermissionModel,
     PipelineModel,
     PipelineStageModel,
+    RefreshTokenModel,
     ReminderModel,
     ReportModel,
+    RoleModel,
+    RolePermissionModel,
     RoutingRuleModel,
     TaskModel,
     TenantModel,
     TicketModel,
     TicketReplyModel,
+    UserCredentialModel,
     UserModel,
+    UserRoleModel,
+    WebAuthnChallengeModel,
+    WorkflowExecutionModel,
+    WorkflowModel,
+)
+
+_ALEMBIC_MODEL_IMPORTS = (
+    ActivityModel,
+    ApiClientModel,
+    CampaignEventModel,
+    CampaignModel,
+    CustomerModel,
+    DashboardModel,
+    DeviceTrustModel,
+    NotificationModel,
+    OpportunityModel,
+    PermissionModel,
+    PipelineModel,
+    PipelineStageModel,
+    RefreshTokenModel,
+    ReminderModel,
+    ReportModel,
+    RoleModel,
+    RolePermissionModel,
+    RoutingRuleModel,
+    TaskModel,
+    TenantModel,
+    TicketModel,
+    TicketReplyModel,
+    UserCredentialModel,
+    UserModel,
+    UserRoleModel,
+    WebAuthnChallengeModel,
     WorkflowExecutionModel,
     WorkflowModel,
 )

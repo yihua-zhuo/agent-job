@@ -77,6 +77,24 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
+      - name: Pull latest pipeline scripts from master to /tmp
+        # Always run the freshest version of the pipeline scripts, regardless
+        # of how stale the PR branch is. We extract them to /tmp/ci-scripts/
+        # instead of overwriting the git working tree so the working tree
+        # stays pristine — important because the next step does a real
+        # `git merge`, which would refuse to run if scripts/ci/ were staged.
+        # As a bonus, this means we never need to worry about excluding the
+        # refresh from the final commit either.
+        run: |
+          set -e
+          git fetch origin master --depth=1
+          mkdir -p /tmp/ci-scripts
+          git show origin/master:scripts/ci/fix_pr_comments.py > /tmp/ci-scripts/fix_pr_comments.py
+          git show origin/master:scripts/ci/fetch_pr_test_failures.py > /tmp/ci-scripts/fetch_pr_test_failures.py
+          git show origin/master:scripts/ci/resolve_merge_conflicts.py > /tmp/ci-scripts/resolve_merge_conflicts.py
+          echo "Refreshed pipeline scripts in /tmp/ci-scripts/ from origin/master"
+          ls -la /tmp/ci-scripts/
+
       - name: Install Python dependencies
         run: |
           set -e
@@ -100,6 +118,16 @@ jobs:
             exit 1
           fi
 
+      - name: Resolve merge conflicts with master (if any)
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          HEAD_REF: ${{ steps.pr.outputs.head_ref }}
+          DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
+          PYTHONPATH: src
+        run: python3 /tmp/ci-scripts/resolve_merge_conflicts.py
+
       - name: Fetch failing CI logs for this branch
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -110,7 +138,7 @@ jobs:
           # Which workflows count as "tests we want Claude to fix". Add more
           # workflow filenames separated by commas if you grow the test matrix.
           TEST_WORKFLOWS: 'ci.yml'
-        run: python3 scripts/ci/fetch_pr_test_failures.py
+        run: python3 /tmp/ci-scripts/fetch_pr_test_failures.py
 
       - name: Fetch comments and let Claude fix them
         env:
@@ -124,7 +152,7 @@ jobs:
           PR_FAILURES_FILE: /tmp/pr-${{ steps.pr.outputs.pr_number }}-failures.md
           DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
           PYTHONPATH: src
-        run: python3 scripts/ci/fix_pr_comments.py
+        run: python3 /tmp/ci-scripts/fix_pr_comments.py
 
       - name: Diagnostics (working tree after Claude)
         run: |
@@ -143,10 +171,20 @@ jobs:
           HEAD_REF="${{ steps.pr.outputs.head_ref }}"
 
           git add -A
+
+          # Detect whether we're completing a merge (MERGE_HEAD exists when
+          # `git merge` left the working tree mid-merge — resolve_merge_conflicts.py
+          # only reaches this state if Claude resolved every conflict).
+          if [ -f .git/MERGE_HEAD ]; then
+            COMMIT_TITLE="merge+fix: bring master into PR #${PR_NUMBER}, resolve conflicts"
+            COMMIT_DETAIL="Resolved merge conflicts between master and PR branch, plus any reviewer feedback addressed in the same pass. All tests re-run before commit."
+          else
+            COMMIT_TITLE="fix: address PR #${PR_NUMBER} review comments"
+            COMMIT_DETAIL="Auto-applied by Claude Code based on unresolved reviewer feedback. Tests re-run before commit."
+          fi
+
           if ! git diff --cached --quiet; then
-            git commit \
-              -m "fix: address PR #${PR_NUMBER} review comments" \
-              -m "Auto-applied by Claude Code based on unresolved reviewer feedback. Tests re-run before commit."
+            git commit -m "$COMMIT_TITLE" -m "$COMMIT_DETAIL"
           fi
 
           # Compare HEAD against the remote head_ref tip. If nothing new

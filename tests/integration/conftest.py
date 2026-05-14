@@ -315,26 +315,14 @@ async def client(fastapi_app) -> AsyncGenerator[AsyncClient, None]:
         yield ac
 
 
-# auth_headers_* fixtures need async_session from above — they are declared
-# after async_session so pytest resolves them in the correct order.
-_tenant_id_web: int | None = None
-_tenant_id_2_web: int | None = None
-
-
 @pytest.fixture
 def tenant_id_web() -> int:
-    global _tenant_id_web
-    if _tenant_id_web is None:
-        _tenant_id_web = random.randint(10_000_000, 99_999_999)
-    return _tenant_id_web
+    return random.randint(10_000_000, 99_999_999)
 
 
 @pytest.fixture
 def tenant_id_2_web() -> int:
-    global _tenant_id_2_web
-    if _tenant_id_2_web is None:
-        _tenant_id_2_web = random.randint(10_000_000, 99_999_999)
-    return _tenant_id_2_web
+    return random.randint(10_000_000, 99_999_999)
 
 
 async def _seed_routing_rule(
@@ -372,33 +360,35 @@ async def _seed_routing_rule(
 
 
 @pytest_asyncio.fixture(scope="function")
-async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
+async def auth_headers_web(db_schema, tenant_id_web) -> dict[str, str]:
     """Return a valid JWT Authorization header for the test tenant."""
     os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
     from services.auth_service import AuthService
     from services.user_service import UserService
 
-    # Create the test user in the DB so /users/me resolves correctly.
-    user_svc = UserService(async_session)
-    await user_svc.create_user(
-        username="webtest",
-        email="webtest@example.com",
-        password="TestPass123!",
-        role="admin",
-        tenant_id=tenant_id_web,
-    )
-    await async_session.commit()
-    # Retrieve the actual DB-assigned user id (not hardcoded 999).
-    created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
-    actual_user_id = created_user.id if created_user else 999
+    factory = _get_test_async_session_factory()
+    async with factory() as session:
+        # Create the test user in the DB so /users/me resolves correctly.
+        user_svc = UserService(session)
+        await user_svc.create_user(
+            username="webtest",
+            email="webtest@example.com",
+            password="TestPass123!",
+            role="admin",
+            tenant_id=tenant_id_web,
+        )
+        await session.commit()
+        # Retrieve the actual DB-assigned user id (not hardcoded 999).
+        created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
+        actual_user_id = created_user.id if created_user else 999
 
-    auth_svc = AuthService(async_session, secret_key="integration-test-jwt-secret-key")
-    token = auth_svc.generate_token(
-        user_id=actual_user_id,
-        username="webtest",
-        role="admin",
-        tenant_id=tenant_id_web,
-    )
+        auth_svc = AuthService(session, secret_key="integration-test-jwt-secret-key")
+        token = auth_svc.generate_token(
+            user_id=actual_user_id,
+            username="webtest",
+            role="admin",
+            tenant_id=tenant_id_web,
+        )
     return {"Authorization": f"Bearer {token}"}
 
 
