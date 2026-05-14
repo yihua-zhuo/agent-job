@@ -434,7 +434,7 @@ class TestSLAIntegration:
         ticket.response_deadline = datetime.now(UTC) - timedelta(hours=1)
 
         sla_svc = SLAService(async_session)
-        breached = sla_svc.get_breach_tickets(tickets=[ticket])
+        breached = await sla_svc.get_breach_tickets(tickets=[ticket])
         breached_ids = [t.id for t in breached]
         assert ticket.id in breached_ids
 

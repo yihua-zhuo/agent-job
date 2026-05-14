@@ -39,10 +39,10 @@ class SLAService:
 
         return "normal"
 
-    def get_breach_tickets(self, tickets: list[Ticket] = None) -> list[Ticket]:
-        """获取所有超时的工单"""
+    async def get_breach_tickets(self, tenant_id: int = 0, tickets: list[Ticket] = None) -> list[Ticket]:
+        """Get all breached tickets, optionally from a provided list or via service query."""
         if tickets is None and self._ticket_service:
-            tickets = self._ticket_service._tickets.values()
+            tickets = await self._ticket_service.get_sla_breaches(tenant_id=tenant_id)
         return [t for t in (tickets or []) if t.check_sla_breach()]
 
     def calculate_remaining_time(self, ticket: Ticket) -> timedelta:
