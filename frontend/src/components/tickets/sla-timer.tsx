@@ -31,7 +31,7 @@ export function SLATimer({ responseDeadline, createdAt, slaLevel, className }: S
   useEffect(() => {
     const id = setInterval(() => tick((n) => n + 1), 60000);
     return () => clearInterval(id);
-  }, [createdAt, slaLevel]);
+  }, []);
 
   if (!responseDeadline || !createdAt) {
     return (

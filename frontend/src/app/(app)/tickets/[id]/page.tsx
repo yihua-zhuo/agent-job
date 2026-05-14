@@ -104,7 +104,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
         toast.error(`SLA breached on ticket #${ticketId}`);
       }
     }
-  }, [ticket, ticketId, ticket?.resolved_at]);
+  }, [ticket, ticketId]);
 
   async function handleSendReply() {
     if (!replyContent.trim()) return;
@@ -121,10 +121,6 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
     } catch {
       toast.error("Failed to send reply");
     }
-  }
-
-  function handleDelete() {
-    setDeleteDialogOpen(true);
   }
 
   if (ticketLoading) {
@@ -179,7 +175,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             <EditIcon className="h-4 w-4 mr-1" />
             Edit
           </Button>
-          <Button variant="ghost" size="sm" className="text-destructive" onClick={handleDelete}>
+          <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteDialogOpen(true)}>
             <Trash2Icon className="h-4 w-4" />
           </Button>
         </div>
@@ -380,9 +376,9 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
             <Button
               variant="destructive"
               onClick={async () => {
-                setDeleteDialogOpen(false);
                 try {
                   await deleteTicket.mutateAsync(ticketId);
+                  setDeleteDialogOpen(false);
                   toast.success("Ticket deleted");
                   router.push("/tickets");
                 } catch {
