@@ -85,6 +85,15 @@ class TicketBulkUpdate(BaseModel):
     status: str | None = Field(None, pattern="^(open|in_progress|pending|resolved|closed)$")
 
 
+class SLAStatCard(BaseModel):
+    """Aggregated SLA counts across the full tenant-scoped ticket dataset."""
+
+    breached: int
+    at_risk: int
+    on_track: int
+    total_tickets: int
+
+
 def _status_str_to_enum(status_str: str) -> TicketStatus:
     """Map a raw status string to the corresponding TicketStatus enum.
 
@@ -412,3 +421,14 @@ async def get_sla_breach_tickets(
         "data": [t.to_dict() for t in tickets],
         "message": "查询成功",
     }
+
+
+@tickets_router.get("/sla/summary")
+async def get_sla_summary(
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Return aggregated SLA counts across the full ticket dataset for the current tenant."""
+    sla_svc = SLAService(session)
+    counts = await sla_svc.get_sla_summary(tenant_id=ctx.tenant_id or 0)
+    return {"success": True, "data": SLAStatCard(**counts)}

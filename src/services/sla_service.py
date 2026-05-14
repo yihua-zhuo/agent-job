@@ -1,8 +1,10 @@
 from datetime import UTC, datetime, timedelta
 from typing import Literal
 
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.ticket import TicketModel
 from models.ticket import SLA_CONFIGS, Ticket
 
 
@@ -38,6 +40,57 @@ class SLAService:
             return "warning"
 
         return "normal"
+
+    async def get_sla_summary(self, tenant_id: int) -> dict[str, int]:
+        """Return aggregated SLA counts across the full ticket dataset for a tenant.
+
+        Counts are bucketed as:
+          - breached: open, deadline set, deadline < now
+          - at_risk : open, deadline set, now < deadline <= now + 4h
+          - on_track: resolved OR no deadline OR deadline > now + 4h
+          - total_tickets: all tickets for the tenant
+        """
+        now = datetime.now(UTC)
+        at_risk_threshold = now + timedelta(hours=4)
+
+        base_filter = and_(TicketModel.tenant_id == tenant_id)
+
+        # breached
+        breached_filter = and_(
+            base_filter,
+            TicketModel.resolved_at.is_(None),
+            TicketModel.response_deadline.is_not(None),
+            TicketModel.response_deadline < now,
+        )
+        breached_count = await self._session.scalar(
+            select(func.count(TicketModel.id)).where(breached_filter)
+        )
+
+        # at_risk
+        at_risk_filter = and_(
+            base_filter,
+            TicketModel.resolved_at.is_(None),
+            TicketModel.response_deadline.is_not(None),
+            TicketModel.response_deadline > now,
+            TicketModel.response_deadline <= at_risk_threshold,
+        )
+        at_risk_count = await self._session.scalar(
+            select(func.count(TicketModel.id)).where(at_risk_filter)
+        )
+
+        # total
+        total_count = await self._session.scalar(
+            select(func.count(TicketModel.id)).where(base_filter)
+        )
+
+        on_track_count = (total_count or 0) - (breached_count or 0) - (at_risk_count or 0)
+
+        return {
+            "breached": breached_count or 0,
+            "at_risk": at_risk_count or 0,
+            "on_track": on_track_count,
+            "total_tickets": total_count or 0,
+        }
 
     async def get_breach_tickets(self, tenant_id: int = 0, tickets: list[Ticket] = None) -> list[Ticket]:
         """Get all breached tickets, optionally from a provided list or via service query."""
