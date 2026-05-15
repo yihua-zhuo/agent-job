@@ -4,8 +4,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from models.customer import CustomerStatus
-from models.customer_create_dto import CustomerCreateDTO
+from models.customer import CustomerCreateDTO, CustomerStatus
 from pkg.errors.app_exceptions import ValidationException
 from services.customer_service import CustomerService
 
@@ -42,7 +41,7 @@ class TestCustomerCreateDTO:
         assert dto.email == "alice@example.com"
         assert dto.phone is None
         assert dto.company is None
-        assert dto.status == "lead"
+        assert dto.status == CustomerStatus.LEAD
         assert dto.owner_id == 0
         assert dto.tags == []
 
@@ -94,7 +93,7 @@ class TestCustomerCreateDTO:
             email="dave@example.com",
             phone="13700137000",
             company="Gamma",
-            status="lead",
+            status=CustomerStatus.LEAD,
             owner_id=3,
             tags=["prospect"],
         )
@@ -120,7 +119,7 @@ class TestCustomerCreateDTO:
     def test_default_status_is_lead(self):
         """Default status when not specified."""
         dto = CustomerCreateDTO(name="Eve", email="eve@example.com")
-        assert dto.status == "lead"
+        assert dto.status == CustomerStatus.LEAD
 
     def test_default_owner_id_is_zero(self):
         """Default owner_id when not specified."""
@@ -130,6 +129,34 @@ class TestCustomerCreateDTO:
 
 class TestCreateCustomerService:
     """Tests for CustomerService.create_customer with DTO support."""
+
+    @pytest.mark.asyncio
+    async def test_create_customer_with_dto(self, mock_db_session):
+        """create_customer uses direct DTO field access when passed a CustomerCreateDTO."""
+        service = CustomerService(mock_db_session)
+
+        async def fake_refresh(obj):
+            obj.id = 10
+            obj.name = "DTO Customer"
+            obj.status = "customer"
+
+        mock_db_session.refresh = fake_refresh
+
+        result = await service.create_customer(
+            CustomerCreateDTO(
+                name="DTO Customer",
+                email="dto@test.com",
+                status=CustomerStatus.CUSTOMER,
+            ),
+            tenant_id=1,
+        )
+
+        call_args = mock_db_session.add.call_args[0][0]
+        assert call_args.name == "DTO Customer"
+        assert call_args.email == "dto@test.com"
+        assert call_args.status == "customer"
+        assert result.name == "DTO Customer"
+        assert result.status == "customer"
 
     @pytest.mark.asyncio
     async def test_create_customer_accepts_dict(self, mock_db_session):

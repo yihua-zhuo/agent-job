@@ -7,8 +7,7 @@ from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
-from models.customer import CustomerStatus
-from models.customer_create_dto import CustomerCreateDTO
+from models.customer import CustomerCreateDTO, CustomerStatus
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
@@ -32,30 +31,36 @@ class CustomerService:
             tenant_id: Tenant scope for the new customer.
         """
         if isinstance(data, CustomerCreateDTO):
-            d = {
-                "name": data.name,
-                "email": data.email,
-                "phone": data.phone,
-                "company": data.company,
-                "status": data.status,
-                "owner_id": data.owner_id,
-                "tags": data.tags,
-            }
+            dto = data
         else:
             d = data or {}
         now = datetime.now(UTC)
-        customer = CustomerModel(
-            tenant_id=tenant_id,
-            name=d.get("name") or "Customer",
-            email=d.get("email"),
-            phone=d.get("phone"),
-            company=d.get("company"),
-            status=d.get("status", "lead"),
-            owner_id=d.get("owner_id", 0),
-            tags=d.get("tags", []),
-            created_at=now,
-            updated_at=now,
-        )
+        if isinstance(data, CustomerCreateDTO):
+            customer = CustomerModel(
+                tenant_id=tenant_id,
+                name=dto.name,
+                email=dto.email,
+                phone=dto.phone,
+                company=dto.company,
+                status=dto.status_value,
+                owner_id=dto.owner_id,
+                tags=dto.tags,
+                created_at=now,
+                updated_at=now,
+            )
+        else:
+            customer = CustomerModel(
+                tenant_id=tenant_id,
+                name=d.get("name") or "Customer",
+                email=d.get("email"),
+                phone=d.get("phone"),
+                company=d.get("company"),
+                status=d.get("status", "lead"),
+                owner_id=d.get("owner_id", 0),
+                tags=d.get("tags", []),
+                created_at=now,
+                updated_at=now,
+            )
         self.session.add(customer)
         await self.session.flush()
         await self.session.refresh(customer)
