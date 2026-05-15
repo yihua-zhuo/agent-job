@@ -1,0 +1,27 @@
+{
+  "lastChecks": {
+    "cron": 1778888225,
+    "test_count": 1776490320
+  },
+  "testCount": 89,
+  "testCountNote": "Dropped from 217 - needs investigation",
+  "activeJobs": {
+    "video-poll-test": {
+      "id": "d44cc44b-ba4a-43fa-bfaa-dad549a7cff1",
+      "everyMs": 120000,
+      "status": "error",
+      "lastRunStatus": "error"
+    },
+    "video-poll-NTAwZQ==": {
+      "id": "6788cdb0-5e46-46e3-8339-2ad4e91c57e2",
+      "everyMs": 120000,
+      "status": "error",
+      "lastError": "Channel is required when multiple channels configured: telegram, qqbot"
+    },
+    "security-hourly": {
+      "id": "3c40b43c-5298-4ae0-a655-5b87e04151fc",
+      "status": "ok",
+      "lastDelivered": true
+    }
+  }
+}
