@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import json as _json
 import sys
-from pathlib import Path
 from contextlib import asynccontextmanager
 from datetime import datetime as dt
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -150,7 +150,7 @@ class MockResult:
 
 
 class MockState:
-    """Per-test mutable state consumed by customer & user handlers."""
+    """Per-test mutable state consumed by customer, user & tenant handlers."""
 
     def __init__(self):
         self.customers: dict[int, dict] = {}
@@ -158,6 +158,8 @@ class MockState:
         self.users: dict[int, dict] = {}
         self.users_next_id: int = 1
         self.deleted_user_ids: set[int] = set()
+        self.tenants: dict[int, dict] = {}
+        self.tenants_next_id: int = 1
 
 
 # ---------------------------------------------------------------------------
@@ -437,76 +439,98 @@ def make_user_handler(state: MockState):
     return handler
 
 
-def tenant_handler(sql_text, params):
-    """Handle all tenant-related SQL (stateless)."""
+def make_tenant_handler(state: MockState):
+    """Handle all tenant-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
 
-    # INSERT
-    if "insert into tenants" in sql_text:
-        row = MockRow({
-            "id": 1,
-            "name": params.get("name"),
-            "plan": params.get("plan"),
-            "status": "active",
-            "settings": params.get("settings", "{}"),
-            "created_at": params.get("now"),
-            "updated_at": params.get("now"),
-        })
-        return MockResult([row])
+    def handler(sql_text, params):
+        # INSERT
+        if "insert into tenants" in sql_text:
+            tid = state.tenants_next_id
+            state.tenants_next_id += 1
+            record = {
+                "id": tid,
+                "name": params.get("name"),
+                "slug": params.get("slug", ""),
+                "plan": params.get("plan", "free"),
+                "status": "active",
+                "settings": params.get("settings", "{}"),
+                "usage_limits": params.get("usage_limits", "{}"),
+                "created_at": params.get("created_at"),
+                "updated_at": params.get("updated_at"),
+            }
+            state.tenants[tid] = record
+            return MockResult([MockRow(record.copy())])
 
-    # DELETE
-    if "delete" in sql_text and "tenants" in sql_text:
-        tenant_id = params.get("tenant_id")
-        if tenant_id and tenant_id != 1:
-            return MockResult([])
-        return MockResult([[1, "Deleted Tenant", "pro", "deleted", "{}", None, None]])
+        # DELETE
+        if "delete" in sql_text and "tenants" in sql_text:
+            tenant_id = params.get("tenant_id") or params.get("id")
+            if tenant_id and tenant_id not in state.tenants:
+                return MockResult([])
+            return MockResult([[1, "Deleted Tenant", "", "pro", "deleted", "{}", "{}", None, None]])
 
-    # UPDATE
-    if "update" in sql_text and "tenants" in sql_text:
-        tenant_id = params.get("tenant_id") or params.get("id")
-        if tenant_id == 1:
-            return MockResult([[1, "Updated Name", "pro", "active", "{}", None, None]])
-        return MockResult([])
+        # UPDATE
+        if "update" in sql_text and "tenants" in sql_text:
+            tenant_id = params.get("tenant_id") or params.get("id")
+            if tenant_id in state.tenants:
+                for k, v in params.items():
+                    if k not in ("id", "tenant_id"):
+                        state.tenants[tenant_id][k] = v
+                return MockResult([MockRow(state.tenants[tenant_id].copy())])
+            return MockResult([[1, "Updated Name", "updated-slug", "pro", "active", "{}", "{}", None, None]])
 
-    # COUNT
-    if "select" in sql_text and "count" in sql_text and "from tenants" in sql_text:
-        return MockResult([[2]])
+        # COUNT
+        if "select" in sql_text and "count" in sql_text and "from tenants" in sql_text:
+            return MockResult([[len(state.tenants) or 2]])
 
-    # SELECT (not count)
-    if "select" in sql_text and "from tenants" in sql_text and "count" not in sql_text:
-        tenant_id = params.get("tenant_id")
+        # SELECT (not count)
+        if "select" in sql_text and "from tenants" in sql_text and "count" not in sql_text:
+            tenant_id = params.get("tenant_id")
 
-        # Specific lookup: LIMIT 1 + WHERE id
-        if "limit 1" in sql_text and "where id" in sql_text:
-            if tenant_id == 1:
-                return MockResult([MockRow({"id": 1})])
+            # Specific lookup: LIMIT 1 + WHERE id
+            if "limit 1" in sql_text and "where id" in sql_text:
+                if tenant_id in state.tenants:
+                    return MockResult([MockRow(state.tenants[tenant_id].copy())])
+                fixtures = {
+                    1: {"id": 1, "name": "Tenant A", "slug": "tenant-a", "plan": "pro",
+                        "status": "active", "settings": "{}", "usage_limits": "{}",
+                        "created_at": None, "updated_at": None},
+                    42: {"id": 42, "name": "Beta Org", "slug": "beta-org", "plan": "enterprise",
+                         "status": "active", "settings": '{"sso": true}', "usage_limits": '{"users": 100}',
+                         "created_at": None, "updated_at": None},
+                }
+                if tenant_id in fixtures:
+                    return MockResult([MockRow(fixtures[tenant_id].copy())])
+                return MockResult([])
+
+            # List query (no WHERE id)
+            if "where id" not in sql_text:
+                if state.tenants:
+                    rows = [MockRow(r.copy()) for r in state.tenants.values()]
+                else:
+                    rows = [
+                        MockRow({"id": 1, "name": "Tenant A", "slug": "tenant-a", "plan": "pro",
+                                 "status": "active", "settings": "{}", "usage_limits": "{}",
+                                 "created_at": None, "updated_at": None}),
+                        MockRow({"id": 2, "name": "Tenant B", "slug": "tenant-b", "plan": "enterprise",
+                                 "status": "active", "settings": "{}", "usage_limits": "{}",
+                                 "created_at": None, "updated_at": None}),
+                    ]
+                return MockResult(rows)
+
+            # General SELECT with WHERE id (not LIMIT 1)
+            if tenant_id in state.tenants:
+                return MockResult([MockRow(state.tenants[tenant_id].copy())])
             if tenant_id == 42:
                 return MockResult([MockRow({
-                    "id": 42, "name": "Beta Org", "plan": "enterprise",
-                    "status": "active", "settings": '{"sso": true}',
+                    "id": 42, "name": "Beta Org", "slug": "beta-org", "plan": "enterprise",
+                    "status": "active", "settings": '{"sso": true}', "usage_limits": '{"users": 100}',
                     "created_at": None, "updated_at": None,
                 })])
             return MockResult([])
 
-        # List query (no WHERE id)
-        if "where id" not in sql_text:
-            rows = [
-                MockRow({"id": 1, "name": "Tenant A", "plan": "pro", "status": "active",
-                         "settings": "{}", "created_at": None, "updated_at": None}),
-                MockRow({"id": 2, "name": "Tenant B", "plan": "enterprise", "status": "active",
-                         "settings": "{}", "created_at": None, "updated_at": None}),
-            ]
-            return MockResult(rows)
+        return None
 
-        # General SELECT with WHERE id (not LIMIT 1)
-        if tenant_id == 42:
-            return MockResult([MockRow({
-                "id": 42, "name": "Beta Org", "plan": "enterprise",
-                "status": "active", "settings": '{"sso": true}',
-                "created_at": None, "updated_at": None,
-            })])
-        return MockResult([])
-
-    return None
+    return handler
 
 
 def pipeline_handler(sql_text, params):
@@ -637,7 +661,7 @@ def all_handlers(state: MockState):
     return [
         make_customer_handler(state),
         make_user_handler(state),
-        tenant_handler,
+        make_tenant_handler(state),
         pipeline_handler,
         opportunity_handler,
         ticket_sql_handler,
