@@ -1,0 +1,16 @@
+# HEARTBEAT.md - Manager Agent 自动检查
+
+定期自动执行，无需用户干预。
+
+## Security Platform cron
+- Job ID: `3c40b43c-5298-4ae0-a655-5b87e04151fc`
+- Status: ✅ 22:03 May 15 SUCCESS (all 5 pages complete)
+- Last good: 22:03 May 15 (all 5 pages complete)
+
+## cron 状态
+- Job ID: 未配置
+- 测试：待检查
+- 待提交：待检查
+
+## 输出报告格式（如需要发送）
+📊 待更新
