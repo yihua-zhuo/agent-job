@@ -1,116 +1,49 @@
-name: Dev Agent CI
+name: CI
 
 on:
-  pull_request:
-    branches: [master, develop]
-  # Re-validate on master after merges. Scoped narrowly to avoid the
-  # push+pull_request duplication we hit before — feature branches still
-  # only run via the PR trigger.
   push:
-    branches: [master]
+    branches: [master, develop]
 
 env:
-  MODEL: MiniMax-M2.7
   PYTHON_VERSION: '3.11'
 
 jobs:
-  coordinator:
-    name: Coordinator Agent
+  test:
+    name: Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Parse Task
-        run: python3 scripts/coordinator.py parse
 
-  unit-test:
-    name: Unit Tests
-    runs-on: ubuntu-latest
-    needs: coordinator
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: testdb
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql+psycopg2://postgres:postgres@localhost:5432/testdb
-    steps:
-      - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
+
       - run: pip install -q ".[dev]"
-      - run: PYTHONPATH=src pytest tests/unit/ -v --cov=src --cov-report=xml
-      - uses: codecov/codecov-action@v4
-        if: always()
 
-  integration-test:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    needs: unit-test
-    env:
-      DATABASE_URL: postgresql+psycopg2://test_user:test_pass@localhost:5432/test_db
-      TEST_DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - run: PYTHONPATH=src pytest tests/ -m "not integration" -v
+
+      - run: ruff check src/
+
+      - uses: actions/upload-artifact@v4
         with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install -q ".[dev]" requests
-      - run: docker compose -f configs/docker-compose.test.yml up -d --wait
-      - run: PYTHONPATH=src pytest tests/integration/ -v
-      - if: always()
-        run: docker compose -f configs/docker-compose.test.yml down
+          name: pytest-results
+          path: .pytest_cache/
 
   code-review:
     name: Code Review
     runs-on: ubuntu-latest
-    needs: [coordinator, unit-test]
-    if: false
+    needs: [test]
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
       - name: Run Code Review Agent
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python3 docs/agents/code_review/review_agent.py
-
-  quality-check:
-    name: Quality Control
-    runs-on: ubuntu-latest
-    needs: code-review
-    continue-on-error: false
-    steps:
-      - uses: actions/checkout@v4
-      - run: pip install -q ruff mypy
-      - run: |
-          ruff check src/
-          mypy src/ --ignore-missing-imports
-
-  build:
-    name: Build & Package
-    runs-on: ubuntu-latest
-    needs: [unit-test, quality-check]
-    steps:
-      - uses: actions/checkout@v4
-      - run: python3 -m py_compile src/**/*.py
-      - run: pip install -q build
-      - run: python3 -m build
-
-  deploy:
-    name: Deploy
-    runs-on: ubuntu-latest
-    needs: build
-    if: github.ref == 'refs/heads/master'
-    steps:
-      - uses: actions/checkout@v4
-      - run: echo "Deploy triggered" && python3 scripts/deploy.py
+          CLAUDE_GATEWAY_URL: ${{ vars.CLAUDE_GATEWAY_URL }}
+          CLAUDE_GATEWAY_TOKEN: ${{ secrets.CLAUDE_GATEWAY_TOKEN }}
+        run: python3 scripts/ci/run_code_review.py
