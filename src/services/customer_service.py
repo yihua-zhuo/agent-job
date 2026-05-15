@@ -137,6 +137,8 @@ class CustomerService:
 
     async def count_by_status(self, tenant_id: int) -> dict[CustomerStatus, int]:
         """Count customers grouped by status."""
+        if tenant_id <= 0:
+            return {}
         result = await self.session.execute(
             select(CustomerModel.status, func.count(CustomerModel.id))
             .where(CustomerModel.tenant_id == tenant_id)
