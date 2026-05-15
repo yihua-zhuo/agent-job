@@ -4,8 +4,9 @@
 
 ## Security Platform cron
 - Job ID: `3c40b43c-5298-4ae0-a655-5b87e04151fc`
-- Status: ✅ 22:03 May 15 SUCCESS (all 5 pages complete)
+- Status: ⚠️ 23:01 May 15 FAILED (process died at projects nav)
 - Last good: 22:03 May 15 (all 5 pages complete)
+- Note: Recurring SIGTERM issue — script keeps dying at projects navigation step
 
 ## cron 状态
 - Job ID: 未配置
