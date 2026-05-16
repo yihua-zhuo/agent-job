@@ -227,6 +227,7 @@ class GitHubClient:
     """GitHub REST API client focused on PR comments and reviews."""
 
     API_BASE = "https://api.github.com"
+    GRAPHQL_URL = "https://api.github.com/graphql"
     REVIEW_MARKER = "<!-- agent-job-code-review-result -->"
 
     def __init__(self, token: str, repo: str) -> None:
@@ -339,6 +340,187 @@ class GitHubClient:
                     self.delete(f"/pulls/comments/{comment['id']}")
                 except Exception:  # best-effort cleanup; never block the review
                     pass
+
+    # ------------------------------------------------------------------
+    # GraphQL — needed for review-thread resolution (not in REST API)
+    # ------------------------------------------------------------------
+
+    def graphql(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
+        body = json.dumps({"query": query, "variables": variables}).encode()
+        req = Request(
+            self.GRAPHQL_URL,
+            data=body,
+            method="POST",
+            headers={
+                "Accept": "application/vnd.github+json",
+                "Authorization": f"Bearer {self.token}",
+                "Content-Type": "application/json",
+            },
+        )
+        with urlopen(req, timeout=20) as response:
+            text = response.read().decode()
+        return json.loads(text) if text else {}
+
+    def fetch_existing_review_threads(self, pr_number: int) -> list[dict[str, Any]]:
+        """
+        Return unresolved review threads whose first comment was authored by this
+        bot (identified by REVIEW_MARKER). Each entry has:
+          {thread_id, file, line, comment_id}
+        """
+        owner, name = self.repo.split("/", 1)
+        query = """
+        query($owner: String!, $name: String!, $number: Int!) {
+          repository(owner: $owner, name: $name) {
+            pullRequest(number: $number) {
+              reviewThreads(first: 100) {
+                nodes {
+                  id
+                  isResolved
+                  comments(first: 20) {
+                    nodes {
+                      databaseId
+                      path
+                      line
+                      body
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+        """
+        data = self.graphql(query, {"owner": owner, "name": name, "number": pr_number})
+        pr_data = ((data.get("data") or {}).get("repository") or {}).get("pullRequest") or {}
+        threads = (pr_data.get("reviewThreads") or {}).get("nodes") or []
+        result: list[dict[str, Any]] = []
+        for thread in threads:
+            if thread.get("isResolved"):
+                continue
+            comments = (thread.get("comments") or {}).get("nodes") or []
+            bot_comment = next(
+                (c for c in comments if self.REVIEW_MARKER in (c.get("body") or "")),
+                None,
+            )
+            if not bot_comment:
+                continue
+            result.append({
+                "thread_id": thread["id"],
+                "file": bot_comment.get("path"),
+                "line": bot_comment.get("line"),
+                "comment_id": bot_comment.get("databaseId"),
+            })
+        return result
+
+    def resolve_review_thread(self, thread_id: str) -> None:
+        mutation = """
+        mutation($threadId: ID!) {
+          resolveReviewThread(input: {threadId: $threadId}) {
+            thread { isResolved }
+          }
+        }
+        """
+        self.graphql(mutation, {"threadId": thread_id})
+
+    def reply_to_review_comment(self, pr_number: int, comment_id: int, body: str) -> None:
+        self.post(f"/pulls/{pr_number}/comments/{comment_id}/replies", {"body": body})
+
+    def reconcile_review_comments(
+        self,
+        pr_number: int,
+        commit_sha: str,
+        issues: list[ReviewIssue],
+        summary_body: str,
+    ) -> dict[str, int]:
+        """
+        Diff existing bot inline comments against the new set of issues:
+          - new issue at the same (file, line) as an existing thread → skip
+            (don't duplicate the comment)
+          - existing thread whose (file, line) is no longer in the new review →
+            reply with "Resolved" and mark the thread resolved via GraphQL
+          - new issue with no matching existing thread → include as inline
+            comment in a fresh review
+
+        Returns {"new": N, "kept": N, "resolved": N}.
+        """
+        new_by_key: dict[tuple[str, int], ReviewIssue] = {}
+        for issue in issues:
+            if not issue.line or not str(issue.line).strip().isdigit():
+                continue
+            line_int = int(str(issue.line).strip())
+            if line_int <= 0:
+                continue
+            new_by_key[(issue.file, line_int)] = issue
+
+        try:
+            existing = self.fetch_existing_review_threads(pr_number)
+        except (HTTPError, URLError, TimeoutError, OSError) as exc:
+            log(f"reconcile_fetch_failed={type(exc).__name__}: {exc}")
+            existing = []
+
+        existing_by_key: dict[tuple[str, int], dict[str, Any]] = {}
+        for thread in existing:
+            file = thread.get("file")
+            line = thread.get("line")
+            if file and isinstance(line, int) and line > 0:
+                existing_by_key[(file, line)] = thread
+
+        new_inline_comments: list[dict[str, Any]] = []
+        for key, issue in new_by_key.items():
+            if key in existing_by_key:
+                continue
+            label = _severity_emoji(issue.severity)
+            body = (
+                f"{self.REVIEW_MARKER}\n"
+                f"{label} **{issue.severity.capitalize()}**\n\n"
+                f"{issue.message}"
+            )
+            new_inline_comments.append({
+                "path": issue.file,
+                "line": key[1],
+                "side": issue.side,
+                "body": body,
+            })
+
+        resolved_count = 0
+        short_sha = commit_sha[:8] if commit_sha else ""
+        for key, thread in existing_by_key.items():
+            if key in new_by_key:
+                continue
+            ref = f" in `{short_sha}`" if short_sha else ""
+            try:
+                self.reply_to_review_comment(
+                    pr_number,
+                    thread["comment_id"],
+                    f"{self.REVIEW_MARKER}\n✅ Resolved — this issue is no longer reported"
+                    f"{ref}.",
+                )
+                self.resolve_review_thread(thread["thread_id"])
+                resolved_count += 1
+                log(
+                    f"resolved_thread={thread['thread_id']} "
+                    f"file={thread['file']} line={thread['line']}"
+                )
+            except (HTTPError, URLError, TimeoutError, OSError) as exc:
+                log(f"resolve_thread_failed={type(exc).__name__}: {exc}")
+
+        review_event = "REQUEST_CHANGES" if any(i.is_critical for i in issues) else "COMMENT"
+        payload: dict[str, Any] = {
+            "commit_id": commit_sha,
+            "body": summary_body,
+            "event": review_event,
+            "comments": new_inline_comments,
+        }
+        self.post(f"/pulls/{pr_number}/reviews", payload)
+
+        kept_count = len(existing_by_key) - resolved_count
+        new_count = len(new_inline_comments)
+        log(
+            f"reconciled_review=pr_{pr_number} "
+            f"new={new_count} kept={kept_count} resolved={resolved_count} "
+            f"event={review_event}"
+        )
+        return {"new": new_count, "kept": kept_count, "resolved": resolved_count}
 
     def post_review_with_inline_comments(
         self,
@@ -808,11 +990,11 @@ class CodeReviewOrchestrator:
             # 1. Upsert the top-level summary comment
             client.upsert_summary_comment(pr_number, summary_body)
 
-            # 2. Post inline review with per-line comments (CodeRabbit-style)
+            # 2. Reconcile inline comments: keep still-present issues, resolve
+            #    fixed ones, post truly new ones.
             if commit_sha:
                 all_issues = critical + warnings
-                client.dismiss_previous_review_comments(pr_number)
-                client.post_review_with_inline_comments(
+                client.reconcile_review_comments(
                     pr_number=pr_number,
                     commit_sha=commit_sha,
                     issues=all_issues,

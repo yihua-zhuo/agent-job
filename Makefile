@@ -1,14 +1,14 @@
-.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev
+.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix
 
-# Use the project virtualenv's interpreter so installed deps are picked up
-# without needing the venv to be activated first. Layout differs by OS:
-# Windows → .venv/Scripts/python.exe, Unix → .venv/bin/python.
-# Override at the call site if you need to point at a different interpreter,
-# e.g. `make PYTHON=python3 test-integration`.
+# Create a local virtualenv on demand and use it by default.
+VENV_DIR := .venv
+VENV_READY := $(VENV_DIR)/.dev-installed
 ifeq ($(OS),Windows_NT)
-PYTHON ?= .venv/Scripts/python.exe
+VENV_PY := $(VENV_DIR)/Scripts/python.exe
+PYTHON ?= $(VENV_PY)
 else
-PYTHON ?= .venv/bin/python
+VENV_PY := $(VENV_DIR)/bin/python
+PYTHON ?= $(VENV_PY)
 endif
 
 PYTHONPATH := src
@@ -27,39 +27,54 @@ help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 # ── Setup ──────────────────────────────────────────────────────────────────
+venv: $(VENV_READY) ## Create the local virtualenv and install dev dependencies
+
+$(VENV_READY): pyproject.toml
+	python3 -m venv "$(VENV_DIR)"
+	$(VENV_PY) -m pip install -e ".[dev]"
+	@touch "$@"
+
 install: ## Install the project into the venv (runtime deps only)
+install: venv
 	$(PYTHON) -m pip install -e .
 
 install-dev: ## Install runtime + dev extras (pytest, pytest-asyncio, ruff, mypy, …)
-	$(PYTHON) -m pip install -e ".[dev]"
+install-dev: venv
 
 # ── Tests ──────────────────────────────────────────────────────────────────
 test: test-unit ## Alias for test-unit
 
 test-unit: ## Run unit tests (no DB)
+test-unit: venv
 	$(PYTHON) -m pytest tests/unit/ -v
 
 test-integration: db-up ## Run all integration tests against docker test-db
+test-integration: venv
 	$(PYTHON) -m pytest tests/integration/ -v
 
 test-web: db-up ## Run web integration tests only
+test-web: venv
 	$(PYTHON) -m pytest tests/integration/test_web_integration.py -v
 
 test-all: test-unit test-integration ## Run unit + integration tests
 
 # ── Lint / format ──────────────────────────────────────────────────────────
 lint: ## Run ruff check
+lint: venv
 	$(PYTHON) -m ruff check src/
 
 format: ## Run ruff format (in place)
+format: venv
 	$(PYTHON) -m ruff format src/
 
 format-check: ## Verify formatting without writing
+format-check: venv
 	$(PYTHON) -m ruff format --check src/
 
 check: lint format-check ## Run lint + format check (CI-style)
 
 fix: ## Run ruff with --fix
+fix: venv
 	$(PYTHON) -m ruff check --fix src/
 	$(PYTHON) -m ruff format src/
 
@@ -75,8 +90,13 @@ db-shell: ## Open a psql shell against the test-db
 
 # ── Alembic ────────────────────────────────────────────────────────────────
 migrate: ## Apply all alembic migrations to the test-db
-	alembic upgrade head
+migrate: venv
+	$(PYTHON) -m alembic upgrade head
 
 migrate-new: ## Autogenerate a new migration: make migrate-new MSG="..."
+migrate-new: venv
 	@if [ -z "$(MSG)" ]; then echo "Usage: make migrate-new MSG=\"describe change\""; exit 1; fi
-	alembic revision --autogenerate -m "$(MSG)"
+	$(PYTHON) -m alembic revision --autogenerate -m "$(MSG)"
+
+trigger-fix: venv
+	$(PYTHON) "scripts/ci/trigger_fix_for_issue.py" $(ISSUE)

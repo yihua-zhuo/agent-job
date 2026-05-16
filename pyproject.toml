@@ -12,6 +12,7 @@ dependencies = [
     "uvicorn[standard]>=0.23,<1.0",
     # Database
     "sqlalchemy>=2.0,<3.0",
+    "greenlet>=3.0,<4.0",
     "asyncpg>=0.29",
     "psycopg2-binary>=2.9,<3.0",
     "alembic>=1.13,<2.0",
@@ -50,5 +51,5 @@ select = ["E", "F", "UP", "S", "I", "W"]
 ignore = ["E501"]  # line-length handled by line-length setting
 
 [tool.ruff.lint.per-file-ignores]
-"tests/**" = ["S101", "INP001"]  # assert okay in tests, explicit namespace package okay
+"tests/**" = ["S101", "S106", "INP001"]  # assert okay in tests, hardcoded password okay in integration test seeds
 "src/main.py" = ["F401"]  # app may import without using all routers

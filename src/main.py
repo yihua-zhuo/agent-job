@@ -9,11 +9,13 @@ from fastapi.responses import JSONResponse
 from api import (
     activities_router,
     automation_router,
+    auth_router,
     customers_router,
     notifications_router,
     rbac_router,
     reports_router,
     sales_router,
+    tasks_router,
     tenants_router,
     tickets_router,
     users_router,
@@ -95,6 +97,7 @@ def create_app() -> FastAPI:
         )
 
     # ── Routes ─────────────────────────────────────────────────────────────
+    app.include_router(auth_router)
     app.include_router(customers_router)
     app.include_router(sales_router)
     app.include_router(users_router)
@@ -105,6 +108,7 @@ def create_app() -> FastAPI:
     app.include_router(automation_router)
     app.include_router(reports_router)
     app.include_router(rbac_router)
+    app.include_router(tasks_router)
 
     @app.get("/")
     async def health():

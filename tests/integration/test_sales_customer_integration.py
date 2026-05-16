@@ -13,6 +13,7 @@ import uuid
 
 import pytest
 
+from models.customer import CustomerStatus
 from pkg.errors.app_exceptions import NotFoundException
 from services.customer_service import CustomerService
 from services.pipeline_service import PipelineService
@@ -50,6 +51,7 @@ async def _seed_customer(async_session, tenant_id: int = 1, **overrides):
 #  CustomerService integration tests
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestCustomerServiceIntegration:
     """Full customer lifecycle via the real DB using the shared async_session fixture."""
 
@@ -221,6 +223,7 @@ class TestCustomerServiceIntegration:
 #  PipelineService integration tests
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestPipelineServiceIntegration:
     """Full pipeline lifecycle via the real DB using the shared async_session fixture."""
 
@@ -299,6 +302,7 @@ class TestPipelineServiceIntegration:
 #  SalesService integration tests
 # ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 @pytest.mark.integration
+@pytest.mark.asyncio
 class TestSalesServiceIntegration:
     """Full opportunity lifecycle + pipeline stats via the real DB."""
 
@@ -411,3 +415,131 @@ class TestSalesServiceIntegration:
         funnel = await sales_svc.get_pipeline_funnel(tenant_id, pid)
         assert funnel is not None
         assert isinstance(funnel, dict)
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+class TestCustomerCountByStatusIntegration:
+    """Integration tests for CustomerService.count_by_status via real DB + REST API.
+
+    Customers are created via the REST POST /customers endpoint so the full
+    request/response cycle (auth → validation → DTO → service → DB) is exercised.
+    count_by_status is called directly on the service to verify the aggregation.
+    """
+
+    async def test_count_by_status_empty(
+        self, db_schema, tenant_id_web, async_session
+    ):
+        """Returns empty dict when no customers exist for the tenant."""
+        cust_svc = CustomerService(async_session)
+        result = await cust_svc.count_by_status(tenant_id=tenant_id_web)
+        assert result == {}
+
+    async def test_count_by_status_single_status(
+        self, db_schema, tenant_id_web, async_session
+    ):
+        """Returns one exact enum-keyed count when all customers share a status."""
+        cust_svc = CustomerService(async_session)
+        suffix = uuid.uuid4().hex[:8]
+        for i in range(3):
+            await cust_svc.create_customer(
+                data={
+                    "name": f"Lead {suffix}-{i}",
+                    "email": f"lead_{suffix}_{i}@example.com",
+                    "status": "lead",
+                },
+                tenant_id=tenant_id_web,
+            )
+
+        result = await cust_svc.count_by_status(tenant_id=tenant_id_web)
+
+        assert result == {CustomerStatus.LEAD: 3}
+
+    async def test_count_by_status_returns_correct_counts(
+        self, db_schema, tenant_id_web, api_client, async_session
+    ):
+        """Three leads + two opportunities + one customer via REST — counts must match exactly."""
+        suffix = uuid.uuid4().hex[:8]
+
+        # Create 3 leads via REST
+        for i in range(3):
+            r = await api_client.post(
+                "/api/v1/customers",
+                json={
+                    "name": f"Lead {suffix}-{i}",
+                    "email": f"lead_{suffix}_{i}@test.com",
+                    "status": "lead",
+                },
+            )
+            assert r.status_code == 201
+
+        # Create 2 opportunities via REST
+        for i in range(2):
+            r = await api_client.post(
+                "/api/v1/customers",
+                json={
+                    "name": f"Opp {suffix}-{i}",
+                    "email": f"opp_{suffix}_{i}@test.com",
+                    "status": "opportunity",
+                },
+            )
+            assert r.status_code == 201
+
+        # Create 1 customer via REST
+        r = await api_client.post(
+            "/api/v1/customers",
+            json={
+                "name": f"Cust {suffix}",
+                "email": f"cust_{suffix}@test.com",
+                "status": "customer",
+            },
+        )
+        assert r.status_code == 201
+
+        # Verify aggregation via the service layer
+        cust_svc = CustomerService(async_session)
+        result = await cust_svc.count_by_status(tenant_id=tenant_id_web)
+
+        assert result[CustomerStatus.LEAD] == 3
+        assert result[CustomerStatus.OPPORTUNITY] == 2
+        assert result[CustomerStatus.CUSTOMER] == 1
+
+    async def test_count_by_status_tenant_isolation(
+        self, db_schema, tenant_id_web, tenant_id_2_web,
+        api_client, api_client_tenant_2, async_session
+    ):
+        """Tenant A's customers must not appear in Tenant B's count."""
+        suffix = uuid.uuid4().hex[:8]
+
+        # Tenant 1: 2 leads via REST
+        for i in range(2):
+            r = await api_client.post(
+                "/api/v1/customers",
+                json={
+                    "name": f"T1 {suffix}-{i}",
+                    "email": f"t1_{suffix}_{i}@test.com",
+                    "status": "lead",
+                },
+            )
+            assert r.status_code == 201
+
+        # Tenant 2: 5 leads via REST
+        for i in range(5):
+            r = await api_client_tenant_2.post(
+                "/api/v1/customers",
+                json={
+                    "name": f"T2 {suffix}-{i}",
+                    "email": f"t2_{suffix}_{i}@test.com",
+                    "status": "lead",
+                },
+            )
+            assert r.status_code == 201
+
+        # Verify counts via service layer using tenant sessions
+        cust_svc = CustomerService(async_session)
+        result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id_web)
+        await async_session.commit()
+        result_t2 = await cust_svc.count_by_status(tenant_id=tenant_id_2_web)
+
+        assert result_t1[CustomerStatus.LEAD] == 2
+        assert result_t2[CustomerStatus.LEAD] == 5

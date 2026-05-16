@@ -56,7 +56,12 @@ jobs:
       - name: Post PR line comments
         if: github.event_name == 'pull_request'
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # MUST use the PAT (not the workflow-issued GITHUB_TOKEN). The GraphQL
+          # `resolveReviewThread` mutation we call inside post_pr_line_comments.py
+          # rejects the github-actions[bot] integration with
+          # "Resource not accessible by integration" — it requires a real
+          # collaborator identity, which the PAT provides.
+          GITHUB_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           CODE_REVIEW_RESULT_PATH: shared-memory/results/code-review-result.json
         run: |
           python3 scripts/ci/post_pr_line_comments.py

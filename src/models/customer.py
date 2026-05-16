@@ -5,9 +5,6 @@ from datetime import UTC, datetime
 from enum import Enum
 from typing import Any
 
-from db.models.customer import CustomerModel
-from models.customer_create_dto import CustomerCreateDTO
-
 
 class CustomerStatus(Enum):
     """Customer status enumeration."""
@@ -15,7 +12,11 @@ class CustomerStatus(Enum):
     LEAD = "lead"
     OPPORTUNITY = "opportunity"
     CUSTOMER = "customer"
+    PARTNER = "partner"
+    PROSPECT = "prospect"
+    ACTIVE = "active"
     INACTIVE = "inactive"
+    BLOCKED = "blocked"
 
 
 @dataclass

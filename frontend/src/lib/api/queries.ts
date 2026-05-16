@@ -6,12 +6,15 @@ export const qk = {
   me: () => ["me"] as const,
   customers: (page = 1) => ["customers", page] as const,
   customer: (id: number) => ["customer", id] as const,
-  opportunities: (page = 1) => ["opportunities", page] as const,
+  opportunities: (page = 1, pageSize = 20) => ["opportunities", page, pageSize] as const,
   pipelines: () => ["pipelines"] as const,
   tickets: (page = 1, status = "") => ["tickets", page, status] as const,
+  ticket: (id: number) => ["ticket", id] as const,
+  ticketReplies: (ticketId: number) => ["ticket", ticketId, "replies"] as const,
+  ticketActivity: (ticketId: number) => ["ticket", ticketId, "activity"] as const,
   tasks: (page = 1, status = "") => ["tasks", page, status] as const,
   task: (id: number) => ["task", id] as const,
-  users: (page = 1) => ["users", page] as const,
+  users: (page = 1, page_size = 20) => ["users", page, page_size] as const,
   notifications: (page = 1, unreadOnly = false) => ["notifications", page, unreadOnly] as const,
   reminders: (upcomingOnly = false) => ["reminders", upcomingOnly] as const,
   activities: (page = 1, type = "") => ["activities", page, type] as const,
@@ -96,11 +99,11 @@ export function useDeleteCustomer() {
 }
 
 // ── Opportunities ─────────────────────────────────────────────────────────
-export function useOpportunities(page = 1) {
+export function useOpportunities(page = 1, pageSize = 20) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
-    queryKey: qk.opportunities(page),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/sales/opportunities?page=${page}&page_size=20`, token ?? undefined),
+    queryKey: qk.opportunities(page, pageSize),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/sales/opportunities?page=${page}&page_size=${pageSize}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -156,12 +159,104 @@ export function useCreateTicket() {
   });
 }
 
-// ── Users ───────────────────────────────────────────────────────────────────
-export function useUsers(page = 1) {
+export function useTicket(id: number) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
-    queryKey: qk.users(page),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?page=${page}&page_size=20`, token ?? undefined),
+    queryKey: qk.ticket(id),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tickets/${id}`, token ?? undefined),
+    enabled: id > 0,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useTicketReplies(ticketId: number) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.ticketReplies(ticketId),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tickets/${ticketId}/replies`, token ?? undefined),
+    enabled: ticketId > 0,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useTicketActivity(ticketId: number) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.ticketActivity(ticketId),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tickets/${ticketId}/activity`, token ?? undefined),
+    enabled: ticketId > 0,
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useAddReply() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: ({ ticketId, data }: { ticketId: number; data: Record<string, unknown> }) =>
+      apiClient.post(`/api/v1/tickets/${ticketId}/replies`, data, token ?? undefined),
+    onSuccess: (_res, vars) => {
+      qc.invalidateQueries({ queryKey: qk.ticketReplies(vars.ticketId) });
+      qc.invalidateQueries({ queryKey: qk.ticketActivity(vars.ticketId) });
+    },
+  });
+}
+
+export function useUpdateTicket() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
+      apiClient.put(`/api/v1/tickets/${id}`, data, token ?? undefined),
+    onSuccess: (_res, vars) => {
+      qc.invalidateQueries({ queryKey: ["tickets"] });
+      qc.invalidateQueries({ queryKey: qk.ticket(vars.id) });
+    },
+  });
+}
+
+export function useChangeTicketStatus() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: ({ ticketId, newStatus }: { ticketId: number; newStatus: string }) =>
+      apiClient.put(`/api/v1/tickets/${ticketId}/status`, { new_status: newStatus }, token ?? undefined),
+    onSuccess: (_res, vars) => {
+      qc.invalidateQueries({ queryKey: ["tickets"] });
+      qc.invalidateQueries({ queryKey: qk.ticket(vars.ticketId) });
+    },
+  });
+}
+
+export function useBulkUpdateTickets() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: { ticket_ids: number[]; assigned_to?: number; status?: string }) =>
+      apiClient.post("/api/v1/tickets/bulk-update", data, token ?? undefined),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["tickets"] }),
+  });
+}
+
+export function useAutoAssignTicket() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (ticketId: number) =>
+      apiClient.post(`/api/v1/tickets/${ticketId}/auto-assign`, {}, token ?? undefined),
+    onSuccess: (_res, ticketId) => {
+      qc.invalidateQueries({ queryKey: ["tickets"] });
+      qc.invalidateQueries({ queryKey: qk.ticket(ticketId) });
+    },
+  });
+}
+
+// ── Users ───────────────────────────────────────────────────────────────────
+export function useUsers(page = 1, page_size = 20) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.users(page, page_size),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?page=${page}&page_size=${page_size}`, token ?? undefined),
     staleTime: 60 * 1000,
   });
 }
@@ -215,10 +310,14 @@ export function useCreateUser() {
 }
 // ── Tasks ───────────────────────────────────────────────────────────────────
 
-export function useTasks(page = 1, status = "") {
+export function useTasks(page = 1, status = "", priority = "", assigned_to = "", createdAfter = "", createdBefore = "") {
   const token = useAuthStore((s) => s.token);
   const params = new URLSearchParams({ page: String(page), page_size: "20" });
   if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
+  if (assigned_to) params.set("assigned_to", assigned_to);
+  if (createdAfter) params.set("created_after", createdAfter);
+  if (createdBefore) params.set("created_before", createdBefore);
   return useQuery({
     queryKey: qk.tasks(page, status),
     queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tasks?${params}`, token ?? undefined),
