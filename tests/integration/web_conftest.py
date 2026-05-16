@@ -81,11 +81,13 @@ async def auth_headers_web(async_session_web, tenant_id_web) -> dict[str, str]:
     """Return a valid JWT Authorization header for the test tenant."""
     from services.auth_service import AuthService
 
-    # Set env var directly (do NOT use setdefault — conftest.py already loaded .env
+    # Set env vars directly (do NOT use setdefault — conftest.py already loaded .env
     # which cached the real secret before this fixture runs; we must override it).
-    os.environ["JWT_SECRET_KEY"] = "integration-test-jwt-secret-key"
+    test_secret = "integration-test-jwt-secret-key-32"
+    os.environ["JWT_SECRET"] = test_secret
+    os.environ["JWT_SECRET_KEY"] = test_secret
 
-    auth_svc = AuthService(async_session_web, secret_key="integration-test-jwt-secret-key")
+    auth_svc = AuthService(async_session_web, secret_key=test_secret)
     token = auth_svc.generate_token(
         user_id=999,
         username="webtest",
@@ -98,11 +100,13 @@ async def auth_headers_web(async_session_web, tenant_id_web) -> dict[str, str]:
 @pytest_asyncio.fixture(scope="function")
 async def auth_headers_tenant_2(async_session_web, tenant_id_2_web) -> dict[str, str]:
     """Return a valid JWT Authorization header for tenant 2."""
-    # Set env var directly — see note in auth_headers_web.
-    os.environ["JWT_SECRET_KEY"] = "integration-test-jwt-secret-key"
+    # Set env vars directly — see note in auth_headers_web.
+    test_secret = "integration-test-jwt-secret-key-32"
+    os.environ["JWT_SECRET"] = test_secret
+    os.environ["JWT_SECRET_KEY"] = test_secret
     from services.auth_service import AuthService
 
-    auth_svc = AuthService(async_session_web, secret_key="integration-test-jwt-secret-key")
+    auth_svc = AuthService(async_session_web, secret_key=test_secret)
     token = auth_svc.generate_token(
         user_id=999,
         username="webtest2",
