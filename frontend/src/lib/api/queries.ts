@@ -6,7 +6,7 @@ export const qk = {
   me: () => ["me"] as const,
   customers: (page = 1) => ["customers", page] as const,
   customer: (id: number) => ["customer", id] as const,
-  opportunities: (page = 1) => ["opportunities", page] as const,
+  opportunities: (page = 1, pageSize = 20) => ["opportunities", page, pageSize] as const,
   pipelines: () => ["pipelines"] as const,
   tickets: (page = 1, status = "") => ["tickets", page, status] as const,
   ticket: (id: number) => ["ticket", id] as const,
@@ -14,11 +14,14 @@ export const qk = {
   ticketActivity: (ticketId: number) => ["ticket", ticketId, "activity"] as const,
   tasks: (page = 1, status = "") => ["tasks", page, status] as const,
   task: (id: number) => ["task", id] as const,
-  users: (page = 1) => ["users", page] as const,
+  users: (page = 1, page_size = 20) => ["users", page, page_size] as const,
   notifications: (page = 1, unreadOnly = false) => ["notifications", page, unreadOnly] as const,
   reminders: (upcomingOnly = false) => ["reminders", upcomingOnly] as const,
   activities: (page = 1, type = "") => ["activities", page, type] as const,
   slaBreaches: () => ["sla", "breaches"] as const,
+  automationRules: (page = 1, pageSize = 20) => ["automation_rules", page, pageSize] as const,
+  automationRule: (id: number) => ["automation_rules", "detail", id] as const,
+  automationLogs: (page = 1, pageSize = 20, ruleId?: number, status?: string) => ["automation_logs", page, pageSize, ruleId ?? null, status ?? ""] as const,
 } as const;
 
 interface PaginatedResponse<T> {
@@ -96,11 +99,11 @@ export function useDeleteCustomer() {
 }
 
 // ── Opportunities ─────────────────────────────────────────────────────────
-export function useOpportunities(page = 1) {
+export function useOpportunities(page = 1, pageSize = 20) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
-    queryKey: qk.opportunities(page),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/sales/opportunities?page=${page}&page_size=20`, token ?? undefined),
+    queryKey: qk.opportunities(page, pageSize),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/sales/opportunities?page=${page}&page_size=${pageSize}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -252,7 +255,7 @@ export function useAutoAssignTicket() {
 export function useUsers(page = 1, page_size = 20) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
-    queryKey: qk.users(page),
+    queryKey: qk.users(page, page_size),
     queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?page=${page}&page_size=${page_size}`, token ?? undefined),
     staleTime: 60 * 1000,
   });
@@ -307,10 +310,14 @@ export function useCreateUser() {
 }
 // ── Tasks ───────────────────────────────────────────────────────────────────
 
-export function useTasks(page = 1, status = "") {
+export function useTasks(page = 1, status = "", priority = "", assigned_to = "", createdAfter = "", createdBefore = "") {
   const token = useAuthStore((s) => s.token);
   const params = new URLSearchParams({ page: String(page), page_size: "20" });
   if (status) params.set("status", status);
+  if (priority) params.set("priority", priority);
+  if (assigned_to) params.set("assigned_to", assigned_to);
+  if (createdAfter) params.set("created_after", createdAfter);
+  if (createdBefore) params.set("created_before", createdBefore);
   return useQuery({
     queryKey: qk.tasks(page, status),
     queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/tasks?${params}`, token ?? undefined),
@@ -433,7 +440,7 @@ export function useReminders(upcomingOnly = false) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.reminders(upcomingOnly),
-    queryFn: () => apiClient.get(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -455,5 +462,89 @@ export function useDeleteReminder() {
     mutationFn: (id: number) =>
       apiClient.delete(`/api/v1/reminders/${id}`, token ?? undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["reminders"] }),
+  });
+}
+
+// ── Automation Rules ───────────────────────────────────────────────────────
+
+export function useAutomationRules(page = 1, pageSize = 20) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.automationRules(page, pageSize),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/automation/rules?page=${page}&page_size=${pageSize}`, token ?? undefined),
+    staleTime: 30 * 1000,
+  });
+}
+
+export function useAutomationRule(id: number) {
+  const token = useAuthStore((s) => s.token);
+  return useQuery({
+    queryKey: qk.automationRule(id),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/automation/rules/${id}`, token ?? undefined),
+    enabled: id > 0,
+  });
+}
+
+export function useCreateAutomationRule() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (data: Record<string, unknown>) =>
+      apiClient.post("/api/v1/automation/rules", data, token ?? undefined),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["automation_rules"] });
+      qc.invalidateQueries({ queryKey: ["automation_logs"] });
+    },
+  });
+}
+
+export function useUpdateAutomationRule() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: ({ id, data }: { id: number; data: Record<string, unknown> }) =>
+      apiClient.put(`/api/v1/automation/rules/${id}`, data, token ?? undefined),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["automation_rules"] });
+      qc.invalidateQueries({ queryKey: ["automation_logs"] });
+    },
+  });
+}
+
+export function useDeleteAutomationRule() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.delete(`/api/v1/automation/rules/${id}`, token ?? undefined),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["automation_rules"] });
+      qc.invalidateQueries({ queryKey: ["automation_logs"] });
+    },
+  });
+}
+
+export function useToggleAutomationRule() {
+  const qc = useQueryClient();
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiClient.post(`/api/v1/automation/rules/${id}/toggle`, {}, token ?? undefined),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["automation_rules"] });
+      qc.invalidateQueries({ queryKey: ["automation_logs"] });
+    },
+  });
+}
+
+export function useAutomationLogs(page = 1, pageSize = 20, ruleId?: number, status?: string) {
+  const token = useAuthStore((s) => s.token);
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (ruleId != null) params.set("rule_id", String(ruleId));
+  if (status) params.set("status", status);
+  return useQuery({
+    queryKey: qk.automationLogs(page, pageSize, ruleId, status),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/automation/logs?${params}`, token ?? undefined),
+    staleTime: 30 * 1000,
   });
 }

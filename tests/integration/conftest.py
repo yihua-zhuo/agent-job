@@ -188,6 +188,8 @@ _TABLES = [
     "reminders",
     "routing_rules",
     "tasks",
+    "automation_rules",
+    "automation_logs",
 ]
 
 
