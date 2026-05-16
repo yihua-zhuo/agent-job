@@ -27,11 +27,24 @@ Before writing any code, confirm:
 6. Tests use **per-file mock fixtures** — no global autouse patching.
 7. Linting: `ruff check src/ && ruff format --check src/` — never flake8/black.
 
+When reviewing code or plans, also check recent recurring failure modes:
+
+- Unit SQL mocks must use the same bind parameter names as the query and must enforce tenant scope.
+- DTO validators must match declared optionality/types; enum fields must reject unrelated truthy values.
+- `to_dict()`, logs, and response schemas must exclude secrets, tokens, and password hashes by allow-list.
+- Tenant-owned ORM models need real `tenants.id` foreign keys plus consistent audit/lifecycle fields.
+- `.plans/issue-*.md` must match the issue objectives, implementation files, test counts, and executable validation commands.
+- CI must be fork-aware: do not require unavailable secrets for fork PRs, and prefer SHA-based diffs over branch-name diffs.
+- CI artifacts must be useful outputs, not internal caches such as `.pytest_cache/`.
+- Async tests must use `await asyncio.sleep(...)` or fake clocks, never `time.sleep(...)`.
+- Batch/import validation tests should assert counters and representative error records, not only that errors exist.
+- Markdown fences in docs/plans/skills need explicit language tags such as `text`, `bash`, `python`, or `yaml`.
+
 ---
 
 ## Project Layout (abbreviated)
 
-```
+```text
 src/
   api/routers/          # FastAPI route handlers
   services/             # Business logic — one class per domain
@@ -45,12 +58,25 @@ src/
   main.py
 tests/
   unit/
-    conftest.py         # MockRow, MockResult, MockState, handlers
+    conftest.py         # MockRow, MockResult, MockState, core handlers + discovery
+    domain_handlers/    # Domain-owned mock SQL handlers
     test_*.py
   integration/
     conftest.py         # Real DB fixtures (db_schema, tenant_id, async_session)
+    domain_fixtures/    # Domain-owned integration seed helpers
     test_*_integration.py
 ```
+
+### Domain Ownership
+
+Feature domains own their registration files. Do not add new domains by editing
+central registries:
+
+- Routers: add `src/api/routers/<domain>.py` exporting an `APIRouter`; `api.iter_routers()` discovers it.
+- ORM models: add `src/db/models/<domain>.py`; `db.models` imports all model modules for `Base.metadata`.
+- Unit SQL handlers: add `tests/unit/domain_handlers/<domain>.py` with `get_handlers(state)`.
+- Integration seed helpers: add `tests/integration/domain_fixtures/<domain>.py`.
+- Do not update `src/api/__init__.py`, `src/db/models/__init__.py`, `tests/unit/conftest.py`, or `tests/integration/conftest.py` for routine domain additions.
 
 ---
 
@@ -118,6 +144,10 @@ mypy src/
 - Every `__init__` types session as `AsyncSession` with **no default**.
 - Every SQL query filters by `tenant_id`.
 - Each test file defines its own `mock_db_session` fixture.
+- New domain test helpers live under `tests/unit/domain_handlers/` or `tests/integration/domain_fixtures/`.
+- Unit mock handlers validate bind params and tenant scope.
+- Identity/auth serialization uses allow-lists that exclude credential material.
+- CI/review workflow changes account for forked PRs and missing secrets.
 
 ### ❌ Don't
 - Call `.to_dict()` inside services.
@@ -127,3 +157,7 @@ mypy src/
 - Use flake8 / pylint / black.
 - Use global autouse DB patching in tests.
 - Use module-level in-memory state for new services.
+- Edit central router/model/conftest registries for routine domain additions.
+- Let tests pass with mismatched SQL placeholders and mock params.
+- Upload `.pytest_cache/` as a CI test artifact.
+- Use `time.sleep()` inside async tests.

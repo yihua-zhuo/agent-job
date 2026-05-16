@@ -155,6 +155,7 @@ class TestGetTicketReplies:
 # ---------------------------------------------------------------------------
 
 class TestGetTicketActivity:
+    @pytest.mark.asyncio
     async def test_returns_activity_ordered_by_created_at_desc(self, ticket_service, mock_session):
         activity1 = MockActivityModel(id=1, content="ticket#1 updated")
         activity2 = MockActivityModel(id=2, content="ticket#1 assigned")
@@ -172,6 +173,7 @@ class TestGetTicketActivity:
         assert "order by" in sql_str
         assert "desc" in sql_str
 
+    @pytest.mark.asyncio
     async def test_raises_not_found_for_invalid_ticket(self, ticket_service, mock_session):
         mock_session.execute.side_effect = [MockResult([]), MockResult([])]
 

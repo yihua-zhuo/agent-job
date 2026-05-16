@@ -4,7 +4,7 @@ Services raise AppException on errors (caught by global handler in main.py).
 TaskModel objects have .to_dict(); router calls it before returning.
 """
 
-from datetime import date
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -16,9 +16,12 @@ from services.task_service import TaskService
 
 tasks_router = APIRouter(prefix="/api/v1", tags=["tasks"])
 
+UNASSIGNED = 0
+
 
 def _paginated(items, total, page, page_size):
-    total_pages = (total + page_size - 1) // page_size if page_size > 0 else 0
+    total_pages = (total + page_size - 1) // page_size
+    has_next = page < total_pages
     return {
         "success": True,
         "data": {
@@ -26,9 +29,8 @@ def _paginated(items, total, page, page_size):
             "total": total,
             "page": page,
             "page_size": page_size,
-            "total_pages": total_pages,
+            "has_next": has_next,
         },
-        "message": "Task list retrieved",
     }
 
 
@@ -40,18 +42,31 @@ def _paginated(items, total, page, page_size):
 class TaskCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=500)
     description: str = Field(default="")
-    assigned_to: int = Field(default=0, ge=0)
-    due_date: date | None = Field(default=None)
-    priority: str | None = Field(default=None)
+    priority: str = Field(default="normal", pattern="^(low|normal|high|urgent)$")
+    status: str = Field(default="pending", pattern="^(pending|in_progress|completed|cancelled)$")
+    due_date: str | None = Field(default=None)
+    assigned_to: int = Field(default=UNASSIGNED, ge=0)
 
 
 class TaskUpdate(BaseModel):
     title: str | None = Field(None, min_length=1, max_length=500)
     description: str | None = None
+    priority: str | None = Field(None, pattern="^(low|normal|high|urgent)$")
+    status: str | None = Field(None, pattern="^(pending|in_progress|completed|cancelled)$")
+    due_date: str | None = None
     assigned_to: int | None = Field(None, ge=0)
-    due_date: date | None = Field(default=None)
-    status: str | None = Field(None)
-    priority: str | None = Field(None)
+
+
+def _parse_due_date(val: str | None) -> datetime | None:
+    if val is None:
+        return None
+    try:
+        return datetime.fromisoformat(val.replace("Z", "+00:00"))
+    except ValueError:
+        try:
+            return datetime.fromisoformat(val)
+        except ValueError:
+            return None
 
 
 # ---------------------------------------------------------------------------
@@ -69,12 +84,13 @@ async def create_task(
     task = await service.create_task(
         title=body.title,
         description=body.description,
-        assigned_to=body.assigned_to,
-        due_date=body.due_date,
         priority=body.priority,
         tenant_id=ctx.tenant_id,
+        created_by=ctx.user_id,
+        assigned_to=body.assigned_to or UNASSIGNED,
+        due_date=_parse_due_date(body.due_date),
     )
-    return {"success": True, "data": task.to_dict(), "message": "任务创建成功"}
+    return {"success": True, "data": task.to_dict(), "message": "Task created"}
 
 
 @tasks_router.get("/tasks")
@@ -88,11 +104,11 @@ async def list_tasks(
 ):
     service = TaskService(session)
     items, total = await service.list_tasks(
-        tenant_id=ctx.tenant_id,
-        status=status,
-        assigned_to=assigned_to,
         page=page,
         page_size=page_size,
+        status=status,
+        assigned_to=assigned_to,
+        tenant_id=ctx.tenant_id,
     )
     return _paginated(items, total, page, page_size)
 
@@ -105,7 +121,7 @@ async def get_task(
 ):
     service = TaskService(session)
     task = await service.get_task(tenant_id=ctx.tenant_id, task_id=task_id)
-    return {"success": True, "data": task.to_dict(), "message": "获取任务成功"}
+    return {"success": True, "data": task.to_dict()}
 
 
 @tasks_router.patch("/tasks/{task_id}")
@@ -116,12 +132,14 @@ async def update_task(
     session: AsyncSession = Depends(get_db),
 ):
     service = TaskService(session)
-    update_data = body.model_dump(exclude_unset=True)
+    update_data = body.model_dump(exclude_none=True)
+    if "due_date" in update_data:
+        update_data["due_date"] = _parse_due_date(update_data["due_date"])
     task = await service.update_task(tenant_id=ctx.tenant_id, task_id=task_id, **update_data)
-    return {"success": True, "data": task.to_dict(), "message": "任务更新成功"}
+    return {"success": True, "data": task.to_dict(), "message": "Task updated"}
 
 
-@tasks_router.post("/tasks/{task_id}/complete", status_code=200)
+@tasks_router.post("/tasks/{task_id}/complete")
 async def complete_task(
     task_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -129,7 +147,7 @@ async def complete_task(
 ):
     service = TaskService(session)
     task = await service.complete_task(tenant_id=ctx.tenant_id, task_id=task_id)
-    return {"success": True, "data": task.to_dict(), "message": "任务已完成"}
+    return {"success": True, "data": task.to_dict(), "message": "Task completed"}
 
 
 @tasks_router.delete("/tasks/{task_id}")
@@ -140,4 +158,4 @@ async def delete_task(
 ):
     service = TaskService(session)
     await service.delete_task(tenant_id=ctx.tenant_id, task_id=task_id)
-    return {"success": True, "data": None, "message": "任务已删除"}
+    return {"success": True, "data": None, "message": "Task deleted"}

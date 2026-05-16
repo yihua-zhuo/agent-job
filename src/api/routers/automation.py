@@ -183,7 +183,7 @@ async def trigger_event(
     service = AutomationService(session)
     results = await service.trigger_event(
         tenant_id=ctx.tenant_id,
-        event_type=body.event_type,
+        trigger_event=body.event_type,
         context=body.context,
     )
     return {"success": True, "data": results}

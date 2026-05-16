@@ -44,3 +44,5 @@ class Settings(BaseSettings):
 settings = Settings()
 if settings.env not in {"development", "local", "test"} and not settings.jwt_secret:
     raise RuntimeError("JWT_SECRET is required outside local development")
+if bool(settings.webauthn_rp_id) != bool(settings.webauthn_rp_name):
+    raise RuntimeError("WebAuthn configuration requires both WEBAUTHN_RP_ID and WEBAUTHN_RP_NAME to be set")

@@ -6,20 +6,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from api import (
-    activities_router,
-    automation_router,
-    auth_router,
-    customers_router,
-    notifications_router,
-    rbac_router,
-    reports_router,
-    sales_router,
-    tasks_router,
-    tenants_router,
-    tickets_router,
-    users_router,
-)
+from api import iter_routers
 from configs.settings import settings
 from middleware.logging import LoggingMiddleware, logger
 from pkg.errors.app_exceptions import AppException
@@ -97,18 +84,8 @@ def create_app() -> FastAPI:
         )
 
     # ── Routes ─────────────────────────────────────────────────────────────
-    app.include_router(auth_router)
-    app.include_router(customers_router)
-    app.include_router(sales_router)
-    app.include_router(users_router)
-    app.include_router(tenants_router)
-    app.include_router(tickets_router)
-    app.include_router(tasks_router)
-    app.include_router(activities_router)
-    app.include_router(notifications_router)
-    app.include_router(automation_router)
-    app.include_router(reports_router)
-    app.include_router(rbac_router)
+    for router in iter_routers():
+        app.include_router(router)
 
     @app.get("/")
     async def health():
