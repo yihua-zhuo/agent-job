@@ -5,6 +5,7 @@
 ## Security Platform cron
 - Job ID: `3c40b43c-5298-4ae0-a655-5b87e04151fc`
 - Status: ⚠️ 10:11 May 16 FAILED (process died at settings, 4/5 complete)
+- 11:03 May 16: not started yet
 - Last good: 07:01 May 16 (all 5 pages complete)
 - Note: Recurring SIGTERM issue — script keeps dying at projects OR settings step
 
