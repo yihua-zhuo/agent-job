@@ -15,6 +15,7 @@ jobs:
     name: Code Review
     runs-on: ubuntu-latest
     permissions:
+      actions: write
       contents: read
       pull-requests: write
     steps:
@@ -65,6 +66,68 @@ jobs:
           CODE_REVIEW_RESULT_PATH: shared-memory/results/code-review-result.json
         run: |
           python3 scripts/ci/post_pr_line_comments.py
+
+      - name: Trigger automatic PR fix for critical findings
+        env:
+          GH_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN }}
+          CODE_REVIEW_RESULT_PATH: shared-memory/results/code-review-result.json
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "COMMIT_GITHUB_TOKEN is not configured; cannot dispatch fix-pr-comments.yml" >&2
+            exit 1
+          fi
+
+          ISSUE_ID="$(python3 - <<'PY'
+          import json
+          import os
+          import re
+          import sys
+          from pathlib import Path
+
+          result_path = Path(os.environ["CODE_REVIEW_RESULT_PATH"])
+          if not result_path.exists():
+              print("code review result file not found", file=sys.stderr)
+              sys.exit(2)
+
+          result = json.loads(result_path.read_text(encoding="utf-8") or "{}")
+          critical = result.get("critical_issues") or []
+          if not critical:
+              sys.exit(0)
+
+          candidates = [
+              os.environ.get("PR_HEAD_REF", ""),
+              os.environ.get("PR_BODY", ""),
+          ]
+          patterns = [
+              r"(?:^|/)auto/issue-(\d+)(?:$|[^0-9])",
+              r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s+#(\d+)\b",
+              r"\bissue-(\d+)\b",
+              r"#(\d+)",
+          ]
+          for text in candidates:
+              for pattern in patterns:
+                  match = re.search(pattern, text or "", re.IGNORECASE)
+                  if match:
+                      print(match.group(1))
+                      sys.exit(0)
+
+          print("critical findings found, but issue id could not be inferred", file=sys.stderr)
+          sys.exit(2)
+          PY
+          )"
+
+          if [ -z "${ISSUE_ID:-}" ]; then
+            echo "No critical findings; skipping fix-pr-comments.yml dispatch."
+            exit 0
+          fi
+
+          echo "Critical findings detected; dispatching fix-pr-comments.yml for issue #${ISSUE_ID}."
+          python3 scripts/ci/trigger_fix_for_issue.py "${ISSUE_ID}"
 
 #      - name: Push shared-memory
 #        if: always()
