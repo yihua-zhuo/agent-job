@@ -2,10 +2,10 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuthStore } from "@/lib/store/auth-store";
+import { useQuickAddTask } from "@/lib/store/task-store";
 import {
   Users, TrendingUp, Ticket, BarChart3, Sparkles, CheckSquare, Bell,
-  Activity, UsersRound, Settings as SettingsIcon, Shield, Upload,
-  LogOut, UserCog, ChevronLeft, ChevronRight,
+  Activity, UsersRound, Settings, LogOut, UserCog, ChevronLeft, ChevronRight, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -30,7 +30,7 @@ const crmItems = [
 ];
 
 const systemItems = [
-  { href: "/settings", label: "Settings", icon: SettingsIcon },
+  { href: "/settings", label: "Settings", icon: Settings },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/ai", label: "AI", icon: Sparkles },
   { href: "/import-export", label: "Import/Export", icon: Upload },
@@ -85,8 +85,9 @@ function NavGroup({
 export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const { user, clearAuth } = useAuthStore();
   const router = useRouter();
-  const { data: notifData } = useNotifications(1, true);
-  const unreadCount = (notifData?.data?.total as number) ?? 0;
+  const { data: notifData } = useNotifications(1, false);
+  const unreadCount = (notifData?.data?.unread_count as number) ?? 0;
+  const quickAdd = useQuickAddTask();
 
   const initials = user
     ? (user.full_name ?? user.username ?? "?").slice(0, 2).toUpperCase()
@@ -124,6 +125,15 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
           {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+        </button>
+        <button
+          type="button"
+          onClick={() => quickAdd.open("pending")}
+          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground transition-colors cursor-pointer"
+          aria-label="Add task"
+          title="Add task"
+        >
+          <Plus className="h-4 w-4" />
         </button>
       </div>
 
