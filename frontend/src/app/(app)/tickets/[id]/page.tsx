@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { use } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { useTicket, useTicketReplies, useTicketActivity, useAddReply, useUpdateTicket, useDeleteTicket, useCustomers } from "@/lib/api/queries";
@@ -69,10 +68,13 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const router = useRouter();
   const { id } = use(params);
   const ticketId = Number(id);
-  if (isNaN(ticketId)) {
-    router.push("/tickets");
-    return null;
-  }
+  const invalidTicketId = Number.isNaN(ticketId);
+
+  useEffect(() => {
+    if (invalidTicketId) {
+      router.push("/tickets");
+    }
+  }, [invalidTicketId, router]);
 
   const { data: ticketData, isLoading: ticketLoading } = useTicket(ticketId);
   const { data: repliesData } = useTicketReplies(ticketId);
@@ -91,7 +93,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const slaToastShownRef = useRef(false);
 
   const ticket = ticketData?.data as Record<string, unknown> | undefined;
-  const customerName = customers.find((c) => c.id === Number(ticket?.customer_id))?.name;
+  const customerName = useMemo(
+    () => customers.find((c) => c.id === Number(ticket?.customer_id))?.name,
+    [customers, ticket?.customer_id]
+  );
   const replies = (repliesData?.data ?? []) as Array<Record<string, unknown>>;
   const activities = (activityData?.data ?? []) as Array<Record<string, unknown>>;
 
@@ -105,6 +110,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       }
     }
   }, [ticket, ticketId]);
+
+  if (invalidTicketId) {
+    return null;
+  }
 
   async function handleSendReply() {
     if (!replyContent.trim()) return;

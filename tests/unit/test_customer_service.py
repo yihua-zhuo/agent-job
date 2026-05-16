@@ -1,6 +1,6 @@
 """Unit tests for CustomerService — focus on CustomerCreateDTO integration."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -13,8 +13,6 @@ from services.customer_service import CustomerService
 @pytest.fixture
 def mock_db_session():
     """Async mock session that tracks calls and properly wires execute()."""
-    from unittest.mock import patch
-
     session = MagicMock()
     session.add = MagicMock()
     session.flush = AsyncMock()

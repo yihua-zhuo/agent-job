@@ -41,7 +41,9 @@ AUTH_SCHEME = "bearer"
 
 
 def _jwt_secret() -> str:
-    return settings.jwt_secret or "dev-jwt-secret"
+    if not settings.jwt_secret:
+        raise RuntimeError("JWT secret is not configured")
+    return settings.jwt_secret
 
 
 def _access_token_expires_seconds() -> int:
@@ -276,16 +278,13 @@ async def refresh_token(
 
 @auth_router.post("/logout")
 async def logout(
-    request: Request,
     response: Response,
-    current_user: AuthContext = Depends(get_current_user),
     refresh_token: str | None = Cookie(default=None, alias=COOKIE_NAME),
     session: AsyncSession = Depends(get_db),
 ) -> dict[str, bool | str]:
-    """Revoke the current refresh token (logout)."""
-    _require_tenant_id(current_user)
-    token_svc = TokenService(session, secret_key=_jwt_secret())
+    """Revoke the refresh token cookie and clear it even after access expiry."""
     if refresh_token:
+        token_svc = TokenService(session, secret_key=_jwt_secret())
         await token_svc.revoke_refresh_token(refresh_token)
 
     _clear_refresh_cookie(response)

@@ -122,7 +122,7 @@ async def update_routing_rule(
     session: AsyncSession = Depends(get_db),
 ):
     """Update an existing routing rule."""
-    await _require_admin_or_manager(ctx, session)
+    await _require_admin_or_manager(ctx)
     from sqlalchemy import select, update
 
     from db.models.routing_rule import RoutingRuleModel
@@ -174,7 +174,7 @@ async def delete_routing_rule(
     session: AsyncSession = Depends(get_db),
 ):
     """Delete a routing rule."""
-    await _require_admin_or_manager(ctx, session)
+    await _require_admin_or_manager(ctx)
     from sqlalchemy import delete
 
     from db.models.routing_rule import RoutingRuleModel
@@ -200,7 +200,7 @@ async def reorder_routing_rules(
 
     Body: {rule_ids: [3, 1, 2]} assigns priority len - index (highest first).
     """
-    await _require_admin_or_manager(ctx, session)
+    await _require_admin_or_manager(ctx)
     from sqlalchemy import update
 
     from db.models.routing_rule import RoutingRuleModel
@@ -233,7 +233,7 @@ async def toggle_routing_rule(
     session: AsyncSession = Depends(get_db),
 ):
     """Toggle is_active status of a routing rule."""
-    await _require_admin_or_manager(ctx, session)
+    await _require_admin_or_manager(ctx)
     from sqlalchemy import select, update
 
     from db.models.routing_rule import RoutingRuleModel

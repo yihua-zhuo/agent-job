@@ -64,18 +64,16 @@ alembic stamp head            # mark DB as up-to-date without running migrations
 ## Adding a New Model
 
 1. Create `src/db/models/my_model.py` with your `Base`-derived class.
-2. Import it in `alembic/env.py`:
-   ```python
-   from db.models.my_model import MyModel  # noqa: F401
-   ```
+2. Do not edit `src/db/models/__init__.py` or `alembic/env.py`; `db.models`
+   auto-imports model modules so `Base.metadata` and Alembic see the new table.
 3. Follow the generate steps above.
 
 ---
 
 ## Rules
 
-- Every new model in `src/db/models/` **must** be imported in `alembic/env.py`, otherwise
-  autogenerate ignores it.
+- Every new SQLAlchemy model must live in `src/db/models/<domain>.py` and inherit
+  from `db.base.Base`; model discovery depends on that.
 - Migrations must be **reversible** — fill in `downgrade()` even if autogen left it blank.
 - **Never edit** a migration that has shipped to any environment; write a new one instead.
 - **Never run** autogenerate against `test_db` — you'll get an empty diff and miss real drift.

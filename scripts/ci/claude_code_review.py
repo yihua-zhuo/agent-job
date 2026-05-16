@@ -8,14 +8,13 @@ import os
 import re
 import subprocess
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from json import JSONDecoder
 from pathlib import Path
 from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode, urlparse
 from urllib.request import Request, urlopen
-
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -359,7 +358,10 @@ class GitHubClient:
         )
         with urlopen(req, timeout=20) as response:
             text = response.read().decode()
-        return json.loads(text) if text else {}
+        parsed = json.loads(text) if text else {}
+        if parsed.get("errors"):
+            raise RuntimeError(f"GitHub GraphQL errors: {parsed['errors']} response={text}")
+        return parsed
 
     def fetch_existing_review_threads(self, pr_number: int) -> list[dict[str, Any]]:
         """
@@ -505,13 +507,14 @@ class GitHubClient:
                 log(f"resolve_thread_failed={type(exc).__name__}: {exc}")
 
         review_event = "REQUEST_CHANGES" if any(i.is_critical for i in issues) else "COMMENT"
-        payload: dict[str, Any] = {
-            "commit_id": commit_sha,
-            "body": summary_body,
-            "event": review_event,
-            "comments": new_inline_comments,
-        }
-        self.post(f"/pulls/{pr_number}/reviews", payload)
+        if new_inline_comments or resolved_count:
+            payload: dict[str, Any] = {
+                "commit_id": commit_sha,
+                "body": summary_body,
+                "event": review_event,
+                "comments": new_inline_comments,
+            }
+            self.post(f"/pulls/{pr_number}/reviews", payload)
 
         kept_count = len(existing_by_key) - resolved_count
         new_count = len(new_inline_comments)

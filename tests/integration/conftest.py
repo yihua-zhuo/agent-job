@@ -168,29 +168,12 @@ def _install_test_db_session():
 
 
 # ── Schema setup / teardown ──────────────────────────────────────────────────────
-_TABLES = [
-    "pipeline_stages",
-    "pipelines",
-    "activities",
-    "workflows",
-    "campaign_events",
-    "campaigns",
-    "dashboards",
-    "reports",
-    "tickets",
-    "ticket_replies",
-    "users",
-    "opportunities",
-    "contacts",
-    "customers",
-    "tenants",
-    "notifications",
-    "reminders",
-    "routing_rules",
-    "tasks",
-    "automation_rules",
-    "automation_logs",
-]
+def _metadata_tables() -> list[str]:
+    """Return all ORM table names in dependency-safe cleanup order."""
+    import db.models  # noqa: F401 - registers all model modules with Base.metadata
+    from db.base import Base
+
+    return [table.name for table in reversed(Base.metadata.sorted_tables)]
 
 
 @pytest.fixture(scope="session")
@@ -206,7 +189,7 @@ def fresh_schema() -> Generator[None, None, None]:
     # 3. Drop and recreate all tables via the sync engine.
     sync_engine = _get_test_sync_engine()
     with sync_engine.begin() as conn:
-        for tbl in _TABLES:
+        for tbl in _metadata_tables():
             try:
                 conn.execute(text(f"DROP TABLE IF EXISTS {tbl} CASCADE"))
             except Exception:
@@ -224,7 +207,7 @@ def fresh_schema() -> Generator[None, None, None]:
 def db_schema(fresh_schema) -> Generator[None, None, None]:
     """Truncate all tables between each test for function-level isolation."""
     sync_engine = _get_test_sync_engine()
-    for table in _TABLES:
+    for table in _metadata_tables():
         try:
             with sync_engine.begin() as conn:
                 conn.execute(text(f"TRUNCATE {table} RESTART IDENTITY CASCADE"))
@@ -278,7 +261,7 @@ def _cleanup_after_module() -> Generator[None, None, None]:
     """Truncate all tables once after every test file completes."""
     yield
     sync_engine = _get_test_sync_engine()
-    for table in _TABLES:
+    for table in _metadata_tables():
         try:
             with sync_engine.begin() as conn:
                 conn.execute(text(f"TRUNCATE {table} RESTART IDENTITY CASCADE"))
@@ -325,40 +308,6 @@ def tenant_id_web() -> int:
 @pytest.fixture
 def tenant_id_2_web() -> int:
     return random.randint(10_000_000, 99_999_999)
-
-
-async def _seed_routing_rule(
-    session: AsyncSession,
-    tenant_id: int,
-    name: str = "APAC Rule",
-    conditions: list[dict] | None = None,
-    assignee_type: str = "user",
-    assignee_id: int | None = 5,
-    priority: int = 100,
-    is_active: bool = True,
-):
-    """Seed a routing rule for lead routing tests."""
-    from datetime import UTC, datetime
-    from db.models.routing_rule import RoutingRuleModel
-
-    rule = RoutingRuleModel(
-        tenant_id=tenant_id,
-        name=name,
-        conditions_json=(
-            conditions
-            if conditions is not None
-            else [{"field": "region", "operator": "in", "value": ["APAC"]}]
-        ),
-        assignee_type=assignee_type,
-        assignee_id=assignee_id,
-        priority=priority,
-        is_active=is_active,
-        created_at=datetime.now(UTC),
-        updated_at=datetime.now(UTC),
-    )
-    session.add(rule)
-    await session.flush()
-    return rule
 
 
 @pytest_asyncio.fixture(scope="function")

@@ -25,7 +25,6 @@ import subprocess
 import sys
 from typing import Any
 
-
 LABEL_SPLIT = "split"
 SUBTASK_OF_PATTERN = re.compile(r"(?i)Subtask of\s*#(\d+)")
 DEPENDS_ON_PATTERN = re.compile(r"(?i)(?:depends on|blocked by)\s*:?\s*#(\d+)")
@@ -133,6 +132,16 @@ def main() -> int:
             log(f"chain_ok parent=#{parent_number} children={sorted(sibling_numbers)}")
             continue
 
+        closed_children = [
+            c for c in children if (c.get("state") or "").upper() == "CLOSED"
+        ]
+        if closed_children:
+            log(
+                f"skip_closed_children parent=#{parent_number} "
+                f"closed={sorted(c['number'] for c in closed_children)}"
+            )
+            continue
+
         open_children = [
             c for c in children if (c.get("state") or "").upper() == "OPEN"
         ]
@@ -148,7 +157,8 @@ def main() -> int:
             if delete_issue(n):
                 deleted.append(n)
 
-        ok = remove_split_label(parent_number)
+        all_deleted = len(deleted) == len(open_children)
+        ok = remove_split_label(parent_number) if all_deleted else False
         log(f"cleaned parent=#{parent_number} deleted={deleted} label_removed={ok}")
         if deleted or ok:
             cleaned += 1

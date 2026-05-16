@@ -99,4 +99,5 @@ migrate-new: venv
 	$(PYTHON) -m alembic revision --autogenerate -m "$(MSG)"
 
 trigger-fix: venv
+	@if [ -z "$(ISSUE)" ]; then echo "Usage: make trigger-fix ISSUE=123"; exit 1; fi
 	$(PYTHON) "scripts/ci/trigger_fix_for_issue.py" $(ISSUE)

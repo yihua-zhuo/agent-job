@@ -1,31 +1,29 @@
-"""Central API router — aggregates all feature routers."""
+"""API router discovery.
 
-from api.routers.activities import activities_router
-from api.routers.auth import auth_router
-from api.routers.automation import automation_router
-from api.routers.customers import customers_router
-from api.routers.lead_routing import lead_routing_router
-from api.routers.notifications import notifications_router
-from api.routers.rbac import rbac_router
-from api.routers.reports import reports_router
-from api.routers.sales import sales_router
-from api.routers.tasks import tasks_router
-from api.routers.tenants import tenants_router
-from api.routers.tickets import tickets_router
-from api.routers.users import users_router
+Router modules own their registration by exporting one or more FastAPI
+``APIRouter`` instances. New domains should add ``src/api/routers/<domain>.py``;
+this package discovers it without requiring a central import update.
+"""
 
-__all__ = [
-    "activities_router",
-    "auth_router",
-    "automation_router",
-    "customers_router",
-    "lead_routing_router",
-    "notifications_router",
-    "rbac_router",
-    "reports_router",
-    "sales_router",
-    "tasks_router",
-    "tenants_router",
-    "tickets_router",
-    "users_router",
-]
+from __future__ import annotations
+
+import importlib
+import pkgutil
+from collections.abc import Iterator
+
+from fastapi import APIRouter
+
+from api import routers
+
+
+def iter_routers() -> Iterator[APIRouter]:
+    """Yield all APIRouter instances exported by modules in ``api.routers``."""
+    for info in sorted(pkgutil.iter_modules(routers.__path__, prefix=f"{routers.__name__}."), key=lambda item: item.name):
+        module = importlib.import_module(info.name)
+        for name in sorted(dir(module)):
+            value = getattr(module, name)
+            if isinstance(value, APIRouter):
+                yield value
+
+
+__all__ = ["iter_routers"]

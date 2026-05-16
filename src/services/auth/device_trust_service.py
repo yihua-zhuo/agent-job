@@ -205,6 +205,6 @@ class DeviceTrustService:
                 DeviceTrustModel.tenant_id == tenant_id,
                 DeviceTrustModel.trusted == True,  # noqa: E712
             )
-            .order_by(DeviceTrustModel.last_used_at.desc().nullsfirst(), DeviceTrustModel.trusted_at.desc())
+            .order_by(DeviceTrustModel.last_used_at.desc().nullslast(), DeviceTrustModel.trusted_at.desc())
         )
         return list(result.scalars().all())
