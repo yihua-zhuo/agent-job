@@ -1,6 +1,5 @@
 """Unit tests for src/api/routers/tasks.py — /api/v1/tasks endpoints."""
 
-from contextlib import asynccontextmanager
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -11,6 +10,8 @@ from api.routers.tasks import tasks_router
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import AppException, NotFoundException
+from services.task_service import TaskService
+from tests.unit.conftest import make_mock_session
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -81,20 +82,25 @@ def client_with_service(monkeypatch):
         for attr in ("create_task", "list_tasks", "count_tasks", "get_task", "update_task", "complete_task", "delete_task"):
             setattr(mock_service, attr, AsyncMock())
 
+        mock_session = make_mock_session()
+
+        def task_service_factory(session):
+            assert session is mock_session
+            return mock_service
+
         monkeypatch.setattr(
             "api.routers.tasks.TaskService",
-            lambda session: mock_service,
+            task_service_factory,
         )
 
         app = FastAPI()
         app.include_router(tasks_router)
         app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
 
-        @asynccontextmanager
-        async def mock_db_session():
-            yield MagicMock()
+        async def override_db():
+            yield mock_session
 
-        app.dependency_overrides[get_db] = lambda: mock_db_session()
+        app.dependency_overrides[get_db] = override_db
 
         @app.exception_handler(AppException)
         async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -212,6 +218,22 @@ class TestListTasksEndpoint:
         client, _ = client_with_service()
         resp = await client.get("/api/v1/tasks?page_size=101")
         assert resp.status_code == 422
+
+
+class TestTaskServiceTenantIsolation:
+    async def test_get_task_rejects_other_tenant(self):
+        service = TaskService(make_mock_session())
+
+        with pytest.raises(NotFoundException):
+            await service.get_task(tenant_id=2, task_id=1)
+
+    async def test_list_tasks_filters_by_tenant(self):
+        service = TaskService(make_mock_session())
+
+        items, total = await service.list_tasks(tenant_id=2)
+
+        assert items == []
+        assert total == 0
 
 
 # ---------------------------------------------------------------------------
