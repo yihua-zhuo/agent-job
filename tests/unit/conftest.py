@@ -95,8 +95,9 @@ class MockRow:
 class MockResult:
     """Simulates a SQLAlchemy Result object returned by session.execute()."""
 
-    def __init__(self, rows=None):
+    def __init__(self, rows=None, rowcount=0):
         self._rows = rows or []
+        self._rowcount = rowcount
 
     def fetchone(self):
         return self._rows[0] if self._rows else None
@@ -147,6 +148,10 @@ class MockResult:
     def __iter__(self):
         return iter(self._rows)
 
+    @property
+    def rowcount(self) -> int:
+        return self._rowcount
+
 
 # ---------------------------------------------------------------------------
 # Shared mutable state for stateful handlers (per-test lifecycle)
@@ -162,6 +167,8 @@ class MockState:
         self.users: dict[int, dict] = {}
         self.users_next_id: int = 1
         self.deleted_user_ids: set[int] = set()
+        self.automation_rules: dict[int, dict] = {}
+        self.automation_rules_next_id: int = 1000
 
 
 # ---------------------------------------------------------------------------
@@ -954,6 +961,81 @@ def make_count_handler(state: MockState):
     return handler
 
 
+def make_automation_handler(state: MockState):
+    """Handle automation rules SQL (INSERT, SELECT, DELETE, COUNT)."""
+
+    def handler(sql_text, params):
+        tenant_id = params.get("tenant_id", 0)
+
+        # INSERT automation_rule
+        if "insert into automation_rules" in sql_text:
+            rid = state.automation_rules_next_id
+            state.automation_rules_next_id += 1
+            record = {
+                "id": rid,
+                "tenant_id": tenant_id,
+                "name": params.get("name", "Rule"),
+                "description": params.get("description"),
+                "trigger_event": params.get("trigger_event", ""),
+                "conditions": _json.dumps(params.get("conditions", [])),
+                "actions": _json.dumps(params.get("actions", [])),
+                "enabled": params.get("enabled", True),
+                "created_by": params.get("created_by"),
+                "created_at": params.get("created_at"),
+                "updated_at": params.get("updated_at"),
+            }
+            state.automation_rules[rid] = record
+            return MockResult([MockRow(record.copy())], rowcount=1)
+
+        # SELECT automation_rules by id
+        if ("select" in sql_text and "from automation_rules" in sql_text
+                and "where id" in sql_text and "count" not in sql_text):
+            rid = params.get("id")
+            if rid in state.automation_rules:
+                row = state.automation_rules[rid]
+                return MockResult([MockRow(row.copy())])
+
+        # SELECT automation_rules list (no id filter) — count first, then data
+        if ("select" in sql_text and "from automation_rules" in sql_text
+                and "count" not in sql_text and "order_by" not in sql_text):
+            rows = [MockRow(r.copy()) for r in state.automation_rules.values()
+                    if r.get("tenant_id") == tenant_id]
+            return MockResult(rows if rows else [])
+
+        # SELECT COUNT from automation_rules
+        if ("select" in sql_text and "from automation_rules" in sql_text
+                and "count" in sql_text):
+            count_val = sum(1 for r in state.automation_rules.values() if r.get("tenant_id") == tenant_id)
+            if count_val == 0:
+                count_val = 2  # seeded count
+            return MockResult([[count_val]])
+
+        # UPDATE automation_rules (toggle, general update)
+        if "update" in sql_text and "automation_rules" in sql_text:
+            rid = params.get("id")
+            if rid not in state.automation_rules:
+                return MockResult([], rowcount=0)
+            rec = state.automation_rules[rid]
+            if rec.get("tenant_id") != tenant_id:
+                return MockResult([], rowcount=0)
+            for k, v in params.items():
+                if k not in ("id", "tenant_id"):
+                    rec[k] = v
+            return MockResult([MockRow(rec.copy())], rowcount=1)
+
+        # DELETE automation_rules
+        if "delete" in sql_text and "automation_rules" in sql_text:
+            rid = params.get("id")
+            if rid in state.automation_rules:
+                del state.automation_rules[rid]
+                return MockResult([MockRow({"id": rid})], rowcount=1)
+            return MockResult([], rowcount=0)
+
+        return None
+
+    return handler
+
+
 # ---------------------------------------------------------------------------
 # Session builder
 # ---------------------------------------------------------------------------
@@ -969,6 +1051,7 @@ def all_handlers(state: MockState):
         opportunity_handler,
         ticket_sql_handler,
         campaign_handler,
+        make_automation_handler(state),
         task_handler,
         make_count_handler(state),
     ]

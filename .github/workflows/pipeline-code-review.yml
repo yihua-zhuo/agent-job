@@ -66,23 +66,23 @@ jobs:
         run: |
           python3 scripts/ci/post_pr_line_comments.py
 
-      - name: Push shared-memory
-        if: always()
-        env:
-          SM_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || github.token }}
-        run: |
-          cd shared-memory
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          git pull --rebase \
-            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
-            "$SHARED_MEMORY_BRANCH" 2>/dev/null || true
-          git add -A
-          git diff --cached --quiet && exit 0
-          git commit -m "pipeline(code-review): update results"
-          git push \
-            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
-            "$SHARED_MEMORY_BRANCH"
+#      - name: Push shared-memory
+#        if: always()
+#        env:
+#          SM_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || github.token }}
+#        run: |
+#          cd shared-memory
+#          git config user.name "github-actions[bot]"
+#          git config user.email "github-actions[bot]@users.noreply.github.com"
+#          git pull --rebase \
+#            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
+#            "$SHARED_MEMORY_BRANCH" 2>/dev/null || true
+#          git add -A
+#          git diff --cached --quiet && exit 0
+#          git commit -m "pipeline(code-review): update results"
+#          git push \
+#            "https://x-access-token:${SM_TOKEN}@github.com/${SHARED_MEMORY_REPO}.git" \
+#            "$SHARED_MEMORY_BRANCH"
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

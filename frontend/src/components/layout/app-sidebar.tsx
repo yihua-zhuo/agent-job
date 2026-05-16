@@ -5,7 +5,8 @@ import { useAuthStore } from "@/lib/store/auth-store";
 import { useQuickAddTask } from "@/lib/store/task-store";
 import {
   Users, TrendingUp, Ticket, BarChart3, Sparkles, CheckSquare, Bell,
-  Activity, UsersRound, Settings, LogOut, UserCog, ChevronLeft, ChevronRight, Plus,
+  Activity, UsersRound, Settings as SettingsIcon, Shield, Upload,
+  LogOut, UserCog, ChevronLeft, ChevronRight, Zap, Plus,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -26,11 +27,12 @@ const crmItems = [
   { href: "/activities", label: "Activities", icon: Activity },
   { href: "/notifications", label: "Notifications", icon: Bell, badge: true },
   { href: "/team", label: "Team", icon: UsersRound },
+  { href: "/automation/rules", label: "Automation", icon: Zap },
   { href: "/sla", label: "SLA", icon: Shield },
 ];
 
 const systemItems = [
-  { href: "/settings", label: "Settings", icon: Settings },
+  { href: "/settings", label: "Settings", icon: SettingsIcon },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/ai", label: "AI", icon: Sparkles },
   { href: "/import-export", label: "Import/Export", icon: Upload },

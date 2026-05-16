@@ -187,6 +187,8 @@ _TABLES = [
     "notifications",
     "reminders",
     "tasks",
+    "automation_rules",
+    "automation_logs",
 ]
 
 
