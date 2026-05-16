@@ -4,6 +4,9 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    env: {
+      NEXT_PUBLIC_AUTH_KEY: "0123456789abcdef0123456789abcdef",
+    },
     include: ["src/**/*.test.ts"],
     coverage: {
       provider: "v8",

@@ -168,28 +168,12 @@ def _install_test_db_session():
 
 
 # ── Schema setup / teardown ──────────────────────────────────────────────────────
-_TABLES = [
-    "pipeline_stages",
-    "pipelines",
-    "activities",
-    "workflows",
-    "campaign_events",
-    "campaigns",
-    "dashboards",
-    "reports",
-    "tickets",
-    "ticket_replies",
-    "users",
-    "opportunities",
-    "contacts",
-    "customers",
-    "tenants",
-    "notifications",
-    "reminders",
-    "tasks",
-    "automation_rules",
-    "automation_logs",
-]
+def _metadata_tables() -> list[str]:
+    """Return all ORM table names in dependency-safe cleanup order."""
+    import db.models  # noqa: F401 - registers all model modules with Base.metadata
+    from db.base import Base
+
+    return [table.name for table in reversed(Base.metadata.sorted_tables)]
 
 
 @pytest.fixture(scope="session")
@@ -205,7 +189,7 @@ def fresh_schema() -> Generator[None, None, None]:
     # 3. Drop and recreate all tables via the sync engine.
     sync_engine = _get_test_sync_engine()
     with sync_engine.begin() as conn:
-        for tbl in _TABLES:
+        for tbl in _metadata_tables():
             try:
                 conn.execute(text(f"DROP TABLE IF EXISTS {tbl} CASCADE"))
             except Exception:
@@ -223,7 +207,7 @@ def fresh_schema() -> Generator[None, None, None]:
 def db_schema(fresh_schema) -> Generator[None, None, None]:
     """Truncate all tables between each test for function-level isolation."""
     sync_engine = _get_test_sync_engine()
-    for table in _TABLES:
+    for table in _metadata_tables():
         try:
             with sync_engine.begin() as conn:
                 conn.execute(text(f"TRUNCATE {table} RESTART IDENTITY CASCADE"))
@@ -277,7 +261,7 @@ def _cleanup_after_module() -> Generator[None, None, None]:
     """Truncate all tables once after every test file completes."""
     yield
     sync_engine = _get_test_sync_engine()
-    for table in _TABLES:
+    for table in _metadata_tables():
         try:
             with sync_engine.begin() as conn:
                 conn.execute(text(f"TRUNCATE {table} RESTART IDENTITY CASCADE"))

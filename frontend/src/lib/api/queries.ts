@@ -38,6 +38,12 @@ interface ApiEnvelope<T> {
   data: PaginatedResponse<T>;
 }
 
+export interface UserSummary {
+  id: number;
+  username: string;
+  full_name?: string | null;
+}
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 export function useCurrentUser() {
   const token = useAuthStore((s) => s.token);
@@ -232,7 +238,7 @@ export function useBulkUpdateTickets() {
   const qc = useQueryClient();
   const token = useAuthStore((s) => s.token);
   return useMutation({
-    mutationFn: (data: { ticket_ids: number[]; assigned_to?: number; status?: string }) =>
+    mutationFn: (data: { ticket_ids: number[]; assigned_to?: number | null; status?: string }) =>
       apiClient.post("/api/v1/tickets/bulk-update", data, token ?? undefined),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tickets"] }),
   });
@@ -256,7 +262,7 @@ export function useUsers(page = 1, page_size = 20) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.users(page, page_size),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?page=${page}&page_size=${page_size}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<UserSummary>>(`/api/v1/users?page=${page}&page_size=${page_size}`, token ?? undefined),
     staleTime: 60 * 1000,
   });
 }

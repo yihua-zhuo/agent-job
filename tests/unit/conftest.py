@@ -6,11 +6,14 @@ only the handlers they need via ``make_mock_session([handler1, handler2, ...])``
 
 from __future__ import annotations
 
+import importlib
 import json as _json
+import pkgutil
 import sys
-from pathlib import Path
+import warnings
 from contextlib import asynccontextmanager
 from datetime import datetime as dt
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -20,9 +23,6 @@ from sqlalchemy.exc import MultipleResultsFound
 # Load .env so DATABASE_URL is available in test environment.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(_dotenv_path)
-
-# Silence SQLAlchemy 2.0 warnings during tests
-import warnings
 
 try:
     warnings.filterwarnings("ignore", category=warnings.SQLAlchemyWarning)
@@ -167,8 +167,6 @@ class MockState:
         self.users: dict[int, dict] = {}
         self.users_next_id: int = 1
         self.deleted_user_ids: set[int] = set()
-        self.automation_rules: dict[int, dict] = {}
-        self.automation_rules_next_id: int = 1000
 
 
 # ---------------------------------------------------------------------------
@@ -862,92 +860,6 @@ def campaign_handler(sql_text, params):
     return None
 
 
-def task_handler(sql_text, params):
-    """Handle task-related SQL (stateless)."""
-
-    if "insert into tasks" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": params.get("tenant_id", 0),
-                        "title": params.get("title", "Task"),
-                        "description": params.get("description", ""),
-                        "assigned_to": params.get("assigned_to", 0),
-                        "due_date": params.get("due_date"),
-                        "status": params.get("status", "pending"),
-                        "priority": params.get("priority", "normal"),
-                        "created_by": params.get("created_by", 0),
-                        "completed_at": None,
-                        "created_at": params.get("created_at"),
-                        "updated_at": params.get("updated_at"),
-                    }
-                )
-            ]
-        )
-        return MockResult([])
-
-    if "from tasks where id" in sql_text:
-        task_id = params.get("id")
-        tenant_id = params.get("tenant_id")
-        fixtures = {
-            1: {
-                "id": 1,
-                "tenant_id": 1,
-                "title": "Task A",
-                "description": "Desc A",
-                "assigned_to": 1,
-                "due_date": None,
-                "status": "pending",
-                "priority": "normal",
-                "created_by": 1,
-                "completed_at": None,
-                "created_at": None,
-                "updated_at": None,
-            },
-            2: {
-                "id": 2,
-                "tenant_id": 1,
-                "title": "Task B",
-                "description": "Desc B",
-                "assigned_to": 0,
-                "due_date": None,
-                "status": "in_progress",
-                "priority": "high",
-                "created_by": 1,
-                "completed_at": None,
-                "created_at": None,
-                "updated_at": None,
-            },
-        }
-        if task_id in fixtures and fixtures[task_id].get("tenant_id") == tenant_id:
-            return MockResult([MockRow(fixtures[task_id].copy())])
-        return MockResult([])
-
-    if "from tasks" in sql_text:
-        tenant_id = params.get("tenant_id")
-        rows = [
-            {
-                "id": 1,
-                "tenant_id": 1,
-                "title": "Task A",
-                "description": "Desc A",
-                "assigned_to": 1,
-                "due_date": None,
-                "status": "pending",
-                "priority": "normal",
-                "created_by": 1,
-                "completed_at": None,
-                "created_at": None,
-                "updated_at": None,
-            }
-        ]
-        return MockResult([MockRow(r) for r in rows if r.get("tenant_id") == tenant_id])
-
-    return None
-
-
 def make_count_handler(state: MockState):
     """Fallback COUNT handler for queries not caught by domain handlers."""
 
@@ -961,84 +873,35 @@ def make_count_handler(state: MockState):
     return handler
 
 
-def make_automation_handler(state: MockState):
-    """Handle automation rules SQL (INSERT, SELECT, DELETE, COUNT)."""
-
-    def handler(sql_text, params):
-        tenant_id = params.get("tenant_id", 0)
-
-        # INSERT automation_rule
-        if "insert into automation_rules" in sql_text:
-            rid = state.automation_rules_next_id
-            state.automation_rules_next_id += 1
-            record = {
-                "id": rid,
-                "tenant_id": tenant_id,
-                "name": params.get("name", "Rule"),
-                "description": params.get("description"),
-                "trigger_event": params.get("trigger_event", ""),
-                "conditions": _json.dumps(params.get("conditions", [])),
-                "actions": _json.dumps(params.get("actions", [])),
-                "enabled": params.get("enabled", True),
-                "created_by": params.get("created_by"),
-                "created_at": params.get("created_at"),
-                "updated_at": params.get("updated_at"),
-            }
-            state.automation_rules[rid] = record
-            return MockResult([MockRow(record.copy())], rowcount=1)
-
-        # SELECT automation_rules by id
-        if ("select" in sql_text and "from automation_rules" in sql_text
-                and "where id" in sql_text and "count" not in sql_text):
-            rid = params.get("id")
-            if rid in state.automation_rules:
-                row = state.automation_rules[rid]
-                return MockResult([MockRow(row.copy())])
-
-        # SELECT automation_rules list (no id filter) — count first, then data
-        if ("select" in sql_text and "from automation_rules" in sql_text
-                and "count" not in sql_text and "order_by" not in sql_text):
-            rows = [MockRow(r.copy()) for r in state.automation_rules.values()
-                    if r.get("tenant_id") == tenant_id]
-            return MockResult(rows if rows else [])
-
-        # SELECT COUNT from automation_rules
-        if ("select" in sql_text and "from automation_rules" in sql_text
-                and "count" in sql_text):
-            count_val = sum(1 for r in state.automation_rules.values() if r.get("tenant_id") == tenant_id)
-            if count_val == 0:
-                count_val = 2  # seeded count
-            return MockResult([[count_val]])
-
-        # UPDATE automation_rules (toggle, general update)
-        if "update" in sql_text and "automation_rules" in sql_text:
-            rid = params.get("id")
-            if rid not in state.automation_rules:
-                return MockResult([], rowcount=0)
-            rec = state.automation_rules[rid]
-            if rec.get("tenant_id") != tenant_id:
-                return MockResult([], rowcount=0)
-            for k, v in params.items():
-                if k not in ("id", "tenant_id"):
-                    rec[k] = v
-            return MockResult([MockRow(rec.copy())], rowcount=1)
-
-        # DELETE automation_rules
-        if "delete" in sql_text and "automation_rules" in sql_text:
-            rid = params.get("id")
-            if rid in state.automation_rules:
-                del state.automation_rules[rid]
-                return MockResult([MockRow({"id": rid})], rowcount=1)
-            return MockResult([], rowcount=0)
-
-        return None
-
-    return handler
-
-
 # ---------------------------------------------------------------------------
 # Session builder
 # ---------------------------------------------------------------------------
+
+
+def _load_domain_handler_modules():
+    """Import domain-owned handler modules and re-export their named helpers."""
+    package_name = "tests.unit.domain_handlers"
+    package = importlib.import_module(package_name)
+    modules = []
+    for info in sorted(pkgutil.iter_modules(package.__path__, prefix=f"{package_name}."), key=lambda item: item.name):
+        module = importlib.import_module(info.name)
+        modules.append(module)
+        for name in getattr(module, "__all__", []):
+            if name != "get_handlers":
+                globals()[name] = getattr(module, name)
+    return modules
+
+
+_DOMAIN_HANDLER_MODULES = _load_domain_handler_modules()
+
+
+def _domain_handlers(state: MockState):
+    handlers = []
+    for module in _DOMAIN_HANDLER_MODULES:
+        get_handlers = getattr(module, "get_handlers", None)
+        if get_handlers is not None:
+            handlers.extend(get_handlers(state))
+    return handlers
 
 
 def all_handlers(state: MockState):
@@ -1051,8 +914,7 @@ def all_handlers(state: MockState):
         opportunity_handler,
         ticket_sql_handler,
         campaign_handler,
-        make_automation_handler(state),
-        task_handler,
+        *_domain_handlers(state),
         make_count_handler(state),
     ]
 

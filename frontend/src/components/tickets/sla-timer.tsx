@@ -18,7 +18,7 @@ interface SLATimerProps {
 }
 
 function formatRemaining(totalMs: number): string {
-  const totalMinutes = Math.floor(totalMs / 60000);
+  const totalMinutes = Math.floor(Math.abs(totalMs) / 60000);
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
   if (totalMs > 0) return `${hours}h ${minutes}m left`;
@@ -70,7 +70,7 @@ export function SLATimer({ responseDeadline, createdAt, slaLevel, className }: S
     <span
       className={
         breached
-          ? `${colorClass} animate-pulse border-red-500`
+          ? `${colorClass} animate-pulse border-red-500${className ? ` ${className}` : ""}`
           : colorClass + (className ? ` ${className}` : "")
       }
     >

@@ -269,8 +269,13 @@ export default function TicketsPage() {
 
   async function handleDeleteTicket(id: number) {
     if (window.confirm(`Delete ticket #${id}?`)) {
-      await deleteTicket.mutateAsync(id);
-      toast.success("Ticket deleted");
+      try {
+        await deleteTicket.mutateAsync(id);
+        toast.success("Ticket deleted");
+      } catch (err) {
+        console.error("Failed to delete ticket", err);
+        toast.error(err instanceof Error ? err.message : "Failed to delete ticket");
+      }
     }
   }
 

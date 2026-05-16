@@ -1,6 +1,6 @@
 """Unit tests for CustomerService — focus on CustomerCreateDTO integration."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -28,8 +28,11 @@ def mock_db_session():
     mock_result.all = MagicMock(return_value=[])
     mock_result.rowcount = 0
     session.execute = AsyncMock(return_value=mock_result)
+    session.get = AsyncMock(return_value=None)
 
-    return session
+    # auto_assign_lead is a no-op in tests that don't cover routing
+    with patch("services.lead_routing_service.LeadRoutingService.auto_assign_lead", new_callable=AsyncMock, return_value=None):
+        yield session
 
 
 class TestCustomerCreateDTO:

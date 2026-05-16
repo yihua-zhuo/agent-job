@@ -83,7 +83,7 @@ describe("auth-store", () => {
       expect(store.isAuthenticated()).toBe(false);
     });
 
-    it("is idempotent — safe to call without prior setAuth", () => {
+    it("is idempotent - safe to call without prior setAuth", () => {
       const store = useAuthStore.getState();
       store.clearAuth(); // no prior setAuth
       expect(store.token).toBeNull();
