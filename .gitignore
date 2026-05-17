@@ -20,3 +20,6 @@ scripts/push-and-watch.sh
 .omc
 uv.lock
 code-review-result.json
+shared-memory/logs/
+shared-memory/results/
+shared-memory/reports/
