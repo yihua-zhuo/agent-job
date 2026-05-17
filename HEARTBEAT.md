@@ -6,7 +6,7 @@
 - Job ID: `3c40b43c-5298-4ae0-a655-5b87e04151fc`
 - Status: ✅ 10:59 May 17 SUCCESS (all 5 pages)
 - Last good: 10:59 May 17 (all 5 pages complete)
-- Note: Recurring SIGTERM issue — script keeps dying at projects OR settings step
+- Note: No cron configured — manual runs only
 
 ## cron 状态
 - Job ID: 未配置
