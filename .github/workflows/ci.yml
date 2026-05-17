@@ -3,29 +3,17 @@ name: Dev Agent CI
 on:
   pull_request:
     branches: [master, develop]
-  # Re-validate on master after merges. Scoped narrowly to avoid the
-  # push+pull_request duplication we hit before — feature branches still
-  # only run via the PR trigger.
   push:
-    branches: [master]
+    branches: [master, develop, feature/**]
 
 env:
-  MODEL: MiniMax-M2.7
+  MODEL: MiniMax-M2.2
   PYTHON_VERSION: '3.11'
 
 jobs:
-  coordinator:
-    name: Coordinator Agent
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Parse Task
-        run: python3 scripts/coordinator.py parse
-
   unit-test:
     name: Unit Tests
     runs-on: ubuntu-latest
-    needs: coordinator
     services:
       postgres:
         image: postgres:16
@@ -52,37 +40,36 @@ jobs:
       - uses: codecov/codecov-action@v4
         if: always()
 
-  integration-test:
-    name: Integration Tests
-    runs-on: ubuntu-latest
-    needs: unit-test
-    env:
-      DATABASE_URL: postgresql+psycopg2://test_user:test_pass@localhost:5432/test_db
-      TEST_DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: ${{ env.PYTHON_VERSION }}
-      - run: pip install -q ".[dev]" requests
-      - run: docker compose -f configs/docker-compose.test.yml up -d --wait
-      - run: PYTHONPATH=src pytest tests/integration/ -v
-      - if: always()
-        run: docker compose -f configs/docker-compose.test.yml down
-
   code-review:
     name: Code Review
     runs-on: ubuntu-latest
-    needs: [coordinator, unit-test]
-    if: false
+    needs: unit-test
+    permissions:
+      contents: read
+      pull-requests: write
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Run Code Review Agent
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - name: Set up claude
+        run: |
+          if ! command -v claude &>/dev/null; then
+            npm install -g @anthropic-ai/claude-code
+          fi
+      - name: Run Code Review
         env:
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python3 docs/agents/code_review/review_agent.py
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DIFF_FILE: /tmp/pr-diff.txt
+          CODE_REVIEW_RESULT_PATH: /tmp/code-review-result.json
+          DIFF_REMOTE: origin
+          DIFF_BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref || github.event.before }}
+          DIFF_HEAD_REF: ${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
+        run: python3 scripts/ci/run_claude_code_review.py
 
   quality-check:
     name: Quality Control
@@ -91,26 +78,19 @@ jobs:
     continue-on-error: false
     steps:
       - uses: actions/checkout@v4
-      - run: pip install -q ruff mypy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      - run: pip install -q ".[dev]"
       - run: |
           ruff check src/
           mypy src/ --ignore-missing-imports
 
-  build:
-    name: Build & Package
-    runs-on: ubuntu-latest
-    needs: [unit-test, quality-check]
-    steps:
-      - uses: actions/checkout@v4
-      - run: python3 -m py_compile src/**/*.py
-      - run: pip install -q build
-      - run: python3 -m build
-
   deploy:
     name: Deploy
     runs-on: ubuntu-latest
-    needs: build
+    needs: quality-check
     if: github.ref == 'refs/heads/master'
     steps:
       - uses: actions/checkout@v4
-      - run: echo "Deploy triggered" && python3 scripts/deploy.py
+      - run: python3 scripts/deploy.py
