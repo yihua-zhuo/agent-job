@@ -4,8 +4,8 @@
 
 ## Security Platform cron
 - Job ID: `3c40b43c-5298-4ae0-a655-5b87e04151fc`
-- Status: ✅ 03:58 May 18 SUCCESS (all 5 pages)
-- Last good: 03:58 May 18 (all 5 pages complete)
+- Status: ✅ 06:29 May 18 SUCCESS (all 5 pages)
+- Last good: 06:29 May 18 (all 5 pages complete)
 - Note: No cron configured — manual runs only
 
 ## cron 状态
