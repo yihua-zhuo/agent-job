@@ -1,7 +1,8 @@
 {
   "lastChecks": {
-    "cron": 1779345000,
-    "test_count": 1776490320
+    "cron": 1779345600,
+    "test_count": 1776490320,
+    "security_sync": 1779345824
   },
   "testCount": 89,
   "testCountNote": "Dropped from 217 - needs investigation",
@@ -21,7 +22,12 @@
     "security-hourly": {
       "id": "3c40b43c-5298-4ae0-a655-5b87e04151fc",
       "status": "ok",
-      "lastDelivered": true
+      "lastDelivered": true,
+      "lastSuccess": "2026-05-19T17:03:44Z",
+      "projects": 50,
+      "members": 12,
+      "gitlabApiCalls": 109,
+      "errors": 0
     }
   }
 }
