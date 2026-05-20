@@ -18,16 +18,21 @@ class WorkflowModel(Base):
     tenant_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
-    trigger_type: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(50), default=lambda: "manual", server_default="manual", nullable=False)
     trigger_config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     actions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     conditions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
-    status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default=lambda: "draft", server_default="draft", nullable=False)
     created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("trigger_type", "manual")
+        kwargs.setdefault("status", "draft")
+        super().__init__(**kwargs)
 
     def to_dict(self) -> dict:
         return {

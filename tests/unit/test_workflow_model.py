@@ -2,8 +2,21 @@
 
 import pytest
 from datetime import datetime, timezone
+from unittest.mock import MagicMock
 
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
+
+
+@pytest.fixture
+def mock_db_session():
+    """Minimal mock session for tests that don't require real DB."""
+    session = MagicMock()
+    session.add = MagicMock()
+    session.commit = MagicMock()
+    session.flush = MagicMock()
+    session.refresh = MagicMock()
+    session.execute = MagicMock()
+    return session
 
 
 class TestWorkflowModel:
@@ -104,7 +117,6 @@ class TestWorkflowModel:
             trigger_config={},
             actions=[],
             conditions=[],
-            status="draft",
             created_by=0,
             created_at=datetime.now(timezone.utc),
             updated_at=datetime.now(timezone.utc),
@@ -117,7 +129,6 @@ class TestWorkflowModel:
             id=1,
             tenant_id=1,
             name="Default trigger",
-            trigger_type="manual",
             trigger_config={},
             actions=[],
             conditions=[],

@@ -3,8 +3,9 @@
 Run against a real PostgreSQL database (via DATABASE_URL env var):
     DATABASE_URL="postgresql+asyncpg://..." pytest tests/integration/test_workflow_model_integration.py -v
 
-Requires DATABASE_URL pointing at a live Postgres instance.
-Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
+Tests use the db_schema fixture which auto-creates and drops tables per test
+(function-scoped), and require the tenant_id and async_session fixtures
+(function-scoped, shared across services in a single test).
 """
 
 from __future__ import annotations
@@ -114,6 +115,17 @@ class TestWorkflowModelIntegration:
         await async_session.flush()
 
         from sqlalchemy import select
+
+        # Confirm the row IS present for the owning tenant
+        result = await async_session.execute(
+            select(WorkflowModel).where(
+                WorkflowModel.id == workflow.id,
+                WorkflowModel.tenant_id == tenant_id,
+            )
+        )
+        assert result.scalar_one_or_none() is not None
+
+        # Negative query with wrong tenant_id returns None
         result = await async_session.execute(
             select(WorkflowModel).where(
                 WorkflowModel.id == workflow.id,
@@ -216,5 +228,8 @@ class TestWorkflowModelIntegration:
         await async_session.flush()
 
         from sqlalchemy import select
+
+        # Expire the identity map so the re-fetch hits the DB directly
+        async_session.expire_all()
         result = await async_session.execute(select(WorkflowModel).where(WorkflowModel.id == wf_id))
         assert result.scalar_one_or_none() is None
