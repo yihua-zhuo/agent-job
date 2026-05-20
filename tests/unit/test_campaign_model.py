@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
-import pytest
 from datetime import datetime
 
-from tests.unit.conftest import MockState, make_mock_session, make_campaign_handler
+import pytest
+
+from tests.unit.conftest import MockState, make_mock_session
+from tests.unit.domain_handlers.campaigns import make_campaign_handler
 
 
 @pytest.fixture
@@ -51,7 +53,7 @@ class TestCampaignModelToDict:
         mock_state.campaigns_next_id = 43
 
         result = await mock_db_session.execute(
-            "SELECT * FROM campaigns WHERE id = :id", {"id": 42}
+            "SELECT * FROM campaigns WHERE id = :id", {"id": 42, "tenant_id": 1}
         )
         row = result.fetchone()
         assert row is not None
@@ -81,6 +83,10 @@ class TestCampaignModelToDict:
         assert d["type"] == "email"
         assert d["status"] == "active"
         assert d["subject"] == "50% Off!"
+        assert d["target_audience"] == "all_customers"
+        assert d["trigger_type"] == "user_register"
+        assert d["trigger_days"] == 7
+        assert d["created_by"] == 99
         assert d["sent_count"] == 100
         assert d["open_count"] == 30
         assert d["click_count"] == 5
@@ -108,7 +114,7 @@ class TestCampaignEventModelToDict:
         mock_state.campaign_events_next_id = 8
 
         result = await mock_db_session.execute(
-            "SELECT * FROM campaign_events WHERE id = :id", {"id": 7}
+            "SELECT * FROM campaign_events WHERE id = :id", {"id": 7, "tenant_id": 1}
         )
         row = result.fetchone()
         assert row is not None
@@ -154,7 +160,7 @@ class TestTriggerModelToDict:
         mock_state.trigger_next_id = 4
 
         result = await mock_db_session.execute(
-            "SELECT * FROM campaign_triggers WHERE id = :id", {"id": 3}
+            "SELECT * FROM campaign_triggers WHERE id = :id", {"id": 3, "tenant_id": 1}
         )
         row = result.fetchone()
         assert row is not None
@@ -201,7 +207,7 @@ class TestTriggerModelToDict:
         mock_state.trigger_next_id = 5
 
         result = await mock_db_session.execute(
-            "SELECT * FROM campaign_triggers WHERE id = :id", {"id": 4}
+            "SELECT * FROM campaign_triggers WHERE id = :id", {"id": 4, "tenant_id": 2}
         )
         row = result.fetchone()
         assert row is not None
@@ -220,3 +226,4 @@ class TestTriggerModelToDict:
         d = model.to_dict()
         assert d["campaign_id"] is None
         assert d["is_active"] is False
+        assert d["tenant_id"] == 2

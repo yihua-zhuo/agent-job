@@ -6,10 +6,9 @@ Uses real PostgreSQL via the db_schema + async_session fixtures.
 from __future__ import annotations
 
 import pytest
-from datetime import datetime
 from sqlalchemy import text
 
-from db.models.marketing import CampaignModel, CampaignEventModel, TriggerModel
+from db.models.marketing import CampaignEventModel, CampaignModel, TriggerModel
 
 
 @pytest.mark.integration
@@ -70,7 +69,8 @@ class TestCampaignIntegration:
 
         # Retrieve trigger and verify it's linked
         result = await async_session.execute(
-            text(f"SELECT * FROM campaign_triggers WHERE id = {trigger.id}")
+            text("SELECT * FROM campaign_triggers WHERE id = :id"),
+            {"id": trigger.id},
         )
         row = result.fetchone()
         assert row is not None
@@ -100,7 +100,8 @@ class TestCampaignIntegration:
 
         # Verify event is persisted
         result = await async_session.execute(
-            text(f"SELECT * FROM campaign_events WHERE id = {event.id}")
+            text("SELECT * FROM campaign_events WHERE id = :id"),
+            {"id": event.id},
         )
         row = result.fetchone()
         assert row is not None
@@ -135,9 +136,10 @@ class TestCampaignIntegration:
         # Refresh and check count via direct query (relationship lazy behavior)
         result = await async_session.execute(
             text(
-                f"SELECT COUNT(*) as cnt FROM campaign_events "
-                f"WHERE campaign_id = {campaign.id} AND tenant_id = {tenant_id}"
-            )
+                "SELECT COUNT(*) as cnt FROM campaign_events "
+                "WHERE campaign_id = :campaign_id AND tenant_id = :tenant_id"
+            ),
+            {"campaign_id": campaign.id, "tenant_id": tenant_id},
         )
         row = result.fetchone()
         assert row[0] == 3
@@ -182,10 +184,12 @@ class TestCampaignIntegration:
 
         # Verify trigger and event are gone
         trig_result = await async_session.execute(
-            text(f"SELECT COUNT(*) as cnt FROM campaign_triggers WHERE campaign_id = {campaign.id}")
+            text("SELECT COUNT(*) as cnt FROM campaign_triggers WHERE campaign_id = :campaign_id"),
+            {"campaign_id": campaign.id},
         )
         evt_result = await async_session.execute(
-            text(f"SELECT COUNT(*) as cnt FROM campaign_events WHERE campaign_id = {campaign.id}")
+            text("SELECT COUNT(*) as cnt FROM campaign_events WHERE campaign_id = :campaign_id"),
+            {"campaign_id": campaign.id},
         )
         assert trig_result.fetchone()[0] == 0
         assert evt_result.fetchone()[0] == 0
@@ -222,17 +226,42 @@ class TestCampaignIntegration:
             created_by=1,
         )
         async_session.add(camp2)
+        await async_session.flush()
+
+        trigger2 = TriggerModel(
+            tenant_id=tenant_id_2,
+            campaign_id=camp2.id,
+            name="T2 Trigger",
+            type="custom",
+            conditions={},
+            is_active=True,
+        )
+        async_session.add(trigger2)
         await async_session.commit()
 
         # Count campaigns per tenant
         r1 = await async_session.execute(
-            text(f"SELECT COUNT(*) as cnt FROM campaigns WHERE tenant_id = {tenant_id}")
+            text("SELECT COUNT(*) as cnt FROM campaigns WHERE tenant_id = :tenant_id"),
+            {"tenant_id": tenant_id},
         )
         r2 = await async_session.execute(
-            text(f"SELECT COUNT(*) as cnt FROM campaigns WHERE tenant_id = {tenant_id_2}")
+            text("SELECT COUNT(*) as cnt FROM campaigns WHERE tenant_id = :tenant_id"),
+            {"tenant_id": tenant_id_2},
         )
-        assert r1.fetchone()[0] >= 1
+        assert r1.fetchone()[0] == 1
         assert r2.fetchone()[0] == 1
+
+        # Count triggers per tenant
+        t1 = await async_session.execute(
+            text("SELECT COUNT(*) as cnt FROM campaign_triggers WHERE tenant_id = :tenant_id"),
+            {"tenant_id": tenant_id},
+        )
+        t2 = await async_session.execute(
+            text("SELECT COUNT(*) as cnt FROM campaign_triggers WHERE tenant_id = :tenant_id"),
+            {"tenant_id": tenant_id_2},
+        )
+        assert t1.fetchone()[0] == 1
+        assert t2.fetchone()[0] == 1
 
     async def test_to_dict_serialization(self, db_schema, tenant_id, async_session):
         """Verify to_dict() produces expected keys and types."""

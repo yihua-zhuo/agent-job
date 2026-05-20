@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
-ORDER = 60
-
 
 def make_campaign_handler(state: MockState):
     """Handle campaign-related SQL."""
@@ -80,26 +78,46 @@ def make_campaign_handler(state: MockState):
 
         if "from campaigns where id" in sql_text:
             cid = params.get("id")
-            if hasattr(state, "campaigns") and cid in state.campaigns:
+            tid = params.get("tenant_id")
+            if (
+                hasattr(state, "campaigns")
+                and cid in state.campaigns
+                and state.campaigns[cid].get("tenant_id") == tid
+            ):
                 return MockResult([MockRow(state.campaigns[cid].copy())])
             return MockResult([])
 
         if "from campaigns" in sql_text:
+            tid = params.get("tenant_id")
             rows = []
             if hasattr(state, "campaigns"):
-                rows = [MockRow(r.copy()) for r in state.campaigns.values()]
+                rows = [
+                    MockRow(r.copy())
+                    for r in state.campaigns.values()
+                    if r.get("tenant_id") == tid
+                ]
             return MockResult(rows)
 
         if "from campaign_events" in sql_text:
+            tid = params.get("tenant_id")
             rows = []
             if hasattr(state, "campaign_events"):
-                rows = [MockRow(r.copy()) for r in state.campaign_events.values()]
+                rows = [
+                    MockRow(r.copy())
+                    for r in state.campaign_events.values()
+                    if r.get("tenant_id") == tid
+                ]
             return MockResult(rows)
 
         if "from campaign_triggers" in sql_text:
+            tid = params.get("tenant_id")
             rows = []
             if hasattr(state, "triggers"):
-                rows = [MockRow(r.copy()) for r in state.triggers.values()]
+                rows = [
+                    MockRow(r.copy())
+                    for r in state.triggers.values()
+                    if r.get("tenant_id") == tid
+                ]
             return MockResult(rows)
 
         return None
@@ -107,13 +125,8 @@ def make_campaign_handler(state: MockState):
     return handler
 
 
-def campaign_handler(sql_text, params):
-    """Handle campaign-related SQL (legacy flat handler)."""
-    return None
-
-
 def get_handlers(state: MockState):
     return [make_campaign_handler(state)]
 
 
-__all__ = ["campaign_handler", "get_handlers", "make_campaign_handler"]
+__all__ = ["get_handlers", "make_campaign_handler"]
