@@ -104,9 +104,10 @@ def client_with_service(monkeypatch):
     mock_service = MagicMock()
 
     # Patch CustomerService constructor to return our mock
+    # The new signature is (session, customer_repo); the mock only needs session.
     monkeypatch.setattr(
         "api.routers.customers.CustomerService",
-        lambda session: mock_service,
+        lambda session, customer_repo=None: mock_service,
     )
 
     app = FastAPI()
