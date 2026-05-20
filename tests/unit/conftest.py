@@ -12,19 +12,12 @@ import pkgutil
 import sys
 import warnings
 from contextlib import asynccontextmanager
-from datetime import datetime as dt
 from pathlib import Path
-from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from dotenv import load_dotenv
 from sqlalchemy.exc import MultipleResultsFound
-
-if TYPE_CHECKING:
-    from sqlalchemy.ext.asyncio import AsyncSession
-
-from sqlalchemy.ext.asyncio import AsyncSession
 
 # Load .env so DATABASE_URL is available in test environment.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
@@ -57,7 +50,7 @@ class MockRow:
             if "tags" in self._mapping and isinstance(self._mapping["tags"], str):
                 try:
                     self._mapping["tags"] = _json.loads(self._mapping["tags"])
-                except Exception:
+                except Exception:  # noqa: S110 - invalid JSON should leave the original value intact.
                     pass
 
     def __getitem__(self, key):
@@ -72,12 +65,6 @@ class MockRow:
         return key in self._mapping
 
     def keys(self):
-        if self._is_sequence:
-            return range(len(self._mapping))
-        return self._mapping.keys()
-
-    @property
-    def _fields(self):
         if self._is_sequence:
             return range(len(self._mapping))
         return self._mapping.keys()
@@ -173,705 +160,145 @@ class MockState:
         self.users: dict[int, dict] = {}
         self.users_next_id: int = 1
         self.deleted_user_ids: set[int] = set()
+        self.activities: dict[int, dict] = {}
+        self.activities_next_id: int = 1
 
 
-# ---------------------------------------------------------------------------
-# Domain SQL handlers
-#
-# Signature: handler(sql_text: str, params: dict) -> MockResult | None
-# Return MockResult to handle the query, or None to pass to the next handler.
-#
-# Stateful handlers are factories: make_xxx_handler(state) -> handler
-# Stateless handlers are plain functions: xxx_handler(sql_text, params)
-# ---------------------------------------------------------------------------
+def _load_domain_handler_modules():
+    """Import domain-owned handler modules and re-export their named helpers.
+
+    Crashes at collection time with a descriptive message if any module fails
+    to import, rather than letting an opaque ImportError propagate.
+    """
+    package_name = "tests.unit.domain_handlers"
+    try:
+        package = importlib.import_module(package_name)
+    except ImportError as exc:
+        raise RuntimeError(
+            f"Failed to import test package '{package_name}': {exc}. "
+            "Ensure the package exists and all dependencies are installed."
+        ) from exc
+    discovered = []
+    for info in sorted(pkgutil.iter_modules(package.__path__, prefix=f"{package_name}."), key=lambda item: item.name):
+        try:
+            module = importlib.import_module(info.name)
+        except ImportError as exc:
+            raise RuntimeError(
+                f"Failed to import domain handler module '{info.name}': {exc}. "
+                "Check for missing dependencies or syntax errors in the module."
+            ) from exc
+        discovered.append(module)
+    modules = []
+    for module in sorted(discovered, key=lambda item: (getattr(item, "ORDER", 100), item.__name__)):
+        modules.append(module)
+        for name in getattr(module, "__all__", []):
+            if name != "get_handlers":
+                globals()[name] = getattr(module, name)
+    return modules
 
 
-def make_customer_handler(state: MockState):
-    """Handle all customer-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
-
-    def handler(sql_text, params):
-        # INSERT
-        if "insert into customers" in sql_text:
-            cid = state.customers_next_id
-            state.customers_next_id += 1
-            tags_raw = params.get("tags", [])
-            tags_val = _json.dumps(tags_raw) if not isinstance(tags_raw, str) else tags_raw
-            record = {
-                "id": cid,
-                "tenant_id": params.get("tenant_id", 0),
-                "name": params.get("name", "Test"),
-                "email": params.get("email"),
-                "phone": params.get("phone"),
-                "company": params.get("company"),
-                "status": params.get("status", "lead"),
-                "owner_id": params.get("owner_id", 0),
-                "tags": tags_val,
-                "created_at": params.get("created_at"),
-                "updated_at": params.get("updated_at"),
-            }
-            state.customers[cid] = record
-            return MockResult([MockRow(record.copy())])
-
-        # UPDATE
-        if sql_text.startswith("update") and "customers" in sql_text:
-            customer_id = params.get("id")
-            if customer_id in state.customers:
-                rec = state.customers[customer_id]
-                for k, v in params.items():
-                    if k not in ("id", "tenant_id"):
-                        rec[k] = v
-                return MockResult([MockRow(rec.copy())])
-            if customer_id and customer_id >= 1:
-                return MockResult(
-                    [
-                        MockRow(
-                            {
-                                "id": customer_id,
-                                "tenant_id": params.get("tenant_id", 1),
-                                "name": params.get("name", "Customer A"),
-                                "email": params.get("email", "a@test.com"),
-                                "phone": params.get("phone", "123"),
-                                "company": params.get("company", "Acme"),
-                                "status": params.get("status", "lead"),
-                                "owner_id": params.get("owner_id", 1),
-                                "tags": _json.dumps(params.get("tags", [])),
-                                "created_at": None,
-                                "updated_at": None,
-                            }
-                        )
-                    ]
-                )
-            return MockResult([])
-
-        # DELETE
-        if sql_text.startswith("delete") and "customers" in sql_text:
-            return MockResult([MockRow({"id": params.get("id", 1)})])
-
-        # COUNT
-        if "select" in sql_text and "count" in sql_text and "from customers" in sql_text:
-            tenant_id = params.get("tenant_id")
-            count_val = 3 if tenant_id == 1 else 7
-            return MockResult([[count_val]])
-
-        # SELECT tags by id (more specific — check before generic SELECT by id)
-        if "select" in sql_text and "from customers" in sql_text and "tags" in sql_text and "where id" in sql_text:
-            customer_id = params.get("id")
-            if customer_id in state.customers:
-                c = state.customers[customer_id]
-                return MockResult([MockRow({"id": customer_id, "tags": c.get("tags", "[]")})])
-            return MockResult([])
-
-        # SELECT by id
-        if "from customers where id" in sql_text:
-            customer_id = params.get("id")
-            if customer_id in state.customers:
-                return MockResult([MockRow(state.customers[customer_id].copy())])
-            fixtures = {
-                1: {
-                    "id": 1,
-                    "tenant_id": 1,
-                    "name": "Customer A",
-                    "email": "a@test.com",
-                    "phone": "123",
-                    "company": "Acme",
-                    "status": "lead",
-                    "owner_id": 1,
-                    "tags": "[]",
-                    "created_at": None,
-                    "updated_at": None,
-                },
-            }
-            if customer_id in fixtures:
-                return MockResult([MockRow(fixtures[customer_id].copy())])
-            return MockResult([])
-
-        # SELECT list (no WHERE id)
-        if "select" in sql_text and "from customers" in sql_text and "where id" not in sql_text:
-            tenant_filter = params.get("tenant_id", 0)
-            rows = []
-            for cid, rec in state.customers.items():
-                if rec.get("tenant_id") == tenant_filter:
-                    rows.append(MockRow(rec.copy()))
-            rows.extend(
-                [
-                    MockRow(
-                        {
-                            "id": 1,
-                            "tenant_id": tenant_filter,
-                            "name": "Customer A",
-                            "email": "a@test.com",
-                            "phone": "123",
-                            "company": "Acme",
-                            "status": "lead",
-                            "owner_id": 1,
-                            "tags": "[]",
-                            "created_at": None,
-                            "updated_at": None,
-                        }
-                    ),
-                    MockRow(
-                        {
-                            "id": 2,
-                            "tenant_id": tenant_filter,
-                            "name": "Customer B",
-                            "email": "b@test.com",
-                            "phone": "456",
-                            "company": "Beta",
-                            "status": "customer",
-                            "owner_id": 1,
-                            "tags": "[]",
-                            "created_at": None,
-                            "updated_at": None,
-                        }
-                    ),
-                ]
-            )
-            if tenant_filter == 2:
-                rows = []
-            return MockResult(rows)
-
-        return None
-
-    return handler
+_DOMAIN_HANDLER_MODULES = _load_domain_handler_modules()
 
 
-def make_user_handler(state: MockState):
-    """Handle all user-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
+def _domain_handlers(state: MockState):
+    handlers = []
+    for module in _DOMAIN_HANDLER_MODULES:
+        get_handlers = getattr(module, "get_handlers", None)
+        if get_handlers is not None:
+            handlers.extend(get_handlers(state))
+    return handlers
 
-    def handler(sql_text, params):
-        # INSERT (checked before the guard because INSERT doesn't have "from users")
-        if "insert into users" in sql_text:
-            uid = state.users_next_id
-            state.users_next_id += 1
-            record = {
-                "id": uid,
-                "tenant_id": params.get("tenant_id", 0),
-                "username": params.get("username"),
-                "email": params.get("email"),
-                "password_hash": None,
-                "role": params.get("role", "user"),
-                "status": "pending",
-                "full_name": params.get("full_name"),
-                "bio": None,
-                "created_at": params.get("created_at"),
-                "updated_at": params.get("created_at"),
-            }
-            state.users[uid] = record
-            return MockResult([MockRow(record.copy())])
 
-        # Guard: only handle queries that reference the users table
-        is_user_query = "from users" in sql_text or (sql_text.startswith("update") and "users" in sql_text)
-        if not is_user_query:
-            return None
+def all_handlers(state: MockState):
+    """Return the full list of domain handlers (default for backward compat)."""
+    return _domain_handlers(state)
 
-        # DELETE
-        if sql_text.startswith("delete") and "users" in sql_text:
-            user_id = params.get("id")
-            was_in_mock = user_id in state.users
-            if was_in_mock:
-                state.users[user_id]["status"] = "deleted"
-                del state.users[user_id]
-            state.deleted_user_ids.add(user_id)
-            if was_in_mock:
-                return MockResult([MockRow({"id": user_id})])
-            return MockResult([])
 
-        # UPDATE by id
-        if ("set " in sql_text or sql_text.startswith("update")) and "where id" in sql_text:
-            user_id = params.get("id")
-            if user_id in state.users:
-                for k, v in params.items():
-                    if k not in ("id", "tenant_id"):
-                        state.users[user_id][k] = v
-                return MockResult([MockRow(state.users[user_id].copy())])
-            return MockResult([])
+def make_mock_session(handlers=None, state=None):
+    """Create a mock AsyncSession wired to the given SQL handlers.
 
-        # COUNT
-        if "select" in sql_text and "count" in sql_text and "from users" in sql_text:
-            count_val = len(state.users)
-            if count_val == 0:
-                tenant_id = params.get("tenant_id")
-                count_val = 7 if tenant_id == 1 else 3
-            return MockResult([[count_val]])
+    If *handlers* is ``None``, all domain handlers with fresh state are used.
+    Tests that want a subset can pass their own list::
 
-        # SELECT by username
-        if "where username" in sql_text:
-            username = params.get("username")
-            for uid, rec in state.users.items():
-                if rec.get("username") == username:
-                    return MockResult([MockRow(rec.copy())])
-            fixtures = {
-                "existing": {
-                    "id": 1,
-                    "tenant_id": 0,
-                    "username": "existing",
-                    "email": "existing@test.com",
-                    "password_hash": None,
-                    "role": "user",
-                    "status": "pending",
-                    "full_name": None,
-                    "bio": None,
-                },
-                "alice": {
-                    "id": 1,
-                    "tenant_id": 1,
-                    "username": "alice",
-                    "email": "alice@test.com",
-                    "password_hash": None,
-                    "role": "user",
-                    "status": "active",
-                    "full_name": "Alice",
-                    "bio": "bio",
-                },
-                "john_doe": {
-                    "id": 2,
-                    "tenant_id": 0,
-                    "username": "john_doe",
-                    "email": "john@test.com",
-                    "password_hash": None,
-                    "role": "user",
-                    "status": "pending",
-                    "full_name": "John Doe",
-                    "bio": None,
-                },
-                "jane_doe": {
-                    "id": 3,
-                    "tenant_id": 0,
-                    "username": "jane_doe",
-                    "email": "jane@test.com",
-                    "password_hash": None,
-                    "role": "user",
-                    "status": "pending",
-                    "full_name": "Jane Doe",
-                    "bio": None,
-                },
-            }
-            if username in fixtures:
-                row = fixtures[username].copy()
-                now = dt.utcnow()
-                row["created_at"] = now
-                row["updated_at"] = now
-                return MockResult([MockRow(row)])
-            return MockResult([])
+        state = MockState()
+        session = make_mock_session([
+            make_customer_handler(state),
+            make_count_handler(state),
+        ], state=state)
 
-        # SELECT by email
-        if "where email" in sql_text:
-            email = params.get("email")
-            for uid, rec in state.users.items():
-                if rec.get("email") == email:
-                    return MockResult([MockRow(rec.copy())])
-            if email == "existing@test.com":
-                now = dt.utcnow()
-                return MockResult(
-                    [
-                        MockRow(
-                            {
-                                "id": 1,
-                                "tenant_id": 0,
-                                "username": "existing",
-                                "email": "existing@test.com",
-                                "password_hash": None,
-                                "role": "user",
-                                "status": "pending",
-                                "full_name": None,
-                                "bio": None,
-                                "created_at": now,
-                                "updated_at": now,
-                            }
-                        )
-                    ]
-                )
-            return MockResult([])
+    If *state* is provided it is used to build handlers; otherwise a fresh
+    MockState() is created internally. Sharing the same *state* object across
+    the fixture and the handler lets tests seed records directly into state.
+    """
+    if state is None:
+        state = MockState()
+    if handlers is None:
+        handlers = all_handlers(state)
 
-        # SELECT by id
-        if "where id" in sql_text:
-            user_id = params.get("id")
-            if user_id in state.users:
-                return MockResult([MockRow(state.users[user_id].copy())])
-            if user_id in state.deleted_user_ids:
-                return MockResult([])
-            fixtures = {
-                1: {
-                    "id": 1,
-                    "tenant_id": 0,
-                    "username": "existing",
-                    "email": "existing@test.com",
-                    "password_hash": None,
-                    "role": "user",
-                    "status": "pending",
-                    "full_name": None,
-                    "bio": None,
-                },
-                5: {
-                    "id": 5,
-                    "tenant_id": 1,
-                    "username": "charlie",
-                    "email": "charlie@test.com",
-                    "password_hash": None,
-                    "role": "admin",
-                    "status": "active",
-                    "full_name": "Charlie",
-                    "bio": "dev",
-                },
-            }
-            if user_id in fixtures:
-                row = fixtures[user_id].copy()
-                now = dt.utcnow()
-                row["created_at"] = now
-                row["updated_at"] = now
-                return MockResult([MockRow(row)])
-            return MockResult([])
-
-        # SELECT list (generic)
-        if state.users:
-            return MockResult([MockRow(r.copy()) for r in state.users.values()])
-        now = dt.utcnow()
-        rows = [
-            MockRow(
-                {
-                    "id": 1,
-                    "tenant_id": 0,
-                    "username": "existing",
-                    "email": "existing@test.com",
-                    "password_hash": None,
-                    "role": "user",
-                    "status": "pending",
-                    "full_name": None,
-                    "bio": None,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            ),
-            MockRow(
-                {
-                    "id": 2,
-                    "tenant_id": 0,
-                    "username": "john_doe",
-                    "email": "john@test.com",
-                    "password_hash": None,
-                    "role": "user",
-                    "status": "pending",
-                    "full_name": "John Doe",
-                    "bio": None,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            ),
-            MockRow(
-                {
-                    "id": 3,
-                    "tenant_id": 0,
-                    "username": "jane_doe",
-                    "email": "jane@test.com",
-                    "password_hash": None,
-                    "role": "user",
-                    "status": "pending",
-                    "full_name": "Jane Doe",
-                    "bio": None,
-                    "created_at": now,
-                    "updated_at": now,
-                }
-            ),
+    session = MagicMock(
+        spec=[
+            "execute",
+            "add",
+            "delete",
+            "commit",
+            "rollback",
+            "close",
+            "flush",
+            "refresh",
+            "scalars",
+            "scalar_one_or_none",
+            "scalar_one",
+            "get",
+            "result",
+            "__aenter__",
+            "__aexit__",
         ]
-        return MockResult(rows)
+    )
 
-    return handler
-
-
-def tenant_handler(sql_text, params):
-    """Handle all tenant-related SQL (stateless)."""
-
-    # INSERT
-    if "insert into tenants" in sql_text:
-        row = MockRow(
-            {
-                "id": 1,
-                "name": params.get("name"),
-                "plan": params.get("plan"),
-                "status": "active",
-                "settings": params.get("settings", "{}"),
-                "created_at": params.get("now"),
-                "updated_at": params.get("now"),
-            }
-        )
-        return MockResult([row])
-
-    # DELETE
-    if "delete" in sql_text and "tenants" in sql_text:
-        tenant_id = params.get("tenant_id")
-        if tenant_id and tenant_id != 1:
-            return MockResult([])
-        return MockResult([[1, "Deleted Tenant", "pro", "deleted", "{}", None, None]])
-
-    # UPDATE
-    if "update" in sql_text and "tenants" in sql_text:
-        tenant_id = params.get("tenant_id") or params.get("id")
-        if tenant_id == 1:
-            return MockResult([[1, "Updated Name", "pro", "active", "{}", None, None]])
+    def _execute_side_effect(sql, params=None):
+        sql_text = str(sql).lower().strip()
+        bound_params = {}
+        try:
+            bound_params.update(getattr(sql.compile(), "params", {}) or {})
+        except Exception as exc:  # noqa: BLE001 - some SQLAlchemy test doubles are not compilable.
+            bound_params["_compile_error"] = exc
+            pass
+        bound_params.update(params or {})
+        for h in handlers:
+            result = h(sql_text, bound_params)
+            if result is not None:
+                return result
         return MockResult([])
 
-    # COUNT
-    if "select" in sql_text and "count" in sql_text and "from tenants" in sql_text:
-        return MockResult([[2]])
+    session.execute = AsyncMock(side_effect=_execute_side_effect)
+    session.add = MagicMock()
+    session.delete = MagicMock()
+    session.commit = AsyncMock()
+    session.rollback = AsyncMock()
+    session.close = AsyncMock()
+    session.flush = AsyncMock()
+    session.refresh = AsyncMock()
+    session.get = AsyncMock(return_value=None)
+    session.scalars = MagicMock()
+    session.scalar_one_or_none = MagicMock()
+    session.scalar_one = MagicMock()
+    session.result = MagicMock()
 
-    # SELECT (not count)
-    if "select" in sql_text and "from tenants" in sql_text and "count" not in sql_text:
-        tenant_id = params.get("tenant_id")
+    @asynccontextmanager
+    async def _mock_aenter():
+        yield session
 
-        # Specific lookup: LIMIT 1 + WHERE id
-        if "limit 1" in sql_text and "where id" in sql_text:
-            if tenant_id == 1:
-                return MockResult([MockRow({"id": 1})])
-            if tenant_id == 42:
-                return MockResult(
-                    [
-                        MockRow(
-                            {
-                                "id": 42,
-                                "name": "Beta Org",
-                                "plan": "enterprise",
-                                "status": "active",
-                                "settings": '{"sso": true}',
-                                "created_at": None,
-                                "updated_at": None,
-                            }
-                        )
-                    ]
-                )
-            return MockResult([])
-
-        # List query (no WHERE id)
-        if "where id" not in sql_text:
-            rows = [
-                MockRow(
-                    {
-                        "id": 1,
-                        "name": "Tenant A",
-                        "plan": "pro",
-                        "status": "active",
-                        "settings": "{}",
-                        "created_at": None,
-                        "updated_at": None,
-                    }
-                ),
-                MockRow(
-                    {
-                        "id": 2,
-                        "name": "Tenant B",
-                        "plan": "enterprise",
-                        "status": "active",
-                        "settings": "{}",
-                        "created_at": None,
-                        "updated_at": None,
-                    }
-                ),
-            ]
-            return MockResult(rows)
-
-        # General SELECT with WHERE id (not LIMIT 1)
-        if tenant_id == 42:
-            return MockResult(
-                [
-                    MockRow(
-                        {
-                            "id": 42,
-                            "name": "Beta Org",
-                            "plan": "enterprise",
-                            "status": "active",
-                            "settings": '{"sso": true}',
-                            "created_at": None,
-                            "updated_at": None,
-                        }
-                    )
-                ]
-            )
-        return MockResult([])
-
-    return None
-
-
-def pipeline_handler(sql_text, params):
-    """Handle pipeline-related SQL (stateless)."""
-
-    if "insert into pipelines" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": params.get("tenant_id", 0),
-                        "name": params.get("name", "Pipeline"),
-                        "description": params.get("description"),
-                        "is_active": True,
-                        "created_at": params.get("created_at"),
-                        "updated_at": params.get("updated_at"),
-                    }
-                )
-            ]
-        )
-
-    if "from pipelines" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": 1,
-                        "name": "Pipeline A",
-                        "description": "Desc",
-                        "is_active": True,
-                        "created_at": None,
-                        "updated_at": None,
-                    }
-                )
-            ]
-        )
-
-    return None
-
-
-def opportunity_handler(sql_text, params):
-    """Handle opportunity-related SQL (stateless)."""
-
-    if "insert into opportunities" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": params.get("tenant_id", 0),
-                        "customer_id": 1,
-                        "title": params.get("title", "Opportunity"),
-                        "amount": params.get("amount", 1000),
-                        "stage": "qualification",
-                        "probability": 20,
-                        "owner_id": params.get("owner_id", 0),
-                        "expected_close_date": params.get("expected_close_date"),
-                        "created_at": params.get("created_at"),
-                        "updated_at": params.get("updated_at"),
-                    }
-                )
-            ]
-        )
-
-    if "from opportunities" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": 1,
-                        "customer_id": 1,
-                        "title": "Opportunity A",
-                        "amount": 1000,
-                        "stage": "qualification",
-                        "probability": 20,
-                        "owner_id": 1,
-                        "expected_close_date": None,
-                        "created_at": None,
-                        "updated_at": None,
-                    }
-                )
-            ]
-        )
-
-    return None
-
-
-def ticket_sql_handler(sql_text, params):
-    """Handle ticket-related SQL (stateless)."""
-
-    if "insert into tickets" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": params.get("tenant_id", 0),
-                        "subject": params.get("subject", "Ticket"),
-                        "description": params.get("description"),
-                        "status": "open",
-                        "priority": params.get("priority", "medium"),
-                        "customer_id": 1,
-                        "assignee_id": params.get("assignee_id"),
-                        "created_at": params.get("created_at"),
-                        "updated_at": params.get("updated_at"),
-                    }
-                )
-            ]
-        )
-
-    if "from tickets" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": 1,
-                        "subject": "Issue A",
-                        "description": "Desc",
-                        "status": "open",
-                        "priority": "medium",
-                        "customer_id": 1,
-                        "assignee_id": 1,
-                        "created_at": None,
-                        "updated_at": None,
-                    }
-                )
-            ]
-        )
-
-    return None
-
-
-def campaign_handler(sql_text, params):
-    """Handle campaign-related SQL (stateless)."""
-
-    if "insert into campaigns" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": params.get("tenant_id", 0),
-                        "name": params.get("name", "Campaign"),
-                        "campaign_type": params.get("campaign_type", "email"),
-                        "status": "draft",
-                        "created_by": params.get("created_by"),
-                        "created_at": params.get("created_at"),
-                        "updated_at": params.get("updated_at"),
-                    }
-                )
-            ]
-        )
-
-    if "from campaigns" in sql_text:
-        return MockResult(
-            [
-                MockRow(
-                    {
-                        "id": 1,
-                        "tenant_id": 1,
-                        "name": "Campaign A",
-                        "campaign_type": "email",
-                        "status": "draft",
-                        "created_by": 1,
-                        "created_at": None,
-                        "updated_at": None,
-                    }
-                )
-            ]
-        )
-
-    return None
+    session.__aenter__ = AsyncMock(side_effect=_mock_aenter)
+    session.__aexit__ = AsyncMock(return_value=None)
+    return session
 
 
 # ---------------------------------------------------------------------------
-# SLA summary mock session (scalar-based, for SLAService tests)
+# SLA mock session (scalar-based, for SLAService tests)
 # ---------------------------------------------------------------------------
 
 
-class SlaMockSession(AsyncSession):
+class SlaMockSession:
     """Minimal mock AsyncSession that routes session.scalar() and session.execute() to SQL handlers.
 
     SLAService.get_sla_summary calls session.scalar(select(func.count(...))) directly.
@@ -1023,148 +450,6 @@ def make_sla_summary_handler(
         return breached
 
     return handler
-
-
-# ---------------------------------------------------------------------------
-# Session builder
-# ---------------------------------------------------------------------------
-
-
-def make_count_handler(state: MockState):
-    """Fallback COUNT handler for queries not caught by domain handlers."""
-
-    def handler(sql_text, params):
-        if "select" not in sql_text or "count" not in sql_text:
-            return None
-        tenant_id = params.get("tenant_id")
-        count_val = 7 if tenant_id == 1 else 3
-        return MockResult([[count_val]])
-
-    return handler
-
-
-def _load_domain_handler_modules():
-    """Import domain-owned handler modules and re-export their named helpers.
-
-    Crashes at collection time with a descriptive message if any module fails
-    to import, rather than letting an opaque ImportError propagate.
-    """
-    package_name = "tests.unit.domain_handlers"
-    try:
-        package = importlib.import_module(package_name)
-    except ImportError as exc:
-        raise RuntimeError(
-            f"Failed to import test package '{package_name}': {exc}. "
-            "Ensure the package exists and all dependencies are installed."
-        ) from exc
-    modules = []
-    for info in sorted(pkgutil.iter_modules(package.__path__, prefix=f"{package_name}."), key=lambda item: item.name):
-        try:
-            module = importlib.import_module(info.name)
-        except ImportError as exc:
-            raise RuntimeError(
-                f"Failed to import domain handler module '{info.name}': {exc}. "
-                "Check for missing dependencies or syntax errors in the module."
-            ) from exc
-        modules.append(module)
-        for name in getattr(module, "__all__", []):
-            if name != "get_handlers":
-                globals()[name] = getattr(module, name)
-    return modules
-
-
-_DOMAIN_HANDLER_MODULES = _load_domain_handler_modules()
-
-
-def _domain_handlers(state: MockState):
-    handlers = []
-    for module in _DOMAIN_HANDLER_MODULES:
-        get_handlers = getattr(module, "get_handlers", None)
-        if get_handlers is not None:
-            handlers.extend(get_handlers(state))
-    return handlers
-
-
-def all_handlers(state: MockState):
-    """Return the full list of domain handlers (default for backward compat)."""
-    return [
-        make_customer_handler(state),
-        make_user_handler(state),
-        tenant_handler,
-        pipeline_handler,
-        opportunity_handler,
-        ticket_sql_handler,
-        campaign_handler,
-        *_domain_handlers(state),
-        make_count_handler(state),
-    ]
-
-
-def make_mock_session(handlers=None):
-    """Create a mock AsyncSession wired to the given SQL handlers.
-
-    If *handlers* is ``None``, all domain handlers with fresh state are used.
-    Tests that want a subset can pass their own list::
-
-        state = MockState()
-        session = make_mock_session([
-            make_customer_handler(state),
-            make_count_handler(state),
-        ])
-    """
-    if handlers is None:
-        handlers = all_handlers(MockState())
-
-    session = MagicMock(
-        spec=[
-            "execute",
-            "add",
-            "delete",
-            "commit",
-            "rollback",
-            "close",
-            "flush",
-            "refresh",
-            "scalars",
-            "scalar_one_or_none",
-            "scalar_one",
-            "get",
-            "result",
-            "__aenter__",
-            "__aexit__",
-        ]
-    )
-
-    def _execute_side_effect(sql, params=None):
-        sql_text = str(sql).lower().strip()
-        params = params or {}
-        for h in handlers:
-            result = h(sql_text, params)
-            if result is not None:
-                return result
-        return MockResult([])
-
-    session.execute = AsyncMock(side_effect=_execute_side_effect)
-    session.add = MagicMock()
-    session.delete = MagicMock()
-    session.commit = AsyncMock()
-    session.rollback = AsyncMock()
-    session.close = AsyncMock()
-    session.flush = AsyncMock()
-    session.refresh = AsyncMock()
-    session.get = AsyncMock(return_value=None)
-    session.scalars = MagicMock()
-    session.scalar_one_or_none = MagicMock()
-    session.scalar_one = MagicMock()
-    session.result = MagicMock()
-
-    @asynccontextmanager
-    async def _mock_aenter():
-        yield session
-
-    session.__aenter__ = AsyncMock(side_effect=_mock_aenter)
-    session.__aexit__ = AsyncMock(return_value=None)
-    return session
 
 
 # ---------------------------------------------------------------------------

@@ -332,5 +332,13 @@
      rather than ad hoc `fetch` calls. Response handling should preserve the
      backend envelope shape and avoid duplicating token/header logic across
      components.
+149. **Do not modify shared unit `conftest.py` for domain changes.**
+     `tests/unit/conftest.py` is protected shared test infrastructure. New or
+     changed SQL mock behavior, fixtures, seeded data, and handler logic must
+     live in domain-owned files such as `tests/unit/domain_handlers/<domain>.py`
+     or in the specific test file that needs them. Reviewers should flag PRs
+     that edit `tests/unit/conftest.py` unless the change is a narrowly scoped
+     improvement to the shared loader/session primitives and cannot reasonably
+     live in a domain module.
 
 ---
