@@ -25,7 +25,6 @@ import subprocess
 import sys
 from typing import Any
 
-
 LABEL_SPLIT = "split"
 SUBTASK_OF_PATTERN = re.compile(r"(?i)Subtask of\s*#(\d+)")
 DEPENDS_ON_PATTERN = re.compile(r"(?i)(?:depends on|blocked by)\s*:?\s*#(\d+)")
@@ -48,25 +47,39 @@ def run_gh(args: list[str]) -> subprocess.CompletedProcess[str]:
     )
 
 
-def list_all_issues() -> list[dict[str, Any]]:
-    """All issues (open + closed) with body, labels, state."""
-    result = run_gh([
-        "issue", "list",
-        "--state", "all",
-        "--json", "number,title,body,labels,state",
-        "--limit", "500",
-    ])
+def parse_issue_list(result: subprocess.CompletedProcess[str], context: str) -> list[dict[str, Any]]:
     if result.returncode != 0:
-        log(f"list_failed rc={result.returncode} stderr={result.stderr.strip()}")
+        log(f"list_failed context={context} rc={result.returncode} stderr={result.stderr.strip()}")
         return []
     try:
         return json.loads(result.stdout or "[]")
     except json.JSONDecodeError:
+        log(f"json_decode_failed context={context}")
         return []
 
 
-def has_label(issue: dict[str, Any], name: str) -> bool:
-    return any((lbl.get("name") or "") == name for lbl in (issue.get("labels") or []))
+def list_subtask_issues() -> list[dict[str, Any]]:
+    """Issues whose body says they are a subtask of another issue."""
+    result = run_gh([
+        "issue", "list",
+        "--state", "all",
+        "--search", 'type:issue "Subtask of" in:body',
+        "--json", "number,title,body,labels,state",
+        "--limit", "1000",
+    ])
+    return parse_issue_list(result, "subtasks")
+
+
+def list_split_parent_issues() -> list[dict[str, Any]]:
+    """Open issues carrying the split label."""
+    result = run_gh([
+        "issue", "list",
+        "--state", "open",
+        "--search", f"state:open type:issue label:{LABEL_SPLIT}",
+        "--json", "number,title,labels,state",
+        "--limit", "1000",
+    ])
+    return parse_issue_list(result, "split_parents")
 
 
 def parent_of(issue: dict[str, Any]) -> int | None:
@@ -97,22 +110,19 @@ def remove_split_label(number: int) -> bool:
 
 
 def main() -> int:
-    issues = list_all_issues()
-    log(f"issues_total={len(issues)}")
+    subtask_issues = list_subtask_issues()
+    split_parents = list_split_parent_issues()
+    log(f"subtask_issues_total={len(subtask_issues)}")
 
     # Group every "Subtask of #N" issue under its parent — include closed
     # ones so a partly-completed chain (one sibling closed) is still
     # recognised as chained via the remaining open siblings' references.
     children_by_parent: dict[int, list[dict[str, Any]]] = {}
-    for issue in issues:
+    for issue in subtask_issues:
         parent = parent_of(issue)
         if parent is not None:
             children_by_parent.setdefault(parent, []).append(issue)
 
-    split_parents = [
-        i for i in issues
-        if has_label(i, LABEL_SPLIT) and (i.get("state") or "").upper() == "OPEN"
-    ]
     log(f"split_parents_open={len(split_parents)}")
 
     cleaned = 0
@@ -133,6 +143,16 @@ def main() -> int:
             log(f"chain_ok parent=#{parent_number} children={sorted(sibling_numbers)}")
             continue
 
+        closed_children = [
+            c for c in children if (c.get("state") or "").upper() == "CLOSED"
+        ]
+        if closed_children:
+            log(
+                f"skip_closed_children parent=#{parent_number} "
+                f"closed={sorted(c['number'] for c in closed_children)}"
+            )
+            continue
+
         open_children = [
             c for c in children if (c.get("state") or "").upper() == "OPEN"
         ]
@@ -148,7 +168,8 @@ def main() -> int:
             if delete_issue(n):
                 deleted.append(n)
 
-        ok = remove_split_label(parent_number)
+        all_deleted = len(deleted) == len(open_children)
+        ok = remove_split_label(parent_number) if all_deleted else False
         log(f"cleaned parent=#{parent_number} deleted={deleted} label_removed={ok}")
         if deleted or ok:
             cleaned += 1

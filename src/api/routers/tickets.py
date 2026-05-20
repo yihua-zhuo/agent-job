@@ -81,7 +81,7 @@ class TicketStatusChange(BaseModel):
 
 class TicketBulkUpdate(BaseModel):
     ticket_ids: list[int] = Field(..., min_length=1)
-    assigned_to: int | None = Field(None, ge=1)
+    assigned_to: int | None = Field(None, ge=0)
     status: str | None = Field(None, pattern="^(open|in_progress|pending|resolved|closed)$")
 
 
@@ -303,15 +303,23 @@ async def bulk_update_tickets(
     """
     service = TicketService(session)
     updated = []
+    errors = []
     for ticket_id in body.ticket_ids:
-        kwargs: dict = {}
-        if body.assigned_to is not None:
-            kwargs["assigned_to"] = body.assigned_to
-        if body.status is not None:
-            kwargs["status"] = _status_str_to_enum(body.status)
-        ticket = await service.update_ticket(ticket_id, tenant_id=ctx.tenant_id or 0, **kwargs)
-        updated.append(ticket.to_dict())
-    return {"success": True, "data": updated, "message": "Bulk update successful"}
+        try:
+            kwargs: dict = {}
+            if "assigned_to" in body.model_fields_set:
+                kwargs["assigned_to"] = body.assigned_to
+            if body.status is not None:
+                kwargs["status"] = _status_str_to_enum(body.status)
+            ticket = await service.update_ticket(ticket_id, tenant_id=ctx.tenant_id or 0, **kwargs)
+            updated.append(ticket.to_dict())
+        except Exception as exc:
+            errors.append({"ticket_id": ticket_id, "error": str(exc)})
+    return {
+        "success": True,
+        "data": {"updated": updated, "errors": errors},
+        "message": f"Updated {len(updated)} tickets, {len(errors)} failed",
+    }
 
 
 @tickets_router.post("/tickets/{ticket_id}/auto-assign")

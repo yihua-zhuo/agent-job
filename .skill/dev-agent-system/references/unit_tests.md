@@ -45,7 +45,35 @@ Only include handlers your tests actually exercise.
 | `campaign_handler` | no | no |
 | `make_count_handler(state)` | yes | yes |
 
-If your service queries a table not covered above, add a new handler in `conftest.py` first.
+Domain-specific handlers are discovered from `tests/unit/domain_handlers/*.py`.
+Current domain handler modules also re-export their helpers through
+`tests.unit.conftest` for compatibility.
+
+If your service queries a table not covered above, add a new file:
+
+```python
+# tests/unit/domain_handlers/my_domain.py
+from tests.unit.conftest import MockResult, MockRow, MockState
+
+
+def make_my_domain_handler(state: MockState):
+    def handler(sql_text, params):
+        if "from my_table" in sql_text:
+            return MockResult([MockRow({"id": 1, "tenant_id": params.get("tenant_id")})])
+        return None
+
+    return handler
+
+
+def get_handlers(state: MockState):
+    return [make_my_domain_handler(state)]
+
+
+__all__ = ["get_handlers", "make_my_domain_handler"]
+```
+
+Do not add routine domain handlers to `tests/unit/conftest.py`; keep them in
+their own domain module.
 
 ## Writing Tests
 
@@ -96,3 +124,4 @@ pytest tests/unit/test_my_service.py -v
 - Real SQL is **never** executed in unit tests.
 - Use `pytest.raises(SomeException)` to assert error paths.
 - Don't import `MockState` / handlers in the test body — only in fixtures.
+- New domain SQL handlers belong in `tests/unit/domain_handlers/<domain>.py`.
