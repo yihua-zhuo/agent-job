@@ -7,6 +7,7 @@ import math
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
@@ -75,7 +76,7 @@ async def list_campaigns(
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     svc = MarketingService(session)
     items, total = await svc.list_campaigns(
@@ -91,7 +92,7 @@ async def list_campaigns(
 async def create_campaign(
     body: CampaignCreate,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     svc = MarketingService(session)
     campaign = await svc.create_campaign(
@@ -110,7 +111,7 @@ async def create_campaign(
 async def get_campaign(
     campaign_id: int,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     svc = MarketingService(session)
     campaign = await svc.get_campaign(campaign_id, tenant_id=ctx.tenant_id)
@@ -122,7 +123,7 @@ async def update_campaign_put(
     campaign_id: int,
     body: CampaignUpdate,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     svc = MarketingService(session)
     # Build kwargs from non-None fields only
@@ -136,7 +137,7 @@ async def update_campaign_patch(
     campaign_id: int,
     body: CampaignUpdate,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     svc = MarketingService(session)
     kwargs = {k: v for k, v in body.model_dump().items() if v is not None}
@@ -148,7 +149,7 @@ async def update_campaign_patch(
 async def delete_campaign(
     campaign_id: int,
     ctx: AuthContext = Depends(require_auth),
-    session=Depends(get_db),
+    session: AsyncSession = Depends(get_db),
 ):
     svc = MarketingService(session)
     campaign = await svc.delete_campaign(campaign_id, tenant_id=ctx.tenant_id)

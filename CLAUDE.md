@@ -362,4 +362,3 @@ Rule: no global autouse patching — each test owns its mock. Real SQL is never 
 - FastAPI: https://fastapi.tiangolo.com/
 - SQLAlchemy 2.x: https://docs.sqlalchemy.org/en/20/
 - Pytest: https://docs.pytest.org/
-- Project root: /home/node/.openclaw/workspace/dev-agent-system/
