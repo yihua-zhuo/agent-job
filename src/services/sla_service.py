@@ -12,15 +12,20 @@ if TYPE_CHECKING:
 
 
 class SLAService:
-    """SLA管理"""
+    """SLA management and breach detection for tickets."""
 
     def __init__(self, session: AsyncSession, ticket_service: "TicketService | None" = None):
         self._session = session
         self._ticket_service = ticket_service
 
     def check_sla_status(self, ticket: Ticket) -> Literal["normal", "warning", "breached"]:
-        """检查SLA状态"""
-        # 返回：正常、临近超时、已超时
+        """Return SLA status: normal, warning, or breached.
+
+        Returns:
+            normal   — ticket is resolved or has no deadline
+            warning  — remaining time below 25% of SLA window
+            breached — deadline has passed and ticket is unresolved
+        """
         if ticket.resolved_at:
             return "normal"
 
@@ -47,10 +52,10 @@ class SLAService:
     async def get_sla_summary(self, tenant_id: int) -> dict[str, int]:
         """Return aggregated SLA counts across the full ticket dataset for a tenant.
 
-        Counts are bucketed as:
-          - breached: open, deadline set, deadline < now
-          - at_risk : open, deadline set, now < deadline <= now + 4h
-          - on_track: resolved OR no deadline OR deadline > now + 4h
+        Buckets:
+          - breached     : open, deadline set, deadline < now
+          - at_risk     : open, deadline set, now < deadline <= now + 4h
+          - on_track    : resolved OR no deadline OR deadline > now + 4h
           - total_tickets: all tickets for the tenant
         """
         now = datetime.now(UTC)

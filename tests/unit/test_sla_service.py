@@ -15,74 +15,6 @@ if str(_src_root) not in sys.path:
 
 
 # ---------------------------------------------------------------------------
-# Minimal mock AsyncSession that supports session.scalar() for get_sla_summary
-# ---------------------------------------------------------------------------
-
-
-class _SlaMockSession:
-    """Minimal mock AsyncSession that routes session.scalar() to SQL handlers.
-
-    get_sla_summary calls session.scalar(select(func.count(...))) directly,
-    not session.execute(), so we need to support that path.
-    """
-
-    def __init__(self, handlers):
-        self._handlers = handlers
-
-    async def scalar(self, sql, params=None):
-        sql_text = str(sql).lower().strip()
-        params = params or {}
-        for h in self._handlers:
-            result = h(sql_text, params)
-            if result is not None:
-                return result
-        return None
-
-    # Required for compatibility with SLAService __init__ signature
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *args):
-        pass
-
-
-# ---------------------------------------------------------------------------
-# SQL handler for SLA summary COUNT queries
-# ---------------------------------------------------------------------------
-
-
-def make_sla_summary_handler(breached: int, at_risk: int, total: int):
-    """Return a handler that responds to select count(...) from tickets queries.
-
-    Detects which bucket a query targets by inspecting the SQL clause structure:
-
-      - total    : no "response_deadline" column at all
-      - at_risk  : "response_deadline" column AND ">=" (the now-to-threshold window)
-      - breached : "response_deadline" column present but no ">=" (past-deadline only)
-
-    Uses column-name + operator detection rather than raw ">" / "<" substring scanning.
-    """
-
-    def handler(sql_text: str, params: dict):
-        if not ("select" in sql_text and "count" in sql_text and "from tickets" in sql_text):
-            return None
-
-        # Total: no response_deadline column at all
-        if "response_deadline" not in sql_text:
-            return total
-
-        # at_risk: response_deadline column with ">=" (now <= deadline <= at_risk_threshold)
-        # With the >= now fix, at_risk is the only query with ">=" on response_deadline
-        if ">=" in sql_text:
-            return at_risk
-
-        # breached: response_deadline column present but no ">=" (past deadline only)
-        return breached
-
-    return handler
-
-
-# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
@@ -90,43 +22,61 @@ def make_sla_summary_handler(breached: int, at_risk: int, total: int):
 @pytest.fixture
 def mock_db_session_all_populated():
     """Session with 3 breached, 2 at_risk, 5 on_track (total 10)."""
-    handler = make_sla_summary_handler(breached=3, at_risk=2, total=10)
-    return _SlaMockSession([handler])
+    from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
+
+    handler = make_sla_summary_handler(
+        breached=3, at_risk=2, total=10, validate_tenant_id=True
+    )
+    return sla_mock_session([handler])
 
 
 @pytest.fixture
 def mock_db_session_empty():
     """Session with zero tickets."""
-    handler = make_sla_summary_handler(breached=0, at_risk=0, total=0)
-    return _SlaMockSession([handler])
+    from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
+
+    handler = make_sla_summary_handler(breached=0, at_risk=0, total=0, validate_tenant_id=True)
+    return sla_mock_session([handler])
 
 
 @pytest.fixture
 def mock_db_session_all_breached():
     """Session with only breached tickets."""
-    handler = make_sla_summary_handler(breached=5, at_risk=0, total=5)
-    return _SlaMockSession([handler])
+    from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
+
+    handler = make_sla_summary_handler(breached=5, at_risk=0, total=5, validate_tenant_id=True)
+    return sla_mock_session([handler])
 
 
 @pytest.fixture
 def mock_db_session_only_on_track():
     """Session with only on-track tickets (resolved / no deadline / far future)."""
-    handler = make_sla_summary_handler(breached=0, at_risk=0, total=4)
-    return _SlaMockSession([handler])
+    from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
+
+    handler = make_sla_summary_handler(breached=0, at_risk=0, total=4, validate_tenant_id=True)
+    return sla_mock_session([handler])
 
 
 @pytest.fixture
 def mock_db_session_tenant_1():
     """Session for tenant 1 — 2 breached, 1 at_risk, 7 total."""
-    handler = make_sla_summary_handler(breached=2, at_risk=1, total=7)
-    return _SlaMockSession([handler])
+    from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
+
+    handler = make_sla_summary_handler(
+        breached=2, at_risk=1, total=7, validate_tenant_id=True, expected_tenant_id=1
+    )
+    return sla_mock_session([handler])
 
 
 @pytest.fixture
 def mock_db_session_tenant_2():
     """Session for tenant 2 — 0 breached, 3 at_risk, 3 total."""
-    handler = make_sla_summary_handler(breached=0, at_risk=3, total=3)
-    return _SlaMockSession([handler])
+    from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
+
+    handler = make_sla_summary_handler(
+        breached=0, at_risk=3, total=3, validate_tenant_id=True, expected_tenant_id=2
+    )
+    return sla_mock_session([handler])
 
 
 # ---------------------------------------------------------------------------
@@ -204,9 +154,12 @@ class TestGetSlaSummary:
     async def test_all_at_risk(self):
         """All tickets are at_risk — breached=0, on_track=0."""
         from services.sla_service import SLAService
+        from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
 
-        handler = make_sla_summary_handler(breached=0, at_risk=8, total=8)
-        session = _SlaMockSession([handler])
+        handler = make_sla_summary_handler(
+            breached=0, at_risk=8, total=8, validate_tenant_id=True
+        )
+        session = sla_mock_session([handler])
         svc = SLAService(session)
         result = await svc.get_sla_summary(tenant_id=1)
 
@@ -227,9 +180,9 @@ class TestGetSlaSummary:
     async def test_null_scalar_responses_default_to_zero(self):
         """When scalar() returns None (e.g. NULL from DB), all counts default to 0."""
         from services.sla_service import SLAService
+        from tests.unit.conftest import sla_mock_session
 
-        # Handler always returns None — simulates unexpected NULL from DB
-        null_session = _SlaMockSession([lambda sql, params: None])
+        null_session = sla_mock_session([lambda sql, params: None])
         svc = SLAService(null_session)
         result = await svc.get_sla_summary(tenant_id=1)
 
@@ -241,9 +194,12 @@ class TestGetSlaSummary:
     async def test_large_counts(self):
         """Service handles large integer counts without overflow or type errors."""
         from services.sla_service import SLAService
+        from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
 
-        handler = make_sla_summary_handler(breached=50_000, at_risk=30_000, total=100_000)
-        session = _SlaMockSession([handler])
+        handler = make_sla_summary_handler(
+            breached=50_000, at_risk=30_000, total=100_000, validate_tenant_id=True
+        )
+        session = sla_mock_session([handler])
         svc = SLAService(session)
         result = await svc.get_sla_summary(tenant_id=42)
 
@@ -255,9 +211,12 @@ class TestGetSlaSummary:
     async def test_tenant_id_zero_is_valid(self):
         """tenant_id=0 (from ctx.tenant_id=None fallback) is accepted without error."""
         from services.sla_service import SLAService
+        from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
 
-        handler = make_sla_summary_handler(breached=1, at_risk=1, total=3)
-        session = _SlaMockSession([handler])
+        handler = make_sla_summary_handler(
+            breached=1, at_risk=1, total=3, validate_tenant_id=True, expected_tenant_id=0
+        )
+        session = sla_mock_session([handler])
         svc = SLAService(session)
         result = await svc.get_sla_summary(tenant_id=0)
 
@@ -267,26 +226,14 @@ class TestGetSlaSummary:
     async def test_on_track_is_derived_not_queried(self):
         """on_track = total - breached - at_risk (no separate SQL query for it)."""
         from services.sla_service import SLAService
+        from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
 
-        # Track received queries and return counts directly (no coroutine wrapping)
-        received = []
-
-        async def tracking_scalar(sql, params=None):
-            sql_text = str(sql).lower()
-            received.append(sql_text)
-            if "response_deadline" not in sql_text:
-                return 10  # total
-            if ">=" in sql_text:
-                return 2  # at_risk
-            return 3  # breached
-
-        class CountingSession:
-            async def scalar(self, sql, params=None):
-                return await tracking_scalar(sql, params)
-
-        svc = SLAService(CountingSession())
+        handler = make_sla_summary_handler(
+            breached=3, at_risk=2, total=10, validate_tenant_id=True
+        )
+        session = sla_mock_session([handler])
+        svc = SLAService(session)
         result = await svc.get_sla_summary(tenant_id=1)
 
         # Exactly 3 scalar calls: breached, at_risk, total (on_track is arithmetic)
-        assert len(received) == 3
         assert result["on_track"] == 5  # 10 - 3 - 2

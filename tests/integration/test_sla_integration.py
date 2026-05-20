@@ -1,5 +1,7 @@
 """Integration tests for SLA summary endpoint and service."""
-from datetime import UTC, datetime, timedelta
+from datetime import UTC
+from datetime import datetime
+from datetime import timedelta
 
 import pytest
 
@@ -102,8 +104,6 @@ async def test_sla_summary_empty(db_schema, tenant_id, async_session):
 
 async def test_sla_summary_tenant_isolation(db_schema, tenant_id, tenant_id_2, async_session):
     """Seed tickets for two different tenant_ids; each query only sees its own."""
-    from datetime import UTC
-
     from db.models.ticket import TicketModel
     from services.sla_service import SLAService
 
