@@ -9,6 +9,7 @@ from db.repositories.customer import CustomerRepository
 from models.customer import CustomerStatus
 from models.customer_create_dto import CustomerCreateDTO
 from pkg.errors.app_exceptions import ValidationException
+from services.lead_routing_service import LeadRoutingService
 
 
 class CustomerService:
@@ -50,8 +51,6 @@ class CustomerService:
         customer = await self.customer_repo.create(d, tenant_id)
 
         if customer.status == "lead" and customer.owner_id == 0:
-            from services.lead_routing_service import LeadRoutingService
-
             routing_svc = LeadRoutingService(self.session)
             await routing_svc.auto_assign_lead(customer.id, tenant_id)
 
@@ -64,7 +63,6 @@ class CustomerService:
         page_size: int = 20,
         status: str | None = None,
         owner_id: int | None = None,
-        tags: str | None = None,
     ) -> tuple[list[Any], int]:
         """List customers for tenant with optional filters."""
         return await self.customer_repo.list_customers(
@@ -117,12 +115,7 @@ class CustomerService:
         """Change a customer's status."""
         if status not in self.VALID_STATUSES:
             raise ValidationException(f"Invalid status: {status}")
-        customer = await self.customer_repo.get_customer(customer_id, tenant_id)
-        customer.status = status
-        customer.updated_at = datetime.now(UTC)
-        await self.session.flush()
-        await self.session.refresh(customer)
-        return customer
+        return await self.customer_repo.update_status(customer_id, status, tenant_id)
 
     async def assign_owner(
         self,
@@ -131,15 +124,7 @@ class CustomerService:
         tenant_id: int,
     ) -> Any:
         """Assign an owner to a customer."""
-        customer = await self.customer_repo.get_customer(customer_id, tenant_id)
-        now = datetime.now(UTC)
-        customer.owner_id = owner_id
-        if customer.assigned_at is None:
-            customer.assigned_at = now
-        customer.updated_at = now
-        await self.session.flush()
-        await self.session.refresh(customer)
-        return customer
+        return await self.customer_repo.update_owner(customer_id, owner_id, tenant_id)
 
     async def bulk_import(self, customers: list[dict[str, Any]], tenant_id: int) -> int:
         """Bulk insert customers, returns imported count."""
@@ -153,10 +138,6 @@ class CustomerService:
         reason: str | None = None,
     ) -> Any:
         """Reassign a lead with history tracking."""
-        from sqlalchemy import and_, update
-
-        from db.models.customer import CustomerModel
-
         customer = await self.customer_repo.get_customer(customer_id, tenant_id)
         now = datetime.now(UTC)
         entry = {
@@ -166,20 +147,13 @@ class CustomerService:
         }
         history = list(customer.recycle_history or [])
         history.append(entry)
-        await self.session.execute(
-            update(CustomerModel)
-            .where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
-            .values(
-                owner_id=new_owner_id,
-                assigned_at=now,
-                recycle_count=customer.recycle_count + 1,
-                recycle_history=history,
-                updated_at=now,
-            )
+        return await self.customer_repo.reassign_lead(
+            customer_id,
+            new_owner_id,
+            customer.recycle_count + 1,
+            history,
+            tenant_id,
         )
-        await self.session.flush()
-        await self.session.refresh(customer)
-        return customer
 
     async def get_unassigned_leads(
         self,

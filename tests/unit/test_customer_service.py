@@ -32,7 +32,6 @@ def mock_db_session():
     session.add = MagicMock()
     session.flush = AsyncMock()
     session.refresh = AsyncMock()
-    session.commit = AsyncMock()
     session.execute = AsyncMock()
     session.get = AsyncMock(return_value=None)
     session.delete = MagicMock()
@@ -285,19 +284,16 @@ class TestCountByStatus:
         assert len(result) == 1
         assert result[CustomerStatus.INACTIVE] == 10
 
-    async def test_count_by_status_invalid_db_status_raises_validation(
+    async def test_count_by_status_invalid_db_status_skipped(
         self, mock_db_session, mock_customer_repo
     ):
-        """Repository raises ValidationException for invalid DB status."""
-        from pkg.errors.app_exceptions import ValidationException
-
+        """Repository returns partial counts when some DB rows have invalid status."""
         mock_customer_repo.count_by_status = AsyncMock(
-            side_effect=ValidationException("Invalid customer status in DB: legacy_unknown")
+            return_value={CustomerStatus.LEAD: 3}  # unknown statuses silently skipped
         )
         service = CustomerService(mock_db_session, mock_customer_repo)
-
-        with pytest.raises(ValidationException, match="Invalid customer status"):
-            await service.count_by_status(tenant_id=1)
+        result = await service.count_by_status(tenant_id=1)
+        assert result == {CustomerStatus.LEAD: 3}
 
 
 @pytest.mark.asyncio
@@ -332,3 +328,4 @@ class TestSearchCustomers:
             r"100%_fit\\", 1
         )
         assert result == [mock_row]
+

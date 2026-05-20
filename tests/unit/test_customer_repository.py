@@ -21,11 +21,9 @@ def _make_mock_session():
     session.add = MagicMock()
     session.flush = AsyncMock()
     session.refresh = AsyncMock()
-    session.commit = AsyncMock()
 
     # Execute is async so that `await session.execute(...)` returns the mock result.
     # The mock result (returned from .return_value) has synchronous sub-attributes.
-    from types import SimpleNamespace
     session.execute = AsyncMock(return_value=MagicMock(
         scalars=MagicMock(return_value=MagicMock(all=MagicMock(return_value=[]))),
         scalar_one_or_none=MagicMock(return_value=None),
@@ -118,7 +116,7 @@ class TestUpdateCustomer:
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=mock_customer)
         repo = CustomerRepository(session)
 
-        result = await repo.update_customer(1, {"name": "New Name"}, tenant_id=1)
+        _ = await repo.update_customer(1, {"name": "New Name"}, tenant_id=1)
 
         session.flush.assert_awaited_once()
         session.refresh.assert_awaited_once_with(mock_customer)
@@ -209,13 +207,14 @@ class TestCountByStatus:
         assert result[CustomerStatus.CUSTOMER] == 1
 
     @pytest.mark.asyncio
-    async def test_raises_validation_for_invalid_db_status(self):
+    async def test_skips_invalid_db_status(self):
         session = _make_mock_session()
         session.execute.return_value.all = MagicMock(return_value=[("unknown_status", 1)])
         repo = CustomerRepository(session)
 
-        with pytest.raises(ValidationException, match="Invalid customer status in DB"):
-            await repo.count_by_status(tenant_id=1)
+        result = await repo.count_by_status(tenant_id=1)
+
+        assert result == {}
 
 
 class TestSearchCustomers:
@@ -269,7 +268,7 @@ class TestAddTag:
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=mock_customer)
         repo = CustomerRepository(session)
 
-        result = await repo.add_tag(1, "vip", tenant_id=1)
+        _ = await repo.add_tag(1, "vip", tenant_id=1)
 
         session.flush.assert_awaited_once()
         session.refresh.assert_awaited_once()
@@ -296,7 +295,7 @@ class TestRemoveTag:
         session.execute.return_value.scalar_one_or_none = MagicMock(return_value=mock_customer)
         repo = CustomerRepository(session)
 
-        result = await repo.remove_tag(1, "vip", tenant_id=1)
+        _ = await repo.remove_tag(1, "vip", tenant_id=1)
 
         session.flush.assert_awaited_once()
         session.refresh.assert_awaited_once()
@@ -357,3 +356,4 @@ class TestBulkImport:
         assert added[0].status == "lead"
         assert added[0].owner_id == 0
         assert added[0].tags == []
+

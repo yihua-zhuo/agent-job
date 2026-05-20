@@ -130,7 +130,7 @@ async def create_customer(
 ):
     service = CustomerService(session, CustomerRepository(session))
     result = await service.create_customer(body.model_dump(), tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "客户创建成功"}
+    return {"success": True, "data": result.to_dict(), "message": "客户创建成功"}
 
 
 @customers_router.get("")
@@ -139,7 +139,6 @@ async def list_customers(
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     owner_id: int | None = Query(None, ge=0),
-    tags: str | None = None,
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
@@ -149,10 +148,9 @@ async def list_customers(
         page_size=page_size,
         status=status,
         owner_id=owner_id,
-        tags=tags,
         tenant_id=ctx.tenant_id,
     )
-    return _paginated(items, total, page, page_size)
+    return _paginated([item.to_dict() for item in items], total, page, page_size)
 
 
 @customers_router.get("/search")
@@ -163,7 +161,7 @@ async def search_customers(
 ):
     service = CustomerService(session, CustomerRepository(session))
     items = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
-    return {"success": True, "data": {"keyword": keyword, "items": items}}
+    return {"success": True, "data": {"keyword": keyword, "items": [item.to_dict() for item in items]}}
 
 
 @customers_router.get("/{customer_id}")
@@ -174,7 +172,7 @@ async def get_customer(
 ):
     service = CustomerService(session, CustomerRepository(session))
     result = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result}
+    return {"success": True, "data": result.to_dict()}
 
 
 @customers_router.put("/{customer_id}")
@@ -186,7 +184,7 @@ async def update_customer(
 ):
     service = CustomerService(session, CustomerRepository(session))
     result = await service.update_customer(customer_id, body, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "客户更新成功"}
+    return {"success": True, "data": result.to_dict(), "message": "客户更新成功"}
 
 
 @customers_router.delete("/{customer_id}")
@@ -209,7 +207,7 @@ async def add_tag(
 ):
     service = CustomerService(session, CustomerRepository(session))
     result = await service.add_tag(customer_id, _sanitize(body.tag), tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "标签添加成功"}
+    return {"success": True, "data": result.to_dict(), "message": "标签添加成功"}
 
 
 @customers_router.delete("/{customer_id}/tags/{tag}")
@@ -221,7 +219,7 @@ async def remove_tag(
 ):
     service = CustomerService(session, CustomerRepository(session))
     result = await service.remove_tag(customer_id, _sanitize(tag), tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "标签移除成功"}
+    return {"success": True, "data": result.to_dict(), "message": "标签移除成功"}
 
 
 @customers_router.put("/{customer_id}/status")
@@ -233,7 +231,7 @@ async def change_status(
 ):
     service = CustomerService(session, CustomerRepository(session))
     result = await service.change_status(customer_id, body.status, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "状态更新成功"}
+    return {"success": True, "data": result.to_dict(), "message": "状态更新成功"}
 
 
 @customers_router.put("/{customer_id}/owner")
@@ -245,7 +243,7 @@ async def assign_owner(
 ):
     service = CustomerService(session, CustomerRepository(session))
     result = await service.assign_owner(customer_id, body.owner_id, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "负责人更新成功"}
+    return {"success": True, "data": result.to_dict(), "message": "负责人更新成功"}
 
 
 @customers_router.post("/import")

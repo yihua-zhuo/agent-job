@@ -97,6 +97,57 @@ class CustomerRepository(BaseRepository):
         await self.session.refresh(customer)
         return customer
 
+    async def update_status(
+        self,
+        customer_id: int,
+        status: str,
+        tenant_id: int,
+    ) -> CustomerModel:
+        """Update a customer's status. Caller must flush/commit."""
+        customer = await self.get_customer(customer_id, tenant_id)
+        customer.status = status
+        customer.updated_at = datetime.now(UTC)
+        await self.session.flush()
+        await self.session.refresh(customer)
+        return customer
+
+    async def update_owner(
+        self,
+        customer_id: int,
+        owner_id: int,
+        tenant_id: int,
+    ) -> CustomerModel:
+        """Update a customer's owner. Sets assigned_at if null. Caller must flush/commit."""
+        customer = await self.get_customer(customer_id, tenant_id)
+        now = datetime.now(UTC)
+        customer.owner_id = owner_id
+        if customer.assigned_at is None:
+            customer.assigned_at = now
+        customer.updated_at = now
+        await self.session.flush()
+        await self.session.refresh(customer)
+        return customer
+
+    async def reassign_lead(
+        self,
+        customer_id: int,
+        new_owner_id: int,
+        recycle_count: int,
+        recycle_history: list[dict[str, Any]],
+        tenant_id: int,
+    ) -> CustomerModel:
+        """Reassign a lead (update owner, increment recycle_count, append history)."""
+        now = datetime.now(UTC)
+        customer = await self.get_customer(customer_id, tenant_id)
+        customer.owner_id = new_owner_id
+        customer.assigned_at = now
+        customer.recycle_count = recycle_count
+        customer.recycle_history = recycle_history
+        customer.updated_at = now
+        await self.session.flush()
+        await self.session.refresh(customer)
+        return customer
+
     async def delete_customer(self, customer_id: int, tenant_id: int) -> dict[str, int]:
         """Delete a customer (tenant-scoped). Raises NotFoundException if not found."""
         result = await self.session.execute(
@@ -108,6 +159,8 @@ class CustomerRepository(BaseRepository):
 
     async def count_by_status(self, tenant_id: int) -> dict[CustomerStatus, int]:
         """Count customers grouped by status."""
+        import logging
+
         result = await self.session.execute(
             select(CustomerModel.status, func.count(CustomerModel.id))
             .where(CustomerModel.tenant_id == tenant_id)
@@ -117,8 +170,9 @@ class CustomerRepository(BaseRepository):
         for raw_status, count in result.all():
             try:
                 status = CustomerStatus(raw_status)
-            except ValueError as exc:
-                raise ValidationException(f"Invalid customer status in DB: {raw_status}") from exc
+            except ValueError:
+                logging.warning("Skipping invalid customer status in DB: %s", raw_status)
+                continue
             counts[status] = int(count)
         return counts
 
