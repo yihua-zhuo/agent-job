@@ -8,8 +8,6 @@ Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 """
 from __future__ import annotations
 
-import uuid
-
 import pytest
 
 from services.user_service import UserService
@@ -48,6 +46,10 @@ class TestListUsersFiltered:
         items, total = await svc.list_users(q="alice", tenant_id=tenant_id)
         assert total == 1
         assert items[0].username == "alice_w"
+        assert (
+            "alice" in items[0].username.lower()
+            or "alice" in (items[0].full_name or "").lower()
+        )
 
     async def test_list_users_filter_by_role(self, db_schema, tenant_id, async_session):
         svc = UserService(async_session)
@@ -96,19 +98,31 @@ class TestListUsersFiltered:
         assert total == 1
         assert items[0].username == "alice_full"
 
-    async def test_list_users_pagination(self, db_schema, tenant_id, async_session):
+    async def test_list_users_cross_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
+        """Verify users seeded under a different tenant are never returned."""
         svc = UserService(async_session)
-        for i in range(5):
+        await _seed_user(async_session, tenant_id, "alice_cross", "alice_cross@example.com", "admin")
+        await _seed_user(async_session, tenant_id_2, "alice_other", "alice_other@example.com", "admin")
+
+        items, total = await svc.list_users(q="alice", tenant_id=tenant_id)
+        assert total == 1
+        assert items[0].username == "alice_cross"
+
+    async def test_list_users_pagination(self, db_schema, tenant_id, async_session):
+        PAGE_SIZE = 2
+        TOTAL_USERS = 5
+        svc = UserService(async_session)
+        for i in range(TOTAL_USERS):
             await _seed_user(async_session, tenant_id, f"pageuser{i}", f"pageuser{i}@example.com", "user")
 
-        page1, total1 = await svc.list_users(page=1, page_size=2, tenant_id=tenant_id)
-        assert total1 == 5
-        assert len(page1) == 2
+        page1, total1 = await svc.list_users(page=1, page_size=PAGE_SIZE, tenant_id=tenant_id)
+        assert total1 == TOTAL_USERS
+        assert len(page1) == PAGE_SIZE
 
-        page2, total2 = await svc.list_users(page=2, page_size=2, tenant_id=tenant_id)
-        assert total2 == 5
-        assert len(page2) == 2
+        page2, total2 = await svc.list_users(page=2, page_size=PAGE_SIZE, tenant_id=tenant_id)
+        assert total2 == TOTAL_USERS
+        assert len(page2) == PAGE_SIZE
 
-        page3, total3 = await svc.list_users(page=3, page_size=2, tenant_id=tenant_id)
-        assert total3 == 5
+        page3, total3 = await svc.list_users(page=3, page_size=PAGE_SIZE, tenant_id=tenant_id)
+        assert total3 == TOTAL_USERS
         assert len(page3) == 1
