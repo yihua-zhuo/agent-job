@@ -23,7 +23,6 @@ import subprocess
 import sys
 import time
 
-
 # Markers identifying SUMMARY-style bot comments we should NOT ask Claude to
 # "address" — they're status updates, not actionable feedback. Notably absent:
 # `agent-job-code-review-inline`. Those inline comments contain real
