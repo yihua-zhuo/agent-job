@@ -196,3 +196,93 @@ class TestGetSlaSummary:
         assert result["at_risk"] == 3
         assert result["on_track"] == 0  # 3 - 0 - 3
         assert result["total_tickets"] == 3
+
+    async def test_all_at_risk(self):
+        """All tickets are at_risk — breached=0, on_track=0."""
+        from services.sla_service import SLAService
+
+        handler = make_sla_summary_handler(breached=0, at_risk=8, total=8)
+        session = _SlaMockSession([handler])
+        svc = SLAService(session)
+        result = await svc.get_sla_summary(tenant_id=1)
+
+        assert result["breached"] == 0
+        assert result["at_risk"] == 8
+        assert result["on_track"] == 0  # 8 - 0 - 8
+        assert result["total_tickets"] == 8
+
+    async def test_return_value_has_all_required_keys(self, mock_db_session_all_populated):
+        """Result dict must contain exactly the four documented keys."""
+        from services.sla_service import SLAService
+
+        svc = SLAService(mock_db_session_all_populated)
+        result = await svc.get_sla_summary(tenant_id=1)
+
+        assert set(result.keys()) == {"breached", "at_risk", "on_track", "total_tickets"}
+
+    async def test_null_scalar_responses_default_to_zero(self):
+        """When scalar() returns None (e.g. NULL from DB), all counts default to 0."""
+        from services.sla_service import SLAService
+
+        # Handler always returns None — simulates unexpected NULL from DB
+        null_session = _SlaMockSession([lambda sql, params: None])
+        svc = SLAService(null_session)
+        result = await svc.get_sla_summary(tenant_id=1)
+
+        assert result["breached"] == 0
+        assert result["at_risk"] == 0
+        assert result["on_track"] == 0
+        assert result["total_tickets"] == 0
+
+    async def test_large_counts(self):
+        """Service handles large integer counts without overflow or type errors."""
+        from services.sla_service import SLAService
+
+        handler = make_sla_summary_handler(breached=50_000, at_risk=30_000, total=100_000)
+        session = _SlaMockSession([handler])
+        svc = SLAService(session)
+        result = await svc.get_sla_summary(tenant_id=42)
+
+        assert result["breached"] == 50_000
+        assert result["at_risk"] == 30_000
+        assert result["on_track"] == 20_000  # 100_000 - 50_000 - 30_000
+        assert result["total_tickets"] == 100_000
+
+    async def test_tenant_id_zero_is_valid(self):
+        """tenant_id=0 (from ctx.tenant_id=None fallback) is accepted without error."""
+        from services.sla_service import SLAService
+
+        handler = make_sla_summary_handler(breached=1, at_risk=1, total=3)
+        session = _SlaMockSession([handler])
+        svc = SLAService(session)
+        result = await svc.get_sla_summary(tenant_id=0)
+
+        assert result["total_tickets"] == 3
+        assert result["on_track"] == 1  # 3 - 1 - 1
+
+    async def test_on_track_is_derived_not_queried(self):
+        """on_track = total - breached - at_risk (no separate SQL query for it)."""
+        from services.sla_service import SLAService
+
+        # Provide a session that counts each scalar() call
+        call_count = []
+
+        async def counting_scalar(sql, params=None):
+            call_count.append(str(sql).lower())
+            sql_text = str(sql).lower()
+            if ">" in sql_text:
+                return 2  # at_risk
+            if "<" in sql_text:
+                return 3  # breached
+            return 10  # total
+
+        class CountingSession:
+            async def scalar(self, sql, params=None):
+                return await counting_scalar(sql, params)
+
+        svc = SLAService(CountingSession())
+        result = await svc.get_sla_summary(tenant_id=1)
+
+        # Exactly 3 scalar calls: breached, at_risk, total
+        assert len(call_count) == 3
+        assert result["on_track"] == 5  # 10 - 3 - 2
