@@ -1,20 +1,19 @@
 """Integration tests for SLA summary endpoint and service."""
-from datetime import UTC
-from datetime import datetime
-from datetime import timedelta
+
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
 pytestmark = pytest.mark.integration
 
 
-async def test_sla_summary_all_categories(db_schema, tenant_id, async_session):
+async def test_sla_summary_all_categories(db_schema, tenant_id, async_session, _seed_customer):
     """Seed 3 breached, 2 at_risk, 5 on_track tickets; assert counts match."""
     from db.models.ticket import TicketModel
     from services.sla_service import SLAService
 
     now = datetime.now(UTC)
-    four_hours = timedelta(hours=4)
+    cid = _seed_customer
 
     # 3 breached: resolved_at=None, deadline in past
     for _ in range(3):
@@ -26,7 +25,7 @@ async def test_sla_summary_all_categories(db_schema, tenant_id, async_session):
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=1,
+                customer_id=cid,
                 resolved_at=None,
                 response_deadline=now - timedelta(hours=5),
             )
@@ -42,7 +41,7 @@ async def test_sla_summary_all_categories(db_schema, tenant_id, async_session):
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=1,
+                customer_id=0,
                 resolved_at=None,
                 response_deadline=now + timedelta(hours=2),
             )
@@ -58,7 +57,7 @@ async def test_sla_summary_all_categories(db_schema, tenant_id, async_session):
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=1,
+                customer_id=0,
                 resolved_at=now - timedelta(hours=1),
                 response_deadline=now - timedelta(hours=5),  # also past but resolved overrides
             )
@@ -72,7 +71,7 @@ async def test_sla_summary_all_categories(db_schema, tenant_id, async_session):
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=1,
+                customer_id=0,
                 resolved_at=None,
                 response_deadline=now + timedelta(hours=6),
             )
@@ -119,7 +118,7 @@ async def test_sla_summary_tenant_isolation(db_schema, tenant_id, tenant_id_2, a
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=1,
+                customer_id=0,
                 resolved_at=None,
                 response_deadline=now - timedelta(hours=3),
             )
@@ -133,7 +132,7 @@ async def test_sla_summary_tenant_isolation(db_schema, tenant_id, tenant_id_2, a
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=1,
+                customer_id=0,
                 resolved_at=None,
                 response_deadline=now + timedelta(hours=2),
             )
@@ -149,7 +148,7 @@ async def test_sla_summary_tenant_isolation(db_schema, tenant_id, tenant_id_2, a
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=1,
+                customer_id=0,
                 resolved_at=None,
                 response_deadline=now - timedelta(hours=3),
             )
@@ -162,7 +161,7 @@ async def test_sla_summary_tenant_isolation(db_schema, tenant_id, tenant_id_2, a
             status="open",
             priority="medium",
             channel="email",
-            customer_id=1,
+            customer_id=0,
             resolved_at=None,
             response_deadline=now + timedelta(hours=2),
         )
@@ -200,7 +199,7 @@ async def test_sla_summary_no_deadline_tickets_counted_as_on_track(db_schema, te
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=1,
+                customer_id=0,
                 resolved_at=None,
                 response_deadline=None,
             )
@@ -215,7 +214,7 @@ async def test_sla_summary_no_deadline_tickets_counted_as_on_track(db_schema, te
             status="open",
             priority="medium",
             channel="email",
-            customer_id=1,
+            customer_id=0,
             resolved_at=None,
             response_deadline=now - timedelta(hours=2),
         )
@@ -249,7 +248,7 @@ async def test_sla_summary_resolved_tickets_not_counted_as_breached(db_schema, t
                 status="resolved",
                 priority="medium",
                 channel="email",
-                customer_id=1,
+                customer_id=0,
                 resolved_at=now - timedelta(hours=1),
                 response_deadline=now - timedelta(hours=10),
             )
@@ -299,7 +298,7 @@ async def test_sla_summary_at_risk_boundary_just_inside(db_schema, tenant_id, as
             status="open",
             priority="medium",
             channel="email",
-            customer_id=1,
+            customer_id=0,
             resolved_at=None,
             response_deadline=now + timedelta(hours=3, minutes=59),
         )
@@ -331,7 +330,7 @@ async def test_sla_summary_at_risk_boundary_just_outside(db_schema, tenant_id, a
             status="open",
             priority="medium",
             channel="email",
-            customer_id=1,
+            customer_id=0,
             resolved_at=None,
             response_deadline=now + timedelta(hours=4, minutes=1),
         )

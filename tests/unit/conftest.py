@@ -14,11 +14,17 @@ import warnings
 from contextlib import asynccontextmanager
 from datetime import datetime as dt
 from pathlib import Path
+from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from dotenv import load_dotenv
 from sqlalchemy.exc import MultipleResultsFound
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+from sqlalchemy.ext.asyncio import AsyncSession
 
 # Load .env so DATABASE_URL is available in test environment.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
@@ -865,11 +871,12 @@ def campaign_handler(sql_text, params):
 # ---------------------------------------------------------------------------
 
 
-class SlaMockSession:
-    """Minimal mock AsyncSession that routes session.scalar() to SQL handlers.
+class SlaMockSession(AsyncSession):
+    """Minimal mock AsyncSession that routes session.scalar() and session.execute() to SQL handlers.
 
-    get_sla_summary calls session.scalar(select(func.count(...))) directly,
-    not session.execute(), so we need to support that path.
+    SLAService.get_sla_summary calls session.scalar(select(func.count(...))) directly.
+    SlaMockSession also implements execute() so any future call to session.execute()
+    is routed to the same handlers instead of silently passing a bare MagicMock.
     """
 
     def __init__(self, handlers):
@@ -887,8 +894,13 @@ class SlaMockSession:
             for k, v in compiled.params.items():
                 if k not in params:
                     params[k] = v
-        except Exception:
-            # Fallback: raw text for pattern matching
+        except Exception as exc:
+            # Surface compilation errors rather than silently falling through,
+            # so broken SQL is detected immediately instead of being masked by
+            # raw-string fallback matching.
+            import warnings
+
+            warnings.warn(f"SlaMockSession: SQL compilation failed ({exc}), falling back to raw string", UserWarning)
             sql_text = str(sql).lower().strip()
 
         for h in self._handlers:
@@ -896,6 +908,33 @@ class SlaMockSession:
             if result is not None:
                 return result
         return None
+
+    async def execute(self, sql, params=None):
+        """Route session.execute() to the same handlers as scalar().
+
+        Returns a MockResult wrapping whatever value the first matching handler returns.
+        """
+        params = dict(params) if params else {}
+
+        try:
+            compiled = sql.compile(dialect=self._get_dialect())
+            sql_text = str(compiled).lower()
+            for k, v in compiled.params.items():
+                if k not in params:
+                    params[k] = v
+        except Exception as exc:
+            import warnings
+
+            warnings.warn(
+                f"SlaMockSession.execute: SQL compilation failed ({exc}), falling back to raw string", UserWarning
+            )
+            sql_text = str(sql).lower().strip()
+
+        for h in self._handlers:
+            result = h(sql_text, params)
+            if result is not None:
+                return MockResult([[result]])
+        return MockResult([[None]])
 
     @staticmethod
     def _get_dialect():
@@ -961,16 +1000,16 @@ def make_sla_summary_handler(
         # "tenant_id" as a prefix.
         if validate_tenant_id:
             tenant_keys = [k for k in params if k.lower().startswith("tenant_id")]
-            assert tenant_keys, (
-                f"Query is missing tenant_id bind param. "
-                f"sql={sql_text[:100]!r}, params={params!r}"
-            )
+            assert tenant_keys, f"Query is missing tenant_id bind param. sql={sql_text[:100]!r}, params={params!r}"
             if expected_tenant_id is not None:
-                # Use whichever tenant_id key SQLAlchemy generated
-                actual = params.get("tenant_id") or params.get("tenant_id_1")
-                assert actual == expected_tenant_id, (
-                    f"Expected tenant_id={expected_tenant_id}, got {actual}"
+                # Use whichever tenant_id key SQLAlchemy generated (could be
+                # tenant_id, tenant_id_1, tenant_id_2, … when multiple tenant_id
+                # conditions appear in the same query).
+                actual = next(
+                    (params[k] for k in sorted(tenant_keys) if params.get(k) is not None),
+                    None,
                 )
+                assert actual == expected_tenant_id, f"Expected tenant_id={expected_tenant_id}, got {actual}"
 
         # Total: no response_deadline column at all
         if "response_deadline" not in sql_text:
@@ -1005,12 +1044,28 @@ def make_count_handler(state: MockState):
 
 
 def _load_domain_handler_modules():
-    """Import domain-owned handler modules and re-export their named helpers."""
+    """Import domain-owned handler modules and re-export their named helpers.
+
+    Crashes at collection time with a descriptive message if any module fails
+    to import, rather than letting an opaque ImportError propagate.
+    """
     package_name = "tests.unit.domain_handlers"
-    package = importlib.import_module(package_name)
+    try:
+        package = importlib.import_module(package_name)
+    except ImportError as exc:
+        raise RuntimeError(
+            f"Failed to import test package '{package_name}': {exc}. "
+            "Ensure the package exists and all dependencies are installed."
+        ) from exc
     modules = []
     for info in sorted(pkgutil.iter_modules(package.__path__, prefix=f"{package_name}."), key=lambda item: item.name):
-        module = importlib.import_module(info.name)
+        try:
+            module = importlib.import_module(info.name)
+        except ImportError as exc:
+            raise RuntimeError(
+                f"Failed to import domain handler module '{info.name}': {exc}. "
+                "Check for missing dependencies or syntax errors in the module."
+            ) from exc
         modules.append(module)
         for name in getattr(module, "__all__", []):
             if name != "get_handlers":
