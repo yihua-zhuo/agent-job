@@ -34,6 +34,12 @@ _src_root = _project_root / "src"
 if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 
+# Re-export SLA domain handlers for backward compat — primary location is tests/unit/domain_handlers/sla.py
+from tests.unit.domain_handlers.sla import (  # noqa: F401, E402
+    SlaMockSession,
+    make_sla_summary_handler,
+    sla_mock_session,
+)
 
 # ---------------------------------------------------------------------------
 # Mock SQLAlchemy Result object (returned by session.execute).
@@ -291,165 +297,6 @@ def make_mock_session(handlers=None, state=None):
     session.__aenter__ = AsyncMock(side_effect=_mock_aenter)
     session.__aexit__ = AsyncMock(return_value=None)
     return session
-
-
-# ---------------------------------------------------------------------------
-# SLA mock session (scalar-based, for SLAService tests)
-# ---------------------------------------------------------------------------
-
-
-class SlaMockSession:
-    """Minimal mock AsyncSession that routes session.scalar() and session.execute() to SQL handlers.
-
-    SLAService.get_sla_summary calls session.scalar(select(func.count(...))) directly.
-    SlaMockSession also implements execute() so any future call to session.execute()
-    is routed to the same handlers instead of silently passing a bare MagicMock.
-    """
-
-    def __init__(self, handlers):
-        self._handlers = handlers
-
-    async def scalar(self, sql, params=None):
-        params = dict(params) if params else {}
-
-        try:
-            # Compile with a specific dialect to get the rendered SQL string
-            compiled = sql.compile(dialect=self._get_dialect())
-            # Normalize to lower-case so handlers can match patterns case-insensitively
-            sql_text = str(compiled).lower()
-            # compiled.params is a dict (attribute, not method in SQLAlchemy 2.x)
-            for k, v in compiled.params.items():
-                if k not in params:
-                    params[k] = v
-        except Exception as exc:
-            # Surface compilation errors rather than silently falling through,
-            # so broken SQL is detected immediately instead of being masked by
-            # raw-string fallback matching.
-            import warnings
-
-            warnings.warn(f"SlaMockSession: SQL compilation failed ({exc}), falling back to raw string", UserWarning)
-            sql_text = str(sql).lower().strip()
-
-        for h in self._handlers:
-            result = h(sql_text, params)
-            if result is not None:
-                return result
-        return None
-
-    async def execute(self, sql, params=None):
-        """Route session.execute() to the same handlers as scalar().
-
-        Returns a MockResult wrapping whatever value the first matching handler returns.
-        """
-        params = dict(params) if params else {}
-
-        try:
-            compiled = sql.compile(dialect=self._get_dialect())
-            sql_text = str(compiled).lower()
-            for k, v in compiled.params.items():
-                if k not in params:
-                    params[k] = v
-        except Exception as exc:
-            import warnings
-
-            warnings.warn(
-                f"SlaMockSession.execute: SQL compilation failed ({exc}), falling back to raw string", UserWarning
-            )
-            sql_text = str(sql).lower().strip()
-
-        for h in self._handlers:
-            result = h(sql_text, params)
-            if result is not None:
-                return MockResult([result])
-        return MockResult([[None]])
-
-    @staticmethod
-    def _get_dialect():
-        """Lazily create a PostgreSQL dialect instance for compilation."""
-        if not hasattr(SlaMockSession, "_dialect"):
-            from sqlalchemy.dialects.postgresql import dialect as pg_dialect
-
-            SlaMockSession._dialect = pg_dialect()
-        return SlaMockSession._dialect
-
-    async def __aenter__(self):
-        return self
-
-    async def __aexit__(self, *args):
-        pass
-
-
-def sla_mock_session(handlers=None):
-    """Create a mock AsyncSession wired to the given SQL handlers for SLA tests.
-
-    Shorthand for ``SlaMockSession(handlers)``.
-    """
-    return SlaMockSession(handlers or [])
-
-
-# ---------------------------------------------------------------------------
-# SLA summary SQL handler
-# ---------------------------------------------------------------------------
-
-
-def make_sla_summary_handler(
-    breached: int,
-    at_risk: int,
-    total: int,
-    *,
-    validate_tenant_id: bool = True,
-    expected_tenant_id: int | None = None,
-):
-    """Return a handler that responds to select count(...) from tickets queries.
-
-    Detects which bucket a query targets by inspecting the SQL clause structure:
-
-      - total    : no "response_deadline" column at all
-      - at_risk  : "response_deadline" column AND ">=" (the now-to-threshold window)
-      - breached : "response_deadline" column present but no ">=" (past-deadline only)
-
-    When ``validate_tenant_id`` is True the handler asserts ``params["tenant_id"]``
-    equals ``expected_tenant_id`` (if given), raising ``AssertionError`` if the
-    bind is absent or mismatched — ensuring the service actually forwards the
-    tenant scope rather than hardcoding it as a literal.
-
-    Uses column-name + operator detection rather than raw ">" / "<" substring
-    scanning.
-    """
-
-    def handler(sql_text: str, params: dict):
-        if not ("select" in sql_text and "count" in sql_text and "from tickets" in sql_text):
-            return None
-
-        # Tenant-scope assertion: catch silent tenant_id omissions.
-        # SQLAlchemy may label the bind as "tenant_id_1" when multiple tenant_id
-        # columns are present, so we check that at least one param key contains
-        # "tenant_id" as a prefix.
-        if validate_tenant_id:
-            tenant_keys = [k for k in params if k.lower().startswith("tenant_id")]
-            assert tenant_keys, f"Query is missing tenant_id bind param. sql={sql_text[:100]!r}, params={params!r}"
-            if expected_tenant_id is not None:
-                # Use whichever tenant_id key SQLAlchemy generated (could be
-                # tenant_id, tenant_id_1, tenant_id_2, … when multiple tenant_id
-                # conditions appear in the same query).
-                actual = next(
-                    (params[k] for k in sorted(tenant_keys) if params.get(k) is not None),
-                    None,
-                )
-                assert actual == expected_tenant_id, f"Expected tenant_id={expected_tenant_id}, got {actual}"
-
-        # Total: no response_deadline column at all
-        if "response_deadline" not in sql_text:
-            return total
-
-        # at_risk: response_deadline column with ">=" (now <= deadline <= at_risk_threshold)
-        if ">=" in sql_text:
-            return at_risk
-
-        # breached: response_deadline column present but no ">=" (past deadline only)
-        return breached
-
-    return handler
 
 
 # ---------------------------------------------------------------------------

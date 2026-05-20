@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -256,7 +256,7 @@ class TestGetBreachTickets:
         from tests.unit.conftest import sla_mock_session
 
         # Build a mixed list: 2 breached, 1 on-track, 1 at-risk
-        now = datetime.utcnow()
+        now = datetime.now(UTC)
         breached_deadline = now - timedelta(hours=1)
         future_deadline = now + timedelta(hours=10)
 

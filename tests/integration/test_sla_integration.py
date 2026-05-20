@@ -56,7 +56,7 @@ async def test_sla_summary_all_categories(db_schema, tenant_id, async_session):
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=0,
+                customer_id=cid,
                 resolved_at=None,
                 response_deadline=now + timedelta(hours=2),
             )
@@ -69,10 +69,10 @@ async def test_sla_summary_all_categories(db_schema, tenant_id, async_session):
                 tenant_id=tenant_id,
                 subject="Resolved",
                 description="desc",
-                status="open",
+                status="resolved",
                 priority="medium",
                 channel="email",
-                customer_id=0,
+                customer_id=cid,
                 resolved_at=now - timedelta(hours=1),
                 response_deadline=now - timedelta(hours=5),  # also past but resolved overrides
             )
@@ -86,7 +86,7 @@ async def test_sla_summary_all_categories(db_schema, tenant_id, async_session):
                 status="open",
                 priority="medium",
                 channel="email",
-                customer_id=0,
+                customer_id=cid,
                 resolved_at=None,
                 response_deadline=now + timedelta(hours=6),
             )
