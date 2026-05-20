@@ -203,7 +203,7 @@ def all_handlers(state: MockState):
     return _domain_handlers(state)
 
 
-def make_mock_session(handlers=None):
+def make_mock_session(handlers=None, state=None):
     """Create a mock AsyncSession wired to the given SQL handlers.
 
     If *handlers* is ``None``, all domain handlers with fresh state are used.
@@ -213,10 +213,16 @@ def make_mock_session(handlers=None):
         session = make_mock_session([
             make_customer_handler(state),
             make_count_handler(state),
-        ])
+        ], state=state)
+
+    If *state* is provided it is used to build handlers; otherwise a fresh
+    MockState() is created internally. Sharing the same *state* object across
+    the fixture and the handler lets tests seed records directly into state.
     """
+    if state is None:
+        state = MockState()
     if handlers is None:
-        handlers = all_handlers(MockState())
+        handlers = all_handlers(state)
 
     session = MagicMock(
         spec=[
