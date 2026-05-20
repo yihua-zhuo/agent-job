@@ -12,7 +12,11 @@ class CustomerStatus(Enum):
     LEAD = "lead"
     OPPORTUNITY = "opportunity"
     CUSTOMER = "customer"
+    PARTNER = "partner"
+    PROSPECT = "prospect"
+    ACTIVE = "active"
     INACTIVE = "inactive"
+    BLOCKED = "blocked"
 
 
 @dataclass

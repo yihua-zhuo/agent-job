@@ -29,33 +29,28 @@ def run_gh(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=False)
 
 
-def list_open_with_any_label(labels: list[str]) -> list[dict]:
-    """Return open issues that carry at least ONE of the given labels.
+def quote_search_value(value: str) -> str:
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
 
-    gh issue list with multiple `--label` flags uses AND semantics, not OR,
-    so we query each label separately and union the results client-side
-    (deduping by issue number).
-    """
-    seen: dict[int, dict] = {}
-    for label in labels:
-        r = run_gh([
-            "issue", "list",
-            "--state", "open",
-            "--label", label,
-            "--json", "number,title,labels",
-            "--limit", "500",
-        ])
-        if r.returncode != 0:
-            log(f"list_failed label={label!r} stderr={r.stderr.strip()[:200]}")
-            continue
-        try:
-            chunk = json.loads(r.stdout or "[]")
-        except json.JSONDecodeError:
-            log(f"json_decode_failed label={label!r}")
-            continue
-        for issue in chunk:
-            seen[int(issue["number"])] = issue
-    return list(seen.values())
+
+def list_open_with_any_label(labels: list[str]) -> list[dict]:
+    """Return open issues that carry at least ONE of the given labels."""
+    label_query = "label:" + ",".join(quote_search_value(label) for label in labels)
+    r = run_gh([
+        "issue", "list",
+        "--state", "open",
+        "--search", f"state:open type:issue {label_query}",
+        "--json", "number,title,labels",
+        "--limit", "1000",
+    ])
+    if r.returncode != 0:
+        log(f"list_failed labels={labels!r} stderr={r.stderr.strip()[:200]}")
+        return []
+    try:
+        return json.loads(r.stdout or "[]")
+    except json.JSONDecodeError:
+        log(f"json_decode_failed labels={labels!r}")
+        return []
 
 
 def labels_on_issue(issue: dict) -> set[str]:

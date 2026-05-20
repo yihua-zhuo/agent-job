@@ -78,7 +78,9 @@ TEST_SYNC_DATABASE_URL: str = TEST_DATABASE_URL.replace(
 
 # Ensure required env vars are present for services instantiated in tests.
 # Note: dotenv loaded .env above which may have the real secret; override for tests.
-os.environ["JWT_SECRET_KEY"] = "integration-test-jwt-secret-key"
+TEST_JWT_SECRET = "integration-test-jwt-secret-key-32"
+os.environ["JWT_SECRET"] = TEST_JWT_SECRET
+os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
 os.environ.setdefault("SECRET_KEY", "integration-test-secret-key")
 os.environ.setdefault("DATABASE_URL", TEST_SYNC_DATABASE_URL)
 
@@ -168,26 +170,12 @@ def _install_test_db_session():
 
 
 # ── Schema setup / teardown ──────────────────────────────────────────────────────
-_TABLES = [
-    "pipeline_stages",
-    "pipelines",
-    "activities",
-    "workflows",
-    "campaign_events",
-    "campaigns",
-    "dashboards",
-    "reports",
-    "tickets",
-    "ticket_replies",
-    "users",
-    "opportunities",
-    "contacts",
-    "customers",
-    "tenants",
-    "notifications",
-    "reminders",
-    "tasks",
-]
+def _metadata_tables() -> list[str]:
+    """Return all ORM table names in dependency-safe cleanup order."""
+    import db.models  # noqa: F401 - registers all model modules with Base.metadata
+    from db.base import Base
+
+    return [table.name for table in reversed(Base.metadata.sorted_tables)]
 
 
 @pytest.fixture(scope="session")
@@ -203,7 +191,7 @@ def fresh_schema() -> Generator[None, None, None]:
     # 3. Drop and recreate all tables via the sync engine.
     sync_engine = _get_test_sync_engine()
     with sync_engine.begin() as conn:
-        for tbl in _TABLES:
+        for tbl in _metadata_tables():
             try:
                 conn.execute(text(f"DROP TABLE IF EXISTS {tbl} CASCADE"))
             except Exception:
@@ -221,7 +209,7 @@ def fresh_schema() -> Generator[None, None, None]:
 def db_schema(fresh_schema) -> Generator[None, None, None]:
     """Truncate all tables between each test for function-level isolation."""
     sync_engine = _get_test_sync_engine()
-    for table in _TABLES:
+    for table in _metadata_tables():
         try:
             with sync_engine.begin() as conn:
                 conn.execute(text(f"TRUNCATE {table} RESTART IDENTITY CASCADE"))
@@ -275,7 +263,7 @@ def _cleanup_after_module() -> Generator[None, None, None]:
     """Truncate all tables once after every test file completes."""
     yield
     sync_engine = _get_test_sync_engine()
-    for table in _TABLES:
+    for table in _metadata_tables():
         try:
             with sync_engine.begin() as conn:
                 conn.execute(text(f"TRUNCATE {table} RESTART IDENTITY CASCADE"))
@@ -314,66 +302,58 @@ async def client(fastapi_app) -> AsyncGenerator[AsyncClient, None]:
         yield ac
 
 
-# auth_headers_* fixtures need async_session from above — they are declared
-# after async_session so pytest resolves them in the correct order.
-_tenant_id_web: int | None = None
-_tenant_id_2_web: int | None = None
-
-
 @pytest.fixture
 def tenant_id_web() -> int:
-    global _tenant_id_web
-    if _tenant_id_web is None:
-        _tenant_id_web = random.randint(10_000_000, 99_999_999)
-    return _tenant_id_web
+    return random.randint(10_000_000, 99_999_999)
 
 
 @pytest.fixture
 def tenant_id_2_web() -> int:
-    global _tenant_id_2_web
-    if _tenant_id_2_web is None:
-        _tenant_id_2_web = random.randint(10_000_000, 99_999_999)
-    return _tenant_id_2_web
+    return random.randint(10_000_000, 99_999_999)
 
 
 @pytest_asyncio.fixture(scope="function")
-async def auth_headers_web(async_session, tenant_id_web) -> dict[str, str]:
+async def auth_headers_web(db_schema, tenant_id_web) -> dict[str, str]:
     """Return a valid JWT Authorization header for the test tenant."""
-    os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
+    os.environ["JWT_SECRET"] = TEST_JWT_SECRET
+    os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
     from services.auth_service import AuthService
     from services.user_service import UserService
 
-    # Create the test user in the DB so /users/me resolves correctly.
-    user_svc = UserService(async_session)
-    await user_svc.create_user(
-        username="webtest",
-        email="webtest@example.com",
-        password="TestPass123!",
-        role="admin",
-        tenant_id=tenant_id_web,
-    )
-    await async_session.commit()
-    # Retrieve the actual DB-assigned user id (not hardcoded 999).
-    created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
-    actual_user_id = created_user.id if created_user else 999
+    factory = _get_test_async_session_factory()
+    async with factory() as session:
+        # Create the test user in the DB so /users/me resolves correctly.
+        user_svc = UserService(session)
+        await user_svc.create_user(
+            username="webtest",
+            email="webtest@example.com",
+            password="TestPass123!",
+            role="admin",
+            tenant_id=tenant_id_web,
+        )
+        await session.commit()
+        # Retrieve the actual DB-assigned user id (not hardcoded 999).
+        created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
+        actual_user_id = created_user.id if created_user else 999
 
-    auth_svc = AuthService(async_session, secret_key="integration-test-jwt-secret-key")
-    token = auth_svc.generate_token(
-        user_id=actual_user_id,
-        username="webtest",
-        role="admin",
-        tenant_id=tenant_id_web,
-    )
+        auth_svc = AuthService(session, secret_key=TEST_JWT_SECRET)
+        token = auth_svc.generate_token(
+            user_id=actual_user_id,
+            username="webtest",
+            role="admin",
+            tenant_id=tenant_id_web,
+        )
     return {"Authorization": f"Bearer {token}"}
 
 
 @pytest_asyncio.fixture(scope="function")
 async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str]:
     """Return a valid JWT Authorization header for tenant 2."""
-    os.environ.setdefault("JWT_SECRET_KEY", "integration-test-jwt-secret-key")
+    os.environ["JWT_SECRET"] = TEST_JWT_SECRET
+    os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
     from services.auth_service import AuthService
 
-    auth_svc = AuthService(async_session, secret_key="integration-test-jwt-secret-key")
+    auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
     token = auth_svc.generate_token(
         user_id=999,
         username="webtest2",

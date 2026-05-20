@@ -441,8 +441,8 @@ class TestSLAServiceIntegration:
             tenant_id=tenant_id,
         )
 
-        # get_breach_tickets is not async; pass tickets list or None
-        breaches = sla_svc.get_breach_tickets()
+        # get_breach_tickets is async; pass tenant_id to query via ticket_service
+        breaches = await sla_svc.get_breach_tickets(tenant_id=tenant_id)
         assert isinstance(breaches, list)
 
 

@@ -1,7 +1,7 @@
 """Unit tests for src/services/ai_service.py — AIService business logic."""
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -61,7 +61,7 @@ def mock_gateway():
 
 
 @pytest.fixture
-def mock_session():
+def mock_db_session():
     session = MagicMock()
     session.execute = AsyncMock()
     session.add = MagicMock()
@@ -71,8 +71,8 @@ def mock_session():
 
 
 @pytest.fixture
-def ai_service(mock_session, mock_gateway):
-    return AIService(mock_session, gateway=mock_gateway)
+def ai_service(mock_db_session, mock_gateway):
+    return AIService(mock_db_session, gateway=mock_gateway)
 
 
 # ---------------------------------------------------------------------------
@@ -80,25 +80,27 @@ def ai_service(mock_session, mock_gateway):
 # ---------------------------------------------------------------------------
 
 class TestCreateConversation:
-    async def test_creates_conversation_record(self, ai_service):
-        conv = _mock_conversation(id=1, title="Test Chat")
+    async def test_creates_conversation_record(self, ai_service, mock_db_session):
+        added = []
+        mock_db_session.add.side_effect = lambda obj: added.append(obj)
 
-        with patch.object(ai_service, "create_conversation", autospec=True) as mock_method:
-            mock_method.return_value = conv
-            result = await ai_service.create_conversation(
-                tenant_id=1, user_id=99, title="Test Chat"
-            )
-        assert result is not None
+        result = await ai_service.create_conversation(tenant_id=1, user_id=99, title="Test Chat")
+        assert result.tenant_id == 1
+        assert result.user_id == 99
+        assert result.title == "Test Chat"
+        assert added == [result]
+        mock_db_session.flush.assert_awaited_once()
+        mock_db_session.refresh.assert_awaited_once_with(result)
 
-    async def test_creates_with_null_title(self, ai_service):
-        conv = _mock_conversation(id=1, title=None)
+    async def test_creates_with_null_title(self, ai_service, mock_db_session):
+        added = []
+        mock_db_session.add.side_effect = lambda obj: added.append(obj)
 
-        with patch.object(ai_service, "create_conversation", autospec=True) as mock_method:
-            mock_method.return_value = conv
-            result = await ai_service.create_conversation(
-                tenant_id=1, user_id=99, title=None
-            )
-        assert result is not None
+        result = await ai_service.create_conversation(tenant_id=1, user_id=99, title=None)
+        assert result.title is None
+        assert added == [result]
+        mock_db_session.flush.assert_awaited_once()
+        mock_db_session.refresh.assert_awaited_once_with(result)
 
 
 # ---------------------------------------------------------------------------
@@ -106,24 +108,24 @@ class TestCreateConversation:
 # ---------------------------------------------------------------------------
 
 class TestGetConversation:
-    async def test_returns_conversation(self, ai_service, mock_session):
+    async def test_returns_conversation(self, ai_service, mock_db_session):
         conv = _mock_conversation(id=1)
 
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = conv
-        mock_session.execute.return_value = mock_result
+        mock_db_session.execute.return_value = mock_result
 
-        result = await ai_service.get_conversation(conversation_id=1, tenant_id=1)
+        result = await ai_service.get_conversation(conversation_id=1, tenant_id=1, user_id=99)
         assert result is not None
         assert result.id == 1
 
-    async def test_raises_not_found_for_missing_conversation(self, ai_service, mock_session):
+    async def test_raises_not_found_for_missing_conversation(self, ai_service, mock_db_session):
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
-        mock_session.execute.return_value = mock_result
+        mock_db_session.execute.return_value = mock_result
 
         with pytest.raises(NotFoundException):
-            await ai_service.get_conversation(conversation_id=9999, tenant_id=1)
+            await ai_service.get_conversation(conversation_id=9999, tenant_id=1, user_id=99)
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +133,7 @@ class TestGetConversation:
 # ---------------------------------------------------------------------------
 
 class TestListConversations:
-    async def test_returns_conversations_and_count(self, ai_service, mock_session):
+    async def test_returns_conversations_and_count(self, ai_service, mock_db_session):
         conv1 = _mock_conversation(id=1)
         conv2 = _mock_conversation(id=2)
 
@@ -141,20 +143,20 @@ class TestListConversations:
         list_result = MagicMock()
         list_result.scalars.return_value.all.return_value = [conv1, conv2]
 
-        mock_session.execute.side_effect = [count_result, list_result]
+        mock_db_session.execute.side_effect = [count_result, list_result]
 
         items, total = await ai_service.list_conversations(tenant_id=1, user_id=99)
         assert isinstance(items, list)
         assert total == 2
 
-    async def test_pagination_params(self, ai_service, mock_session):
+    async def test_pagination_params(self, ai_service, mock_db_session):
         count_result = MagicMock()
         count_result.scalar.return_value = 10
 
         list_result = MagicMock()
         list_result.scalars.return_value.all.return_value = []
 
-        mock_session.execute.side_effect = [count_result, list_result]
+        mock_db_session.execute.side_effect = [count_result, list_result]
 
         items, total = await ai_service.list_conversations(
             tenant_id=1, user_id=99, page=2, page_size=5
@@ -167,7 +169,7 @@ class TestListConversations:
 # ---------------------------------------------------------------------------
 
 class TestGetConversationMessages:
-    async def test_returns_message_list(self, ai_service, mock_session):
+    async def test_returns_message_list(self, ai_service, mock_db_session):
         msgs = [
             _mock_message(id=1, role="user", content="Hello"),
             _mock_message(id=2, role="assistant", content="Hi there!"),
@@ -175,17 +177,17 @@ class TestGetConversationMessages:
 
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = msgs
-        mock_session.execute.return_value = mock_result
+        mock_db_session.execute.return_value = mock_result
 
         result = await ai_service.get_conversation_messages(conversation_id=1, tenant_id=1)
         assert len(result) == 2
         assert result[0].role == "user"
         assert result[1].role == "assistant"
 
-    async def test_returns_empty_for_no_messages(self, ai_service, mock_session):
+    async def test_returns_empty_for_no_messages(self, ai_service, mock_db_session):
         mock_result = MagicMock()
         mock_result.scalars.return_value.all.return_value = []
-        mock_session.execute.return_value = mock_result
+        mock_db_session.execute.return_value = mock_result
 
         result = await ai_service.get_conversation_messages(conversation_id=1, tenant_id=1)
         assert result == []
@@ -196,7 +198,7 @@ class TestGetConversationMessages:
 # ---------------------------------------------------------------------------
 
 class TestSendMessage:
-    async def test_stores_user_and_assistant_messages(self, ai_service, mock_session):
+    async def test_stores_user_and_assistant_messages(self, ai_service, mock_db_session):
         conv = _mock_conversation(id=1)
         conv_result = MagicMock()
         conv_result.scalar_one_or_none.return_value = conv
@@ -213,15 +215,15 @@ class TestSendMessage:
         mock_cust.name = "Acme"
         fetch_result.scalars.return_value.all.return_value = [mock_cust]
 
-        # 10 execute calls: get_conv(×2) + build_hist + enrich(×7) + get_conv(update)
-        mock_session.execute.side_effect = [
-            conv_result, conv_result, msgs_result,
+        # 10 execute calls: get_conv + build_hist + enrich(×7) + get_conv(update)
+        mock_db_session.execute.side_effect = [
+            conv_result, msgs_result,
             count_result, count_result, count_result, count_result, count_result,
             fetch_result, fetch_result, conv_result,
         ]
 
         added = []
-        mock_session.add = MagicMock(side_effect=lambda obj: added.append(obj))
+        mock_db_session.add = MagicMock(side_effect=lambda obj: added.append(obj))
 
         result = await ai_service.send_message(
             conversation_id=1, message="Hello", tenant_id=1, user_id=99
@@ -229,7 +231,7 @@ class TestSendMessage:
         assert result.reply == "Hello from AI!"
         assert len(added) >= 2  # user message + assistant reply
 
-    async def test_calls_ai_gateway(self, ai_service, mock_session, mock_gateway):
+    async def test_calls_ai_gateway(self, ai_service, mock_db_session, mock_gateway):
         conv = _mock_conversation(id=1)
         conv_result = MagicMock()
         conv_result.scalar_one_or_none.return_value = conv
@@ -247,7 +249,7 @@ class TestSendMessage:
         fetch_result.scalars.return_value.all.return_value = [mock_cust]
 
         # 10 execute calls: get_conv (×2) + build_history (×1) + enrich_context (×7)
-        mock_session.execute.side_effect = [
+        mock_db_session.execute.side_effect = [
             conv_result,         # get_conversation
             msgs_result,         # _build_message_history
             count_result,        # _enrich_context: customer_count
@@ -270,17 +272,17 @@ class TestSendMessage:
         assert any(m["role"] == "user" and m["content"] == "Hello" for m in messages)
         assert "customer_count" in context
 
-    async def test_raises_not_found_for_missing_conversation(self, ai_service, mock_session):
+    async def test_raises_not_found_for_missing_conversation(self, ai_service, mock_db_session):
         mock_result = MagicMock()
         mock_result.scalar_one_or_none.return_value = None
-        mock_session.execute.return_value = mock_result
+        mock_db_session.execute.return_value = mock_result
 
         with pytest.raises(NotFoundException):
             await ai_service.send_message(
                 conversation_id=9999, message="Hello", tenant_id=1, user_id=99
             )
 
-    async def test_returns_chat_response(self, ai_service, mock_session, mock_gateway):
+    async def test_returns_chat_response(self, ai_service, mock_db_session, mock_gateway):
         conv = _mock_conversation(id=1)
         conv_result = MagicMock()
         conv_result.scalar_one_or_none.return_value = conv
@@ -297,8 +299,8 @@ class TestSendMessage:
         mock_cust.name = "Acme"
         fetch_result.scalars.return_value.all.return_value = [mock_cust]
 
-        mock_session.execute.side_effect = [
-            conv_result, conv_result, msgs_result,
+        mock_db_session.execute.side_effect = [
+            conv_result, msgs_result,
             count_result, count_result, count_result, count_result, count_result,
             fetch_result, fetch_result, conv_result,
         ]
@@ -317,7 +319,7 @@ class TestSendMessage:
 # ---------------------------------------------------------------------------
 
 class TestEnrichContext:
-    async def test_enrich_context_returns_crm_counts(self, ai_service, mock_session):
+    async def test_enrich_context_returns_crm_counts(self, ai_service, mock_db_session):
         count_result = MagicMock()
         count_result.scalar.return_value = 5
 
@@ -327,7 +329,7 @@ class TestEnrichContext:
         fetch_result.scalars.return_value.all.return_value = [mock_customer]
 
         # 5 count queries + 2 fetch queries = 7 calls
-        mock_session.execute.side_effect = [
+        mock_db_session.execute.side_effect = [
             count_result,  # customer_count
             count_result,  # open_ticket_count
             count_result,  # opportunity_count

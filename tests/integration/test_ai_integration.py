@@ -28,7 +28,7 @@ class TestAIConversationIntegration:
         )
         await async_session.commit()
 
-        fetched = await svc.get_conversation(conv.id, tenant_id)
+        fetched = await svc.get_conversation(conv.id, tenant_id, user_id=999)
         assert fetched.id == conv.id
         assert fetched.title == "Test Conversation"
         assert fetched.tenant_id == tenant_id
@@ -53,13 +53,22 @@ class TestAIConversationIntegration:
         await async_session.commit()
 
         with pytest.raises(NotFoundException):
-            await svc.get_conversation(conv.id, tenant_id=99999)  # Different tenant
+            await svc.get_conversation(conv.id, tenant_id=99999, user_id=999)  # Different tenant
+
+    async def test_get_conversation_404_for_wrong_user(self, db_schema, tenant_id, async_session):
+        """Conversation from user A is not accessible to user B."""
+        svc = AIService(async_session)
+        conv = await svc.create_conversation(tenant_id=tenant_id, user_id=999, title="Private")
+        await async_session.commit()
+
+        with pytest.raises(NotFoundException):
+            await svc.get_conversation(conv.id, tenant_id=tenant_id, user_id=1000)
 
     async def test_get_conversation_404_missing(self, db_schema, tenant_id, async_session):
         """Non-existent conversation raises NotFoundException."""
         svc = AIService(async_session)
         with pytest.raises(NotFoundException):
-            await svc.get_conversation(conversation_id=999999, tenant_id=tenant_id)
+            await svc.get_conversation(conversation_id=999999, tenant_id=tenant_id, user_id=999)
 
 
 @pytest.mark.integration
@@ -110,7 +119,7 @@ class TestAIMessageIntegration:
         await async_session.commit()
 
         # Refresh conversation
-        updated_conv = await svc.get_conversation(conv.id, tenant_id)
+        updated_conv = await svc.get_conversation(conv.id, tenant_id, user_id=999)
         # updated_at is set to now() at send_message time, which is after original
         assert updated_conv.updated_at >= original_updated
 

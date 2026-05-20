@@ -2,8 +2,8 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
 
@@ -30,6 +30,13 @@ class AIConversationModel(Base):
         {"sqlite_autoincrement": True},
     )
 
+    messages: Mapped[list["AIMessageModel"]] = relationship(
+        "AIMessageModel",
+        back_populates="conversation",
+        cascade="all, delete-orphan",
+        lazy="raise",
+    )
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -47,7 +54,9 @@ class AIMessageModel(Base):
     __tablename__ = "ai_messages"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    conversation_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    conversation_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("ai_conversations.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # "user" | "assistant"
     content: Mapped[str] = mapped_column(Text, nullable=False)
@@ -59,6 +68,12 @@ class AIMessageModel(Base):
         # Index for fetching messages in order per tenant + conversation
         Index("ix_ai_messages_tenant_conv", "tenant_id", "conversation_id"),
         {"sqlite_autoincrement": True},
+    )
+
+    conversation: Mapped["AIConversationModel"] = relationship(
+        "AIConversationModel",
+        back_populates="messages",
+        lazy="raise",
     )
 
     def to_dict(self) -> dict:

@@ -20,6 +20,9 @@ class ChatResponse(BaseModel):
     suggestions: list[str] | None = None
     actions: list[dict] | None = None
 
+    def to_dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
 
 class CreateConversationRequest(BaseModel):
     """Request body for ``POST /api/v1/ai/conversation``."""
@@ -35,6 +38,9 @@ class ConversationResponse(BaseModel):
     created_at: str
     updated_at: str
 
+    def to_dict(self) -> dict[str, Any]:
+        return self.model_dump()
+
 
 class MessageResponse(BaseModel):
     """Single message in a conversation."""
@@ -43,6 +49,9 @@ class MessageResponse(BaseModel):
     role: str
     content: str
     created_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return self.model_dump()
 
 
 class ConversationDetailResponse(BaseModel):
@@ -53,3 +62,8 @@ class ConversationDetailResponse(BaseModel):
     created_at: str
     updated_at: str
     messages: list[MessageResponse]
+
+    def to_dict(self) -> dict[str, Any]:
+        data = self.model_dump()
+        data["messages"] = [message.to_dict() for message in self.messages]
+        return data

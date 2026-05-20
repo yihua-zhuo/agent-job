@@ -39,7 +39,12 @@ MESSAGE_ROWS = [
 
 
 @pytest.fixture
-def client_with_service(monkeypatch):
+def mock_db_session():
+    return MagicMock()
+
+
+@pytest.fixture
+def client_with_service(monkeypatch, mock_db_session):
     """Return a TestClient with AIService fully mocked."""
     from internal.middleware.fastapi_auth import require_auth
     from starlette.requests import Request
@@ -56,7 +61,7 @@ def client_with_service(monkeypatch):
     app = FastAPI()
     app.include_router(ai_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[get_db] = lambda: mock_db_session
 
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -86,21 +91,21 @@ class TestRateLimitHelper:
         _rate_limit_store.clear()
         tenant_id = 1
         for _ in range(_RATE_LIMIT_MAX):
-            _check_rate_limit(tenant_id)  # Should not raise up to MAX calls
+            _check_rate_limit(tenant_id, 99)  # Should not raise up to MAX calls
         # MAX+1 should fail
         with pytest.raises(ValidationException) as exc_info:
-            _check_rate_limit(tenant_id)
+            _check_rate_limit(tenant_id, 99)
         assert "Rate limit exceeded" in str(exc_info.value.detail)
 
-    def test_different_tenants_independent(self):
+    def test_different_tenants_and_users_independent(self):
         _rate_limit_store.clear()
-        # Fill up tenant 1 to the limit
+        # Fill up tenant 1/user 99 to the limit
         for _ in range(_RATE_LIMIT_MAX):
-            _check_rate_limit(1)
+            _check_rate_limit(1, 99)
         with pytest.raises(ValidationException):
-            _check_rate_limit(1)
-        # Tenant 2 should still pass
-        _check_rate_limit(2)  # Should not raise
+            _check_rate_limit(1, 99)
+        _check_rate_limit(2, 99)  # Different tenant should not raise
+        _check_rate_limit(1, 100)  # Different user should not raise
 
 
 # ---------------------------------------------------------------------------
@@ -272,7 +277,7 @@ class TestRateLimitIntegration:
         # Simulate a full rate limit store
         _rate_limit_store.clear()
         for _ in range(30):
-            _check_rate_limit(999)
+            _check_rate_limit(999, 99)
 
         from internal.middleware.fastapi_auth import require_auth
         from starlette.requests import Request

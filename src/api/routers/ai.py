@@ -22,19 +22,23 @@ from services.ai_service import AIService
 ai_router = APIRouter(prefix="/api/v1/ai", tags=["ai"])
 
 # ---------------------------------------------------------------------------
-# Rate limiting — in-memory sliding window, keyed by tenant_id
+# Rate limiting — in-memory sliding window, keyed by tenant_id + user_id
 # ---------------------------------------------------------------------------
 
-_rate_limit_store: defaultdict[int, list[float]] = defaultdict(list)
+_rate_limit_store: defaultdict[tuple[int, int], list[float]] = defaultdict(list)
 
 _RATE_LIMIT_WINDOW = 60  # seconds
 _RATE_LIMIT_MAX = 30  # requests
 
 
-def _check_rate_limit(tenant_id: int) -> None:
-    """Raise ValidationException if tenant exceeds the rate limit."""
+def _success(data: dict, message: str = "") -> dict:
+    return {"success": True, "data": data, "message": message}
+
+
+def _check_rate_limit(tenant_id: int, user_id: int) -> None:
+    """Raise ValidationException if this user exceeds the tenant-scoped rate limit."""
     now = time.time()
-    window = _rate_limit_store[tenant_id]
+    window = _rate_limit_store[(tenant_id, user_id)]
     # Retain only timestamps within the sliding window
     window[:] = [ts for ts in window if now - ts < _RATE_LIMIT_WINDOW]
     if len(window) >= _RATE_LIMIT_MAX:
@@ -77,7 +81,7 @@ async def chat(
     If ``conversation_id`` is absent, a new conversation is created first.
     CRM context is automatically enriched before calling the AI gateway.
     """
-    _check_rate_limit(ctx.tenant_id)
+    _check_rate_limit(ctx.tenant_id, ctx.user_id)
 
     svc = AIService(session)
 
@@ -96,14 +100,12 @@ async def chat(
         user_id=ctx.user_id,
     )
 
-    return {
-        "success": True,
-        "data": ChatResponse(
-            reply=result.reply,
-            suggestions=result.suggestions,
-            actions=result.actions,
-        ).model_dump(),
-    }
+    response = ChatResponse(
+        reply=result.reply,
+        suggestions=result.suggestions,
+        actions=result.actions,
+    )
+    return _success(response.to_dict(), message=result.reply or "")
 
 
 @ai_router.post("/conversation", status_code=201)
@@ -113,22 +115,20 @@ async def create_conversation(
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     """Create a new AI conversation."""
-    _check_rate_limit(ctx.tenant_id)
+    _check_rate_limit(ctx.tenant_id, ctx.user_id)
 
     svc = AIService(session)
     conversation = await svc.create_conversation(
         tenant_id=ctx.tenant_id, user_id=ctx.user_id, title=request.title
     )
 
-    return {
-        "success": True,
-        "data": ConversationResponse(
-            id=conversation.id,
-            title=conversation.title or "",
-            created_at=conversation.created_at.isoformat() if conversation.created_at else "",
-            updated_at=conversation.updated_at.isoformat() if conversation.updated_at else "",
-        ).model_dump(),
-    }
+    response = ConversationResponse(
+        id=conversation.id,
+        title=conversation.title or "",
+        created_at=conversation.created_at.isoformat() if conversation.created_at else "",
+        updated_at=conversation.updated_at.isoformat() if conversation.updated_at else "",
+    )
+    return _success(response.to_dict(), message="")
 
 
 @ai_router.get("/conversation/{conversation_id}")
@@ -138,30 +138,28 @@ async def get_conversation(
     session: AsyncSession = Depends(get_db),
 ) -> dict:
     """Return conversation metadata and its message list."""
-    _check_rate_limit(ctx.tenant_id)
+    _check_rate_limit(ctx.tenant_id, ctx.user_id)
 
     svc = AIService(session)
 
-    # Verify the conversation exists and belongs to this tenant
-    conversation = await svc.get_conversation(conversation_id, ctx.tenant_id)
+    # Verify the conversation exists and belongs to this tenant and user.
+    conversation = await svc.get_conversation(conversation_id, ctx.tenant_id, ctx.user_id)
 
     messages = await svc.get_conversation_messages(conversation_id, ctx.tenant_id, limit=100)
 
-    return {
-        "success": True,
-        "data": ConversationDetailResponse(
-            id=conversation.id,
-            title=conversation.title or "",
-            created_at=conversation.created_at.isoformat() if conversation.created_at else "",
-            updated_at=conversation.updated_at.isoformat() if conversation.updated_at else "",
-            messages=[
-                MessageResponse(
-                    id=m.id,
-                    role=m.role,
-                    content=m.content,
-                    created_at=m.created_at.isoformat() if m.created_at else "",
-                )
-                for m in messages
-            ],
-        ).model_dump(),
-    }
+    response = ConversationDetailResponse(
+        id=conversation.id,
+        title=conversation.title or "",
+        created_at=conversation.created_at.isoformat() if conversation.created_at else "",
+        updated_at=conversation.updated_at.isoformat() if conversation.updated_at else "",
+        messages=[
+            MessageResponse(
+                id=m.id,
+                role=m.role,
+                content=m.content,
+                created_at=m.created_at.isoformat() if m.created_at else "",
+            )
+            for m in messages
+        ],
+    )
+    return _success(response.to_dict(), message="")

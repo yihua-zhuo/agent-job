@@ -34,7 +34,7 @@ BLOCKED_COMMENT_MARKER = "<!-- agent-job-issue-validator:blocked -->"
 # Target work budget. If implementing an issue would take longer than this,
 # the validator asks Claude to break it into subtasks instead of marking it
 # ready. Tune via the IMPLEMENTATION_BUDGET_MINUTES env var on the workflow.
-DEFAULT_BUDGET_MINUTES = 20
+DEFAULT_BUDGET_MINUTES = 30
 # Matches "Depends on #123", "Blocked by #123", with optional colon. Same-repo
 # only; cross-repo refs like owner/repo#123 are intentionally ignored to keep
 # the dependency check scoped to issues this script can actually inspect.
@@ -49,14 +49,17 @@ def run_gh(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=False)
 
 
-def list_open_issues() -> list[dict[str, Any]]:
-    """Return open issues (gh issue list excludes PRs by default)."""
+def list_candidate_issues() -> list[dict[str, Any]]:
+    """Return open issues that have not already been triaged."""
+    skip_terms = " ".join(f"-label:{label}" for label in sorted(SKIP_LABELS))
+    search = f"state:open type:issue {skip_terms}"
     result = run_gh(
         [
             "issue", "list",
             "--state", "open",
+            "--search", search,
             "--json", "number,title,body,labels",
-            "--limit", "100",
+            "--limit", "1000",
         ]
     )
     if result.returncode != 0:
@@ -299,10 +302,13 @@ def create_subtasks(parent_number: int, subtasks: list[dict[str, Any]]) -> list[
     """Create each subtask as a fresh GitHub issue and return the new numbers.
 
     Each subtask body gets a "Subtask of #N" reference so GitHub renders the
-    parent/child relation automatically. We deliberately do NOT pre-label the
-    children as `ready` — the next monitor-issues tick will re-validate them
-    and either ready them or flag them, providing a sanity check on the
-    splitter's output.
+    parent/child relation automatically. Subtasks are linked in a linear
+    "Depends on #<prev>" chain so the dependency check in process_issue keeps
+    later subtasks `blocked` until the earlier ones close — Claude is asked
+    to emit them in implementation order, so the chain matches that order.
+    We deliberately do NOT pre-label the children as `ready` — the next
+    monitor-issues tick will re-validate them and either ready them or flag
+    them, providing a sanity check on the splitter's output.
     """
     created: list[int] = []
     for i, st in enumerate(subtasks, 1):
@@ -311,7 +317,10 @@ def create_subtasks(parent_number: int, subtasks: list[dict[str, Any]]) -> list[
         if not title:
             log(f"subtask_skipped parent=#{parent_number} index={i} reason=empty_title")
             continue
-        full_body = f"Subtask of #{parent_number}\n\n{body}"
+        header_lines = [f"Subtask of #{parent_number}"]
+        if created:
+            header_lines.append(f"Depends on #{created[-1]}")
+        full_body = "\n".join(header_lines) + f"\n\n{body}"
         # Use --body-file - on stdin so long bodies don't hit ARG_MAX.
         r = subprocess.run(
             ["gh", "issue", "create", "--title", title, "--body-file", "-"],
@@ -446,11 +455,8 @@ def process_issue(issue: dict[str, Any]) -> bool:
 def main() -> int:
     ensure_labels()
 
-    issues = list_open_issues()
-    log(f"open_issues_total={len(issues)}")
-
-    candidates = [i for i in issues if not has_any_label(i, SKIP_LABELS)]
-    log(f"candidates_after_filter={len(candidates)} skip_labels={sorted(SKIP_LABELS)}")
+    candidates = list_candidate_issues()
+    log(f"candidates_total={len(candidates)} search_excludes={sorted(SKIP_LABELS)}")
 
     if not candidates:
         log("nothing_to_do")
@@ -458,11 +464,18 @@ def main() -> int:
 
     max_per_run = int(os.environ.get("MAX_ISSUES_PER_RUN", "5"))
     processed = 0
-    for issue in candidates[:max_per_run]:
+    checked = 0
+    for issue in candidates:
+        if processed >= max_per_run:
+            break
+        checked += 1
         if process_issue(issue):
             processed += 1
 
-    log(f"done processed={processed} cap={max_per_run} remaining={max(0, len(candidates) - max_per_run)}")
+    log(
+        f"done processed={processed} checked={checked} cap={max_per_run} "
+        f"remaining_candidates={max(0, len(candidates) - checked)}"
+    )
     return 0
 
 

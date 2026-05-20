@@ -20,6 +20,7 @@ import re
 import subprocess
 import sys
 import urllib.error
+import urllib.parse
 import urllib.request
 from typing import Any
 
@@ -79,25 +80,18 @@ def api(method: str, path: str, token: str, body: dict[str, Any] | None = None) 
 
 
 def list_ready(owner: str, repo: str, token: str) -> list[dict[str, Any]]:
-    # Filter server-side: open + labelled ready. Pagination capped at 100 —
-    # any healthy backlog stays well under that.
+    # Filter server-side: open issues that are ready and not already claimed.
+    query = f"repo:{owner}/{repo} is:issue is:open label:{LABEL_READY} -label:{LABEL_WIP}"
+    encoded = urllib.parse.urlencode({"q": query, "per_page": "100"})
     status, raw = api(
         "GET",
-        f"/repos/{owner}/{repo}/issues?state=open&labels={LABEL_READY}&per_page=100",
+        f"/search/issues?{encoded}",
         token,
     )
     if status != 200:
         die(f"list issues failed: HTTP {status}: {raw.decode('utf-8', 'replace')[:300]}")
-    issues = json.loads(raw)
-    # /issues includes PRs; exclude them. Also drop anything already claimed.
-    out = []
-    for i in issues:
-        if "pull_request" in i:
-            continue
-        names = {(lbl.get("name") or "") for lbl in (i.get("labels") or [])}
-        if LABEL_WIP in names:
-            continue
-        out.append(i)
+    payload = json.loads(raw)
+    out = payload.get("items") or []
     # Oldest-first to match the workflow's FIFO behavior.
     out.sort(key=lambda i: i["number"])
     return out

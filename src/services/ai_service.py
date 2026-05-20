@@ -44,13 +44,14 @@ class AIService:
         await self.session.refresh(conversation)
         return conversation
 
-    async def get_conversation(self, conversation_id: int, tenant_id: int) -> AIConversationModel:
-        """Fetch a conversation, raising NotFoundException if missing or tenant-scoped."""
+    async def get_conversation(self, conversation_id: int, tenant_id: int, user_id: int) -> AIConversationModel:
+        """Fetch a conversation, raising NotFoundException if missing or out of scope."""
         result = await self.session.execute(
             select(AIConversationModel).where(
                 and_(
                     AIConversationModel.id == conversation_id,
                     AIConversationModel.tenant_id == tenant_id,
+                    AIConversationModel.user_id == user_id,
                 )
             )
         )
@@ -119,8 +120,8 @@ class AIService:
         user_id: int,
     ) -> AIResponse:
         """Store user message, call AI gateway with CRM context, store & return reply."""
-        # Ensure the conversation belongs to this tenant
-        await self.get_conversation(conversation_id, tenant_id)
+        # Ensure the conversation belongs to this tenant and user.
+        await self.get_conversation(conversation_id, tenant_id, user_id)
 
         # Persist user message
         now = datetime.now(UTC)
@@ -155,7 +156,7 @@ class AIService:
         await self.session.flush()
 
         # Update conversation updated_at
-        conversation = await self.get_conversation(conversation_id, tenant_id)
+        conversation = await self.get_conversation(conversation_id, tenant_id, user_id)
         conversation.updated_at = datetime.now(UTC)
         await self.session.flush()
 
