@@ -933,7 +933,7 @@ class SlaMockSession(AsyncSession):
         for h in self._handlers:
             result = h(sql_text, params)
             if result is not None:
-                return MockResult([[result]])
+                return MockResult([result])
         return MockResult([[None]])
 
     @staticmethod

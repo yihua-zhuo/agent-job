@@ -7,13 +7,28 @@ import pytest
 pytestmark = pytest.mark.integration
 
 
-async def test_sla_summary_all_categories(db_schema, tenant_id, async_session, _seed_customer):
+async def _seed_customer(async_session, tenant_id: int) -> int:
+    """Create a customer and return its id."""
+    from db.models.customer import CustomerModel
+
+    customer = CustomerModel(
+        tenant_id=tenant_id,
+        name="Integration Test Customer",
+        email="test-sla-customer@example.com",
+        status="active",
+    )
+    async_session.add(customer)
+    await async_session.flush()
+    return customer.id
+
+
+async def test_sla_summary_all_categories(db_schema, tenant_id, async_session):
     """Seed 3 breached, 2 at_risk, 5 on_track tickets; assert counts match."""
     from db.models.ticket import TicketModel
     from services.sla_service import SLAService
 
     now = datetime.now(UTC)
-    cid = _seed_customer
+    cid = await _seed_customer(async_session, tenant_id)
 
     # 3 breached: resolved_at=None, deadline in past
     for _ in range(3):

@@ -228,15 +228,14 @@ class TestGetSlaSummary:
         # Exactly 3 scalar calls: breached, at_risk, total (on_track is arithmetic)
         assert result["on_track"] == 5  # 10 - 3 - 2
 
-    async def test_cross_tenant_data_isolation(self):
-        """When the mock returns only tenant_id=2 data but we query as tenant_id=1,
-        the result must reflect zero counts — confirming the service never reads
-        foreign tenant data even when the mock would return it."""
+    async def test_tenant_id_bind_is_forwarded(self):
+        """The handler validates that tenant_id is forwarded correctly in SQL bind parameters.
+        make_sla_summary_handler checks that the bound tenant_id matches its expected value,
+        which confirms the service constructs queries with the correct tenant isolation filter."""
         from services.sla_service import SLAService
         from tests.unit.conftest import make_sla_summary_handler, sla_mock_session
 
-        # Handler: returns non-zero counts regardless of what tenant_id was passed —
-        # simulates a bug where the service accidentally reads cross-tenant data.
+        # Handler validates tenant_id is correctly forwarded — the mock checks bind params
         handler = make_sla_summary_handler(
             breached=99, at_risk=99, total=99, validate_tenant_id=True, expected_tenant_id=1
         )
@@ -244,8 +243,7 @@ class TestGetSlaSummary:
         svc = SLAService(session)
         result = await svc.get_sla_summary(tenant_id=1)
 
-        # Service must forward tenant_id=1 → handler must see tenant_id=1 → counts
-        # returned must be from the correct bucket, not from cross-tenant data.
+        # Handler confirmed bind parameter tenant_id=1 was used
         assert result["breached"] == 99
         assert result["at_risk"] == 99
         assert result["total_tickets"] == 99
@@ -255,6 +253,7 @@ class TestGetBreachTickets:
     async def test_filters_breached_from_list(self):
         """get_breach_tickets filters the provided list to only breached tickets."""
         from services.sla_service import SLAService
+        from tests.unit.conftest import sla_mock_session
 
         # Build a mixed list: 2 breached, 1 on-track, 1 at-risk
         now = datetime.utcnow()
@@ -308,7 +307,7 @@ class TestGetBreachTickets:
             ),  # resolved → not breached
         ]
 
-        svc = SLAService(session=None)
+        svc = SLAService(sla_mock_session([]))
         result = await svc.get_breach_tickets(tickets=tickets)
 
         ids = {t.id for t in result}
@@ -317,8 +316,9 @@ class TestGetBreachTickets:
     async def test_returns_empty_when_no_tickets(self):
         """Passing an empty list returns an empty result."""
         from services.sla_service import SLAService
+        from tests.unit.conftest import sla_mock_session
 
-        svc = SLAService(session=None)
+        svc = SLAService(sla_mock_session([]))
         result = await svc.get_breach_tickets(tickets=[])
 
         assert result == []
@@ -326,8 +326,9 @@ class TestGetBreachTickets:
     async def test_handles_none_tickets_without_ticket_service(self):
         """When tickets=None and no ticket_service is configured, returns empty list."""
         from services.sla_service import SLAService
+        from tests.unit.conftest import sla_mock_session
 
-        svc = SLAService(session=None)
+        svc = SLAService(sla_mock_session([]))
         result = await svc.get_breach_tickets(tenant_id=1, tickets=None)
 
         assert result == []
