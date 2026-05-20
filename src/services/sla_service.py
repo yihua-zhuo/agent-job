@@ -1,5 +1,5 @@
 from datetime import UTC, datetime, timedelta
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,11 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.ticket import TicketModel
 from models.ticket import SLA_CONFIGS, Ticket
 
+if TYPE_CHECKING:
+    from services.ticket_service import TicketService
+
 
 class SLAService:
     """SLA管理"""
 
-    def __init__(self, session: AsyncSession, ticket_service=None):
+    def __init__(self, session: AsyncSession, ticket_service: "TicketService | None" = None):
         self._session = session
         self._ticket_service = ticket_service
 
