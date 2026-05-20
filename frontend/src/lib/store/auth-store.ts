@@ -10,6 +10,9 @@ const ENCRYPT_KEY = (() => {
       "NEXT_PUBLIC_AUTH_KEY is not set. Set it in .env.local before starting the app."
     );
   }
+  if (!/^[A-Fa-f0-9]{32}$/.test(key)) {
+    throw new Error("NEXT_PUBLIC_AUTH_KEY must be a 32-character hexadecimal string.");
+  }
   return key;
 })();
 

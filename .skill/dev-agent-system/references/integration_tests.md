@@ -63,16 +63,20 @@ class TestMyServiceIntegration:
 When your entity depends on another (e.g., a ticket needs a customer):
 
 ```python
-from tests.integration.conftest import _seed_customer, _seed_user
+from tests.integration.domain_fixtures.customers import seed_customer
 
 async def test_ticket_requires_customer(self, db_schema, tenant_id, async_session):
-    customer = await _seed_customer(async_session, tenant_id)
+    customer = await seed_customer(async_session, tenant_id)
     svc = TicketService(async_session)
     ticket = await svc.create_ticket(
         {"subject": "Help", "customer_id": customer.id}, tenant_id=tenant_id
     )
     assert ticket.customer_id == customer.id
 ```
+
+Add seed helpers under `tests/integration/domain_fixtures/<domain>.py`. Do not
+add routine domain seed helpers or table names to `tests/integration/conftest.py`;
+schema cleanup uses `Base.metadata.sorted_tables`.
 
 ## Run
 
@@ -91,3 +95,4 @@ DATABASE_URL="..." pytest tests/integration/test_my_service_integration.py -v
 - Don't run against the same DB you use for Alembic autogenerate — it causes phantom diffs.
 - Services raise exceptions on error — always use `pytest.raises()` to test failure paths.
 - Use `async_session` (singular) — all services in one test share the same session so FK constraints resolve.
+- Domain-specific seed helpers live under `tests/integration/domain_fixtures/`.

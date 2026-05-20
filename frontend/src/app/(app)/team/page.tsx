@@ -77,7 +77,10 @@ export default function TeamPage() {
       await create.mutateAsync(createForm as unknown as Record<string, unknown>);
       setShowCreate(false);
       setCreateForm(blankForm);
-    } catch { /* error surfaced via create.isError */ }
+    } catch (error) {
+      void error;
+      /* error surfaced via create.isError */
+    }
   }
 
   // Edit
@@ -96,7 +99,10 @@ export default function TeamPage() {
       await updateUser.mutateAsync({ id: Number(editingUser.id), data: editForm });
       setShowEdit(false);
       setEditingUser(null);
-    } catch { /* error surfaced via updateUser.isError */ }
+    } catch (error) {
+      void error;
+      /* error surfaced via updateUser.isError */
+    }
   }
 
   // Delete
@@ -111,7 +117,10 @@ export default function TeamPage() {
       await deleteUser.mutateAsync(Number(deletingUser.id));
       setShowDelete(false);
       setDeletingUser(null);
-    } catch { /* error surfaced via deleteUser.isError */ }
+    } catch (error) {
+      void error;
+      /* error surfaced via deleteUser.isError */
+    }
   }
 
   return (

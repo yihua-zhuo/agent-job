@@ -185,12 +185,14 @@ class TokenService:
 
     async def get_active_sessions(self, user_id: int, tenant_id: int) -> list[RefreshTokenModel]:
         """List all active (non-revoked, non-expired) sessions for a user."""
+        now = datetime.now(UTC)
         result = await self.session.execute(
             select(RefreshTokenModel)
             .where(
                 RefreshTokenModel.user_id == user_id,
                 RefreshTokenModel.tenant_id == tenant_id,
                 RefreshTokenModel.revoked == False,  # noqa: E712
+                RefreshTokenModel.expires_at > now,
             )
             .order_by(RefreshTokenModel.created_at.desc())
         )
