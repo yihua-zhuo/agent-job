@@ -12,7 +12,7 @@ Extend the `useUsers` hook to accept `q` and `role` parameters and pass them to 
 1. **Update `useUsers` in `frontend/src/lib/api/queries.ts`**
    - Change signature to `useUsers(page = 1, page_size = 20, q = "", role = "")`
    - Build `URLSearchParams` with `page`, `page_size`, and conditional `.set()` for `q` and `role` (same pattern as `useTickets` at line 128)
-   - Update query key to `["users", page, q, role]` so filter changes trigger a refetch
+   - Update query key to `["users", page, pageSize, q, role]` so filter changes trigger a refetch
 
 2. **Update `frontend/src/app/(app)/team/page.tsx`**
    - Change `useUsers(page)` call to `useUsers(page, 20, search, roleFilter !== "all" ? roleFilter : "")`
@@ -21,7 +21,7 @@ Extend the `useUsers` hook to accept `q` and `role` parameters and pass them to 
 
 ## Test Plan
 - Unit tests in `tests/unit/`: no changes — `UserService.list_users` filtering is already covered by existing unit tests; the frontend hook change requires no backend test adjustments
-- Integration tests in `tests/integration/`: add `test_list_users_filtered` in `tests/integration/test_users_integration.py` covering `q` and `role` params returning correct filtered totals
+- Integration tests in `tests/integration/`: `TestListUsersFiltered` class with 6 test methods in `tests/integration/test_users_integration.py` covering `q` and `role` params returning correct filtered totals
 
 ## Acceptance Criteria
 - `GET /api/v1/users?q=alice` returns only users whose username/email/full_name contain "alice" with a `total` reflecting the filtered count

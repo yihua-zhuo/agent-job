@@ -265,7 +265,7 @@ export function useUsers(page = 1, pageSize = 20, q = "", role = "") {
   if (role) params.set("role", role);
   return useQuery({
     queryKey: qk.users(page, pageSize, q, role),
-    queryFn: () => apiClient.get<ApiEnvelope<UserSummary>>(`/api/v1/users?${params}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?${params}`, token ?? undefined),
     staleTime: 60 * 1000,
   });
 }
