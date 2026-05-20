@@ -1,4 +1,5 @@
 """Unit tests for SLAService.get_sla_summary."""
+
 from __future__ import annotations
 
 import sys
@@ -11,8 +12,6 @@ _project_root = Path(__file__).resolve().parents[2]
 _src_root = _project_root / "src"
 if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
-
-from tests.unit.conftest import MockResult
 
 
 # ---------------------------------------------------------------------------
@@ -55,25 +54,30 @@ class _SlaMockSession:
 def make_sla_summary_handler(breached: int, at_risk: int, total: int):
     """Return a handler that responds to select count(...) from tickets queries.
 
-    The handler detects which filter is active based on the SQL text and returns
-    the appropriate count.
+    Detects which bucket a query targets by inspecting the SQL clause structure:
+
+      - total    : no "response_deadline" column at all
+      - at_risk  : "response_deadline" column AND ">=" (the now-to-threshold window)
+      - breached : "response_deadline" column present but no ">=" (past-deadline only)
+
+    Uses column-name + operator detection rather than raw ">" / "<" substring scanning.
     """
 
     def handler(sql_text: str, params: dict):
         if not ("select" in sql_text and "count" in sql_text and "from tickets" in sql_text):
             return None
 
-        # Check for ">" first — at_risk SQL has both "> now" and "<= now+4h" but no plain "<"
-        # Breached SQL has only "< now" with no ">" comparison
-        if ">" in sql_text:
+        # Total: no response_deadline column at all
+        if "response_deadline" not in sql_text:
+            return total
+
+        # at_risk: response_deadline column with ">=" (now <= deadline <= at_risk_threshold)
+        # With the >= now fix, at_risk is the only query with ">=" on response_deadline
+        if ">=" in sql_text:
             return at_risk
 
-        # breached: resolved_at IS NULL AND response_deadline IS NOT NULL AND response_deadline < now
-        if "<" in sql_text:
-            return breached
-
-        # total (no specific SLA filter — plain tenant_id filter)
-        return total
+        # breached: response_deadline column present but no ">=" (past deadline only)
+        return breached
 
     return handler
 
@@ -264,25 +268,25 @@ class TestGetSlaSummary:
         """on_track = total - breached - at_risk (no separate SQL query for it)."""
         from services.sla_service import SLAService
 
-        # Provide a session that counts each scalar() call
-        call_count = []
+        # Track received queries and return counts directly (no coroutine wrapping)
+        received = []
 
-        async def counting_scalar(sql, params=None):
-            call_count.append(str(sql).lower())
+        async def tracking_scalar(sql, params=None):
             sql_text = str(sql).lower()
-            if ">" in sql_text:
+            received.append(sql_text)
+            if "response_deadline" not in sql_text:
+                return 10  # total
+            if ">=" in sql_text:
                 return 2  # at_risk
-            if "<" in sql_text:
-                return 3  # breached
-            return 10  # total
+            return 3  # breached
 
         class CountingSession:
             async def scalar(self, sql, params=None):
-                return await counting_scalar(sql, params)
+                return await tracking_scalar(sql, params)
 
         svc = SLAService(CountingSession())
         result = await svc.get_sla_summary(tenant_id=1)
 
-        # Exactly 3 scalar calls: breached, at_risk, total
-        assert len(call_count) == 3
+        # Exactly 3 scalar calls: breached, at_risk, total (on_track is arithmetic)
+        assert len(received) == 3
         assert result["on_track"] == 5  # 10 - 3 - 2

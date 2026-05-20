@@ -439,4 +439,8 @@ async def get_sla_summary(
     """Return aggregated SLA counts across the full ticket dataset for the current tenant."""
     sla_svc = SLAService(session)
     counts = await sla_svc.get_sla_summary(tenant_id=ctx.tenant_id or 0)
-    return {"success": True, "data": SLAStatCard(**counts)}
+    return {
+        "success": True,
+        "data": SLAStatCard(**counts).model_dump(),
+        "message": "查询成功",
+    }

@@ -28,7 +28,7 @@ Add a new `GET /api/v1/sla/summary` endpoint that returns server-side aggregated
 2. **Add response schema and endpoint to `tickets.py`** (`src/api/routers/tickets.py`):
    - Add a `SLAStatCard(BaseModel)` schema with `breached: int`, `at_risk: int`, `on_track: int`, `total_tickets: int` fields
    - Add `GET /sla/summary` to `tickets_router` (in the existing `# SLA endpoints` section alongside `check_sla_status` and `get_sla_breach_tickets`):
-     ```
+     ```python
      @tickets_router.get("/sla/summary")
      async def get_sla_summary(
          ctx: AuthContext = Depends(require_auth),

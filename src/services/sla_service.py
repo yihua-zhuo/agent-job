@@ -74,7 +74,7 @@ class SLAService:
             base_filter,
             TicketModel.resolved_at.is_(None),
             TicketModel.response_deadline.is_not(None),
-            TicketModel.response_deadline > now,
+            TicketModel.response_deadline >= now,
             TicketModel.response_deadline <= at_risk_threshold,
         )
         at_risk_count = await self._session.scalar(
