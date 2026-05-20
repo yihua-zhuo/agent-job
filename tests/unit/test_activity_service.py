@@ -1,6 +1,6 @@
 """Unit tests for src/services/activity_service.py."""
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 import pytest
 
@@ -17,7 +17,7 @@ def activity_state():
 
 @pytest.fixture
 def mock_db_session(activity_state):
-    session = make_mock_session([make_activity_handler(activity_state)])
+    session = make_mock_session([make_activity_handler(activity_state)], state=activity_state)
 
     async def refresh_side_effect(obj):
         if obj.id is None:
@@ -40,6 +40,7 @@ def add_activity(
     customer_id: int = 1,
     activity_type: str = "call",
     content: str = "Test call",
+    created_at: datetime | None = None,
 ):
     record = {
         "id": activity_id,
@@ -49,7 +50,7 @@ def add_activity(
         "type": activity_type,
         "content": content,
         "created_by": 1,
-        "created_at": datetime.now(UTC),
+        "created_at": created_at or datetime.utcnow(),
     }
     state.activities[activity_id] = record
     state.activities_next_id = max(state.activities_next_id, activity_id + 1)
@@ -197,15 +198,20 @@ class TestListActivitiesPagination:
     @pytest.mark.asyncio
     async def test_list_activities_pagination(self, activity_service, activity_state):
         """list_activities returns paginated items and correct total."""
-        add_activity(activity_state, activity_id=1, tenant_id=1, activity_type="call", content="Call 1")
-        add_activity(activity_state, activity_id=2, tenant_id=1, activity_type="email", content="Email 1")
-        add_activity(activity_state, activity_id=3, tenant_id=2, activity_type="call", content="Other tenant")
+        add_activity(activity_state, activity_id=1, tenant_id=1, activity_type="call", content="Call 1",
+                      created_at=datetime(2025, 1, 1, 10, 0))
+        add_activity(activity_state, activity_id=2, tenant_id=1, activity_type="email", content="Email 1",
+                      created_at=datetime(2025, 1, 1, 11, 0))
+        add_activity(activity_state, activity_id=3, tenant_id=1, activity_type="meeting", content="Meeting 1",
+                      created_at=datetime(2025, 1, 1, 12, 0))
+        add_activity(activity_state, activity_id=4, tenant_id=2, activity_type="call", content="Other tenant",
+                      created_at=datetime(2025, 1, 1, 13, 0))
 
         items, total = await activity_service.list_activities(tenant_id=1, page=1, page_size=2)
 
         assert len(items) == 2
-        assert total == 2
-        assert {item.id for item in items} == {1, 2}
+        assert total == 3
+        assert {item.id for item in items} == {2, 3}
 
     @pytest.mark.asyncio
     async def test_list_activities_filters_customer_and_type(self, activity_service, activity_state):

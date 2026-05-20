@@ -936,7 +936,8 @@ def make_activity_handler(state: MockState):
                 [
                     r
                     for r in state.activities.values()
-                    if matches_filters(r, tenant_id=tenant_id, customer_id=customer_id, activity_type=activity_type)
+                    if r.get("tenant_id") == tenant_id
+                    and matches_filters(r, customer_id=customer_id, activity_type=activity_type)
                 ]
             )
             return MockResult([[count_val]])
@@ -954,11 +955,15 @@ def make_activity_handler(state: MockState):
             tenant_id = param(params, "tenant_id", 0)
             customer_id = param(params, "customer_id")
             activity_type = param(params, "type")
-            rows = [
+            limit = params.get("limit") or params.get("param_1")
+            offset = params.get("offset") or params.get("param_2", 0)
+            filtered = [
                 MockRow(r.copy())
-                for r in state.activities.values()
-                if matches_filters(r, tenant_id=tenant_id, customer_id=customer_id, activity_type=activity_type)
+                for r in sorted(state.activities.values(), key=lambda r: r.get("created_at") or "", reverse=True)
+                if r.get("tenant_id") == tenant_id
+                and matches_filters(r, customer_id=customer_id, activity_type=activity_type)
             ]
+            rows = filtered[int(offset) : int(offset) + int(limit)] if limit else filtered[int(offset) :]
             return MockResult(rows)
 
         return MockResult([])
@@ -1026,7 +1031,7 @@ def all_handlers(state: MockState):
     ]
 
 
-def make_mock_session(handlers=None):
+def make_mock_session(handlers=None, state=None):
     """Create a mock AsyncSession wired to the given SQL handlers.
 
     If *handlers* is ``None``, all domain handlers with fresh state are used.
@@ -1036,10 +1041,16 @@ def make_mock_session(handlers=None):
         session = make_mock_session([
             make_customer_handler(state),
             make_count_handler(state),
-        ])
+        ], state=state)
+
+    If *state* is provided it is used to build handlers; otherwise a fresh
+    MockState() is created internally.  Sharing the same *state* object across
+    the fixture and the handler lets tests seed records directly into state.
     """
+    if state is None:
+        state = MockState()
     if handlers is None:
-        handlers = all_handlers(MockState())
+        handlers = all_handlers(state)
 
     session = MagicMock(
         spec=[
