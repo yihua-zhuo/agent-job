@@ -11,6 +11,7 @@ class CampaignStatus(Enum):
     PAUSED = "paused"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+    SCHEDULED = "scheduled"
 
 
 class CampaignType(Enum):
@@ -18,6 +19,8 @@ class CampaignType(Enum):
     SMS = "sms"
     PUSH = "push"
     AUTO = "auto"  # 自动化触达
+    SOCIAL = "social"
+    ADVERTISING = "advertising"
 
 
 class TriggerType(Enum):
