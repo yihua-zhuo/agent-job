@@ -10,19 +10,35 @@ Tests use the db_schema fixture which auto-creates and drops tables per test
 
 from __future__ import annotations
 
+import uuid
+from datetime import UTC
+
 import pytest
 
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
+from services.tenant_service import TenantService
+
+
+async def _seed_tenant(async_session) -> int:
+    """Insert a tenant record so FK constraints are satisfied."""
+    suffix = uuid.uuid4().hex[:8]
+    result = await TenantService(async_session).create_tenant(
+        name=f"Test Tenant {suffix}",
+        plan="pro",
+        admin_email=f"admin_{suffix}@example.com",
+    )
+    return result["id"]
 
 
 @pytest.mark.integration
 class TestWorkflowModelIntegration:
     """CRUD round-trip tests for WorkflowModel using real DB."""
 
-    async def test_create_and_fetch_workflow(self, db_schema, tenant_id, async_session):
+    async def test_create_and_fetch_workflow(self, db_schema, async_session):
         """Insert a WorkflowModel and retrieve it back — all scalar fields persist."""
+        tid = await _seed_tenant(async_session)
         workflow = WorkflowModel(
-            tenant_id=tenant_id,
+            tenant_id=tid,
             name="Send Welcome Email",
             description="Automated welcome sequence",
             trigger_type="scheduled",
@@ -37,7 +53,7 @@ class TestWorkflowModelIntegration:
         await async_session.refresh(workflow)
 
         assert workflow.id is not None
-        assert workflow.tenant_id == tenant_id
+        assert workflow.tenant_id == tid
         assert workflow.name == "Send Welcome Email"
         assert workflow.description == "Automated welcome sequence"
         assert workflow.trigger_type == "scheduled"
@@ -49,8 +65,9 @@ class TestWorkflowModelIntegration:
         assert workflow.created_at is not None
         assert workflow.updated_at is not None
 
-    async def test_json_fields_roundtrip_complex_structure(self, db_schema, tenant_id, async_session):
+    async def test_json_fields_roundtrip_complex_structure(self, db_schema, async_session):
         """JSONB fields (conditions, actions, trigger_config) round-trip nested structures correctly."""
+        tid = await _seed_tenant(async_session)
         complex_actions = [
             {"type": "email.send", "template": "onboard", "vars": {"name": "{{customer.name}}"}},
             {"type": "task.create", "title": "Follow up in 3 days", "assign_to": 5},
@@ -72,7 +89,7 @@ class TestWorkflowModelIntegration:
         }
 
         workflow = WorkflowModel(
-            tenant_id=tenant_id,
+            tenant_id=tid,
             name="Complex Workflow",
             trigger_type="scheduled",
             trigger_config=complex_trigger_config,
@@ -101,8 +118,9 @@ class TestWorkflowModelIntegration:
 
     async def test_tenant_isolation_wrong_tenant_returns_none(self, db_schema, tenant_id, tenant_id_2, async_session):
         """Querying with the wrong tenant_id returns None (no data leak across tenants)."""
+        tid = await _seed_tenant(async_session)
         workflow = WorkflowModel(
-            tenant_id=tenant_id,
+            tenant_id=tid,
             name="Tenant A Workflow",
             trigger_type="manual",
             trigger_config={},
@@ -120,7 +138,7 @@ class TestWorkflowModelIntegration:
         result = await async_session.execute(
             select(WorkflowModel).where(
                 WorkflowModel.id == workflow.id,
-                WorkflowModel.tenant_id == tenant_id,
+                WorkflowModel.tenant_id == tid,
             )
         )
         assert result.scalar_one_or_none() is not None
@@ -134,11 +152,12 @@ class TestWorkflowModelIntegration:
         )
         assert result.scalar_one_or_none() is None
 
-    async def test_workflow_execution_roundtrip(self, db_schema, tenant_id, async_session):
+    async def test_workflow_execution_roundtrip(self, db_schema, async_session):
         """WorkflowExecutionModel round-trips correctly with all fields."""
+        tid = await _seed_tenant(async_session)
         # Create a workflow first
         workflow = WorkflowModel(
-            tenant_id=tenant_id,
+            tenant_id=tid,
             name="Exec Test Workflow",
             trigger_type="manual",
             trigger_config={},
@@ -170,10 +189,10 @@ class TestWorkflowModelIntegration:
         assert execution.result is None
 
         # Complete the execution
-        from datetime import datetime, timezone
+        from datetime import datetime
         execution.status = "success"
         execution.result = {"steps_executed": 2, "duration_ms": 150}
-        execution.completed_at = datetime.now(timezone.utc)
+        execution.completed_at = datetime.now(UTC)
         await async_session.flush()
         await async_session.refresh(execution)
 
@@ -181,10 +200,11 @@ class TestWorkflowModelIntegration:
         assert execution.result == {"steps_executed": 2, "duration_ms": 150}
         assert execution.completed_at is not None
 
-    async def test_workflow_update_persists(self, db_schema, tenant_id, async_session):
+    async def test_workflow_update_persists(self, db_schema, async_session):
         """Updating a workflow field and flushing persists the change."""
+        tid = await _seed_tenant(async_session)
         workflow = WorkflowModel(
-            tenant_id=tenant_id,
+            tenant_id=tid,
             name="Update Test",
             trigger_type="manual",
             trigger_config={},
@@ -208,10 +228,11 @@ class TestWorkflowModelIntegration:
         assert fetched.status == "active"
         assert fetched.name == "Updated Name"
 
-    async def test_workflow_delete(self, db_schema, tenant_id, async_session):
+    async def test_workflow_delete(self, db_schema, async_session):
         """Deleting a workflow removes it from the DB."""
+        tid = await _seed_tenant(async_session)
         workflow = WorkflowModel(
-            tenant_id=tenant_id,
+            tenant_id=tid,
             name="Delete Me",
             trigger_type="manual",
             trigger_config={},

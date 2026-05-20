@@ -1,8 +1,9 @@
 """Unit tests for WorkflowModel."""
 
-import pytest
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from unittest.mock import MagicMock
+
+import pytest
 
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
 
@@ -24,7 +25,7 @@ class TestWorkflowModel:
 
     def test_to_dict_returns_all_expected_keys(self):
         """to_dict() includes id, tenant_id, name, trigger_type, conditions, actions, status, created_at, updated_at."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         workflow = WorkflowModel(
             id=1,
             tenant_id=42,
@@ -65,8 +66,8 @@ class TestWorkflowModel:
             conditions=None,
             status="draft",
             created_by=0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         assert workflow.conditions is None
         assert workflow.to_dict()["conditions"] == []
@@ -83,8 +84,8 @@ class TestWorkflowModel:
             conditions=None,
             status="draft",
             created_by=0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         assert workflow.actions is None
         assert workflow.to_dict()["actions"] == []
@@ -101,14 +102,14 @@ class TestWorkflowModel:
             conditions=[],
             status="draft",
             created_by=0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
         assert workflow.trigger_config is None
         assert workflow.to_dict()["trigger_config"] == {}
 
     def test_status_default_is_draft(self):
-        """status field defaults to 'draft'."""
+        """status serializes as 'draft' in to_dict() when unset."""
         workflow = WorkflowModel(
             id=1,
             tenant_id=1,
@@ -118,13 +119,13 @@ class TestWorkflowModel:
             actions=[],
             conditions=[],
             created_by=0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
-        assert workflow.status == "draft"
+        assert workflow.to_dict()["status"] == "draft"
 
-    def test_trigger_type_default_is_manual(self):
-        """trigger_type field defaults to 'manual'."""
+    def test_trigger_type_default_serializes_as_manual(self):
+        """trigger_type serializes as 'manual' in to_dict() when unset (server_default)."""
         workflow = WorkflowModel(
             id=1,
             tenant_id=1,
@@ -134,14 +135,14 @@ class TestWorkflowModel:
             conditions=[],
             status="draft",
             created_by=0,
-            created_at=datetime.now(timezone.utc),
-            updated_at=datetime.now(timezone.utc),
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC),
         )
-        assert workflow.trigger_type == "manual"
+        assert workflow.to_dict()["trigger_type"] == "manual"
 
     def test_created_at_isoformat(self):
         """created_at is serialized as ISO string in to_dict."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         workflow = WorkflowModel(
             id=1,
             tenant_id=1,
@@ -161,7 +162,7 @@ class TestWorkflowModel:
 
     def test_updated_at_isoformat(self):
         """updated_at is serialized as ISO string in to_dict."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         workflow = WorkflowModel(
             id=1,
             tenant_id=1,
@@ -181,7 +182,7 @@ class TestWorkflowModel:
 
     def test_to_dict_with_minimal_fields(self):
         """to_dict works when only required fields are set."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         workflow = WorkflowModel(
             id=5,
             tenant_id=99,
@@ -207,7 +208,7 @@ class TestWorkflowExecutionModel:
 
     def test_to_dict_returns_all_expected_keys(self):
         """to_dict() includes execution fields."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         execution = WorkflowExecutionModel(
             id=1,
             workflow_id=10,
@@ -230,7 +231,7 @@ class TestWorkflowExecutionModel:
 
     def test_result_none_when_not_set(self):
         """result is None in to_dict when field is None."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         execution = WorkflowExecutionModel(
             id=1,
             workflow_id=10,
@@ -247,7 +248,7 @@ class TestWorkflowExecutionModel:
 
     def test_to_dict_with_minimal_fields(self):
         """to_dict works with minimal fields set."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         execution = WorkflowExecutionModel(
             id=2,
             workflow_id=20,
