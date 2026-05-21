@@ -30,6 +30,7 @@ class MarketingService:
         "target_audience",
         "trigger_type",
         "trigger_days",
+        "sent_at",
     }
 
     def __init__(self, session: AsyncSession):
@@ -50,7 +51,7 @@ class MarketingService:
             tenant_id=tenant_id,
             name=name,
             type=_enum_val(campaign_type),
-            status=CampaignStatus.DRAFT.value,
+            status=kwargs.get("status") or CampaignStatus.DRAFT.value,
             subject=kwargs.get("subject"),
             content=content,
             target_audience=kwargs.get("target_audience"),
@@ -59,6 +60,7 @@ class MarketingService:
             created_by=created_by,
             created_at=now,
             updated_at=now,
+            sent_at=kwargs.get("sent_at"),
         )
         self.session.add(campaign)
         await self.session.flush()
@@ -89,7 +91,7 @@ class MarketingService:
 
     async def launch_campaign(self, campaign_id: int, tenant_id: int) -> CampaignModel:
         """启动活动"""
-        return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.ACTIVE)
+        return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.ACTIVE, sent_at=datetime.now(UTC))
 
     async def pause_campaign(self, campaign_id: int, tenant_id: int) -> CampaignModel:
         """暂停活动"""

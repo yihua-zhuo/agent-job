@@ -32,6 +32,7 @@ CAMPAIGN_ROW = {
     "click_count": 0,
     "created_at": "2025-01-01T00:00:00",
     "updated_at": "2025-01-01T00:00:00",
+    "sent_at": None,
 }
 
 
