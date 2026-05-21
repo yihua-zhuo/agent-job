@@ -27,7 +27,9 @@ class NotificationService:
         title: str,
         content: str,
         tenant_id: int = 0,
-        **kwargs,
+        channel: str = "email",
+        related_type: str | None = None,
+        related_id: int | None = None,
     ) -> NotificationModel:
         """发送通知"""
         notification = NotificationModel(
@@ -37,8 +39,9 @@ class NotificationService:
             title=title,
             content=content,
             is_read=False,
-            related_type=kwargs.get("related_type"),
-            related_id=kwargs.get("related_id"),
+            related_type=related_type,
+            related_id=related_id,
+            channel=channel,
             created_at=datetime.now(UTC),
         )
         self.session.add(notification)

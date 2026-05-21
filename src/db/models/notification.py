@@ -22,6 +22,7 @@ class NotificationModel(Base):
     is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     related_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     related_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    channel: Mapped[str] = mapped_column(String(20), default="email", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def to_dict(self) -> dict:
@@ -35,5 +36,6 @@ class NotificationModel(Base):
             "is_read": self.is_read,
             "related_type": self.related_type,
             "related_id": self.related_id,
+            "channel": self.channel,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
