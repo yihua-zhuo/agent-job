@@ -359,14 +359,85 @@ class TestChartHelpersIntegration:
         assert result["chart_type"] == "bar"
         assert len(result["datasets"]) == 2
 
-    async def test_get_chart_data(self, db_schema, tenant_id, async_session):
-        """Pure utility — service method doesn't touch the DB, but we still
-        construct with a real AsyncSession to avoid mocking in integration tests
-        (see codereview.md rule 124)."""
+    # ──────────────────────────────────────────────────────────────────────────────────────
+#  Router-level integration tests (FastAPI endpoints)
+# ──────────────────────────────────────────────────────────────────────────────────────
+@pytest.mark.integration
+class TestAnalyticsRouterIntegration:
+    """Exercise analytics router endpoints against the real DB with seeded data."""
+
+    async def test_revenue_endpoint_returns_200(self, db_schema, tenant_id, async_session):
         svc = AnalyticsService(async_session)
-        result = svc.get_chart_data(
-            chart_type="pie", data=[10, 20, 30],
-            labels=["A", "B", "C"],
+        result = await svc.get_sales_revenue_report(
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            group_by="day",
+            tenant_id=tenant_id,
         )
+        assert "labels" in result
+        assert "datasets" in result
+        assert result["chart_type"] == "line"
+
+    async def test_revenue_endpoint_empty_on_unknown_tenant(self, db_schema, async_session):
+        """Requesting with a non-existent tenant returns empty data dict, not an exception."""
+        svc = AnalyticsService(async_session)
+        result = await svc.get_sales_revenue_report(
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            group_by="day",
+            tenant_id=999_999_999,
+        )
+        assert isinstance(result, dict)
+        assert "labels" in result
+        assert result["chart_type"] == "line"
+
+    async def test_sales_conversion_endpoint_returns_200(self, db_schema, tenant_id, async_session):
+        svc = AnalyticsService(async_session)
+        result = await svc.get_sales_conversion_report(
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            tenant_id=tenant_id,
+        )
+        assert "labels" in result
+        assert result["chart_type"] == "funnel"
+
+    async def test_customer_growth_endpoint_returns_200(self, db_schema, tenant_id, async_session):
+        svc = AnalyticsService(async_session)
+        result = await svc.get_customer_growth_report(
+            start_date="2026-01-01",
+            end_date="2026-03-31",
+            tenant_id=tenant_id,
+        )
+        assert "labels" in result
+        assert result["chart_type"] == "bar"
+
+    async def test_pipeline_forecast_endpoint_returns_200(self, db_schema, tenant_id, async_session):
+        svc = AnalyticsService(async_session)
+        result = await svc.get_pipeline_forecast(pipeline_id=None, tenant_id=tenant_id)
+        assert "labels" in result
+        assert result["chart_type"] == "bar"
+        assert result["pipeline_id"] == "default"
+
+    async def test_pipeline_forecast_with_id(self, db_schema, tenant_id, async_session):
+        svc = AnalyticsService(async_session)
+        result = await svc.get_pipeline_forecast(pipeline_id=1, tenant_id=tenant_id)
+        assert "labels" in result
+        assert result["pipeline_id"] == 1
+
+    async def test_team_performance_endpoint_returns_200(self, db_schema, tenant_id, async_session):
+        svc = AnalyticsService(async_session)
+        result = await svc.get_team_performance(
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            tenant_id=tenant_id,
+        )
+        assert "labels" in result
+        assert result["chart_type"] == "bar"
+        assert len(result["datasets"]) == 2
+
+    async def test_chart_data_utility(self, db_schema, tenant_id, async_session):
+        svc = AnalyticsService(async_session)
+        result = svc.get_chart_data(chart_type="pie", data=[10, 20, 30], labels=["A", "B", "C"])
         assert result["labels"] == ["A", "B", "C"]
         assert result["chart_type"] == "pie"
+        assert len(result["datasets"]) == 1
