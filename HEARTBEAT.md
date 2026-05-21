@@ -4,8 +4,8 @@
 
 ## Security Platform cron
 - Job ID: `3c40b43c-5298-4ae0-a655-5b87e04151fc`
-- Status: ⚠️ 03:51 May 21 PARTIAL (3/5 pages, Findings/Pipelines timeout)
-- Last good: 03:51 May 21 (3/5 pages)
+- Status: ⚠️ 07:28 May 21 PARTIAL (4/5 pages, Pipelines timeout)
+- Last good: 07:28 May 21 (4/5 pages)
 - Note: No cron configured — manual runs only
 
 ## cron 状态
