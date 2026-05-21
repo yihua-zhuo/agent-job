@@ -1,13 +1,14 @@
 """Unit tests for src/api/routers/marketing.py — router endpoint tests."""
 
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from fastapi.testclient import TestClient
+
+import pytest
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from api.routers.marketing import marketing_router
-from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
+from internal.middleware.fastapi_auth import AuthContext
 from pkg.errors.app_exceptions import NotFoundException
 
 
@@ -39,9 +40,10 @@ CAMPAIGN_ROW = {
 @pytest.fixture
 def client_with_service(monkeypatch):
     """Return a TestClient with MarketingService fully mocked."""
-    from internal.middleware.fastapi_auth import require_auth
     from starlette.requests import Request
     from starlette.responses import JSONResponse
+
+    from internal.middleware.fastapi_auth import require_auth
     from pkg.errors.app_exceptions import AppException
 
     mock_service = MagicMock()
@@ -133,6 +135,22 @@ class TestCreateCampaignEndpoint:
             json={"name": "Bad", "type": "email", "content": ""},
         )
         assert resp.status_code == 404
+
+    def test_create_forwards_status_and_type_to_service(self, client_with_service):
+        """Router must pass body.status and body.type to MarketingService.create_campaign."""
+        client, svc = client_with_service
+        mock_campaign = MagicMock()
+        mock_campaign.to_dict.return_value = {**CAMPAIGN_ROW, "type": "sms", "status": "active"}
+        svc.create_campaign = AsyncMock(return_value=mock_campaign)
+        resp = client.post(
+            "/api/v1/marketing/campaigns",
+            json={"name": "SMS Campaign", "type": "sms", "status": "active", "content": "Body"},
+        )
+        assert resp.status_code == 201
+        svc.create_campaign.assert_called_once()
+        call_kwargs = svc.create_campaign.call_args.kwargs
+        assert call_kwargs["campaign_type"] == "sms"
+        assert call_kwargs["status"] == "active"
 
 
 # ---------------------------------------------------------------------------

@@ -51,7 +51,7 @@ class MarketingService:
             tenant_id=tenant_id,
             name=name,
             type=_enum_val(campaign_type),
-            status=kwargs.get("status") or CampaignStatus.DRAFT.value,
+            status=_enum_val(kwargs.get("status")) or CampaignStatus.DRAFT.value,
             subject=kwargs.get("subject"),
             content=content,
             target_audience=kwargs.get("target_audience"),
