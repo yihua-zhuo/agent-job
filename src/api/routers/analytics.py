@@ -5,7 +5,10 @@ endpoints. Services raise AppException on errors (caught by global handler in
 main.py). Router wraps successful results in {"success": True, "data": ..., "message": ...}.
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+import json
+from typing import Literal
+
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
@@ -28,14 +31,10 @@ def _chart_response(data: dict) -> dict:
 async def get_sales_revenue(
     start_date: str = Query(..., description="Start date (ISO format, e.g. 2025-01-01)"),
     end_date: str = Query(..., description="End date (ISO format, e.g. 2025-01-31)"),
-    group_by: str = Query(default="day", description="Grouping: day | week | month"),
+    group_by: Literal["day", "week", "month"] = Query(default="day", description="Grouping: day | week | month"),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    import re
-
-    if not re.match(r"^(day|week|month)$", group_by):
-        raise HTTPException(status_code=422, detail="group_by must be one of: day, week, month")
     svc = AnalyticsService(session)
     data = await svc.get_sales_revenue_report(
         start_date=start_date,
@@ -141,16 +140,14 @@ async def get_chart_data(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    import json
-
     try:
         parsed_data: list = json.loads(data)
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         parsed_data = [float(x.strip()) for x in data.split(",") if x.strip()]
 
     try:
         parsed_labels: list[str] = json.loads(labels)
-    except Exception:
+    except (json.JSONDecodeError, ValueError):
         parsed_labels = [x.strip() for x in labels.split(",") if x.strip()]
 
     svc = AnalyticsService(session)
