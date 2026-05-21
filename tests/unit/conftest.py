@@ -34,6 +34,12 @@ _src_root = _project_root / "src"
 if str(_src_root) not in sys.path:
     sys.path.insert(0, str(_src_root))
 
+# Re-export SLA domain handlers for backward compat — primary location is tests/unit/domain_handlers/sla.py
+from tests.unit.domain_handlers.sla import (  # noqa: F401, E402
+    SlaMockSession,
+    make_sla_summary_handler,
+    sla_mock_session,
+)
 
 # ---------------------------------------------------------------------------
 # Mock SQLAlchemy Result object (returned by session.execute).
@@ -164,20 +170,31 @@ class MockState:
         self.activities_next_id: int = 1
 
 
-# ---------------------------------------------------------------------------
-# Session builder
-# ---------------------------------------------------------------------------
-
-
 def _load_domain_handler_modules():
-    """Import domain-owned handler modules and re-export their named helpers."""
+    """Import domain-owned handler modules and re-export their named helpers.
+
+    Crashes at collection time with a descriptive message if any module fails
+    to import, rather than letting an opaque ImportError propagate.
+    """
     package_name = "tests.unit.domain_handlers"
-    package = importlib.import_module(package_name)
-    modules = []
+    try:
+        package = importlib.import_module(package_name)
+    except ImportError as exc:
+        raise RuntimeError(
+            f"Failed to import test package '{package_name}': {exc}. "
+            "Ensure the package exists and all dependencies are installed."
+        ) from exc
     discovered = []
-    for info in pkgutil.iter_modules(package.__path__, prefix=f"{package_name}."):
-        module = importlib.import_module(info.name)
+    for info in sorted(pkgutil.iter_modules(package.__path__, prefix=f"{package_name}."), key=lambda item: item.name):
+        try:
+            module = importlib.import_module(info.name)
+        except ImportError as exc:
+            raise RuntimeError(
+                f"Failed to import domain handler module '{info.name}': {exc}. "
+                "Check for missing dependencies or syntax errors in the module."
+            ) from exc
         discovered.append(module)
+    modules = []
     for module in sorted(discovered, key=lambda item: (getattr(item, "ORDER", 100), item.__name__)):
         modules.append(module)
         for name in getattr(module, "__all__", []):

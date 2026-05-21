@@ -249,6 +249,25 @@ def tenant_id_2() -> int:
     return random.randint(10_000_000, 99_999_999)
 
 
+@pytest_asyncio.fixture
+async def _seed_customer(async_session, tenant_id):
+    """Seed a customer record for the given tenant so FK constraints are satisfied.
+
+    Returns the customer_id of the inserted row.
+    """
+    from db.models.customer import CustomerModel
+
+    customer = CustomerModel(
+        tenant_id=tenant_id,
+        name="Integration Test Customer",
+        email="test-customer@example.com",
+        status="active",
+    )
+    async_session.add(customer)
+    await async_session.flush()
+    return customer.id
+
+
 # ── Per-file cleanup rule (mandatory) ───────────────────────────────────────────
 # Every integration test file must clean up all created data after its tests
 # complete. This fixture runs once per module (i.e. per test file) as the
