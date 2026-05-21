@@ -24,6 +24,9 @@ class ConversationMessageModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     __table_args__ = (
         Index("ix_conversation_messages_tenant_conv", "tenant_id", "conversation_id"),
@@ -39,4 +42,5 @@ class ConversationMessageModel(Base):
             "content": self.content,
             "tool_calls_json": self.tool_calls_json,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

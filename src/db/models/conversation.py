@@ -20,6 +20,9 @@ class ConversationModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
     __table_args__ = (
         Index("ix_conversations_tenant_user", "tenant_id", "user_id"),
@@ -33,4 +36,5 @@ class ConversationModel(Base):
             "user_id": self.user_id,
             "channel": self.channel,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
