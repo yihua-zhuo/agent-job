@@ -55,6 +55,7 @@ class WorkflowExecutionModel(Base):
     workflow_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    tenant_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
     triggered_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -66,6 +67,7 @@ class WorkflowExecutionModel(Base):
         return {
             "id": self.id,
             "workflow_id": self.workflow_id,
+            "tenant_id": self.tenant_id,
             "trigger_type": self.trigger_type,
             "triggered_by": self.triggered_by,
             "started_at": self.started_at.isoformat() if self.started_at else None,

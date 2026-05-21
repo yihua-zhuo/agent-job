@@ -36,9 +36,11 @@ def upgrade() -> None:
     )
     op.create_index(op.f('ix_workflow_nodes_tenant_id'), 'workflow_nodes', ['tenant_id'], unique=False)
     op.create_index(op.f('ix_workflow_nodes_workflow_id'), 'workflow_nodes', ['workflow_id'], unique=False)
+    op.create_index(op.f('ix_workflow_nodes_tenant_id_workflow_id'), 'workflow_nodes', ['tenant_id', 'workflow_id'], unique=False)
 
 
 def downgrade() -> None:
+    op.drop_index(op.f('ix_workflow_nodes_tenant_id_workflow_id'), table_name='workflow_nodes')
     op.drop_index(op.f('ix_workflow_nodes_workflow_id'), table_name='workflow_nodes')
     op.drop_index(op.f('ix_workflow_nodes_tenant_id'), table_name='workflow_nodes')
     op.drop_table('workflow_nodes')
