@@ -1,6 +1,6 @@
 """add webhook tables
 
-Revision ID: add_webhook_tables
+Revision ID: 63274a8b98b3c
 Revises: 9d8e7f6a5b3c
 Create Date: 2026-05-21
 
@@ -13,7 +13,7 @@ from sqlalchemy.dialects import postgresql
 from alembic import op
 
 # revision identifiers, used by Alembic.
-revision: str = 'add_webhook_tables'
+revision: str = '63274a8b98b3c'
 down_revision: str | None = '9d8e7f6a5b3c'
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
@@ -27,8 +27,9 @@ def upgrade() -> None:
         sa.Column('url', sa.String(length=2000), nullable=False),
         sa.Column('events', postgresql.JSON(astext_type=sa.Text()), nullable=False),
         sa.Column('secret', sa.String(length=255), nullable=True),
-        sa.Column('is_active', sa.Boolean(), nullable=False),
+        sa.Column('is_active', sa.Boolean(), server_default=sa.true(), nullable=False),
         sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+        sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id']),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index(op.f('ix_webhooks_tenant_id'), 'webhooks', ['tenant_id'], unique=False)
@@ -41,11 +42,12 @@ def upgrade() -> None:
         sa.Column('tenant_id', sa.Integer(), nullable=False),
         sa.Column('event_type', sa.String(length=100), nullable=False),
         sa.Column('payload', postgresql.JSON(astext_type=sa.Text()), nullable=False),
-        sa.Column('status', sa.String(length=20), nullable=False),
+        sa.Column('status', sa.String(length=20), server_default=sa.text("'pending'"), nullable=False),
         sa.Column('response', postgresql.JSON(astext_type=sa.Text()), nullable=True),
-        sa.Column('attempts', sa.Integer(), nullable=False),
+        sa.Column('attempts', sa.Integer(), server_default=sa.text('1'), nullable=False),
         sa.Column('delivered_at', sa.DateTime(timezone=True), nullable=True),
         sa.ForeignKeyConstraint(['webhook_id'], ['webhooks.id'], ondelete='CASCADE'),
+        sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id']),
         sa.PrimaryKeyConstraint('id'),
     )
     op.create_index(op.f('ix_webhook_deliveries_tenant_id'), 'webhook_deliveries', ['tenant_id'], unique=False)

@@ -27,7 +27,7 @@ class TestWebhookModel:
         assert d["tenant_id"] == 10
         assert d["url"] == "https://example.com/hook"
         assert d["events"] == ["customer.created", "customer.updated"]
-        assert d["secret"] == "test-signing-secret"  # noqa: S105
+        assert d["secret"] == "***"  # noqa: S105  # masked in to_dict()
         assert d["is_active"] is True
         assert d["created_at"] == "2024-06-15T12:00:00"
 
@@ -78,7 +78,7 @@ class TestWebhookDeliveryModel:
         col = WebhookDeliveryModel.__table__.c["webhook_id"]
         fk = list(col.foreign_keys)[0]
         assert str(fk.column) == "webhooks.id"
-        assert fk.ondelete is not None
+        assert fk.ondelete == 'CASCADE'
 
     def test_to_dict_all_fields(self):
         """to_dict returns every column, including datetime as ISO string."""

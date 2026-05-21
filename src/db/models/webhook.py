@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,13 +15,15 @@ class WebhookModel(Base):
     __tablename__ = "webhooks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=False, index=True
+    )
     url: Mapped[str] = mapped_column(String(2000), nullable=False)
     events: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    is_active: Mapped[bool] = mapped_column(default=True, nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+        DateTime(timezone=True), server_default=text("now()"), nullable=False
     )
 
     __table_args__ = (
@@ -34,7 +36,7 @@ class WebhookModel(Base):
             "tenant_id": self.tenant_id,
             "url": self.url,
             "events": self.events or [],
-            "secret": self.secret,
+            "secret": "***" if self.secret else None,
             "is_active": self.is_active,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
@@ -49,7 +51,9 @@ class WebhookDeliveryModel(Base):
     webhook_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id"), nullable=False, index=True
+    )
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
