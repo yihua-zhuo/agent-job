@@ -4,7 +4,7 @@
 
 ## Security Platform cron
 - Job ID: `3c40b43c-5298-4ae0-a655-5b87e04151fc`
-- Status: ⚠️ 12:58 May 21 PARTIAL (1/5 pages, EPIPE crash)
+- Status: ⚠️ 14:34 May 21 FAIL (login page redirect)
 - Last good: 12:58 May 21 (1/5 pages)
 - Note: No cron configured — manual runs only
 
