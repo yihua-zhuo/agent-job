@@ -127,10 +127,24 @@ class TestMarketingServiceIntegration:
             subject="Test",
         )
         cid = created.id
+        wrong_tenant_id = tenant_id + 9999
 
-        # another tenant cannot see it
+        # another tenant cannot get it
         with pytest.raises(NotFoundException):
-            await svc.get_campaign(cid, tenant_id=tenant_id + 9999)
+            await svc.get_campaign(cid, tenant_id=wrong_tenant_id)
+
+        # another tenant cannot update it
+        with pytest.raises(NotFoundException):
+            await svc.update_campaign(cid, tenant_id=wrong_tenant_id, name="Hijacked")
+
+        # another tenant cannot delete it
+        with pytest.raises(NotFoundException):
+            await svc.delete_campaign(cid, tenant_id=wrong_tenant_id)
+
+        # another tenant cannot list it
+        items, total = await svc.list_campaigns(tenant_id=wrong_tenant_id)
+        assert all(c.id != cid for c in items)
+        assert total == 0
 
     async def test_create_with_non_default_status_and_type(self, db_schema, tenant_id, async_session):
         """Creating a campaign with non-default status and type is honored."""
