@@ -4,7 +4,7 @@
 
 ## Security Platform cron
 - Job ID: `3c40b43c-5298-4ae0-a655-5b87e04151fc`
-- Status: ⚠️ 19:37 May 21 FAIL (EPIPE crash during login)
+- Status: ⚠️ 02:31 May 22 FAIL (timeout, connection issues)
 - Last good: 16:38 May 21 (2/5 pages)
 - Note: No cron configured — manual runs only
 
