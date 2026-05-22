@@ -10,15 +10,13 @@ Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
 from db.models.customer import CustomerModel
 from db.models.opportunity import OpportunityModel
 from internal.ai_gateway import AIChatGateway, AIResponse
 from models.ai_draft import DraftContext, DraftRequest, DraftResponse, DraftType, TemplateType, ToneType
-from pkg.errors.app_exceptions import NotFoundException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException as ValExc
 from services.ai_draft_service import AiDraftService
 
 
@@ -30,10 +28,16 @@ from services.ai_draft_service import AiDraftService
 class StubAIChatGateway(AIChatGateway):
     """Test-double gateway that returns fixed canned responses."""
 
+    def __init__(self, opportunity_name: str | None = None):
+        self._opportunity_name = opportunity_name
+
     async def _call_gateway(self, messages, context):
         last = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+        reply = f"Your draft based on: {last[:50]}"
+        if self._opportunity_name:
+            reply = f"Re: {self._opportunity_name} — {reply}"
         return AIResponse(
-            reply=f"Here is your draft based on: {last[:50]}",
+            reply=reply,
             suggestions=["Review draft", "Send now"],
             actions=[
                 {"type": "navigate", "label": "View Customer", "path": "/customers"},
@@ -135,7 +139,7 @@ class TestGenerateDraftIntegration:
         assert len(result.body) > 0
 
     async def test_generate_draft_with_opportunity_id(self, db_schema, tenant_id, async_session):
-        """generate_draft accepts an opportunity_id in context."""
+        """generate_draft accepts an opportunity_id in context and includes it in the prompt."""
         cust = CustomerModel(
             tenant_id=tenant_id,
             name="Opp Test Customer",
@@ -145,21 +149,24 @@ class TestGenerateDraftIntegration:
         async_session.add(cust)
         await async_session.flush()
 
-        await _seed_opportunity(async_session, tenant_id, customer_id=cust.id, name="Big Deal")
+        opp = await _seed_opportunity(async_session, tenant_id, customer_id=cust.id, name="Big Deal")
 
-        svc = AiDraftService(async_session, gateway=StubAIChatGateway())
+        gateway = StubAIChatGateway(opportunity_name="Big Deal")
+        svc = AiDraftService(async_session, gateway=gateway)
         request = DraftRequest(
             type=DraftType.EMAIL,
             subject="Deal update",
             tone=ToneType.PROFESSIONAL,
             context=DraftContext(
                 customer_id=cust.id,
-                opportunity_id=cust.id,  # use cust.id as proxy (opportunity created above)
+                opportunity_id=opp.id,
                 template_type=TemplateType.EMAIL,
             ),
         )
         result = await svc.generate_draft(request, tenant_id=tenant_id)
         assert len(result.body) > 0
+        # Verify opportunity name is reflected in the reply (gateway echoes it when opportunity is included)
+        assert "Big Deal" in result.body
 
     async def test_generate_draft_raises_not_found_for_missing_customer(self, db_schema, tenant_id, async_session):
         """Non-existent customer_id raises NotFoundException."""
@@ -175,8 +182,6 @@ class TestGenerateDraftIntegration:
 
     async def test_generate_draft_raises_validation_for_empty_gateway_reply(self, db_schema, tenant_id, async_session):
         """Gateway returning empty reply raises ValidationException."""
-        from pkg.errors.app_exceptions import ValidationException as ValExc
-
         cust = CustomerModel(
             tenant_id=tenant_id,
             name="Empty Gateway Customer",
@@ -195,3 +200,27 @@ class TestGenerateDraftIntegration:
         )
         with pytest.raises(ValExc):
             await svc.generate_draft(request, tenant_id=tenant_id)
+
+    async def test_cross_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
+        """Tenant A cannot access tenant B's customer via generate_draft."""
+        # Seed a customer under tenant_id
+        cust = CustomerModel(
+            tenant_id=tenant_id,
+            name="Cross Tenant Customer",
+            email="crosstenant@example.com",
+            status="active",
+        )
+        async_session.add(cust)
+        await async_session.flush()
+        customer_id_under_tenant_a = cust.id
+
+        # Calling with a different tenant_id_2 should raise NotFoundException
+        svc = AiDraftService(async_session, gateway=StubAIChatGateway())
+        request = DraftRequest(
+            type=DraftType.EMAIL,
+            subject="Cross tenant test",
+            tone=ToneType.PROFESSIONAL,
+            context=DraftContext(customer_id=customer_id_under_tenant_a, template_type=TemplateType.EMAIL),
+        )
+        with pytest.raises(NotFoundException):
+            await svc.generate_draft(request, tenant_id=tenant_id_2)
