@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 
 import pytest
+import sqlalchemy.exc as sa_exc
 from sqlalchemy import select
 
 from db.models.recommendation import NextAction, RecommendationModel, RiskLevel, RiskSignalModel
@@ -78,7 +79,7 @@ class TestRecommendationCreateAndGet:
             opportunity_id=opp_id,
             next_action=NextAction.CALL.value,
             confidence=0.85,
-            reasons={"reason": "Strong fit for enterprise tier", "urgency": "high"},
+            reasons=["Strong fit for enterprise tier", "Urgency is high"],
             similar_deals=[{"name": "Acme Corp", "amount": 50000, "won": True}],
         )
         async_session.add(rec)
@@ -95,7 +96,7 @@ class TestRecommendationCreateAndGet:
         assert fetched.opportunity_id == opp_id
         assert fetched.next_action == NextAction.CALL.value
         assert fetched.confidence == 0.85
-        assert fetched.reasons == {"reason": "Strong fit for enterprise tier", "urgency": "high"}
+        assert fetched.reasons == ["Strong fit for enterprise tier", "Urgency is high"]
         assert fetched.similar_deals == [{"name": "Acme Corp", "amount": 50000, "won": True}]
         assert fetched.created_at is not None
         assert fetched.updated_at is not None
@@ -109,7 +110,7 @@ class TestRecommendationCreateAndGet:
             tenant_id=tenant_id,
             opportunity_id=opp_id,
             risk_level=RiskLevel.HIGH.value,
-            risk_factors={"budget_concern": True, "competitor": "VendorX", "timeline_risk": 0.8},
+            risk_factors=["budget_concern", "competitor_vendorx", "timeline_risk"],
         )
         async_session.add(signal)
         await async_session.flush()
@@ -124,11 +125,7 @@ class TestRecommendationCreateAndGet:
         assert fetched.tenant_id == tenant_id
         assert fetched.opportunity_id == opp_id
         assert fetched.risk_level == RiskLevel.HIGH.value
-        assert fetched.risk_factors == {
-            "budget_concern": True,
-            "competitor": "VendorX",
-            "timeline_risk": 0.8,
-        }
+        assert fetched.risk_factors == ["budget_concern", "competitor_vendorx", "timeline_risk"]
         assert fetched.created_at is not None
         assert fetched.updated_at is not None
 
@@ -144,7 +141,7 @@ class TestRecommendationCreateAndGet:
             opportunity_id=opp_id_1,
             next_action=NextAction.EMAIL.value,
             confidence=0.9,
-            reasons={"signal": "warm_lead"},
+            reasons=["warm_lead_signal"],
             similar_deals=[],
         )
         rec2 = RecommendationModel(
@@ -152,7 +149,7 @@ class TestRecommendationCreateAndGet:
             opportunity_id=opp_id_2,
             next_action=NextAction.DEMO.value,
             confidence=0.5,
-            reasons={"signal": "cold_lead"},
+            reasons=["cold_lead_signal"],
             similar_deals=[],
         )
         async_session.add(rec1)
@@ -212,13 +209,13 @@ class TestRecommendationCreateAndGet:
             tenant_id=tenant_id,
             opportunity_id=opp_id_1,
             risk_level=RiskLevel.HIGH.value,
-            risk_factors={"budget_concern": True},
+            risk_factors=["budget_concern"],
         )
         signal2 = RiskSignalModel(
             tenant_id=tenant_id_2,
             opportunity_id=opp_id_2,
             risk_level=RiskLevel.LOW.value,
-            risk_factors={"timeline_risk": 0.2},
+            risk_factors=["timeline_risk"],
         )
         async_session.add(signal1)
         async_session.add(signal2)
@@ -274,7 +271,7 @@ class TestRecommendationCreateAndGet:
             opportunity_id=opp_id,
             next_action=NextAction.PROPOSAL.value,
             confidence=0.75,
-            reasons={"stage": "negotiation"},
+            reasons=["stage_negotiation"],
             similar_deals=[{"id": 1, "name": "Deal A"}],
         )
         async_session.add(rec)
@@ -283,21 +280,21 @@ class TestRecommendationCreateAndGet:
         d = rec.to_dict()
         assert d["next_action"] == "proposal"
         assert d["confidence"] == 0.75
-        assert d["reasons"] == {"stage": "negotiation"}
+        assert d["reasons"] == ["stage_negotiation"]
         assert d["similar_deals"] == [{"id": 1, "name": "Deal A"}]
 
         signal = RiskSignalModel(
             tenant_id=tenant_id,
             opportunity_id=opp_id,
             risk_level=RiskLevel.MEDIUM.value,
-            risk_factors={"churn_risk": 0.3},
+            risk_factors=["churn_risk"],
         )
         async_session.add(signal)
         await async_session.flush()
 
         d_sig = signal.to_dict()
         assert d_sig["risk_level"] == "medium"
-        assert d_sig["risk_factors"] == {"churn_risk": 0.3}
+        assert d_sig["risk_factors"] == ["churn_risk"]
 
     async def test_recommendation_unique_constraint(self, db_schema, tenant_id, async_session):
         """Duplicate opportunity_id for the same tenant raises an appropriate error."""
@@ -309,7 +306,7 @@ class TestRecommendationCreateAndGet:
             opportunity_id=opp_id,
             next_action=NextAction.CALL.value,
             confidence=0.8,
-            reasons={},
+            reasons=["reason_one"],
             similar_deals=[],
         )
         async_session.add(rec1)
@@ -320,11 +317,11 @@ class TestRecommendationCreateAndGet:
             opportunity_id=opp_id,
             next_action=NextAction.EMAIL.value,
             confidence=0.6,
-            reasons={},
+            reasons=["reason_two"],
             similar_deals=[],
         )
         async_session.add(rec2)
-        with pytest.raises(Exception):  # integrity error from duplicate key
+        with pytest.raises(sa_exc.IntegrityError):  # integrity error from duplicate key
             await async_session.flush()
 
     async def test_null_json_columns(self, db_schema, tenant_id, async_session):
@@ -352,7 +349,7 @@ class TestRecommendationCreateAndGet:
         assert d["similar_deals"] is None
 
     async def test_invalid_risk_level_string(self, db_schema, tenant_id, async_session):
-        """Invalid risk_level string raises ValueError in to_dict() to catch DB corruption early."""
+        """Invalid risk_level string is rejected by the DB CHECK constraint at flush time."""
         cust = await _seed_customer(async_session, tenant_id)
         opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
 
@@ -360,14 +357,11 @@ class TestRecommendationCreateAndGet:
             tenant_id=tenant_id,
             opportunity_id=opp_id,
             risk_level="invalid_level",
-            risk_factors={"test": True},
+            risk_factors=["test_factor"],
         )
         async_session.add(signal)
-        await async_session.flush()
-        await async_session.refresh(signal)
-
-        with pytest.raises(ValueError):
-            signal.to_dict()
+        with pytest.raises(sa_exc.DBAPIError):
+            await async_session.flush()
 
     async def test_to_dict_excludes_tenant_id(self, db_schema, tenant_id, async_session):
         """to_dict() must not expose internal tenant_id in external responses."""
@@ -379,7 +373,7 @@ class TestRecommendationCreateAndGet:
             opportunity_id=opp_id,
             next_action=NextAction.DEMO.value,
             confidence=0.6,
-            reasons={"x": 1},
+            reasons=["example_reason"],
             similar_deals=[],
         )
         async_session.add(rec)
@@ -392,7 +386,7 @@ class TestRecommendationCreateAndGet:
             tenant_id=tenant_id,
             opportunity_id=opp_id,
             risk_level=RiskLevel.LOW.value,
-            risk_factors={"y": 2},
+            risk_factors=["risk_factor_y"],
         )
         async_session.add(signal)
         await async_session.flush()

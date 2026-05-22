@@ -49,7 +49,11 @@ def upgrade() -> None:
     op.create_index(op.f("ix_recommendations_tenant_id"), "recommendations", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_recommendations_opportunity_id"), "recommendations", ["opportunity_id"], unique=False)
     op.create_index(
-        "ix_recommendations_tenant_opportunity", "recommendations", ["tenant_id", "opportunity_id"], unique=False
+        "ix_recommendations_tenant_opportunity", "recommendations", ["tenant_id", "opportunity_id"], unique=True
+    )
+    op.execute(
+        "ALTER TABLE recommendations ADD CONSTRAINT chk_recommendations_unique "
+        "UNIQUE (tenant_id, opportunity_id)"
     )
     op.execute(
         "ALTER TABLE recommendations ADD CONSTRAINT chk_next_action "
@@ -84,10 +88,19 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_risk_signals_tenant_id"), "risk_signals", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_risk_signals_opportunity_id"), "risk_signals", ["opportunity_id"], unique=False)
-    op.create_index("ix_risk_signals_tenant_opportunity", "risk_signals", ["tenant_id", "opportunity_id"], unique=False)
+    op.create_index("ix_risk_signals_tenant_opportunity", "risk_signals", ["tenant_id", "opportunity_id"], unique=True)
+    op.execute(
+        "ALTER TABLE risk_signals ADD CONSTRAINT chk_risk_signals_unique "
+        "UNIQUE (tenant_id, opportunity_id)"
+    )
     op.execute("ALTER TABLE risk_signals ADD CONSTRAINT chk_risk_level CHECK (risk_level IN ('low','medium','high'))")
 
 
 def downgrade() -> None:
+    op.execute("ALTER TABLE recommendations DROP CONSTRAINT IF EXISTS chk_next_action")
+    op.execute("ALTER TABLE recommendations DROP CONSTRAINT IF EXISTS chk_confidence")
+    op.execute("ALTER TABLE recommendations DROP CONSTRAINT IF EXISTS chk_recommendations_unique")
+    op.execute("ALTER TABLE risk_signals DROP CONSTRAINT IF EXISTS chk_risk_level")
+    op.execute("ALTER TABLE risk_signals DROP CONSTRAINT IF EXISTS chk_risk_signals_unique")
     op.drop_table("risk_signals")
     op.drop_table("recommendations")
