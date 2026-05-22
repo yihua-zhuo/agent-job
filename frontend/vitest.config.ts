@@ -7,7 +7,7 @@ export default defineConfig({
     env: {
       NEXT_PUBLIC_AUTH_KEY: "0123456789abcdef0123456789abcdef",
     },
-    include: ["src/**/*.test.ts"],
+    include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json"],
