@@ -108,7 +108,7 @@ class TestRecommendationCreateAndGet:
         signal = RiskSignalModel(
             tenant_id=tenant_id,
             opportunity_id=opp_id,
-            risk_level=RiskLevel.HIGH,
+            risk_level=RiskLevel.HIGH.value,
             risk_factors={"budget_concern": True, "competitor": "VendorX", "timeline_risk": 0.8},
         )
         async_session.add(signal)
@@ -183,6 +183,87 @@ class TestRecommendationCreateAndGet:
         assert t2_rows[0].next_action == NextAction.DEMO.value
         assert t2_rows[0].confidence == 0.5
 
+        # Negative isolation: tenant 1 must NOT see tenant 2's rows
+        cross_t1 = await async_session.execute(
+            select(RecommendationModel).where(
+                RecommendationModel.tenant_id == tenant_id,
+                RecommendationModel.opportunity_id == opp_id_2,
+            )
+        )
+        assert len(cross_t1.scalars().all()) == 0
+
+        # Negative isolation: tenant 2 must NOT see tenant 1's rows
+        cross_t2 = await async_session.execute(
+            select(RecommendationModel).where(
+                RecommendationModel.tenant_id == tenant_id_2,
+                RecommendationModel.opportunity_id == opp_id_1,
+            )
+        )
+        assert len(cross_t2.scalars().all()) == 0
+
+    async def test_risk_signal_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
+        """Each tenant sees only their own risk signals — cross-tenant queries return zero rows."""
+        cust1 = await _seed_customer(async_session, tenant_id)
+        cust2 = await _seed_customer(async_session, tenant_id_2)
+        opp_id_1 = await _seed_opportunity(async_session, tenant_id, cust1.id)
+        opp_id_2 = await _seed_opportunity(async_session, tenant_id_2, cust2.id)
+
+        signal1 = RiskSignalModel(
+            tenant_id=tenant_id,
+            opportunity_id=opp_id_1,
+            risk_level=RiskLevel.HIGH.value,
+            risk_factors={"budget_concern": True},
+        )
+        signal2 = RiskSignalModel(
+            tenant_id=tenant_id_2,
+            opportunity_id=opp_id_2,
+            risk_level=RiskLevel.LOW.value,
+            risk_factors={"timeline_risk": 0.2},
+        )
+        async_session.add(signal1)
+        async_session.add(signal2)
+        await async_session.flush()
+
+        # Tenant 1 should see only signal1
+        result_t1 = await async_session.execute(
+            select(RiskSignalModel).where(
+                RiskSignalModel.tenant_id == tenant_id,
+                RiskSignalModel.opportunity_id == opp_id_1,
+            )
+        )
+        t1_rows = result_t1.scalars().all()
+        assert len(t1_rows) == 1
+        assert t1_rows[0].risk_level == RiskLevel.HIGH.value
+
+        # Tenant 2 should see only signal2
+        result_t2 = await async_session.execute(
+            select(RiskSignalModel).where(
+                RiskSignalModel.tenant_id == tenant_id_2,
+                RiskSignalModel.opportunity_id == opp_id_2,
+            )
+        )
+        t2_rows = result_t2.scalars().all()
+        assert len(t2_rows) == 1
+        assert t2_rows[0].risk_level == RiskLevel.LOW.value
+
+        # Negative isolation: tenant 1 must NOT see tenant 2's rows
+        cross_t1 = await async_session.execute(
+            select(RiskSignalModel).where(
+                RiskSignalModel.tenant_id == tenant_id,
+                RiskSignalModel.opportunity_id == opp_id_2,
+            )
+        )
+        assert len(cross_t1.scalars().all()) == 0
+
+        # Negative isolation: tenant 2 must NOT see tenant 1's rows
+        cross_t2 = await async_session.execute(
+            select(RiskSignalModel).where(
+                RiskSignalModel.tenant_id == tenant_id_2,
+                RiskSignalModel.opportunity_id == opp_id_1,
+            )
+        )
+        assert len(cross_t2.scalars().all()) == 0
+
     async def test_to_dict_json_serializable(self, db_schema, tenant_id, async_session):
         """to_dict() on both models returns JSON-serializable output including JSON columns."""
         cust = await _seed_customer(async_session, tenant_id)
@@ -217,3 +298,104 @@ class TestRecommendationCreateAndGet:
         d_sig = signal.to_dict()
         assert d_sig["risk_level"] == "medium"
         assert d_sig["risk_factors"] == {"churn_risk": 0.3}
+
+    async def test_recommendation_unique_constraint(self, db_schema, tenant_id, async_session):
+        """Duplicate opportunity_id for the same tenant raises an appropriate error."""
+        cust = await _seed_customer(async_session, tenant_id)
+        opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
+
+        rec1 = RecommendationModel(
+            tenant_id=tenant_id,
+            opportunity_id=opp_id,
+            next_action=NextAction.CALL.value,
+            confidence=0.8,
+            reasons={},
+            similar_deals=[],
+        )
+        async_session.add(rec1)
+        await async_session.flush()
+
+        rec2 = RecommendationModel(
+            tenant_id=tenant_id,
+            opportunity_id=opp_id,
+            next_action=NextAction.EMAIL.value,
+            confidence=0.6,
+            reasons={},
+            similar_deals=[],
+        )
+        async_session.add(rec2)
+        with pytest.raises(Exception):  # integrity error from duplicate key
+            await async_session.flush()
+
+    async def test_null_json_columns(self, db_schema, tenant_id, async_session):
+        """recommendations with null reasons/similar_deals insert and round-trip correctly."""
+        cust = await _seed_customer(async_session, tenant_id)
+        opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
+
+        rec = RecommendationModel(
+            tenant_id=tenant_id,
+            opportunity_id=opp_id,
+            next_action=NextAction.MEETING.value,
+            confidence=0.7,
+            reasons=None,
+            similar_deals=None,
+        )
+        async_session.add(rec)
+        await async_session.flush()
+        await async_session.refresh(rec)
+
+        assert rec.reasons is None
+        assert rec.similar_deals is None
+
+        d = rec.to_dict()
+        assert d["reasons"] is None
+        assert d["similar_deals"] is None
+
+    async def test_invalid_risk_level_string(self, db_schema, tenant_id, async_session):
+        """Invalid risk_level string raises ValueError in to_dict() to catch DB corruption early."""
+        cust = await _seed_customer(async_session, tenant_id)
+        opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
+
+        signal = RiskSignalModel(
+            tenant_id=tenant_id,
+            opportunity_id=opp_id,
+            risk_level="invalid_level",
+            risk_factors={"test": True},
+        )
+        async_session.add(signal)
+        await async_session.flush()
+        await async_session.refresh(signal)
+
+        with pytest.raises(ValueError):
+            signal.to_dict()
+
+    async def test_to_dict_excludes_tenant_id(self, db_schema, tenant_id, async_session):
+        """to_dict() must not expose internal tenant_id in external responses."""
+        cust = await _seed_customer(async_session, tenant_id)
+        opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
+
+        rec = RecommendationModel(
+            tenant_id=tenant_id,
+            opportunity_id=opp_id,
+            next_action=NextAction.DEMO.value,
+            confidence=0.6,
+            reasons={"x": 1},
+            similar_deals=[],
+        )
+        async_session.add(rec)
+        await async_session.flush()
+
+        d = rec.to_dict()
+        assert "tenant_id" not in d
+
+        signal = RiskSignalModel(
+            tenant_id=tenant_id,
+            opportunity_id=opp_id,
+            risk_level=RiskLevel.LOW.value,
+            risk_factors={"y": 2},
+        )
+        async_session.add(signal)
+        await async_session.flush()
+
+        d_sig = signal.to_dict()
+        assert "tenant_id" not in d_sig

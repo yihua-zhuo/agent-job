@@ -53,7 +53,6 @@ class RecommendationModel(Base):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "tenant_id": self.tenant_id,
             "opportunity_id": self.opportunity_id,
             "next_action": NextAction(self.next_action).value,
             "confidence": self.confidence,
@@ -88,7 +87,6 @@ class RiskSignalModel(Base):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
-            "tenant_id": self.tenant_id,
             "opportunity_id": self.opportunity_id,
             "risk_level": RiskLevel(self.risk_level).value,
             "risk_factors": self.risk_factors,
