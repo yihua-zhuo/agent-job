@@ -7,6 +7,7 @@ Run against a real PostgreSQL database (DATABASE_URL env var):
 Requires DATABASE_URL (or TEST_DATABASE_URL) pointing at a live Postgres instance.
 Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -14,13 +15,28 @@ import pytest
 from db.models.churn_prediction import ChurnPredictionModel
 
 
+async def _seed_customer(async_session, tenant_id: int) -> int:
+    """Create a customer and return its id."""
+    from db.models.customer import CustomerModel
+
+    customer = CustomerModel(
+        tenant_id=tenant_id,
+        name="Churn Test Customer",
+        email="churn-test@example.com",
+        status="active",
+    )
+    async_session.add(customer)
+    await async_session.flush()
+    return customer.id
+
+
 @pytest.mark.integration
 class TestChurnPredictionIntegration:
     """ChurnPrediction table lifecycle via the real DB."""
 
-    async def test_insert_and_fetch(self, db_schema, tenant_id, async_session, _seed_customer):
+    async def test_insert_and_fetch(self, db_schema, tenant_id, async_session):
         """Insert a ChurnPrediction row and retrieve it with all fields correct."""
-        customer_id = _seed_customer
+        customer_id = await _seed_customer(async_session, tenant_id)
 
         prediction = ChurnPredictionModel(
             tenant_id=tenant_id,
@@ -38,8 +54,9 @@ class TestChurnPredictionIntegration:
             model_version="churn-v2.1",
         )
         async_session.add(prediction)
-        await async_session.commit()
+        await async_session.flush()
         await async_session.refresh(prediction)
+        await async_session.commit()
 
         assert prediction.id is not None
         assert prediction.tenant_id == tenant_id
