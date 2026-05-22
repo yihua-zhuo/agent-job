@@ -67,42 +67,37 @@ def make_customer_handler(state: MockState):
         if sql_text.startswith("delete") and "customers" in sql_text:
             return MockResult([MockRow({"id": params.get("id", 1)})])
 
-        if "select" in sql_text and "count" in sql_text and "from customers" in sql_text:
+        if "select" in sql_text and "count(" in sql_text and "from customers" in sql_text:
             tenant_id = params.get("tenant_id")
             count_val = 3 if tenant_id == 1 else 7
             return MockResult([[count_val]])
 
-        if "select" in sql_text and "from customers" in sql_text and "tags" in sql_text and "where id" in sql_text:
+        if "select" in sql_text and "from customers" in sql_text and "tags" in sql_text:
+            # Only match when filtering BY tags, not when 'tags' appears in SELECT
+            after_where = ""
+            if "where" in sql_text:
+                after_where = sql_text.split("where", 1)[1].split("order")[0].split("limit")[0]
+            if "tags" not in after_where:
+                return None  # not a tag-filter query; let other handlers deal with it
             customer_id = params.get("id")
             if customer_id in state.customers:
                 c = state.customers[customer_id]
                 return MockResult([MockRow({"id": customer_id, "tags": c.get("tags", "[]")})])
             return MockResult([])
 
-        if "from customers where id" in sql_text:
-            customer_id = params.get("id")
-            if customer_id in state.customers:
-                return MockResult([MockRow(state.customers[customer_id].copy())])
-            fixtures = {
-                1: {
-                    "id": 1,
-                    "tenant_id": 1,
-                    "name": "Customer A",
-                    "email": "a@test.com",
-                    "phone": "123",
-                    "company": "Acme",
-                    "status": "lead",
-                    "owner_id": 1,
-                    "tags": "[]",
-                    "created_at": None,
-                    "updated_at": None,
-                },
-            }
-            if customer_id in fixtures:
-                return MockResult([MockRow(fixtures[customer_id].copy())])
-            return MockResult([])
+        # Single-customer lookup by id (recognized by 'where customers.id' in SQL text)
+        if "from customers" in sql_text and "where" in sql_text and "customers.id" in sql_text:
+            customer_id = params.get("id") or params.get("id_1")
+            tenant_id_param = params.get("tenant_id") or params.get("tenant_id_1")
+            if customer_id is not None:
+                # Only return state-seeded customers — no fallback fixtures
+                if customer_id in state.customers:
+                    rec = state.customers[customer_id]
+                    if rec.get("tenant_id") == tenant_id_param:
+                        return MockResult([MockRow(rec.copy())])
+                return MockResult([])
 
-        if "select" in sql_text and "from customers" in sql_text and "where id" not in sql_text:
+        if "select" in sql_text and "from customers" in sql_text and "id" not in params and "id_1" not in params:
             tenant_filter = params.get("tenant_id", 0)
             rows = []
             for rec in state.customers.values():

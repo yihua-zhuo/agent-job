@@ -1,6 +1,7 @@
 """Models package for CRM system."""
 
 from .activity import Activity, ActivityType
+from .ai_draft import DraftContext, DraftRequest, DraftResponse, DraftType, SuggestedAction, TemplateType, ToneType
 from .customer import Customer, CustomerStatus
 from .marketing import Campaign, CampaignEvent, CampaignStatus, CampaignType, TriggerType
 from .opportunity import Opportunity, Stage
@@ -22,4 +23,11 @@ __all__ = [
     "CampaignStatus",
     "CampaignType",
     "TriggerType",
+    "DraftRequest",
+    "DraftResponse",
+    "DraftContext",
+    "SuggestedAction",
+    "DraftType",
+    "ToneType",
+    "TemplateType",
 ]
