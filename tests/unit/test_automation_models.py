@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
+import sqlalchemy as sa
+
 from db.models.automation_log import AutomationLogModel
 from db.models.automation_rule import AutomationRuleModel
 
@@ -20,7 +22,7 @@ class TestAutomationRuleModelToDict:
             name="Welcome Email",
             description="Send welcome on signup",
             trigger_event="user.signup",
-            conditions=[{"field": "plan", "op": "eq", "value": "free"}],
+            conditions=[{"field": "plan", "operator": "eq", "value": "free"}],
             actions=[{"type": "send_email", "template": "welcome"}],
             enabled=True,
             created_by=2,
@@ -33,7 +35,7 @@ class TestAutomationRuleModelToDict:
         assert d["name"] == "Welcome Email"
         assert d["description"] == "Send welcome on signup"
         assert d["trigger_event"] == "user.signup"
-        assert d["conditions"] == [{"field": "plan", "op": "eq", "value": "free"}]
+        assert d["conditions"] == [{"field": "plan", "operator": "eq", "value": "free"}]
         assert d["actions"] == [{"type": "send_email", "template": "welcome"}]
         assert d["enabled"] is True
         assert d["created_by"] == 2
@@ -84,9 +86,13 @@ class TestAutomationRuleModelDefaults:
     """Test AutomationRuleModel column default values."""
 
     def test_enabled_column_default_is_true(self):
-        """The enabled column defaults to True."""
+        """The enabled column defaults to True, is Boolean, and is not nullable."""
         col = AutomationRuleModel.__table__.c.enabled
-        assert col.default is not None and col.default.arg is True
+        assert isinstance(col.type, sa.Boolean)
+        assert col.nullable is False
+        default_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert default_val is True or server_val is True
 
     def test_conditions_column_has_callable_default(self):
         """The conditions column has a callable default (empty list factory)."""
@@ -209,25 +215,26 @@ class TestAutomationLogModelDefaults:
         assert col.default is not None and col.default.arg == 0
 
 
+def _col_is_indexed(table, col_name: str) -> bool:
+    """Return True if col_name appears in any table index."""
+    return any(col_name in idx.columns for idx in table.indexes)
+
+
 class TestAutomationModelsIndexing:
     """Test that tenant_id and other key columns are indexed."""
 
     def test_rule_tenant_id_is_indexed(self):
         """AutomationRuleModel.tenant_id column is indexed."""
-        col = AutomationRuleModel.__table__.c.tenant_id
-        assert col.index is True
+        assert _col_is_indexed(AutomationRuleModel.__table__, "tenant_id")
 
     def test_log_tenant_id_is_indexed(self):
         """AutomationLogModel.tenant_id column is indexed."""
-        col = AutomationLogModel.__table__.c.tenant_id
-        assert col.index is True
+        assert _col_is_indexed(AutomationLogModel.__table__, "tenant_id")
 
     def test_rule_trigger_event_is_indexed(self):
         """AutomationRuleModel.trigger_event column is indexed."""
-        col = AutomationRuleModel.__table__.c.trigger_event
-        assert col.index is True
+        assert _col_is_indexed(AutomationRuleModel.__table__, "trigger_event")
 
     def test_log_rule_id_is_indexed(self):
         """AutomationLogModel.rule_id column is indexed."""
-        col = AutomationLogModel.__table__.c.rule_id
-        assert col.index is True
+        assert _col_is_indexed(AutomationLogModel.__table__, "rule_id")

@@ -5,17 +5,18 @@ Revises: 9d8e7f6a5b3c
 Create Date: 2026-05-23 19:18:51.914803
 
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
+from alembic import op
+
 # revision identifiers, used by Alembic.
 revision: str = 'e646948c549a'
-down_revision: Union[str, None] = '9d8e7f6a5b3c'
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = '9d8e7f6a5b3c'
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
@@ -86,16 +87,16 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        op.f("ix_automation_logs_rule_id"), "automation_logs", ["rule_id"], unique=False
+        op.f("ix_automation_logs_tenant_id"), "automation_logs", ["tenant_id"], unique=False
     )
     op.create_index(
-        op.f("ix_automation_logs_tenant_id"), "automation_logs", ["tenant_id"], unique=False
+        op.f("ix_automation_logs_rule_id"), "automation_logs", ["rule_id"], unique=False
     )
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_automation_logs_tenant_id"), table_name="automation_logs")
     op.drop_index(op.f("ix_automation_logs_rule_id"), table_name="automation_logs")
+    op.drop_index(op.f("ix_automation_logs_tenant_id"), table_name="automation_logs")
     op.drop_table("automation_logs")
     op.drop_index(op.f("ix_automation_rules_trigger_event"), table_name="automation_rules")
     op.drop_index(op.f("ix_automation_rules_tenant_id"), table_name="automation_rules")
