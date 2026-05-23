@@ -1,0 +1,55 @@
+# Implementation Plan — Issue #661
+
+## Goal
+Replace the existing `notification.py` ORM model with a new `NotificationModel` matching the issue spec (fields: id, user_id, tenant_id, channel, template, params JSON, status, priority, created_at, delivered_at, read_at), then generate an Alembic migration adding a composite index on (user_id, tenant_id, status) and a PostgreSQL partial index for unread in-app notifications.
+
+## Affected Files
+- `src/db/models/notification.py` — Replace the existing model with the new field set and updated `to_dict()`
+- `src/services/notification_service.py` — Update field references to match the new model (field renames: type → channel, is_read → read_at check, title/content → template/params)
+- `alembic/versions/<new_revision>.py` — New migration (chains from `9d8e7f6a5b3c`) adding composite + partial indexes on `notifications`
+- `tests/unit/domain_handlers/notification.py` — New handler for unit-test mock SQL engine
+- `tests/unit/conftest.py` — Register the new notification handler in the module discovery list
+- `tests/unit/test_notifications_router.py` — Update `to_dict` assertions if field names change in the router's serialization layer
+
+## Implementation Steps
+1. **Replace `src/db/models/notification.py`** with the new `NotificationModel`:
+   - Fields: `id` (pk), `user_id` (index=True), `tenant_id` (index=True), `channel` (String(50)), `template` (String(255)), `params_` (JSON, using `postgresql.JSON`), `status` (String(50)), `priority` (String(20)), `created_at` (DateTime, `server_default=func.now()`), `delivered_at` (DateTime, nullable), `read_at` (DateTime, nullable).
+   - Add `__table_args__` with a composite index: `Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status")`.
+   - Import `JSON` from `sqlalchemy.dialects.postgresql`.
+   - `to_dict()` must serialize `params_` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`.
+   - Rename `params` to `params_` in Python (trailing underscore avoids the built-in shadow).
+
+2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
+
+3. **Add notification handler registration in `tests/unit/conftest.py`**: add `from tests.unit.domain_handlers.notification import ...` imports (re-export pattern matching the existing `from tests.unit.domain_handlers.sla` block).
+
+4. **Update `src/services/notification_service.py`**: replace all `NotificationModel` field references (`type`, `title`, `content`, `is_read`, `related_type`, `related_id`) with the new fields (`channel`, `template`, `params_`, `read_at`). The service logic (WHERE clauses, count queries) remains structurally the same.
+
+5. **Update `tests/unit/test_notifications_router.py`** if it has hard-coded `to_dict` field assertions — replace old field keys (`type`, `title`, `content`, `is_read`) with new ones (`channel`, `template`, `params_`, `status`, `priority`, `delivered_at`, `read_at`).
+
+6. **Generate the migration** (follow CLAUDE.md exactly):
+   - `docker compose -f configs/docker-compose.test.yml up -d test-db`
+   - `docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;" && docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"`
+   - `alembic upgrade head`
+   - `alembic revision --autogenerate -m "add_notification_indexes"`
+   - Review `alembic/versions/<new>.py`: autogen will add a bare `op.create_index(...)` for the composite index but will NOT produce the partial index (autogenerate never handles partial/WHERE clauses). Manually add `op.create_index("ix_notifications_in_app_unread", "notifications", ["user_id", "tenant_id"], unique=False, postgresql_where=(and_(col("channel") == "in_app", col("read_at").is_(None))))`.
+   - Run `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` to verify.
+   - Run a second `alembic revision --autogenerate -m "drift_check"` to confirm an empty diff; delete the empty migration if both up/down are `pass`.
+
+## Test Plan
+- Unit tests in `tests/unit/`: `test_notifications_router.py` updated for new field names; `tests/unit/domain_handlers/notification.py` covered implicitly by existing router tests patching `NotificationService`.
+- Integration tests in `tests/integration/`: No new integration test files required — the existing `notifications` table is already covered by `db_schema` fixture; the new indexes are exercised by the existing notification integration flows (list, send, mark-read) with no new fixtures needed.
+
+## Acceptance Criteria
+- `src/db/models/notification.py` contains `NotificationModel` with all nine fields (`id`, `user_id`, `tenant_id`, `channel`, `template`, `params_`, `status`, `priority`, `created_at`, `delivered_at`, `read_at`) and a `to_dict()` method serializing all fields correctly.
+- `NotificationModel.params_` is declared with `JSON` type from `sqlalchemy.dialects.postgresql`.
+- `__table_args__` defines `Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status")`.
+- The Alembic migration in `alembic/versions/` contains `op.create_index` for the composite index and a manually written partial index `ix_notifications_in_app_unread` with `WHERE channel='in_app' AND read_at IS NULL`.
+- Migration upgrades and downgrades cleanly against a real PostgreSQL instance with `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`.
+- Unit tests pass: `PYTHONPATH=src pytest tests/unit/ -v` exits with 0.
+- Ruff linting clean: `PYTHONPATH=src ruff check src/`.
+
+## Risks / Open Questions
+- The existing `NotificationService` in `notification_service.py` uses field names (`type`, `is_read`) that differ from the new model. These field references must be updated in the service — if the service is also used by other callers (e.g. API router), those callers' serialization layer may also need updating. The router tests patch `NotificationService` directly, so they are insulated, but any integration test that constructs `NotificationModel` directly will break until updated.
+- The partial index `WHERE channel='in_app' AND read_at IS NULL` cannot be produced by autogenerate; it must be written manually in the migration. Writing the PostgreSQL `WHERE` clause correctly in `op.create_index` requires care — use `postgresql.where()` from `sqlalchemy.dialects.postgresql`.
+- `docker compose -f configs/docker-compose.test.yml` is the correct compose file per CLAUDE.md; confirm it exposes the `test-db` container name as referenced in the steps above before running.
