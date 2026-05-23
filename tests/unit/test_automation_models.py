@@ -58,12 +58,14 @@ class TestAutomationRuleModelToDict:
         assert d["updated_at"] == "2024-01-01T12:00:00+00:00"
 
     def test_to_dict_handles_none_datetime(self):
-        """None datetime fields return None from isoformat guard."""
+        """None datetime fields return None from isoformat guard on fully-constructed instance."""
         rule = AutomationRuleModel(
             id=3,
             tenant_id=1,
             name="Test",
             trigger_event="deal.created",
+            created_at=None,
+            updated_at=None,
         )
         d = rule.to_dict()
         assert d["created_at"] is None
@@ -85,14 +87,21 @@ class TestAutomationRuleModelToDict:
 class TestAutomationRuleModelDefaults:
     """Test AutomationRuleModel column default values."""
 
-    def test_enabled_column_default_is_true(self):
-        """The enabled column defaults to True, is Boolean, and is not nullable."""
+    def test_enabled_column_python_default_is_true(self):
+        """The enabled column uses Python default=True; no server_default is set."""
         col = AutomationRuleModel.__table__.c.enabled
         assert isinstance(col.type, sa.Boolean)
         assert col.nullable is False
         python_val = col.default.arg if col.default is not None else None
         server_val = col.server_default.arg if col.server_default is not None else None
-        assert python_val is True or server_val == "true"
+        assert python_val is True, "Python default must be True"
+        assert server_val is None, "No server_default should be set (migration sets it)"
+
+    def test_enabled_column_has_no_server_default(self):
+        """The enabled column has no server_default in the ORM model (server_default is in migration only)."""
+        col = AutomationRuleModel.__table__.c.enabled
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert server_val is None, "ORM model should not set server_default (migration does)"
 
     def test_conditions_column_has_callable_default(self):
         """The conditions column has a callable default (empty list factory)."""
@@ -106,12 +115,19 @@ class TestAutomationRuleModelDefaults:
         assert col.default is not None
         assert callable(col.default.arg)
 
-    def test_created_by_column_default_is_zero(self):
-        """The created_by column defaults to 0."""
+    def test_created_by_column_python_default_is_zero(self):
+        """The created_by column uses Python default=0; no server_default is set."""
         col = AutomationRuleModel.__table__.c.created_by
         python_val = col.default.arg if col.default is not None else None
         server_val = col.server_default.arg if col.server_default is not None else None
-        assert python_val == 0 or server_val == "0"
+        assert python_val == 0, "Python default must be 0"
+        assert server_val is None, "No server_default should be set (migration sets it)"
+
+    def test_created_by_column_has_no_server_default(self):
+        """The created_by column has no server_default in the ORM model (server_default is in migration only)."""
+        col = AutomationRuleModel.__table__.c.created_by
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert server_val is None, "ORM model should not set server_default (migration does)"
 
 
 class TestAutomationLogModelToDict:
@@ -158,12 +174,13 @@ class TestAutomationLogModelToDict:
         assert d["executed_at"] == "2024-03-10T08:45:00+00:00"
 
     def test_to_dict_handles_none_executed_at(self):
-        """None executed_at returns None from isoformat guard."""
+        """None executed_at returns None from isoformat guard on fully-constructed instance."""
         log = AutomationLogModel(
             id=3,
             rule_id=1,
             tenant_id=1,
             trigger_event="x",
+            executed_at=None,
         )
         d = log.to_dict()
         assert d["executed_at"] is None
