@@ -470,7 +470,7 @@ class TestNotificationIntegration:
         )
 
         marked = await svc.mark_as_read(sent.id, tenant_id=tenant_id)
-        assert marked.is_read is True
+        assert marked.read_at is not None
 
         unread = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert unread == 0

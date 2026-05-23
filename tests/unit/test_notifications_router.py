@@ -75,9 +75,10 @@ class TestSendNotification:
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
             svc.send_notification = AsyncMock(return_value={
-                "id": 5, "tenant_id": 1, "user_id": 2, "type": "info",
-                "title": "New deal", "content": "Deal closed!", "is_read": False,
-                "related_type": "opportunity", "related_id": 10, "created_at": "2026-01-01T00:00:00",
+                "id": 5, "tenant_id": 1, "user_id": 2, "channel": "info",
+                "template": "New deal", "params_": {"content": "Deal closed!"}, "status": "pending",
+                "priority": "normal", "created_at": "2026-01-01T00:00:00",
+                "delivered_at": None, "read_at": None,
             })
             client = _app()
             response = client.post("/api/v1/notifications/send", json={
@@ -87,7 +88,7 @@ class TestSendNotification:
             assert response.status_code == 200
             data = response.json()
             assert data["data"]["id"] == 5
-            assert data["data"]["title"] == "New deal"
+            assert data["data"]["template"] == "New deal"
 
     def test_send_validation_error(self):
         client = _app()

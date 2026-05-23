@@ -1,0 +1,106 @@
+"""add_notification_indexes
+
+Revision ID: e7f6a5b3c12d
+Revises: dc4eeaaaea38
+Create Date: 2026-05-23
+
+Transforms the notifications table from the old schema (type, title, content,
+is_read, related_type, related_id) to the new schema (channel, template,
+params_, status, priority, delivered_at, read_at) then adds:
+- composite index on (user_id, tenant_id, status)
+- partial index for unread in-app notifications
+"""
+
+from alembic import op
+import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
+
+revision = "e7f6a5b3c12d"
+down_revision = "dc4eeaaaea38"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # Phase 1: add new columns (nullable, default null)
+    op.add_column("notifications", sa.Column("channel", sa.String(length=50), nullable=True))
+    op.add_column("notifications", sa.Column("template", sa.String(length=255), nullable=True))
+    op.add_column("notifications", sa.Column("params_", postgresql.JSON, nullable=True))
+    op.add_column("notifications", sa.Column("status", sa.String(length=50), nullable=True))
+    op.add_column("notifications", sa.Column("priority", sa.String(length=20), nullable=True))
+    op.add_column("notifications", sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column("notifications", sa.Column("read_at", sa.DateTime(timezone=True), nullable=True))
+
+    # Phase 2: backfill new columns from old ones
+    op.execute(
+        "UPDATE notifications SET channel = type WHERE type IS NOT NULL"
+    )
+    op.execute(
+        "UPDATE notifications SET template = title WHERE title IS NOT NULL"
+    )
+    op.execute(
+        "UPDATE notifications SET params_ = jsonb_build_object('content', content) WHERE content IS NOT NULL"
+    )
+    op.execute(
+        "UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END"
+    )
+    op.execute(
+        "UPDATE notifications SET read_at = created_at WHERE is_read = true"
+    )
+
+    # Phase 3: drop old columns
+    op.drop_column("notifications", "related_id")
+    op.drop_column("notifications", "related_type")
+    op.drop_column("notifications", "is_read")
+    op.drop_column("notifications", "content")
+    op.drop_column("notifications", "title")
+    op.drop_column("notifications", "type")
+
+    # Phase 4: add indexes
+    op.create_index(
+        "ix_notifications_user_tenant_status",
+        "notifications",
+        ["user_id", "tenant_id", "status"],
+        unique=False,
+    )
+    # Partial index for efficient lookup of unread in-app notifications
+    op.execute(
+        "CREATE INDEX ix_notifications_in_app_unread ON notifications (user_id, tenant_id) "
+        "WHERE channel = 'in_app' AND read_at IS NULL"
+    )
+
+
+def downgrade() -> None:
+    op.drop_index("ix_notifications_in_app_unread", table_name="notifications")
+    op.drop_index("ix_notifications_user_tenant_status", table_name="notifications")
+
+    # Phase 4 (reversed): add back old columns
+    op.add_column("notifications", sa.Column("type", sa.String(length=50), nullable=True))
+    op.add_column("notifications", sa.Column("title", sa.String(length=255), nullable=True))
+    op.add_column("notifications", sa.Column("content", sa.Text(), nullable=True))
+    op.add_column("notifications", sa.Column("is_read", sa.Boolean(), nullable=False, server_default=sa.text("false")))
+    op.add_column("notifications", sa.Column("related_type", sa.String(length=50), nullable=True))
+    op.add_column("notifications", sa.Column("related_id", sa.Integer(), nullable=True))
+
+    # Phase 3 (reversed): restore old data
+    op.execute(
+        "UPDATE notifications SET type = channel WHERE channel IS NOT NULL"
+    )
+    op.execute(
+        "UPDATE notifications SET title = template WHERE template IS NOT NULL"
+    )
+    op.execute(
+        "UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL"
+    )
+    op.execute(
+        "UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL"
+    )
+
+    # Phase 2 (reversed): drop new columns
+    op.drop_column("notifications", "read_at")
+    op.drop_column("notifications", "delivered_at")
+    op.drop_column("notifications", "priority")
+    op.drop_column("notifications", "status")
+    op.drop_column("notifications", "params_")
+    op.drop_column("notifications", "template")
+    op.drop_column("notifications", "channel")

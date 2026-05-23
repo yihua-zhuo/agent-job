@@ -33,12 +33,11 @@ class NotificationService:
         notification = NotificationModel(
             tenant_id=tenant_id,
             user_id=user_id,
-            type=notification_type,
-            title=title,
-            content=content,
-            is_read=False,
-            related_type=kwargs.get("related_type"),
-            related_id=kwargs.get("related_id"),
+            channel=notification_type,
+            template=title,
+            params_={"content": content},
+            status="pending",
+            priority=kwargs.get("priority", "normal"),
             created_at=datetime.now(UTC),
         )
         self.session.add(notification)
@@ -60,7 +59,7 @@ class NotificationService:
             NotificationModel.user_id == user_id,
         ]
         if unread_only:
-            conditions.append(NotificationModel.is_read == False)  # noqa: E712
+            conditions.append(NotificationModel.read_at.is_(None))
 
         count_result = await self.session.execute(select(func.count(NotificationModel.id)).where(and_(*conditions)))
         total = count_result.scalar_one()
@@ -88,7 +87,8 @@ class NotificationService:
         notification = result.scalar_one_or_none()
         if notification is None:
             raise NotFoundException("通知")
-        notification.is_read = True
+        notification.read_at = datetime.now(UTC)
+        notification.status = "read"
         await self.session.flush()
         await self.session.refresh(notification)
         return notification
@@ -100,13 +100,15 @@ class NotificationService:
                 and_(
                     NotificationModel.tenant_id == tenant_id,
                     NotificationModel.user_id == user_id,
-                    NotificationModel.is_read == False,  # noqa: E712
+                    NotificationModel.read_at.is_(None),
                 )
             )
         )
         unread = result.scalars().all()
+        now = datetime.now(UTC)
         for n in unread:
-            n.is_read = True
+            n.read_at = now
+            n.status = "read"
         await self.session.flush()
         return {"marked_count": len(unread)}
 
@@ -132,7 +134,7 @@ class NotificationService:
                 and_(
                     NotificationModel.tenant_id == tenant_id,
                     NotificationModel.user_id == user_id,
-                    NotificationModel.is_read == False,  # noqa: E712
+                    NotificationModel.read_at.is_(None),
                 )
             )
         )
