@@ -24,7 +24,11 @@ class TestOpportunityActivityIntegration:
     """Full lifecycle tests for OpportunityActivityModel via the real DB."""
 
     async def test_insert_and_select(self, db_schema, tenant_id, async_session):
-        """Round-trip: insert an opportunity and its activity, then fetch."""
+        """Round-trip: insert an OpportunityActivity directly and fetch it back.
+
+        OpportunityModel is created directly within this test to satisfy the FK
+        dependency — no external fixture or test file is required.
+        """
         # Seed an opportunity (FK dependency)
         opp = OpportunityModel(
             tenant_id=tenant_id,
@@ -62,7 +66,7 @@ class TestOpportunityActivityIntegration:
         assert fetched.event_metadata == {"source": "web", "campaign": "spring_sale"}
 
     async def test_metadata_json_arbitrary_values(self, db_schema, tenant_id, async_session):
-        """metadata column stores arbitrary JSON without type errors."""
+        """event_metadata column stores arbitrary JSON without type errors."""
         opp = OpportunityModel(
             tenant_id=tenant_id,
             customer_id=1,

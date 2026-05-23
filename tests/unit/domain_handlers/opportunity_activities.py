@@ -30,7 +30,7 @@ def make_opportunity_activity_handler(state: MockState):
                 "opportunity_id": params.get("opportunity_id", 0),
                 "event_type": params.get("event_type", ""),
                 "event_timestamp": params.get("event_timestamp"),
-                "metadata": params.get("event_metadata", {}),
+                "event_metadata": params.get("event_metadata", {}),
             }
             state.activities[aid] = record
             return MockResult([MockRow(record.copy())])

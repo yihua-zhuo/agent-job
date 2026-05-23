@@ -17,8 +17,14 @@ class TestOpportunityActivityModel:
         assert hasattr(OpportunityActivityModel, "event_timestamp")
         assert hasattr(OpportunityActivityModel, "event_metadata")
 
-    def test_to_dict_returns_all_fields(self):
-        """to_dict returns all model fields."""
+    def test_to_dict_orm_column_to_api_dict_key(self):
+        """to_dict returns an API-friendly dict: ORM column 'event_metadata' is
+        serialized as the 'metadata' key to match the plan/API contract.
+
+        The column in the database is named 'event_metadata' (SQLAlchemy reserves
+        'metadata' as a declarative name). The to_dict() method aliases it to
+        'metadata' in the output dict for API consumers.
+        """
         now = datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
         activity = OpportunityActivityModel(
             id=1,
@@ -36,8 +42,8 @@ class TestOpportunityActivityModel:
         assert d["event_timestamp"] == now.isoformat()
         assert d["metadata"] == {"old_stage": "lead", "new_stage": "qualified"}
 
-    def test_to_dict_metadata_default_empty_dict(self):
-        """metadata defaults to {} when not provided."""
+    def test_to_dict_event_metadata_default_empty_dict(self):
+        """event_metadata defaults to {} when not provided."""
         now = datetime(2026, 2, 1, tzinfo=UTC)
         activity = OpportunityActivityModel(
             id=2,
