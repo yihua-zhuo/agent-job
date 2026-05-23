@@ -93,9 +93,57 @@ def make_automation_handler(state: MockState):
     return handler
 
 
+def make_log_handler(state: MockState):
+    """Handle automation logs SQL (INSERT, SELECT)."""
+
+    if not hasattr(state, "automation_logs"):
+        state.automation_logs = {}
+    if not hasattr(state, "automation_logs_next_id"):
+        state.automation_logs_next_id = 2000
+
+    def handler(sql_text, params):
+        tenant_id = params.get("tenant_id", 0)
+
+        if "insert into automation_logs" in sql_text:
+            lid = state.automation_logs_next_id
+            state.automation_logs_next_id += 1
+            record = {
+                "id": lid,
+                "rule_id": params.get("rule_id"),
+                "tenant_id": tenant_id,
+                "trigger_event": params.get("trigger_event", ""),
+                "trigger_context": _json.dumps(params.get("trigger_context", {})),
+                "actions_executed": _json.dumps(params.get("actions_executed", [])),
+                "status": params.get("status", "success"),
+                "error_message": params.get("error_message"),
+                "executed_by": params.get("executed_by"),
+                "executed_at": params.get("executed_at"),
+            }
+            state.automation_logs[lid] = record
+            return MockResult([MockRow(record.copy())], rowcount=1)
+
+        if "select" in sql_text and "from automation_logs" in sql_text and "count" not in sql_text:
+            rows = [
+                MockRow(r.copy())
+                for r in state.automation_logs.values()
+                if r.get("tenant_id") == tenant_id
+            ]
+            return MockResult(rows if rows else [])
+
+        if "select" in sql_text and "from automation_logs" in sql_text and "count" in sql_text:
+            count_val = sum(
+                1 for r in state.automation_logs.values() if r.get("tenant_id") == tenant_id
+            )
+            return MockResult([[count_val]])
+
+        return None
+
+    return handler
+
+
 def get_handlers(state: MockState):
-    return [make_automation_handler(state)]
+    return [make_automation_handler(state), make_log_handler(state)]
 
 
-__all__ = ["get_handlers", "make_automation_handler"]
+__all__ = ["get_handlers", "make_automation_handler", "make_log_handler"]
 
