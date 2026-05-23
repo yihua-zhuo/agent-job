@@ -18,7 +18,7 @@ def param(params, name, default=None):
 
 
 def make_opportunity_activity_handler(state: MockState):
-    """Handle INSERT and SELECT on opportunity_activities."""
+    """Handle INSERT, SELECT, UPDATE, and DELETE on opportunity_activities."""
 
     def handler(sql_text, params):
         if "insert into opportunity_activities" in sql_text:
@@ -47,6 +47,25 @@ def make_opportunity_activity_handler(state: MockState):
                 if tenant_id is not None and rec.get("tenant_id") != tenant_id:
                     return MockResult([])
                 return MockResult([MockRow(rec)])
+            return MockResult([])
+
+        # UPDATE
+        if "update opportunity_activities" in sql_text:
+            aid = param(params, "id")
+            if aid in state.activities:
+                rec = state.activities[aid]
+                for key in ("event_type", "event_metadata", "event_timestamp"):
+                    if key in params:
+                        rec[key] = params[key]
+                return MockResult([])
+            return MockResult([])
+
+        # DELETE
+        if "delete from opportunity_activities" in sql_text:
+            aid = param(params, "id")
+            if aid in state.activities:
+                del state.activities[aid]
+                return MockResult([])
             return MockResult([])
 
         # List all for tenant
