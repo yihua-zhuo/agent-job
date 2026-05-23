@@ -11,9 +11,9 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 revision = "e7f6a5b3c12d"
 down_revision = "dc4eeaaaea38"
@@ -25,7 +25,7 @@ def upgrade() -> None:
     # Phase 1: add new columns (nullable, default null)
     op.add_column("notifications", sa.Column("channel", sa.String(length=50), nullable=True))
     op.add_column("notifications", sa.Column("template", sa.String(length=255), nullable=True))
-    op.add_column("notifications", sa.Column("params_", postgresql.JSON, nullable=True))
+    op.add_column("notifications", sa.Column("params_", sa.JSON, nullable=True))
     op.add_column("notifications", sa.Column("status", sa.String(length=50), nullable=True))
     op.add_column("notifications", sa.Column("priority", sa.String(length=20), nullable=True))
     op.add_column("notifications", sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True))
@@ -39,7 +39,17 @@ def upgrade() -> None:
         "UPDATE notifications SET template = title WHERE title IS NOT NULL"
     )
     op.execute(
-        "UPDATE notifications SET params_ = jsonb_build_object('content', content) WHERE content IS NOT NULL"
+        """
+        UPDATE notifications
+        SET params_ = jsonb_build_object(
+            'content', content,
+            'related_type', related_type,
+            'related_id', related_id
+        )
+        WHERE content IS NOT NULL
+           OR related_type IS NOT NULL
+           OR related_id IS NOT NULL
+        """
     )
     op.execute(
         "UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END"
@@ -64,9 +74,15 @@ def upgrade() -> None:
         unique=False,
     )
     # Partial index for efficient lookup of unread in-app notifications
-    op.execute(
-        "CREATE INDEX ix_notifications_in_app_unread ON notifications (user_id, tenant_id) "
-        "WHERE channel = 'in_app' AND read_at IS NULL"
+    op.create_index(
+        "ix_notifications_in_app_unread",
+        "notifications",
+        ["user_id", "tenant_id"],
+        unique=False,
+        postgresql_where=sa.and_(
+            sa.column("channel") == "in_app",
+            sa.column("read_at").is_(None),
+        ),
     )
 
 
@@ -91,6 +107,14 @@ def downgrade() -> None:
     )
     op.execute(
         "UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL"
+    )
+    op.execute(
+        "UPDATE notifications SET related_type = params_->>'related_type' "
+        "WHERE params_ IS NOT NULL AND params_->>'related_type' IS NOT NULL"
+    )
+    op.execute(
+        "UPDATE notifications SET related_id = NULLIF(params_->>'related_id', '')::integer "
+        "WHERE params_ IS NOT NULL AND params_->>'related_id' IS NOT NULL"
     )
     op.execute(
         "UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL"

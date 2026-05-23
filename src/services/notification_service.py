@@ -30,15 +30,19 @@ class NotificationService:
         **kwargs,
     ) -> NotificationModel:
         """发送通知"""
+        params = {"content": content}
+        if kwargs.get("related_type") is not None:
+            params["related_type"] = kwargs["related_type"]
+        if kwargs.get("related_id") is not None:
+            params["related_id"] = kwargs["related_id"]
         notification = NotificationModel(
             tenant_id=tenant_id,
             user_id=user_id,
             channel=notification_type,
             template=title,
-            params_={"content": content},
+            params_=params,
             status="pending",
             priority=kwargs.get("priority", "normal"),
-            created_at=datetime.now(UTC),
         )
         self.session.add(notification)
         await self.session.flush()
@@ -87,10 +91,10 @@ class NotificationService:
         notification = result.scalar_one_or_none()
         if notification is None:
             raise NotFoundException("通知")
-        notification.read_at = datetime.now(UTC)
+        if notification.read_at is None:
+            notification.read_at = datetime.now(UTC)
         notification.status = "read"
         await self.session.flush()
-        await self.session.refresh(notification)
         return notification
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int = 0) -> dict:
@@ -166,7 +170,6 @@ class NotificationService:
             related_type=related_type,
             related_id=related_id,
             is_completed=False,
-            created_at=datetime.now(UTC),
         )
         self.session.add(reminder)
         await self.session.flush()

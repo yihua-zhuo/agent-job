@@ -31,8 +31,6 @@ class NotificationModel(Base):
 
     def to_dict(self) -> dict:
         params_val = self.params_
-        if isinstance(params_val, dict):
-            params_val = params_val
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,

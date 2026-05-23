@@ -74,8 +74,8 @@ def make_notification_handler(state):
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             unread_filter = "read_at is null" in sql_text or "read_at = null" in sql_text
-            page = params.get("offset", 0) // max(params.get("limit", 20), 1)
-            page_size = params.get("limit", 20)
+            page_size = max(params.get("limit", 20), 1)
+            offset = max(params.get("offset", 0), 0)
             rows = []
             for n in state._notifications.values():
                 if n.get("tenant_id") != tenant_id or n.get("user_id") != user_id:
@@ -83,7 +83,6 @@ def make_notification_handler(state):
                 if unread_filter and n.get("read_at") is not None:
                     continue
                 rows.append(n)
-            offset = page * page_size
             return MockResult([_notification_to_row(r) for r in rows[offset : offset + page_size]])
 
         if "select" in sql_text and "count" in sql_text and "from notifications" in sql_text:

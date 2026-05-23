@@ -41,11 +41,6 @@ from tests.unit.domain_handlers.sla import (  # noqa: F401, E402
     sla_mock_session,
 )
 
-# Re-export notification domain handlers for backward compat — primary location is tests/unit/domain_handlers/notification.py
-from tests.unit.domain_handlers.notification import (  # noqa: F401, E402
-    make_notification_handler,
-)
-
 # ---------------------------------------------------------------------------
 # Mock SQLAlchemy Result object (returned by session.execute).
 # ---------------------------------------------------------------------------
