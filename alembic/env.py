@@ -12,8 +12,6 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import db.models  # noqa: F401 - imports all model modules for Base.metadata
-import db.models.workflow_definition  # noqa: F401
-import db.models.workflow_instance  # noqa: F401
 from alembic import context
 from db.base import Base
 

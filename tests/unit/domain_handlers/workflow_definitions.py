@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
-ORDER = 10
-
 
 def make_workflow_definition_handler(state: MockState):
     """Handle all workflow_definition-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
@@ -45,8 +43,10 @@ def make_workflow_definition_handler(state: MockState):
         if sql_text.startswith("delete") and "workflow_definitions" in sql_text:
             if hasattr(state, "workflow_definitions"):
                 wid = params.get("id")
-                if wid in state.workflow_definitions:
-                    del state.workflow_definitions[wid]
+                rec = state.workflow_definitions.get(wid)
+                if rec is None or rec.get("tenant_id") != params.get("tenant_id"):
+                    return MockResult([])
+                del state.workflow_definitions[wid]
             return MockResult([MockRow({"id": params.get("id", 1)})])
 
         if "select" in sql_text and "count" in sql_text and "from workflow_definitions" in sql_text:
@@ -66,7 +66,11 @@ def make_workflow_definition_handler(state: MockState):
             tenant_filter = params.get("tenant_id", 0)
             rows = []
             if hasattr(state, "workflow_definitions"):
-                rows = [MockRow(r.copy()) for r in state.workflow_definitions.values() if r.get("tenant_id") == tenant_filter]
+                rows = [
+                    MockRow(r.copy())
+                    for r in state.workflow_definitions.values()
+                    if r.get("tenant_id") == tenant_filter
+                ]
             return MockResult(rows)
 
         return None

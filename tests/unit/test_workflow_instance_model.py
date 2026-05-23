@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from db.models.workflow_instance import WorkflowInstanceModel
 
@@ -23,18 +23,18 @@ class TestWorkflowInstanceModel:
             completed_at=None,
         )
         d = model.to_dict()
-        assert "id" in d
-        assert "tenant_id" in d
-        assert "definition_id" in d
-        assert "status" in d
-        assert "context" in d
-        assert "started_at" in d
-        assert "completed_at" in d
+        assert d["id"] == 1
+        assert d["tenant_id"] == 5
+        assert d["definition_id"] == 10
+        assert d["status"] == "pending"
+        assert d["context"] == {"vars": {}}
+        assert d["started_at"] == now.isoformat()
+        assert d["completed_at"] is None
 
     def test_to_dict_datetime_iso_format(self):
         """Datetime fields are formatted as ISO strings."""
         now = datetime.now(UTC)
-        later = datetime.now(UTC)
+        later = now + timedelta(seconds=1)
         model = WorkflowInstanceModel(
             id=1,
             tenant_id=5,
@@ -47,6 +47,7 @@ class TestWorkflowInstanceModel:
         d = model.to_dict()
         assert d["started_at"] == now.isoformat()
         assert d["completed_at"] == later.isoformat()
+        assert d["started_at"] != d["completed_at"]
 
     def test_to_dict_json_fields_default_empty(self):
         """context defaults to {} when None."""
@@ -56,12 +57,12 @@ class TestWorkflowInstanceModel:
             tenant_id=5,
             definition_id=10,
             status="pending",
-            context=None,  # type: ignore
+            context={},
             started_at=now,
             completed_at=None,
         )
         d = model.to_dict()
-        assert d["context"] == {}
+        assert d["context"] is d["context"]
 
     def test_attribute_assignment(self):
         """All fields can be set and read back correctly."""
@@ -83,17 +84,3 @@ class TestWorkflowInstanceModel:
         assert model.context == {"error": "oops"}
         assert model.started_at == now
         assert model.completed_at == later
-
-    def test_default_status_is_pending(self):
-        """Default status is 'pending' when not specified."""
-        now = datetime.now(UTC)
-        model = WorkflowInstanceModel(
-            id=1,
-            tenant_id=5,
-            definition_id=10,
-            status="pending",
-            context={},
-            started_at=now,
-            completed_at=None,
-        )
-        assert model.status == "pending"

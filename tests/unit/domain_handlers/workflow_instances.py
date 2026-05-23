@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
-ORDER = 10
-
 
 def make_workflow_instance_handler(state: MockState):
     """Handle all workflow_instance-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
@@ -35,6 +33,8 @@ def make_workflow_instance_handler(state: MockState):
             wid = params.get("id")
             if hasattr(state, "workflow_instances") and wid in state.workflow_instances:
                 rec = state.workflow_instances[wid]
+                if rec.get("tenant_id") != params.get("tenant_id"):
+                    return MockResult([])
                 for k, v in params.items():
                     if k not in ("id", "tenant_id"):
                         rec[k] = v
@@ -44,8 +44,10 @@ def make_workflow_instance_handler(state: MockState):
         if sql_text.startswith("delete") and "workflow_instances" in sql_text:
             if hasattr(state, "workflow_instances"):
                 wid = params.get("id")
-                if wid in state.workflow_instances:
-                    del state.workflow_instances[wid]
+                rec = state.workflow_instances.get(wid)
+                if rec is None or rec.get("tenant_id") != params.get("tenant_id"):
+                    return MockResult([])
+                del state.workflow_instances[wid]
             return MockResult([MockRow({"id": params.get("id", 1)})])
 
         if "select" in sql_text and "count" in sql_text and "from workflow_instances" in sql_text:
@@ -65,7 +67,9 @@ def make_workflow_instance_handler(state: MockState):
             tenant_filter = params.get("tenant_id", 0)
             rows = []
             if hasattr(state, "workflow_instances"):
-                rows = [MockRow(r.copy()) for r in state.workflow_instances.values() if r.get("tenant_id") == tenant_filter]
+                rows = [
+                    MockRow(r.copy()) for r in state.workflow_instances.values() if r.get("tenant_id") == tenant_filter
+                ]
             return MockResult(rows)
 
         return None

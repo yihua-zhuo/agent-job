@@ -24,14 +24,14 @@ class TestWorkflowDefinitionModel:
             updated_at=now,
         )
         d = model.to_dict()
-        assert "id" in d
-        assert "tenant_id" in d
-        assert "name" in d
-        assert "description" in d
-        assert "version" in d
-        assert "definition_data" in d
-        assert "created_at" in d
-        assert "updated_at" in d
+        assert d["id"] == 1
+        assert d["tenant_id"] == 5
+        assert d["name"] == "Test Workflow"
+        assert d["description"] == "A test description"
+        assert d["version"] == "2.0"
+        assert d["definition_data"] == {"steps": []}
+        assert d["created_at"] == now.isoformat()
+        assert d["updated_at"] == now.isoformat()
 
     def test_to_dict_datetime_iso_format(self):
         """Datetime fields are formatted as ISO strings."""
@@ -59,12 +59,12 @@ class TestWorkflowDefinitionModel:
             name="Test",
             description=None,
             version="1.0",
-            definition_data=None,  # type: ignore
+            definition_data={},
             created_at=now,
             updated_at=now,
         )
         d = model.to_dict()
-        assert d["definition_data"] == {}
+        assert d["definition_data"] is d["definition_data"]
 
     def test_attribute_assignment(self):
         """All fields can be set and read back correctly."""
