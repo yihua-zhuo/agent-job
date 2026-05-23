@@ -81,12 +81,21 @@ class TestWorkflowInstanceIntegration:
         )
         rows = result.scalars().all()
         assert len(rows) == 2
+        # verify both rows belong to tenant_1's definition and have correct statuses
+        for row in rows:
+            assert row.tenant_id == tenant_id
+            assert row.definition_id == def_id_1
+        statuses = {row.status for row in rows}
+        assert statuses == {"pending", "running"}
 
         result_t2 = await async_session.execute(
             select(WorkflowInstanceModel).where(WorkflowInstanceModel.tenant_id == tenant_id_2)
         )
         rows_t2 = result_t2.scalars().all()
         assert len(rows_t2) == 1
+        # verify the single row belongs to tenant_2's definition
+        assert rows_t2[0].tenant_id == tenant_id_2
+        assert rows_t2[0].definition_id == def_id_2
 
     async def test_update_instance_status(self, db_schema, tenant_id, async_session):
         """Change status from 'pending' to 'running', verify the update persists."""
@@ -136,7 +145,12 @@ class TestWorkflowInstanceIntegration:
         assert updated.completed_at is not None
 
     async def test_cascade_delete_on_definition_delete(self, db_schema, tenant_id, async_session):
-        """Insert definition + instance; delete definition; assert instance is gone via FK cascade."""
+        """Insert definition + instance; delete definition; assert instance is gone via FK cascade.
+
+        NOTE: This test assumes the workflow_instances table has an ON DELETE CASCADE FK
+        to workflow_definitions. The migration must declare ON DELETE CASCADE on the
+        definition_id foreign key for this test to be meaningful.
+        """
         def_id = await _seed_definition(async_session, tenant_id)
         instance = WorkflowInstanceModel(
             tenant_id=tenant_id,

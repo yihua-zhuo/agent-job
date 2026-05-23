@@ -1,7 +1,7 @@
 """Workflow instance ORM model."""
 
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING  # noqa: F401
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
@@ -34,7 +34,7 @@ class WorkflowInstanceModel(Base):
         DateTime(timezone=True), nullable=True
     )
 
-    workflow_definition: Mapped["WorkflowDefinitionModel"] = relationship(
+    workflow_definition: Mapped["WorkflowDefinitionModel"] = relationship(  # noqa: UP037
         "WorkflowDefinitionModel",
         back_populates="instances",
         lazy="raise",
@@ -50,3 +50,9 @@ class WorkflowInstanceModel(Base):
             "started_at": self.started_at.isoformat() if self.started_at else None,
             "completed_at": self.completed_at.isoformat() if self.completed_at else None,
         }
+
+    def __init__(self, **kwargs):
+        # Apply defaults that mapped_column default= does not set at Python construction time
+        kwargs.setdefault("status", "pending")
+        kwargs.setdefault("context", {})
+        super().__init__(**kwargs)

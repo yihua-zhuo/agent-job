@@ -49,20 +49,35 @@ class TestWorkflowInstanceModel:
         assert d["completed_at"] == later.isoformat()
         assert d["started_at"] != d["completed_at"]
 
-    def test_to_dict_json_fields_default_empty(self):
-        """context defaults to {} when None."""
+    def test_to_dict_context_defaults_to_empty_when_none(self):
+        """context defaults to {} when None is passed to constructor."""
         now = datetime.now(UTC)
         model = WorkflowInstanceModel(
             id=1,
             tenant_id=5,
             definition_id=10,
             status="pending",
-            context={},
+            context=None,
             started_at=now,
             completed_at=None,
         )
         d = model.to_dict()
-        assert d["context"] is d["context"]
+        assert d["context"] == {}  # exercises the or-{} fallback
+
+    def test_to_dict_context_preserved_when_provided(self):
+        """context is returned unchanged when explicitly set to a non-None value."""
+        now = datetime.now(UTC)
+        model = WorkflowInstanceModel(
+            id=1,
+            tenant_id=5,
+            definition_id=10,
+            status="pending",
+            context={"vars": {}},
+            started_at=now,
+            completed_at=None,
+        )
+        d = model.to_dict()
+        assert d["context"] == {"vars": {}}
 
     def test_attribute_assignment(self):
         """All fields can be set and read back correctly."""
@@ -84,3 +99,15 @@ class TestWorkflowInstanceModel:
         assert model.context == {"error": "oops"}
         assert model.started_at == now
         assert model.completed_at == later
+
+    def test_default_status_is_pending(self):
+        """Default status is 'pending' when not provided."""
+        now = datetime.now(UTC)
+        model = WorkflowInstanceModel(
+            id=1,
+            tenant_id=5,
+            definition_id=10,
+            context={},
+            started_at=now,
+        )
+        assert model.status == "pending"

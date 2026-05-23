@@ -64,7 +64,7 @@ class TestWorkflowDefinitionModel:
             updated_at=now,
         )
         d = model.to_dict()
-        assert d["definition_data"] is d["definition_data"]
+        assert d["definition_data"] == {}  # verifies the default was applied, not that the object is itself
 
     def test_attribute_assignment(self):
         """All fields can be set and read back correctly."""

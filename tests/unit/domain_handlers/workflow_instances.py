@@ -21,7 +21,10 @@ def make_workflow_instance_handler(state: MockState):
                 "definition_id": params.get("definition_id", 1),
                 "status": params.get("status", "pending"),
                 "context": params.get("context", {}),
-                "started_at": params.get("started_at"),
+                # started_at is nullable with no server_default in the ORM model — params.get()
+            # returns None when absent, matching real behavior. If the ORM later adds a
+            # server_default, this mock will need updating to reflect auto-population.
+            "started_at": params.get("started_at"),
                 "completed_at": params.get("completed_at"),
             }
             if not hasattr(state, "workflow_instances"):
@@ -60,7 +63,10 @@ def make_workflow_instance_handler(state: MockState):
         if "from workflow_instances where id" in sql_text:
             wid = params.get("id")
             if hasattr(state, "workflow_instances") and wid in state.workflow_instances:
-                return MockResult([MockRow(state.workflow_instances[wid].copy())])
+                rec = state.workflow_instances[wid]
+                if rec.get("tenant_id") != params.get("tenant_id"):
+                    return MockResult([])
+                return MockResult([MockRow(rec.copy())])
             return MockResult([])
 
         if "select" in sql_text and "from workflow_instances" in sql_text:

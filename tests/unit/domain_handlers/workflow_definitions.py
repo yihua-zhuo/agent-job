@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from tests.unit.conftest import MockResult, MockRow, MockState
 
 
@@ -15,6 +17,7 @@ def make_workflow_definition_handler(state: MockState):
                 state.workflow_definitions_next_id = 1
                 wid = 1
             state.workflow_definitions_next_id += 1
+            now_ts = datetime.now(UTC).isoformat()
             record = {
                 "id": wid,
                 "tenant_id": params.get("tenant_id", 0),
@@ -22,8 +25,8 @@ def make_workflow_definition_handler(state: MockState):
                 "description": params.get("description"),
                 "version": params.get("version", "1.0"),
                 "definition_data": params.get("definition_data", {}),
-                "created_at": params.get("created_at"),
-                "updated_at": params.get("updated_at"),
+                "created_at": now_ts,
+                "updated_at": now_ts,
             }
             if not hasattr(state, "workflow_definitions"):
                 state.workflow_definitions = {}
@@ -59,7 +62,10 @@ def make_workflow_definition_handler(state: MockState):
         if "from workflow_definitions where id" in sql_text:
             wid = params.get("id")
             if hasattr(state, "workflow_definitions") and wid in state.workflow_definitions:
-                return MockResult([MockRow(state.workflow_definitions[wid].copy())])
+                rec = state.workflow_definitions[wid]
+                if rec.get("tenant_id") != params.get("tenant_id"):
+                    return MockResult([])
+                return MockResult([MockRow(rec.copy())])
             return MockResult([])
 
         if "select" in sql_text and "from workflow_definitions" in sql_text:
