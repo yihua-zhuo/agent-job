@@ -116,7 +116,7 @@ def make_log_handler(state: MockState):
                 "actions_executed": _json.dumps(params.get("actions_executed", [])),
                 "status": params.get("status", "success"),
                 "error_message": params.get("error_message"),
-                "executed_by": params.get("executed_by"),
+                "executed_by": params.get("executed_by", 0),
                 "executed_at": params.get("executed_at"),
             }
             state.automation_logs[lid] = record
@@ -127,6 +127,10 @@ def make_log_handler(state: MockState):
                 MockRow(r.copy())
                 for r in state.automation_logs.values()
                 if r.get("tenant_id") == tenant_id
+                and (
+                    "rule_id" not in params
+                    or r.get("rule_id") == params.get("rule_id")
+                )
             ]
             return MockResult(rows if rows else [])
 

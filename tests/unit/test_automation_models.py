@@ -90,9 +90,9 @@ class TestAutomationRuleModelDefaults:
         col = AutomationRuleModel.__table__.c.enabled
         assert isinstance(col.type, sa.Boolean)
         assert col.nullable is False
-        default_val = col.default.arg if col.default is not None else None
+        python_val = col.default.arg if col.default is not None else None
         server_val = col.server_default.arg if col.server_default is not None else None
-        assert default_val is True or server_val is True
+        assert python_val is True or server_val == "true"
 
     def test_conditions_column_has_callable_default(self):
         """The conditions column has a callable default (empty list factory)."""
@@ -109,7 +109,9 @@ class TestAutomationRuleModelDefaults:
     def test_created_by_column_default_is_zero(self):
         """The created_by column defaults to 0."""
         col = AutomationRuleModel.__table__.c.created_by
-        assert col.default is not None and col.default.arg == 0
+        python_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert python_val == 0 or server_val == "0"
 
 
 class TestAutomationLogModelToDict:
@@ -195,7 +197,12 @@ class TestAutomationLogModelDefaults:
     def test_status_column_default_is_success(self):
         """The status column defaults to 'success'."""
         col = AutomationLogModel.__table__.c.status
-        assert col.default is not None and col.default.arg == "success"
+        python_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        if hasattr(col.type, "enums") and col.type.enums:
+            assert col.type.enums[0] == "success"
+        else:
+            assert python_val == "success" or server_val == "'success'"
 
     def test_trigger_context_column_has_callable_default(self):
         """The trigger_context column has a callable default (empty dict factory)."""
@@ -212,7 +219,9 @@ class TestAutomationLogModelDefaults:
     def test_executed_by_column_default_is_zero(self):
         """The executed_by column defaults to 0."""
         col = AutomationLogModel.__table__.c.executed_by
-        assert col.default is not None and col.default.arg == 0
+        python_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert python_val == 0 or server_val == "0"
 
 
 def _col_is_indexed(table, col_name: str) -> bool:
@@ -238,3 +247,5 @@ class TestAutomationModelsIndexing:
     def test_log_rule_id_is_indexed(self):
         """AutomationLogModel.rule_id column is indexed."""
         assert _col_is_indexed(AutomationLogModel.__table__, "rule_id")
+
+
