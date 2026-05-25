@@ -15,14 +15,16 @@ class WorkflowModel(Base):
     __tablename__ = "workflows"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), default=0, nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
-    trigger_type: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(50), default="manual", server_default="manual", nullable=False)
     trigger_config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     actions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     conditions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
-    status: Mapped[str] = mapped_column(String(50), default="draft", nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="draft", server_default="draft", nullable=False)
     created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
@@ -35,11 +37,11 @@ class WorkflowModel(Base):
             "tenant_id": self.tenant_id,
             "name": self.name,
             "description": self.description,
-            "trigger_type": self.trigger_type,
+            "trigger_type": self.trigger_type or "manual",
             "trigger_config": self.trigger_config or {},
             "actions": self.actions or [],
             "conditions": self.conditions or [],
-            "status": self.status,
+            "status": self.status or "draft",
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
