@@ -12,7 +12,6 @@ from db.models.user import UserModel
 from pkg.errors.app_exceptions import (
     NotFoundException,
     UnauthorizedException,
-    ValidationException,
 )
 
 

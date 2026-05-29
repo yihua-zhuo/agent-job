@@ -93,13 +93,29 @@ def count_actionable_feedback(repo: str, pr_number: int) -> int:
     return len(build_actionable_feedback(threads, issue_comments))
 
 
-def dispatch_fix(pr_number: int) -> bool:
-    result = run_gh([
-        "workflow", "run", WORKFLOW_FILE,
-        "-f", f"pr_number={pr_number}",
-    ])
+def dispatch_fix(pr_number: int, head_ref: str | None = None) -> bool:
+    """Trigger fix-pr-comments.yml.
+
+    When ``head_ref`` is given we dispatch with ``--ref <head_ref>`` so the run
+    is associated with the PR/issue branch in the Actions UI — otherwise GH
+    labels the run with the default branch (master) and it looks like a
+    master-side workflow, which is confusing when reading the run list.
+
+    Tradeoff: the workflow file is read from whatever ref we dispatch against.
+    For auto-implement PRs the branch was just cut from master so its
+    workflow file matches; for long-lived PRs it may be stale. The workflow
+    itself sidesteps this for its Python helpers by re-fetching them from
+    origin/master at runtime — but the YAML steps themselves come from
+    head_ref. If a workflow change is shipped to master that hasn't yet
+    propagated to old PR branches, pass ``head_ref=None`` to fall back to
+    the master-dispatch behaviour.
+    """
+    args = ["workflow", "run", WORKFLOW_FILE, "-f", f"pr_number={pr_number}"]
+    if head_ref:
+        args.extend(["--ref", head_ref])
+    result = run_gh(args)
     if result.returncode != 0:
-        log(f"dispatch_failed pr=#{pr_number} rc={result.returncode} stderr={result.stderr.strip()}")
+        log(f"dispatch_failed pr=#{pr_number} ref={head_ref or '<default>'} rc={result.returncode} stderr={result.stderr.strip()}")
         return False
     return True
 
@@ -142,8 +158,9 @@ def main() -> int:
             rows.append((number, head, title, "SKIP", "no unresolved feedback"))
             continue
 
-        # 3. Dispatch.
-        if dispatch_fix(number):
+        # 3. Dispatch against the PR's head branch so the run appears under
+        # that branch in the Actions UI, not under master.
+        if dispatch_fix(number, head_ref=head):
             rows.append((number, head, title, "DISPATCHED", f"{n_items} actionable item(s)"))
         else:
             rows.append((number, head, title, "ERROR", "dispatch failed; see logs above"))

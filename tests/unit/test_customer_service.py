@@ -1,11 +1,10 @@
 """Unit tests for CustomerService — focus on CustomerCreateDTO integration."""
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from models.customer import CustomerStatus
-from models.customer_create_dto import CustomerCreateDTO
+from models.customer import CustomerCreateDTO, CustomerStatus
 from pkg.errors.app_exceptions import ValidationException
 from services.customer_service import CustomerService
 
@@ -28,8 +27,11 @@ def mock_db_session():
     mock_result.all = MagicMock(return_value=[])
     mock_result.rowcount = 0
     session.execute = AsyncMock(return_value=mock_result)
+    session.get = AsyncMock(return_value=None)
 
-    return session
+    # auto_assign_lead is a no-op in tests that don't cover routing
+    with patch("services.lead_routing_service.LeadRoutingService.auto_assign_lead", new_callable=AsyncMock, return_value=None):
+        yield session
 
 
 class TestCustomerCreateDTO:
@@ -42,7 +44,7 @@ class TestCustomerCreateDTO:
         assert dto.email == "alice@example.com"
         assert dto.phone is None
         assert dto.company is None
-        assert dto.status == "lead"
+        assert dto.status == CustomerStatus.LEAD
         assert dto.owner_id == 0
         assert dto.tags == []
 
@@ -94,7 +96,7 @@ class TestCustomerCreateDTO:
             email="dave@example.com",
             phone="13700137000",
             company="Gamma",
-            status="lead",
+            status=CustomerStatus.LEAD,
             owner_id=3,
             tags=["prospect"],
         )
@@ -120,7 +122,7 @@ class TestCustomerCreateDTO:
     def test_default_status_is_lead(self):
         """Default status when not specified."""
         dto = CustomerCreateDTO(name="Eve", email="eve@example.com")
-        assert dto.status == "lead"
+        assert dto.status == CustomerStatus.LEAD
 
     def test_default_owner_id_is_zero(self):
         """Default owner_id when not specified."""
@@ -130,6 +132,34 @@ class TestCustomerCreateDTO:
 
 class TestCreateCustomerService:
     """Tests for CustomerService.create_customer with DTO support."""
+
+    @pytest.mark.asyncio
+    async def test_create_customer_with_dto(self, mock_db_session):
+        """create_customer uses direct DTO field access when passed a CustomerCreateDTO."""
+        service = CustomerService(mock_db_session)
+
+        async def fake_refresh(obj):
+            obj.id = 10
+            obj.name = "DTO Customer"
+            obj.status = "customer"
+
+        mock_db_session.refresh = fake_refresh
+
+        result = await service.create_customer(
+            CustomerCreateDTO(
+                name="DTO Customer",
+                email="dto@test.com",
+                status=CustomerStatus.CUSTOMER,
+            ),
+            tenant_id=1,
+        )
+
+        call_args = mock_db_session.add.call_args[0][0]
+        assert call_args.name == "DTO Customer"
+        assert call_args.email == "dto@test.com"
+        assert call_args.status == "customer"
+        assert result.name == "DTO Customer"
+        assert result.status == "customer"
 
     @pytest.mark.asyncio
     async def test_create_customer_accepts_dict(self, mock_db_session):
@@ -280,6 +310,31 @@ class TestCountByStatus:
 
         with pytest.raises(ValidationException, match="Invalid customer status"):
             await service.count_by_status(tenant_id=1)
+
+    async def test_count_by_status_basic(self):
+        """Returns correct counts across LEAD, ACTIVE, and INACTIVE statuses."""
+        session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.all = MagicMock(return_value=[
+            ("lead", 5),
+            ("active", 3),
+            ("inactive", 2),
+        ])
+        session.execute = AsyncMock(return_value=mock_result)
+        service = CustomerService(session)
+        result = await service.count_by_status(tenant_id=1)
+        assert result[CustomerStatus.LEAD] == 5
+        assert result[CustomerStatus.ACTIVE] == 3
+        assert result[CustomerStatus.INACTIVE] == 2
+
+    async def test_count_by_status_zero_tenant(self):
+        """Returns empty dict for tenant_id <= 0 without querying the database."""
+        session = MagicMock()
+        session.execute = AsyncMock()
+        service = CustomerService(session)
+        result = await service.count_by_status(tenant_id=0)
+        assert result == {}
+        session.execute.assert_not_called()
 
 
 @pytest.mark.asyncio

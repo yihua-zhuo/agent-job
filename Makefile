@@ -1,14 +1,14 @@
-.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev
+.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review act-monitor
 
-# Use the project virtualenv's interpreter so installed deps are picked up
-# without needing the venv to be activated first. Layout differs by OS:
-# Windows → .venv/Scripts/python.exe, Unix → .venv/bin/python.
-# Override at the call site if you need to point at a different interpreter,
-# e.g. `make PYTHON=python3 test-integration`.
+# Create a local virtualenv on demand and use it by default.
+VENV_DIR := .venv
+VENV_READY := $(VENV_DIR)/.dev-installed
 ifeq ($(OS),Windows_NT)
-PYTHON ?= .venv/Scripts/python.exe
+VENV_PY := $(VENV_DIR)/Scripts/python.exe
+PYTHON ?= $(VENV_PY)
 else
-PYTHON ?= .venv/bin/python
+VENV_PY := $(VENV_DIR)/bin/python
+PYTHON ?= $(VENV_PY)
 endif
 
 PYTHONPATH := src
@@ -27,39 +27,54 @@ help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
 
 # ── Setup ──────────────────────────────────────────────────────────────────
+venv: $(VENV_READY) ## Create the local virtualenv and install dev dependencies
+
+$(VENV_READY): pyproject.toml
+	python3 -m venv "$(VENV_DIR)"
+	$(VENV_PY) -m pip install -e ".[dev]"
+	@touch "$@"
+
 install: ## Install the project into the venv (runtime deps only)
+install: venv
 	$(PYTHON) -m pip install -e .
 
 install-dev: ## Install runtime + dev extras (pytest, pytest-asyncio, ruff, mypy, …)
-	$(PYTHON) -m pip install -e ".[dev]"
+install-dev: venv
 
 # ── Tests ──────────────────────────────────────────────────────────────────
 test: test-unit ## Alias for test-unit
 
 test-unit: ## Run unit tests (no DB)
+test-unit: venv
 	$(PYTHON) -m pytest tests/unit/ -v
 
 test-integration: db-up ## Run all integration tests against docker test-db
+test-integration: venv
 	$(PYTHON) -m pytest tests/integration/ -v
 
 test-web: db-up ## Run web integration tests only
+test-web: venv
 	$(PYTHON) -m pytest tests/integration/test_web_integration.py -v
 
 test-all: test-unit test-integration ## Run unit + integration tests
 
 # ── Lint / format ──────────────────────────────────────────────────────────
 lint: ## Run ruff check
+lint: venv
 	$(PYTHON) -m ruff check src/
 
 format: ## Run ruff format (in place)
+format: venv
 	$(PYTHON) -m ruff format src/
 
 format-check: ## Verify formatting without writing
+format-check: venv
 	$(PYTHON) -m ruff format --check src/
 
 check: lint format-check ## Run lint + format check (CI-style)
 
 fix: ## Run ruff with --fix
+fix: venv
 	$(PYTHON) -m ruff check --fix src/
 	$(PYTHON) -m ruff format src/
 
@@ -75,11 +90,74 @@ db-shell: ## Open a psql shell against the test-db
 
 # ── Alembic ────────────────────────────────────────────────────────────────
 migrate: ## Apply all alembic migrations to the test-db
-	alembic upgrade head
+migrate: venv
+	$(PYTHON) -m alembic upgrade head
 
 migrate-new: ## Autogenerate a new migration: make migrate-new MSG="..."
+migrate-new: venv
 	@if [ -z "$(MSG)" ]; then echo "Usage: make migrate-new MSG=\"describe change\""; exit 1; fi
-	alembic revision --autogenerate -m "$(MSG)"
+	$(PYTHON) -m alembic revision --autogenerate -m "$(MSG)"
 
-trigger-fix:
-	$(PYTHON) "scripts/ci/trigger_fix_for_issue.py" $(ISSUE)
+trigger-fix: venv
+	@if [ -z "$(ISSUE)" ]; then echo "Usage: make trigger-fix ISSUE=123"; exit 1; fi
+	$(PYTHON) ".agent-actions/scripts/trigger_fix_for_issue.py" $(ISSUE)
+
+# ── Local CI via act ───────────────────────────────────────────────────────
+# Runs the implement-ready-issues workflow in a local Docker runner via `act`.
+# Pass ISSUE=<n> to target a specific issue; omit to pick the oldest ready one
+# (same semantics as the scheduled run).
+#
+# Requirements:
+#   • brew install act
+#   • .secrets contains real ANTHROPIC_API_KEY and GITHUB_TOKEN (act cannot
+#     read GitHub repo secrets; see .secrets.example).
+#   • Docker is running — the workflow runs `docker compose` from inside the
+#     runner, so we mount the host socket via --bind + -v.
+#
+# Side effects: in --bind mode act operates on the working tree directly. If
+# the workflow gets to `git push`, it will push to the real origin and open a
+# real PR with the token in .secrets. Use a throwaway issue/branch if testing.
+ACT_IMAGE := act-runner-with-gh:latest
+
+act-build: ## Build the custom act runner image (catthehacker + gh CLI)
+	docker build --platform linux/amd64 -t $(ACT_IMAGE) -f .act/Dockerfile .act
+
+act-implement: ## Trigger implement-ready-issues.yml locally via act (ISSUE=123 to target one)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/implement-ready-issues.yml \
+		-j implement \
+		$(if $(ISSUE),--input issue_number=$(ISSUE),) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock
+
+# Triggers the PR-reviewer agent. Heads up: this can enable auto-merge on
+# real open PRs and dispatch fix-pr-comments runs. Use a throwaway GH_TOKEN
+# (or expect real side effects on github.com).
+act-review: ## Trigger review-open-prs.yml locally via act (PR=123 logs intent; agent still scans all open PRs)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/review-open-prs.yml \
+		-j review \
+		$(if $(PR),--input pr_number=$(PR),) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock
+
+# Triggers the issue-monitor agent (now also generates dev-plan boards for
+# ready issues). By default writes boards to docs/dev-plan/issues/ and pushes
+# to master via the .secrets GITHUB_TOKEN. Set DRY=1 to write to /tmp without
+# committing — the recommended way to smoke-test changes to the generator.
+act-monitor: ## Trigger monitor-issues.yml locally via act (DRY=1 to skip commit+push)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/monitor-issues.yml \
+		-j validate \
+		$(if $(DRY),--env DEV_PLAN_DRY_RUN=1,) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock

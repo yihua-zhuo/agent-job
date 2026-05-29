@@ -1,8 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { use } from "react";
 import ReactMarkdown from "react-markdown";
 import { toast } from "sonner";
 import { useTicket, useTicketReplies, useTicketActivity, useAddReply, useUpdateTicket, useDeleteTicket, useCustomers } from "@/lib/api/queries";
@@ -69,10 +68,13 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const router = useRouter();
   const { id } = use(params);
   const ticketId = Number(id);
-  if (isNaN(ticketId)) {
-    router.push("/tickets");
-    return null;
-  }
+  const invalidTicketId = Number.isNaN(ticketId);
+
+  useEffect(() => {
+    if (invalidTicketId) {
+      router.push("/tickets");
+    }
+  }, [invalidTicketId, router]);
 
   const { data: ticketData, isLoading: ticketLoading } = useTicket(ticketId);
   const { data: repliesData } = useTicketReplies(ticketId);
@@ -91,7 +93,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
   const slaToastShownRef = useRef(false);
 
   const ticket = ticketData?.data as Record<string, unknown> | undefined;
-  const customerName = customers.find((c) => c.id === Number(ticket?.customer_id))?.name;
+  const customerName = useMemo(
+    () => customers.find((c) => c.id === Number(ticket?.customer_id))?.name,
+    [customers, ticket?.customer_id]
+  );
   const replies = (repliesData?.data ?? []) as Array<Record<string, unknown>>;
   const activities = (activityData?.data ?? []) as Array<Record<string, unknown>>;
 
@@ -105,6 +110,10 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
       }
     }
   }, [ticket, ticketId]);
+
+  if (invalidTicketId) {
+    return null;
+  }
 
   async function handleSendReply() {
     if (!replyContent.trim()) return;
@@ -215,8 +224,8 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium">Agent {reply.created_by}</span>
-                      {reply.is_internal && (
+                      <span className="text-sm font-medium">Agent {String(reply.created_by ?? "")}</span>
+                      {Boolean(reply.is_internal) && (
                         <span className="inline-flex items-center gap-1 text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full">
                           <LockIcon className="h-3 w-3" />
                           Internal
@@ -310,7 +319,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
 
-              {ticket.response_deadline && (
+              {Boolean(ticket.response_deadline) && (
                 <div className="pt-2 border-t">
                   <span className="text-xs text-muted-foreground block mb-1.5">SLA Timer</span>
                   <SLATimer

@@ -86,8 +86,8 @@ class TestTenantHandler:
                     "slug": "test-tenant",
                     "plan": "free",
                     "status": "active",
-                    "settings": "{}",
-                    "usage_limits": "{}",
+                    "settings": {},
+                    "usage_limits": {},
                 },
             )
         )
@@ -103,7 +103,7 @@ class TestTenantHandler:
         result = self._run(
             mock_db_session.execute(
                 text("SELECT id, name, slug, plan FROM tenants WHERE id = :id LIMIT 1"),
-                {"tenant_id": 1},
+                {"id": 1},
             )
         )
         row = result.fetchone()
@@ -111,6 +111,25 @@ class TestTenantHandler:
 
     def test_count_tenants(self, mock_db_session):
         from sqlalchemy import text
+
+        # Seed two tenants via the handler so the count reflects state, not a magic number.
+        for name, slug in (("Alpha", "alpha"), ("Beta", "beta")):
+            self._run(
+                mock_db_session.execute(
+                    text(
+                        "INSERT INTO tenants (name, slug, plan, status, settings, usage_limits) "
+                        "VALUES (:name, :slug, :plan, :status, :settings, :usage_limits)"
+                    ),
+                    {
+                        "name": name,
+                        "slug": slug,
+                        "plan": "free",
+                        "status": "active",
+                        "settings": {},
+                        "usage_limits": {},
+                    },
+                )
+            )
 
         result = self._run(
             mock_db_session.execute(

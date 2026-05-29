@@ -30,11 +30,11 @@ class TenantModel(Base):
         return {
             "id": self.id,
             "name": self.name,
-            "slug": self.slug or "",
+            "slug": self.slug,
             "plan": self.plan,
             "status": self.status,
-            "settings": self.settings or {},
-            "usage_limits": self.usage_limits or {},
+            "settings": self.settings,
+            "usage_limits": self.usage_limits,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

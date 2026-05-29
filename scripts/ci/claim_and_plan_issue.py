@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from dev_plan_context import build_dev_plan_prompt_block, build_source_contract_text, resolve_dev_plan_context
+
 
 LABEL_READY = "ready"
 LABEL_WIP = "wip"
@@ -39,11 +41,12 @@ def list_ready_issues() -> list[dict[str, Any]]:
     # the limit must be large enough that older ready issues don't starve
     # behind newer ones. gh paginates internally up to --limit; 1000 covers
     # any realistic backlog.
+    search = f"state:open type:issue label:{LABEL_READY} -label:{LABEL_WIP}"
     r = run_gh(
         [
             "issue", "list",
             "--state", "open",
-            "--label", LABEL_READY,
+            "--search", search,
             "--json", "number,title,body,labels",
             "--limit", "1000",
         ]
@@ -58,23 +61,28 @@ def list_ready_issues() -> list[dict[str, Any]]:
 
 
 def fetch_issue(number: int) -> dict[str, Any] | None:
+    # Search keeps the same eligibility rules as the scheduled queue for
+    # workflow_dispatch targets: open issue, ready, and not already claimed.
     r = run_gh(
         [
-            "issue", "view", str(number),
+            "issue", "list",
+            "--state", "open",
+            "--search", f"#{number} state:open type:issue label:{LABEL_READY} -label:{LABEL_WIP}",
             "--json", "number,title,body,labels,state",
+            "--limit", "5",
         ]
     )
     if r.returncode != 0:
         log(f"fetch_failed issue=#{number} stderr={r.stderr.strip()}")
         return None
     try:
-        return json.loads(r.stdout or "{}")
+        issues = json.loads(r.stdout or "[]")
     except json.JSONDecodeError:
         return None
-
-
-def has_label(issue: dict[str, Any], name: str) -> bool:
-    return any((lbl.get("name") or "") == name for lbl in (issue.get("labels") or []))
+    for issue in issues:
+        if issue.get("number") == number:
+            return issue
+    return None
 
 
 def claim_issue(number: int) -> bool:
@@ -106,6 +114,16 @@ def call_claude_for_plan(issue: dict[str, Any]) -> tuple[str | None, str]:
     title = issue.get("title") or ""
     body = (issue.get("body") or "").strip()
     number = issue["number"]
+    dev_plan_ctx, dev_plan_err = resolve_dev_plan_context(issue)
+    if dev_plan_err:
+        return None, dev_plan_err
+    dev_plan_block = build_dev_plan_prompt_block(dev_plan_ctx) if dev_plan_ctx else ""
+    source_of_truth = (
+        "The dev-plan contract below is the source of truth for scope and sequencing."
+        if dev_plan_ctx
+        else "The GitHub issue body is the source of truth for scope."
+    )
+    source_contract = build_source_contract_text(dev_plan_ctx)
 
     prompt = f"""You are writing an implementation plan for GitHub issue #{number}.
 
@@ -113,6 +131,9 @@ Title: {title}
 
 Body:
 {body}
+
+{source_of_truth}
+{dev_plan_block}
 
 Read whatever files you need from this repository to ground the plan in reality
 (file paths, function names, existing patterns). Then return ONLY the Markdown
@@ -125,6 +146,9 @@ Use this structure exactly:
 ## Goal
 <one short paragraph stating what is being changed and why>
 
+## Source Contract
+{source_contract}
+
 ## Affected Files
 - `path/to/file.py` — <what changes>
 - `path/to/test.py` — <what changes>
@@ -136,6 +160,7 @@ Use this structure exactly:
 ## Test Plan
 - Unit tests in `tests/unit/`: <files to add/modify and what they cover>
 - Integration tests in `tests/integration/`: <files to add/modify and what they cover>
+- Dev-plan verification: <for dev-plan issues, list each target-board §6 command or explain why the board has no command for that step>
 
 ## Acceptance Criteria
 - <testable condition>
@@ -210,32 +235,21 @@ def select_issue() -> dict[str, Any] | None:
             return None
         issue = fetch_issue(n)
         if not issue:
-            return None
-        if (issue.get("state") or "").lower() != "open":
-            log(f"targeted_issue_not_open issue=#{n} state={issue.get('state')!r}")
-            return None
-        if not has_label(issue, LABEL_READY):
-            log(f"targeted_issue_not_ready issue=#{n}")
-            return None
-        if has_label(issue, LABEL_WIP):
-            log(f"targeted_issue_already_wip issue=#{n}")
+            log(f"targeted_issue_not_claimable issue=#{n}")
             return None
         log(f"selected_targeted issue=#{n}")
         return issue
 
     issues = list_ready_issues()
-    log(f"ready_issues_total={len(issues)}")
+    log(f"claimable_ready_issues_total={len(issues)}")
 
-    candidates = [i for i in issues if not has_label(i, LABEL_WIP)]
-    log(f"candidates_after_filter={len(candidates)}")
-
-    if not candidates:
+    if not issues:
         log("nothing_to_do")
         return None
 
     # gh issue list default sort is newest-first. Process oldest first (FIFO)
     # so issues don't starve waiting for a slot.
-    return candidates[-1]
+    return issues[-1]
 
 
 def main() -> int:
