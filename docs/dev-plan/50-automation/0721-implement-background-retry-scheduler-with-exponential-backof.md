@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 2-2.5 工作日 |
-| 依赖 | [0720-retry-webhook-upon-failure-atomic-compare-and-swap](../0720-retry-webhook-upon-failure-atomic-compare-and-swap.md) |
+| 依赖 | [0720 - 实现 HMAC 签名与投递](../0720-implement-webhookdeliveryservice-hmac-signing-post-delivery.md) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -43,8 +43,9 @@
 ### 2.1 现有实现
 
 TBD - 待验证：`src/services/webhook_delivery_service.py L? —现有 WebhookDeliveryService 服务，定义投递状态枚举和方法`
-TBD - 待验证：`src/db/models/webhook_delivery.py L? — 现有 webhook_deliveries 表 schema，包含 status / attempts / next_retry_at 列`
-TBD - 待验证：`src/db/models/webhook.py L? — 现有 webhooks 表 schema，包含 url / secret 列`
+`src/db/models/webhook.py` L? — WebhookDeliveryModel 现有字段（#718 添加了 next_retry_at / last_attempt_at / error_message；确认 #718 合入后再参考）
+
+TBD - 待验证：`src/db/models/webhook.py` L? — 现有 webhooks 表 schema，包含 url / secret 列`
 
 ### 2.2 涉及文件清单
 
@@ -173,12 +174,11 @@ alembic upgrade head && alembic downgrade -1 && alembic upgrade head
 a) 创建文件 `src/services/webhook_scheduler.py`：
 
 ```python
-from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
-from typing import AsyncGeneratorfrom sqlalchemy import select, update
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
-from db.base import async_session_factory
-from db.models import WebhookDeliveryModel, WebhookModel
+from db.connection import async_session_maker
+from db.models.webhook import WebhookModel, WebhookDeliveryModel
 from services.webhook_delivery_service import WebhookDeliveryService
 
 RETRY_DELAYS: tuple[timedelta, ...] = (
@@ -193,25 +193,15 @@ BATCH_SIZE = 50
 SCHEDULE_INTERVAL = 30  # seconds
 
 
-async def _get_fresh_session() -> AsyncGenerator[AsyncSession, None]:
-    @asynccontextmanager
-    def _factory():
-        session: AsyncSession = async_session_factory()
-        try:
-            yield session
-        finally:
-            await session.close()
-    return _factory()
-
-
 async def _retry_scheduler() -> None:
-    factory = _get_fresh_session()
-    async with factory() as session:
+    session: AsyncSession = async_session_maker()
+    try:
         svc = WebhookDeliveryService(session)
         now = datetime.now(timezone.utc)
         stmt = (
             select(WebhookDeliveryModel)
             .where(
+                WebhookDeliveryModel.tenant_id == tenant_id,  # multi-tenant isolation (tenant_id resolved per-cycle)
                 WebhookDeliveryModel.status == "failed",
                 WebhookDeliveryModel.attempts < MAX_RETRIES,
                 WebhookDeliveryModel.next_retry_at <= now,
@@ -221,17 +211,26 @@ async def _retry_scheduler() -> None:
         )
         result = await session.execute(stmt)
         deliveries = result.scalars().all()
+    finally:
+        await session.close()
     # TODO: fetch parent webhook URL/secret; POST retry; update status/next_retry_at # (refinement in subsequent steps)
 
 
-async def start_scheduler() -> None:
+async def start_scheduler(app: FastAPI = None) -> None:
     import asyncio
     while True:
         try:
             await _retry_scheduler()
         except Exception:
-            import logging            logging.getLogger(__name__).exception("Scheduler cycle failed")
+            import logging
+            logging.getLogger(__name__).exception("Scheduler cycle failed")
         await asyncio.sleep(SCHEDULE_INTERVAL)
+
+
+def create_scheduler_task(app: FastAPI) -> asyncio.Task:
+    task = asyncio.create_task(start_scheduler(app), name="webhook-retry-scheduler")
+    app.state.scheduler_task = task
+    return task
 ```
 
 b) 运行 ruff check：
@@ -266,12 +265,16 @@ async def _send_webhook(url: str, payload: dict, secret: str) -> bool:
 
 
 async def _retry_scheduler() -> None:
-    factory = _get_fresh_session()
-    async with factory() as session:
+    session: AsyncSession = async_session_maker()
+    try:
         now = datetime.now(timezone.utc)
         stmt = (
             select(WebhookDeliveryModel)
             .where(
+                # NOTE: tenant_id filter is applied per-delivery below (see loop).
+                # For full multi-tenant isolation, either loop over known tenant_ids
+                # or pass tenant_id explicitly. The per-delivery filter below
+                # (WebhookModel.tenant_id == delivery.tenant_id) is the safety net.
                 WebhookDeliveryModel.status == "failed",
                 WebhookDeliveryModel.attempts < MAX_RETRIES,
                 WebhookDeliveryModel.next_retry_at <= now,
@@ -282,7 +285,7 @@ async def _retry_scheduler() -> None:
         result = await session.execute(stmt)
         deliveries: list[WebhookDeliveryModel] = list(result.scalars().all())
 
- for delivery in deliveries:
+        for delivery in deliveries:
             webhook_stmt = select(WebhookModel).where(
                 WebhookModel.id == delivery.webhook_id,
                 WebhookModel.tenant_id == delivery.tenant_id,
@@ -292,7 +295,7 @@ async def _retry_scheduler() -> None:
             if webhook is None:
                 continue
 
- payload = delivery.event_metadata or {}
+            payload = delivery.payload or {}
             ok = await _send_webhook(webhook.url, payload, webhook.secret)
 
             if ok:
@@ -306,7 +309,9 @@ async def _retry_scheduler() -> None:
                 else:
                     delay = RETRY_DELAYS[delivery.attempts - 1]
                     delivery.next_retry_at = now + delay
-            await session.commit()
+            await session.flush()
+    finally:
+        await session.close()
 ```
 
 **完成判定**：`ruff check src/services/webhook_scheduler.py` exit 0
@@ -327,11 +332,13 @@ b) 在 lifespan startup 中插入：
 
 ```python
 async def lifespan(app: FastAPI):
-    asyncio.create_task(start_scheduler(), name="webhook-retry-scheduler")
+    app.state.scheduler_task = asyncio.create_task(start_scheduler(app), name="webhook-retry-scheduler")
     yield
+    # Cancel on shutdown
+    app.state.scheduler_task.cancel()
 ```
 
-（若 lifespan 已存在，则将 `asyncio.create_task(...)` 加入现有 startup块）
+（若 lifespan 已存在，则将 `app.state.scheduler_task = asyncio.create_task(...)` 加入现有 startup块，并在 shutdown 块中 `app.state.scheduler_task.cancel()`）
 
 **完成判定**：`ruff check src/main.py` exit 0，`grep -n "start_scheduler" src/main.py` 有输出
 

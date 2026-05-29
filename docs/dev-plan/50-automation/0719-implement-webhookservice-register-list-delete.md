@@ -3,11 +3,11 @@
 | 元数据 | 值 |
 |---|---|
 | Issue | #719 |
-| 分类 | 20-sales |
+| 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [0706-WebhookModel-注册](0706-implement-webhookmodel.md) |
-| 启用后赋能 | [0720-WebhookDeliveryService-HMAC](0720-implement-webhookdeliveryservice-hmac-signing-post-delivery.md) |
+| 依赖 | [0718 - 添加重试调度列到 WebhookDeliveryModel](0718-add-retry-scheduling-columns-to-webhookdeliverymodel-and-mig.md) |
+| 启用后赋能 | [0720 - 实现 HMAC 签名与投递](0720-implement-webhookdeliveryservice-hmac-signing-post-delivery.md) |
 | 状态 | 📋 待开始 |
 
 ---
@@ -271,12 +271,14 @@ class TestDeleteWebhook:
 
 ---
 
-### Step 3: 如 `conftest.py` 缺少 `make_webhook_handler`，则新增
+### Step 3: 创建领域专属 handler 文件
 
-在 `tests/unit/conftest.py` 中新增（参照 `make_customer_handler` 写法）：
+在 `tests/unit/domain_handlers/` 下新建 `webhook.py`（不修改共享的 `conftest.py`）：
 
-```python:tests/unit/conftest.py（新增片段）
-def make_webhook_handler(state: MockState):
+```python:tests/unit/domain_handlers/webhook.py
+from tests.unit.conftest import MockRow, MockResult
+
+def make_webhook_handler(state):
     """state.webhooks: list[dict] with keys id, tenant_id, url, events, secret, is_active"""
     state.webhooks = []
     def handle(method, sql, params=None):
@@ -291,7 +293,13 @@ def make_webhook_handler(state: MockState):
     return handle
 ```
 
-**完成判定**：`ruff check tests/unit/conftest.py` → 0 errors
+测试文件中引用时：
+
+```python
+from tests.unit.domain_handlers.webhook import make_webhook_handler
+```
+
+**完成判定**：`ruff check tests/unit/domain_handlers/webhook.py` → 0 errors
 
 ---
 

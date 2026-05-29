@@ -120,7 +120,7 @@ TBD - 待验证：`src/services/webhook_delivery_service.py L? — 现有 delive
 
 ```python
 from datetime import datetime
-from sqlalchemy import DateTime, Text, Index
+from sqlalchemy import DateTime, Text, Index, column, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 class WebhookDeliveryModel(Base):
@@ -128,7 +128,7 @@ class WebhookDeliveryModel(Base):
     # ... 现有字段 ...
 
     next_retry_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True
+        DateTime(timezone=True), nullable=True
     )
     last_attempt_at: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True), nullable=True
@@ -166,7 +166,7 @@ class WebhookDeliveryModel(Base):
    - 将所有 `sa.JSON()` 改为 `sa.JSONB()`
    - 将所有 naive `DateTime` 改为 `DateTime(timezone=True)`
    - 在 `upgrade()` 中添加部分索引：
-     `op.create_index("ix_delivery_next_retry", "webhook_delivery", ["next_retry_at"], postgresql_where=text("next_retry_at IS NOT NULL"))`
+     `op.create_index("ix_delivery_next_retry", "webhook_delivery", ["next_retry_at"], postgresql_where=column("next_retry_at").is_(None))`
    - 填写 `downgrade()`：`op.drop_index("ix_delivery_next_retry", table_name="webhook_delivery")` 和三个 `drop_column`
 
 5. 验证迁移双向成功：
@@ -186,13 +186,13 @@ from sqlalchemy import inspect
 from db.models.webhook import WebhookDeliveryModel
 
 def test_model_has_retry_columns():
-    cols = {c.name for c in inspect(WebhookDeliveryModel).__table__.columns}
+    cols = {c.name for c in WebhookDeliveryModel.__table__.columns}
     assert "next_retry_at" in cols
     assert "last_attempt_at" in cols
     assert "error_message" in cols
 
 def test_next_retry_at_is_indexed():
-    indexes = {i.name for i in inspect(WebhookDeliveryModel).__table__.indexes}
+    indexes = {i.name for i in WebhookDeliveryModel.__table__.indexes}
     assert "ix_delivery_next_retry" in indexes
 ```
 

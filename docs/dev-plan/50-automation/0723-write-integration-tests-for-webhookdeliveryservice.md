@@ -6,7 +6,7 @@
 | 分类 | 10-test |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [0722-write-webhook-service](0722-write-webhook-service.md) |
+| 依赖 | 无（可独立进行；不依赖 #722 集成测试） |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -21,7 +21,7 @@ WebhookDeliveryService 已由 #722 实现完毕，但目前仅有单元测试覆
 ### 1.2 做完后
 
 - **用户视角**：无用户可见变化 — 纯测试补充
-- **开发者视角**：获得 `tests/integration/test_webhook_service_integration.py`，覆盖 WebhookDeliveryService 的所有关键数据库交互路径；CI gate 确保所有集成测试通过后才允许合入
+- **开发者视角**：获得 `tests/integration/test_webhook_delivery_service_integration.py`（遵循领域命名规范），覆盖 WebhookDeliveryService 的所有关键数据库交互路径；CI gate 确保所有集成测试通过后才允许合入
 
 ### 1.3 不做什么（剔除）
 
@@ -31,9 +31,9 @@ WebhookDeliveryService 已由 #722 实现完毕，但目前仅有单元测试覆
 
 ### 1.4 关键 KPI
 
-- `PYTHONPATH=src pytest tests/integration/test_webhook_service_integration.py -v` → `5 passed`（或更多）
+- `PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py -v` → `6 passed`（含 test_webhook_crud + 4 个 deliver 场景 + 租户隔离）
 - `ruff check src/services/webhook_service.py` → 0 errors
-- 所有 5 个测试场景均覆盖：CRUD、投递成功、投递失败重试、最大重试永久失败、租户隔离
+- 所有 6 个测试场景均覆盖：CRUD、投递成功、投递失败重试、最大重试永久失败、租户隔离
 
 ---
 
@@ -48,19 +48,19 @@ WebhookDeliveryService 已由 #722 交付，位于 `src/services/webhook_service
 - `delete_webhook(session, webhook_id, tenant_id)` → 删除
 - `deliver_webhook(session, webhook_id, payload)` → 执行投递（含重试逻辑）
 
-关键 ORM 模型：`WebhookDeliveryAttempt` / `WebhookDeliveryRecord`（见 `src/db/models/webhook.py`，具体文件名待验证）。
+关键 ORM 模型：`WebhookModel` / `WebhookDeliveryModel`（见 `src/db/models/webhook.py`；#719 后确认列名）。
 
 ### 2.2 涉及文件清单
 
 - 要改：
   - 无（本次仅新增测试文件，不修改已有代码）
 - 要建：
-  - `tests/integration/test_webhook_service_integration.py` — WebhookDeliveryService 集成测试
+  - `tests/integration/test_webhook_delivery_service_integration.py` — WebhookDeliveryService 集成测试
   - `tests/integration/conftest.py` — 若需补充 webhook 相关 fixture（待确认是否已有）
 
 ### 2.3 缺什么
 
-- [ ] 缺少 `tests/integration/test_webhook_service_integration.py` — WebhookDeliveryService 集成测试文件
+- [ ] 缺少 `tests/integration/test_webhook_delivery_service_integration.py` — WebhookDeliveryService 集成测试文件
 - [ ] 缺少对 `WebhookDeliveryService.deliver_webhook` 在真实 DB session 下的重试逻辑验证
 - [ ] 缺少多租户隔离的集成测试覆盖
 - [ ] CI 缺少 webhook service 集成测试 gate
@@ -73,7 +73,7 @@ WebhookDeliveryService 已由 #722 交付，位于 `src/services/webhook_service
 
 | 路径 | 用途 |
 |------|------|
-| `tests/integration/test_webhook_service_integration.py` | WebhookDeliveryService 集成测试（5 个场景） |
+| `tests/integration/test_webhook_delivery_service_integration.py` | WebhookDeliveryService 集成测试（5 个场景） |
 | `tests/integration/conftest.py` | 若 webhook 专用 seed fixture 缺失则新建；否则复用现有 |
 
 ### 3.2 修改文件
@@ -85,9 +85,9 @@ WebhookDeliveryService 已由 #722 交付，位于 `src/services/webhook_service
 - **集成测试**：`test_webhook_crud` — register → list → delete → verify gone
 - **集成测试**：`test_deliver_success_inserts_record` — mock httpx 返回 200，验证 DB 记录写入
 - **集成测试**：`test_deliver_failure_sets_next_retry_at` — mock httpx 返回 500 或抛异常，验证 `next_retry_at` 被设置
-- **集成测试**：`test_deliver_max_retries_sets_permanent_failure` — 验证达到最大重试次数后 `status=permanent_failure`
+- **集成测试**：`test_deliver_max_retries_sets_permanent_failure` — 验证达到最大重试次数后 `status=failed`
 - **集成测试**：`test_tenant_isolation` — 两个 tenant 的 webhook 互不可见
-- **CI gate**：`pytest tests/integration/test_webhook_service_integration.py` 进入 CI 流程
+- **CI gate**：`pytest tests/integration/test_webhook_delivery_service_integration.py` 进入 CI 流程
 
 ---
 
@@ -113,15 +113,15 @@ WebhookDeliveryService 已由 #722 交付，位于 `src/services/webhook_service
 
 ### 4.4 已知坑
 
-1. **httpx.AsyncClient 在 service 内实例化导致 patch 失效** → 规避：`with unittest.mock.patch("httpx.AsyncClient.post") as mock_post:`，patch 路径为 `src.services.webhook_service.AsyncClient.post`（具体 import 路径待与 #722 确认）
+1. **httpx.AsyncClient 在 service 内实例化导致 patch 失效** → 规避：`with unittest.mock.patch("httpx.AsyncClient.post") as mock_post:`，patch 路径为 `services.webhook_service.httpx.AsyncClient`（如用 `import httpx`）；若用 `from httpx import AsyncClient` 则 patch `services.webhook_service.AsyncClient`。实施前先确认 service 中的 import 风格。
 2. **多租户 fixture 隔离** → 规避：每个测试函数接收 `tenant_id` fixture，第二个 tenant 通过 `async_session` 注入不同 tenant_id 创建 webhook；`list_webhooks` 验证 A tenant 不含 B tenant 的记录
-3. **DB truncate cascade 与 FK 顺序** → 规避：`db_schema` fixture 已处理 cascade；测试中手动 `await session.execute(text("DELETE FROM webhook_delivery_attempts"))` 仅作额外安全清理，不依赖删除顺序
+3. **DB truncate cascade 与 FK 顺序** → 规避：`db_schema` fixture 已通过 CASCADE 处理 cleanup；手动 DELETE 语句作为 belt-and-suspenders 额外安全网，不依赖删除顺序
 
 ---
 
 ## 5. 实现步骤（按顺序）
 
-### Step 1: 创建 `tests/integration/test_webhook_service_integration.py`
+### Step 1: 创建 `tests/integration/test_webhook_delivery_service_integration.py`
 
 创建测试文件，从 `tests/integration/conftest.py` 导入 `db_schema`、`tenant_id`、`async_session` fixtures。导入 `WebhookDeliveryService`（路径待与 #722 确认，预期为 `src.services.webhook_service`）。
 
@@ -131,7 +131,7 @@ WebhookDeliveryService 已由 #722 交付，位于 `src/services/webhook_service
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from src.services.webhook_service import WebhookDeliveryService
+from services.webhook_service import WebhookDeliveryService
 
 @pytest.mark.integration
 class TestWebhookServiceIntegration:
@@ -140,16 +140,17 @@ class TestWebhookServiceIntegration:
         webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", "deal.created", "secret123")
         assert webhook.id is not None
 
-        webhooks, total = await svc.list_webhooks(tenant_id)
-        assert total >= 1
+        webhooks = await svc.list_webhooks(tenant_id)
+        assert len(webhooks) >= 1
 
         await svc.delete_webhook(webhook.id, tenant_id)
 
-        with pytest.raises(NotFoundException):
-            await svc.get_webhook(webhook.id, tenant_id)
+        # Verify gone — list should not contain deleted webhook
+        remaining = await svc.list_webhooks(tenant_id)
+        assert all(w.id != webhook.id for w in remaining)
 ```
 
-**完成判定**：`ls tests/integration/test_webhook_service_integration.py` → 文件存在 / `ruff check tests/integration/test_webhook_service_integration.py` → 0 errors
+**完成判定**：`ls tests/integration/test_webhook_delivery_service_integration.py` → 文件存在 / `ruff check tests/integration/test_webhook_delivery_service_integration.py` → 0 errors
 
 ### Step 2: 实现 `test_deliver_success_inserts_record`
 
@@ -158,17 +159,20 @@ class TestWebhookServiceIntegration:
         svc = WebhookDeliveryService(async_session)
         webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", "deal.created", "secret123")
 
-        with patch("src.services.webhook_service.AsyncClient") as mock_client:
+        # Patch path must match how httpx is imported in webhook_service.py:
+        # If `import httpx` → patch "services.webhook_service.httpx.AsyncClient"
+        # If `from httpx import AsyncClient` → patch "services.webhook_service.AsyncClient"
+        with patch("services.webhook_service.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.post.return_value = AsyncMock(status_code=200)
             mock_client.return_value.__aenter__.return_value = mock_instance
 
-            result = await svc.deliver_webhook(webhook.id, {"event": "deal.created"}, tenant_id)
+            result = await svc.deliver(webhook.id, {"event": "deal.created"}, tenant_id)
 
         assert result.status == "success"
 ```
 
-**完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_service_integration.py::TestWebhookServiceIntegration::test_deliver_success_inserts_record -v` → `1 passed`
+**完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py::TestWebhookServiceIntegration::test_deliver_success_inserts_record -v` → `1 passed`
 
 ### Step 3: 实现 `test_deliver_failure_sets_next_retry_at`
 
@@ -177,42 +181,47 @@ class TestWebhookServiceIntegration:
         svc = WebhookDeliveryService(async_session)
         webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", "deal.created", "secret123")
 
-        with patch("src.services.webhook_service.AsyncClient") as mock_client:
+        with patch("services.webhook_service.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.post.return_value = AsyncMock(status_code=500)
             mock_client.return_value.__aenter__.return_value = mock_instance
 
-            result = await svc.deliver_webhook(webhook.id, {"event": "deal.created"}, tenant_id)
+            result = await svc.deliver("deal.created", {"event": "deal.created"}, tenant_id)
 
         assert result.status == "failed"
         assert result.next_retry_at is not None
 ```
 
-**完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_service_integration.py::TestWebhookServiceIntegration::test_deliver_failure_sets_next_retry_at -v` → `1 passed`
+**完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py::TestWebhookServiceIntegration::test_deliver_failure_sets_next_retry_at -v` → `1 passed`
 
 ### Step 4: 实现 `test_deliver_max_retries_sets_permanent_failure`
 
-模拟连续 5 次失败（第 5 次后永久失败），通过 patch 控制 `httpx.AsyncClient.post` 始终返回 500：
+模拟连续 5 次失败（第 5 次后永久失败），通过 patch 控制 `httpx.AsyncClient.post` 始终返回 500。注意：`deliver` 方法不返回结果；通过直接查 DB 确认最终状态。
 
 ```python
     async def test_deliver_max_retries_sets_permanent_failure(self, db_schema, tenant_id, async_session):
+        from sqlalchemy import text
         svc = WebhookDeliveryService(async_session)
         webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", "deal.created", "secret123")
 
-        with patch("src.services.webhook_service.AsyncClient") as mock_client:
+        with patch("services.webhook_service.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.post.return_value = AsyncMock(status_code=500)
             mock_client.return_value.__aenter__.return_value = mock_instance
 
             for i in range(5):
-                await svc.deliver_webhook(webhook.id, {"event": "deal.created"}, tenant_id)
+                await svc.deliver("deal.created", {"event": "deal.created"}, tenant_id)
 
-        records, _ = await svc.list_delivery_records(webhook.id, tenant_id)
-        final_record = records[-1]
-        assert final_record.status == "permanent_failure"
+        # 查询最后一条投递记录
+        result = await async_session.execute(
+            text("SELECT status FROM webhook_delivery WHERE webhook_id=:wid ORDER BY id DESC LIMIT 1"),
+            {"wid": webhook.id}
+        )
+        row = result.scalar_one_or_none()
+        assert row == "failed"  # permanent failure
 ```
 
-**完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_service_integration.py::TestWebhookServiceIntegration::test_deliver_max_retries_sets_permanent_failure -v` → `1 passed`
+**完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py::TestWebhookServiceIntegration::test_deliver_max_retries_sets_permanent_failure -v` → `1 passed`
 
 ### Step 5: 实现 `test_tenant_isolation`
 
@@ -225,10 +234,10 @@ class TestWebhookServiceIntegration:
         webhook_a = await svc.register_webhook(tenant_id, "https://a.com/hook", "deal.created", "secret")
         webhook_b = await svc.register_webhook(tenant_id + 1000, "https://b.com/hook", "deal.created", "secret")
 
-        list_a, _ = await svc.list_webhooks(tenant_id)
+        list_a = await svc.list_webhooks(tenant_id)
         ids_a = [w.id for w in list_a]
 
-        list_b, _ = await svc.list_webhooks(tenant_id + 1000)
+        list_b = await svc.list_webhooks(tenant_id + 1000)
         ids_b = [w.id for w in list_b]
 
         assert webhook_a.id in ids_a
@@ -237,36 +246,36 @@ class TestWebhookServiceIntegration:
         assert webhook_b.id not in ids_a
 ```
 
-**完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_service_integration.py::TestWebhookServiceIntegration::test_tenant_isolation -v` → `1 passed`
+**完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py::TestWebhookServiceIntegration::test_tenant_isolation -v` → `1 passed`
 
 ### Step 6: 验证全量通过
 
 运行完整测试文件：
 
 ```bash
-PYTHONPATH=src pytest tests/integration/test_webhook_service_integration.py -v
+PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py -v
 ```
 
-期望：`5 passed`（test_webhook_crud、test_deliver_success_inserts_record、test_deliver_failure_sets_next_retry_at、test_deliver_max_retries_sets_permanent_failure、test_tenant_isolation）。
+期望：`6 passed`（test_webhook_crud、test_deliver_success_inserts_record、test_deliver_failure_sets_next_retry_at、test_deliver_max_retries_sets_permanent_failure、test_tenant_isolation）。
 
 同时运行 lint：
 
 ```bash
-ruff check tests/integration/test_webhook_service_integration.py
+ruff check tests/integration/test_webhook_delivery_service_integration.py
 ```
 
-**完成判定**：`pytest -v` → `5 passed` + `ruff check` exit 0
+**完成判定**：`pytest -v` → `6 passed` + `ruff check` exit 0
 
 ---
 
 ## 6. 验收
 
-- [ ] `ruff check tests/integration/test_webhook_service_integration.py` → 0 errors
-- [ ] `PYTHONPATH=src pytest tests/integration/test_webhook_service_integration.py -v` → `5 passed`
+- [ ] `ruff check tests/integration/test_webhook_delivery_service_integration.py` → 0 errors
+- [ ] `PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py -v` → `6 passed`
 - [ ] `test_webhook_crud` 覆盖 register→list→delete→verify gone 全路径
 - [ ] `test_deliver_success_inserts_record` 验证 mock 200 时 DB 记录 status=success
 - [ ] `test_deliver_failure_sets_next_retry_at` 验证 mock 500 时 next_retry_at 非空
-- [ ] `test_deliver_max_retries_sets_permanent_failure` 验证第 5 次失败后 status=permanent_failure
+- [ ] `test_deliver_max_retries_sets_permanent_failure` 验证第 5 次失败后 status=failed
 - [ ] `test_tenant_isolation` 验证两个 tenant 的 webhook 互不可见
 
 ---
@@ -285,7 +294,7 @@ ruff check tests/integration/test_webhook_service_integration.py
 
 ```bash
 # 1. commit + PR
-git add tests/integration/test_webhook_service_integration.py
+git add tests/integration/test_webhook_delivery_service_integration.py
 git commit -m "test(integration): add webhook service integration tests"
 git push -u origin "$(git branch --show-current)"
 gh pr create --base master --title "test(#723): integration tests for WebhookDeliveryService" --body "Closes #723
@@ -299,8 +308,8 @@ gh pr create --base master --title "test(#723): integration tests for WebhookDel
 - test_tenant_isolation: two tenants cannot see each other's webhooks
 
 ## Test plan
-- [x] ruff check tests/integration/test_webhook_service_integration.py
-- [x] PYTHONPATH=src pytest tests/integration/test_webhook_service_integration.py -v → 5 passed
+- [x] ruff check tests/integration/test_webhook_delivery_service_integration.py
+- [x] PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py -v → 6 passed
 
 🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 

@@ -6,7 +6,7 @@
 | 分类 | 40-testing |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [#721 Write integration tests for WebhookDeliveryService](../721-write-integration-tests-for-webhookdeliveryservice/) |
+| 依赖 | 无（可独立进行；不依赖 #723 集成测试） |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -40,7 +40,7 @@ WebhookService and WebhookDeliveryService are currently covered by zero unit tes
 
 ### 2.1 现有实现
 
-TBD - 待验证：`src/services/webhook_service.py` L? — WebhookService/WebhookDeliveryService class definition (depends on #721 completing first; if #721 ships the service, update this ref)
+`src/services/webhook_service.py` L? — WebhookService/WebhookDeliveryService class definition（#719 完成后确认；实施前需先验证文件存在）
 
 Pattern reference (customer service, confirmed existing):
 
@@ -70,7 +70,7 @@ async def test_get_customer_success(customer_service):
   - `TBD - 待验证：` `src/services/webhook_service.py` — WebhookService and WebhookDeliveryService must exist and be importable; if not yet shipped by #721, this doc will be updated after #721 merges
 - 要建：
   - `tests/unit/test_webhook_service.py` — unit test file (8 test cases)
-  - `TBD - 待验证：` `src/db/models/webhook.py` — Webhook model (needed for mock result factories; confirm whether #721 created this)
+  - `src/db/models/webhook.py` — Webhook model (由 #719 创建；确认文件存在后再引用)
 
 ### 2.3 缺什么
 
@@ -90,13 +90,13 @@ async def test_get_customer_success(customer_service):
 | 路径 | 用途 |
 |------|------|
 | `tests/unit/test_webhook_service.py` | Unit tests for WebhookService (register/list/delete) and WebhookDeliveryService (deliver) — 8 test cases |
-| `TBD - 待验证：` `tests/unit/conftest.py` — add `make_webhook_handler(state)` and `make_webhook_delivery_handler(state)` if not present from #721 |
+| `tests/unit/domain_handlers/webhook.py` | 领域专属 handler 文件，包含 `make_webhook_handler` / `make_webhook_delivery_handler`（不修改共享 conftest.py） |
 
 ### 3.2 修改文件
 
 | 路径 | 改动要点 |
 |------|---------|
-| `TBD - 待验证：` `tests/unit/conftest.py` — add `make_webhook_handler`, `make_webhook_delivery_handler`, `make_count_handler` (if not already present from #721 or prior work) |
+| `tests/unit/domain_handlers/webhook.py` — 新建领域专属 handler 文件，包含 `make_webhook_handler` / `make_webhook_delivery_handler`（不修改共享 conftest.py） |
 | `TBD - 待验证：` `src/services/webhook_service.py` — no code change; source for test to import against (must exist first) |
 
 ### 3.3 新增能力
@@ -145,7 +145,7 @@ Locate the service source and confirm the mock session pattern in the reference 
 操作：
 - a) Confirm `src/services/webhook_service.py` exists (will be shipped by #721; if not yet, complete #721 first).
 - b) Confirm `tests/unit/test_customer_service.py` exists and review its mock session setup.
-- c) Confirm or create handlers in `tests/unit/conftest.py`:
+- c) Confirm or create domain handlers in `tests/unit/domain_handlers/webhook.py`（不要修改 `tests/unit/conftest.py`）：
    - `make_webhook_handler(state)` — handles SELECT/INSERT/UPDATE/DELETE for `webhooks` table
    - `make_webhook_delivery_handler(state)` — handles SELECT/INSERT for `webhook_deliveries` table
    - `make_count_handler(state)` — handles COUNT queries for pagination
@@ -362,7 +362,7 @@ Verify all 8 test cases pass and lint is clean.
 ```bash
 # 1. commit + PR
 git add tests/unit/test_webhook_service.py
-git add tests/unit/conftest.py  # if handlers were added/modified
+git add tests/unit/domain_handlers/webhook.py  # new domain handlers (do NOT modify shared conftest.py)
 git add src/services/webhook_service.py  # if any service changes were required
 git commit -m "test(webhook): add unit tests for WebhookService and WebhookDeliveryService"
 
