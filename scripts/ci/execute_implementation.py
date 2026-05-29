@@ -38,19 +38,29 @@ Critical rules — follow ALL of them:
    or incomplete, update the source code as needed — but do NOT modify the
    plan file at `{plan_path}`.
 
-2. Before declaring done, ALL of the following commands must succeed in a clean
+2. If the plan contains a **Source Contract** or **Dev-Plan Contract** section,
+   treat it as binding:
+   - Read the referenced README/template/target board documents before editing.
+   - Execute the target board's implementation steps in order.
+   - After each completed board Step, run the corresponding verification
+     command from the board when it exists.
+   - Do not edit files outside the target board's declared scope unless the
+     plan explicitly allows it. If that scope is insufficient, stop and report
+     the blocker instead of making an unrelated cross-board change.
+
+3. Before declaring done, ALL of the following commands must succeed in a clean
    run (exit code 0):
        PYTHONPATH=src ruff check src/
        PYTHONPATH=src pytest tests/unit/ -v
        DATABASE_URL=postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db PYTHONPATH=src pytest tests/integration/ -v
 
-3. If any of those fail after your changes, fix the failure and re-run. Iterate
+4. If any of those fail after your changes, fix the failure and re-run. Iterate
    until ALL THREE are green. Do not stop on a partial pass.
 
-4. Use the Bash tool to run pytest, ruff, and any shell commands. Use Edit and
+5. Use the Bash tool to run pytest, ruff, and any shell commands. Use Edit and
    Write to modify files. Use Read to examine code before changing it.
 
-5. Do NOT run ANY of: `git commit`, `git commit --amend`, `git push`,
+6. Do NOT run ANY of: `git commit`, `git commit --amend`, `git push`,
    `git add`, `git stash`, `git reset`, `git checkout` of files, or any
    command that modifies `.git/` or git history. Leave all changes as
    UNSTAGED edits in the working tree — the workflow stages and commits
@@ -58,11 +68,11 @@ Critical rules — follow ALL of them:
    vs master" guard now catches it, but you'll still create a confusing
    audit trail. Just edit files and stop.
 
-6. Do NOT modify `.github/workflows/` files unless the plan explicitly requires it.
+7. Do NOT modify `.github/workflows/` files unless the plan explicitly requires it.
 
-7. Do NOT modify the plan file at `{plan_path}`.
+8. Do NOT modify the plan file at `{plan_path}`.
 
-8. When all three checks pass and you have nothing more to do, stop and print a
+9. When all three checks pass and you have nothing more to do, stop and print a
    short summary of the files you changed.
 
 Begin by reading `{plan_path}` and the source files it references.

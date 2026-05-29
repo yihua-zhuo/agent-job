@@ -14,8 +14,8 @@ from urllib.parse import unquote
 
 from dotenv import load_dotenv
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, declarative_base, sessionmaker
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncEngine

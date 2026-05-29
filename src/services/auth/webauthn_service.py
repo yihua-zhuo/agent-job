@@ -49,6 +49,12 @@ REGISTRATION_CHALLENGE_TTL_SECONDS = 60
 ASSERTION_CHALLENGE_TTL_SECONDS = 300
 
 
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=UTC)
+    return value.astimezone(UTC)
+
+
 class WebAuthnService:
     """Service for WebAuthn registration and authentication flows."""
 
@@ -132,7 +138,7 @@ class WebAuthnService:
         if model is None:
             return None
 
-        if model.expires_at < datetime.now(UTC):
+        if _as_utc(model.expires_at) < datetime.now(UTC):
             return None
 
         if consume:

@@ -1,0 +1,73 @@
+name: Review · Open PRs
+
+on:
+  schedule:
+    # Offset to minutes 7, 22, 37, 52 — out of phase with monitor-issues (3,13,...)
+    # and the :00/:10 contended slots GitHub frequently drops under load.
+    - cron: '7-59/15 * * * *'
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: 'Optional single PR # to evaluate. Leave blank to scan all open PRs.'
+        required: false
+        type: string
+        default: ''
+
+# Two concurrent reviews could both enable auto-merge / dispatch fix on the
+# same PR. Serialise so each tick sees a stable view.
+concurrency:
+  group: review-open-prs
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  review:
+    name: Review open PRs
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write          # enable auto-merge + delete branch
+      pull-requests: write     # post review comments
+      issues: write            # read linked issues (issues:read is implicit with write)
+      actions: write           # gh workflow run fix-pr-comments.yml
+      checks: read             # statusCheckRollup
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up claude
+        run: |
+          if ! command -v claude &>/dev/null; then
+            npm install -g @anthropic-ai/claude-code
+          fi
+
+      - name: Review open PRs
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          # GH_TOKEN: gh CLI; GITHUB_TOKEN: implicit fallback. The PAT is
+          # preferred so `gh pr merge --auto` and `gh workflow run` produce
+          # events that fire downstream CI (the default GITHUB_TOKEN does not
+          # trigger workflow_dispatch / pull_request from other workflows).
+          GH_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          # Cap so a backlog can't blow the 30-min job budget on Claude calls.
+          MAX_PRS_PER_RUN: '10'
+          # If `pr_number` was provided via workflow_dispatch, the script
+          # currently scans all PRs — adding a single-PR mode is a follow-up.
+          # We log the requested number so it's visible in the run header.
+          REQUESTED_PR_NUMBER: ${{ inputs.pr_number }}
+        run: |
+          if [ -n "$REQUESTED_PR_NUMBER" ]; then
+            echo "Note: workflow_dispatch input pr_number=$REQUESTED_PR_NUMBER ignored; script scans all open PRs."
+          fi
+          python3 scripts/ci/review_open_prs.py

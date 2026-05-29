@@ -1,6 +1,7 @@
 """导入导出服务单元测试"""
-import pytest
 import json
+
+import pytest
 
 from src.services.import_export_service import ImportExportService
 
@@ -102,11 +103,43 @@ class TestImportExportServiceNormal:
         result = import_export_service.generate_pdf_report(report_data, "测试报表")
         assert isinstance(result, bytes)
         assert len(result) > 0
+        assert isinstance(result, bytes) and len(result) > 0
 
-    def test_validate_import_data_valid(self, import_export_service, sample_customer_data):
+    def test_validate_import_data_success(self, import_export_service, sample_customer_data):
         result = import_export_service.validate_import_data(sample_customer_data, "customer")
-        assert "errors" in result
         assert len(result["errors"]) == 0
+
+    def test_validate_import_data_with_invalid_rows(self, import_export_service):
+        mixed_data = [
+            {"name": "张三", "email": "zhangsan@example.com", "phone": "13800138000"},
+            {"name": "李四", "email": "lisi@example.com"},  # missing phone
+        ]
+        result = import_export_service.validate_import_data(mixed_data, "customer")
+        assert len(result["errors"]) > 0
+
+    def test_validate_import_data_empty(self, import_export_service):
+        result = import_export_service.validate_import_data([], "customer")
+        assert "数据为空" in result["errors"][0]
+
+    async def test_export_customers_with_filters(self, import_export_service):
+        result = await import_export_service.export_customers({"source": "web"}, "json")
+        assert isinstance(result, bytes)
+        assert len(result) > 0
+        json.loads(result)
+
+    async def test_export_opportunities_csv(self, import_export_service):
+        result = await import_export_service.export_opportunities({}, "csv")
+        assert isinstance(result, bytes)
+        assert len(result) > 0
+        content = result.decode("utf-8-sig")
+        for header in ["name", "customer_id"]:
+            assert header in content
+
+    def test_generate_pdf_report_empty_details(self, import_export_service):
+        report_data = {"summary": {}, "details": []}
+        result = import_export_service.generate_pdf_report(report_data, "空报表")
+        assert isinstance(result, bytes)
+        assert len(result) > 0
 
 
 class TestImportExportServiceEdgeCases:
@@ -217,3 +250,18 @@ class TestImportExportServiceEdgeCases:
         json_content = json.dumps(data).encode('utf-8')
         result = await import_export_service.import_customers(json_content, "json")
         assert result["success_count"] == 1
+
+
+class TestImportExportServiceError:
+    async def test_import_customers_malformed_csv(self, import_export_service):
+        csv_bytes = b"email,phone\nzhangsan@example.com,13800138000\n"
+        result = await import_export_service.import_customers(csv_bytes, "csv")
+        assert result["error_count"] > 0
+
+    async def test_import_opportunities_invalid_json(self, import_export_service):
+        result = await import_export_service.import_opportunities(b"not json at all", "json")
+        assert result["error_count"] > 0
+
+    async def test_export_customers_invalid_format(self, import_export_service):
+        with pytest.raises(ValueError, match="不支持"):
+            await import_export_service.export_customers({}, "xml")
