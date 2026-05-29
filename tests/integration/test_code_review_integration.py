@@ -4,6 +4,7 @@ Run against a real PostgreSQL database (DATABASE_URL env var):
     DATABASE_URL="postgresql+asyncpg://..." pytest tests/integration/test_code_review_integration.py -v
 
 Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
+Each test owns the transaction boundary via conftest's commit-on-exit session lifecycle.
 """
 from __future__ import annotations
 
@@ -89,6 +90,28 @@ class TestCodeReviewModelIntegration:
         assert "created_at" in d
         assert d["created_at"] is not None
 
+    async def test_to_dict_on_expired_instance(self, db_schema, tenant_id, async_session):
+        """to_dict() handles a freshly loaded instance after session.expire()."""
+        review = CodeReviewModel(
+            tenant_id=tenant_id,
+            user_id=55,
+            language="python",
+            review_type="style",
+            code_snippet="x = 1",
+            score=50,
+            summary="Ok",
+        )
+        async_session.add(review)
+        await async_session.flush()
+        await async_session.refresh(review)
+
+        async_session.expire(review)
+        d = review.to_dict()
+        assert d["id"] == review.id
+        assert d["tenant_id"] == tenant_id
+        assert d["user_id"] == 55
+        assert d["language"] == "python"
+
     async def test_multi_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
         """Records are not visible across tenant boundaries."""
         review_a = CodeReviewModel(
@@ -130,3 +153,6 @@ class TestCodeReviewModelIntegration:
         assert len(rows_2) == 1
         assert rows_2[0].id == review_b.id
         assert rows_2[0].tenant_id == tenant_id_2
+
+        assert all(r.tenant_id == tenant_id for r in rows)
+        assert all(r.tenant_id == tenant_id_2 for r in rows_2)

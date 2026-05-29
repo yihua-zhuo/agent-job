@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-import pytest
-
 from db.models.code_review import CodeReviewModel
 
 
@@ -117,3 +115,4 @@ class TestCodeReviewModelToDict:
         # All optional fields should be None
         for key in ("id", "language", "review_type", "code_snippet", "score", "summary", "created_at"):
             assert d[key] is None, f"expected {key} to be None, got {d[key]}"
+
