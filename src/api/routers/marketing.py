@@ -101,6 +101,7 @@ async def create_campaign(
         content=body.content or "",
         created_by=ctx.user_id,
         tenant_id=ctx.tenant_id,
+        status=body.status,
         subject=body.subject,
         target_audience=body.target_audience,
     )
