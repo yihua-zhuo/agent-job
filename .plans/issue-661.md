@@ -45,11 +45,15 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
      - `UPDATE notifications SET params_ = jsonb_build_object('content', content, 'related_type', related_type, 'related_id', related_id) WHERE ...`
      - `UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END`
      - `UPDATE notifications SET read_at = created_at WHERE is_read = true`
+     - `UPDATE notifications SET priority = 'normal' WHERE priority IS NULL` (new field — defaults to 'normal')
+     - `UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL` (new field — set to creation time)
    - Example backfill in `downgrade()` (recreates legacy columns, restores legacy data, drops new columns):
      - Add old columns (type, title, content, is_read, related_type, related_id)
      - `UPDATE notifications SET type = channel WHERE channel IS NOT NULL`
      - `UPDATE notifications SET title = template WHERE template IS NOT NULL`
      - `UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL`
+     - `UPDATE notifications SET related_type = params_->>'related_type' WHERE params_ IS NOT NULL`
+     - `UPDATE notifications SET related_id = (params_->>'related_id')::bigint WHERE params_ IS NOT NULL`
      - `UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL`
      - Drop new columns (channel, template, params_, status, priority, delivered_at, read_at)
 

@@ -33,8 +33,7 @@ class NotificationModel(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
-        # Guard: params_ may be stored as a JSON string in some edge cases
-        serialized_params = self.params_ if isinstance(self.params_, dict) else self.params_
+        serialized_params = self.params_ if isinstance(self.params_, dict) else None
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,

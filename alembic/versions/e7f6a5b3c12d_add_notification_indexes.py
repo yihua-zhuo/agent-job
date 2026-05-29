@@ -112,7 +112,7 @@ def downgrade() -> None:
     op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL"))
 
     # Apply NOT NULL constraint after backfill — rows with NULL status become False
-    op.alter_column("is_read", nullable=False)
+    op.alter_column("notifications", "is_read", nullable=False)
 
     # Phase 2 (reversed): drop new columns — done last so the downgrade remains
     # individually reversible without relying on ordering of other migrations
