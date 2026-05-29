@@ -7,6 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.automation import AutomationLogModel, AutomationRuleModel
 from pkg.errors.app_exceptions import NotFoundException
+from services.notification_service import NotificationService
+from services.task_service import TaskService
 
 # Supported trigger events
 TRIGGER_EVENTS = [
@@ -81,8 +83,6 @@ class AutomationService:
         params = action.get("params", {})
 
         if action_type == "notification.send":
-            from services.notification_service import NotificationService
-
             recipient_user_id = params["user_id"] if "user_id" in params else context.get("user_id")
             if not recipient_user_id:
                 return {"type": action_type, "status": "skipped", "reason": "no user_id in context or params"}
@@ -99,8 +99,6 @@ class AutomationService:
             return {"type": action_type, "status": "sent" if result else "failed"}
 
         elif action_type == "task.create":
-            from services.task_service import TaskService
-
             svc = TaskService(self.session)
             task_result = await svc.create_task(
                 tenant_id=tenant_id,

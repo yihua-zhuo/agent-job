@@ -50,7 +50,7 @@ class _MockNotificationModel:
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params_": self._params,
+            "params": self._params,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -63,12 +63,12 @@ class _MockNotificationModel:
         yield from self.to_dict().items()
 
 
-def _app():
+def _app(tenant_id: int = 1) -> TestClient:
     # AsyncSession is not needed here — the router under test patches
     # NotificationService entirely, so the DB session is never accessed.
     app = FastAPI()
     app.include_router(notifications_router)
-    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
+    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=tenant_id)
     app.dependency_overrides[get_db] = lambda: MagicMock()
 
     @app.exception_handler(AppException)
@@ -79,11 +79,7 @@ def _app():
 
 
 def _app_invalid_tenant(tenant_id: int = 0):
-    app = FastAPI()
-    app.include_router(notifications_router)
-    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=tenant_id)
-    app.dependency_overrides[get_db] = lambda: MagicMock()
-    return TestClient(app, raise_server_exceptions=False)
+    return _app(tenant_id=tenant_id)
 
 
 # ---------------------------------------------------------------------------
@@ -162,6 +158,7 @@ class TestSendNotification:
             assert data["message"] == "通知发送成功"
             assert data["data"]["id"] == 5
             assert data["data"]["template"] == "New deal"
+            svc.send_notification.assert_called_once()
 
     def test_send_validation_error(self):
         client = _app()
@@ -344,7 +341,7 @@ class TestDeleteNotification:
 # ---------------------------------------------------------------------------
 
 
-class TestCancelReminder:
+class TestDeleteReminder:
     def test_cancel_reminder_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
@@ -436,3 +433,24 @@ class TestInvalidTenant:
         client = TestClient(app, raise_server_exceptions=False)
         response = client.get("/api/v1/notifications")
         assert response.status_code == 401
+
+
+# ---------------------------------------------------------------------------
+# Cross-tenant isolation tests
+# ---------------------------------------------------------------------------
+
+
+class TestCrossTenantIsolation:
+    """Rule 126: notifications are invisible across tenant boundaries."""
+
+    def test_cross_tenant_read_returns_404(self):
+        """Tenant A's auth context cannot read a notification belonging to tenant B."""
+        with patch("api.routers.notifications.NotificationService") as svc_cls:
+            svc = svc_cls.return_value
+            svc.get_user_notifications = AsyncMock(
+                side_effect=NotFoundException("通知")
+            )
+            client = _app(tenant_id=2)
+            response = client.get("/api/v1/notifications")
+            assert response.status_code == 404
+

@@ -21,12 +21,11 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 
 2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
 
-3. **Update `src/services/notification_service.py`**: replace all `NotificationModel` field references (`type`, `title`, `content`, `is_read`, `related_type`, `related_id`) with the new fields (`channel`, `template`, `params_`, `read_at`). The service logic (WHERE clauses, count queries) remains structurally same.
-   - The service bundles `related_type`/`related_id` into `params_` (it reads `kwargs.get("related_type")` and `kwargs.get("related_id")` and includes them in the `params` dict). The router passes these as keyword arguments via the `**kwargs` parameter to `send_notification`.
+3. **Update `src/services/notification_service.py`**: Already complete — the service was updated to use the new field names (`channel`, `template`, `params_`, `read_at`, `status`) in place of the legacy names.
 
-4. **Update `tests/unit/test_notifications_router.py`** — The router tests' `_MockNotificationModel.params_` property was updated to use only `params_` (no fallback to `params`) to catch mismatched field keys in tests.
+4. **Update `tests/unit/test_notifications_router.py`** — `_MockNotificationModel.to_dict()` now outputs `"params"` (not `"params_"`) to match `NotificationModel.to_dict()`.
 
-5. **Generate the migration** (follow CLAUDE.md exactly):
+5. **Generate the migration** (follow CLAUDE.md exactly): Already complete — the migration at `alembic/versions/e7f6a5b3c12d_add_notification_indexes.py` already contains the manually written partial index (lines 70-78).
    - `docker compose -f configs/docker-compose.test.yml up -d test-db`
    - `docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;" && docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"`
    - `alembic upgrade head`

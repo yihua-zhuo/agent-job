@@ -188,7 +188,6 @@ def fresh_schema() -> Generator[None, None, None]:
     # 2. Ensure ORM models are registered with Base.metadata.
     import db.base as db_base_module  # noqa: F401
     import db.models  # noqa: F401
-    import tests.integration.domain_fixtures.notification  # noqa: F401
 
     # 3. Drop and recreate all tables via the sync engine.
     sync_engine = _get_test_sync_engine()
