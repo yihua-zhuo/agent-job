@@ -7,6 +7,28 @@ from datetime import datetime, timezone
 from db.models.code_review import CodeReviewModel
 
 
+class TestCodeReviewModelInit:
+    """Test __init__ field assignment and id state before flush."""
+
+    def test_id_is_none_before_flush(self):
+        """id is None on a newly constructed instance before any flush."""
+        review = CodeReviewModel(tenant_id=1, user_id=1)
+        assert review.id is None
+
+    def test_required_fields_assigned(self):
+        """All required fields are correctly assigned on construction."""
+        review = CodeReviewModel(tenant_id=42, user_id=99)
+        assert review.tenant_id == 42
+        assert review.user_id == 99
+        assert review.language is None
+        assert review.review_type is None
+        assert review.code_snippet is None
+        assert review.score is None
+        assert review.summary is None
+        assert review.created_at is None
+        assert review.updated_at is None
+
+
 class TestCodeReviewModelToDict:
     """Test to_dict() output shape, types, nullability."""
 

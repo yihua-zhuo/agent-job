@@ -9,6 +9,8 @@ into a single linear chain. No schema operations are required — the upgrade() 
 downgrade() are both pass because the merge is purely a revision-graph correction.
 The actual down_revision chain points to 3ea69d66514e, which is the single true
 head after the divergent paths have been collapsed.
+
+Run ``alembic history --verbose`` after this migration to confirm no divergent heads remain.
 """
 
 from collections.abc import Sequence
