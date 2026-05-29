@@ -1,5 +1,6 @@
 """Unit tests for src/services/analytics_service.py."""
 
+import re
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -115,10 +116,8 @@ def _build_analytics_session(state: MockState) -> MagicMock:
                 compiled = sql.compile()
                 if hasattr(compiled, "params") and isinstance(compiled.params, dict):
                     p = dict(compiled.params)
-            except Exception:  # noqa: S110  # best-effort; non-critical SQL param extraction
+            except (ValueError, TypeError):  # noqa: BLE001  # best-effort; non-critical SQL param extraction
                 pass
-
-        import re
 
         def _extract_id(sql_t, p, col):
             m = re.search(rf"{re.escape(col)}\s*=\s*:(\w+)", sql_t)
