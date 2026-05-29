@@ -5,8 +5,6 @@ from datetime import datetime as dt
 import pytest
 
 from db.models.tenant import TenantModel
-from tests.unit.conftest import MockState, make_mock_session
-from tests.unit.domain_handlers.tenants import make_tenant_handler
 
 
 class TestTenantModel:
@@ -62,6 +60,9 @@ class TestTenantModel:
 class TestTenantHandler:
     @pytest.fixture
     def mock_db_session(self):
+        from tests.unit.conftest import MockState, make_mock_session
+        from tests.unit.domain_handlers.tenants import make_tenant_handler
+
         state = MockState()
         return make_mock_session([make_tenant_handler(state)])
 
@@ -121,7 +122,12 @@ class TestTenantHandler:
 
     @pytest.mark.asyncio
     async def test_select_tenant_isolation(self, mock_db_session):
-        """Verify the handler correctly scopes reads to a specific tenant_id."""
+        """Verify the handler correctly scopes reads to a specific tenant_id.
+
+        Exercises two paths:
+        - PK lookup via 'id' bind (limit 1, where id = :id)
+        - Tenant-scoped list via 'tenant_id' bind (no where id clause)
+        """
         from sqlalchemy import text
 
         # Seed two tenants with different IDs into the handler state.
@@ -154,7 +160,7 @@ class TestTenantHandler:
             },
         )
 
-        # Query by id=1 — the second tenant (id=2) must not be returned.
+        # PK lookup by id=1 — the second tenant (id=2) must not be returned.
         result = await mock_db_session.execute(
             text("SELECT id, name FROM tenants WHERE id = :id LIMIT 1"),
             {"id": 1},
@@ -163,7 +169,7 @@ class TestTenantHandler:
         assert row is not None
         assert row.name == "Tenant One"
 
-        # Query by id=2 — the first tenant (id=1) must not be returned.
+        # PK lookup by id=2 — the first tenant (id=1) must not be returned.
         result2 = await mock_db_session.execute(
             text("SELECT id, name FROM tenants WHERE id = :id LIMIT 1"),
             {"id": 2},
@@ -171,6 +177,24 @@ class TestTenantHandler:
         row2 = result2.fetchone()
         assert row2 is not None
         assert row2.name == "Tenant Two"
+
+        # Tenant-scoped list query: tenant_id=1 must NOT return Tenant Two (id=2).
+        result3 = await mock_db_session.execute(
+            text("SELECT id, name FROM tenants"),
+            {"tenant_id": 1},
+        )
+        rows = list(result3.fetchall())
+        assert len(rows) == 1
+        assert rows[0].name == "Tenant One"
+
+        # Tenant-scoped list query: tenant_id=2 must NOT return Tenant One (id=1).
+        result4 = await mock_db_session.execute(
+            text("SELECT id, name FROM tenants"),
+            {"tenant_id": 2},
+        )
+        rows2 = list(result4.fetchall())
+        assert len(rows2) == 1
+        assert rows2[0].name == "Tenant Two"
 
     @pytest.mark.asyncio
     async def test_count_tenants(self, mock_db_session):

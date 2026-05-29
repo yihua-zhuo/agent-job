@@ -177,6 +177,7 @@ from decimal import Decimal
 from enum import Enum as PyEnum
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, String, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
@@ -239,6 +240,7 @@ from decimal import Decimal
 from enum import Enum as PyEnum
 
 from sqlalchemy import DateTime, Enum, ForeignKey, Index, Integer, Numeric, text
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
@@ -283,14 +285,11 @@ class Contract(Base):
 
 ### Step 2: 生成 Alembic Migration
 
-参考 `alembic/env.py` 的 import 格式，在 `alembic/env.py` 新增：
+运行 autogenerate（参考 CLAUDE.md §Alembic Migrations）：
 
-```python
-from db.models.quote import Quote, QuoteItem  # 新增
-from db.models.contract import Contract        # 新增
-```
-
-然后执行 autogenerate（参考 CLAUDE.md §Alembic Migrations）：
+> **例外说明**：Quote/Contract 模型是新增表，不会覆盖现有 central registry 文件。
+> `alembic/env.py` 的 `Base.metadata` 自动发现所有已注册的 ORM 模型（`db.models.__init__` 导入的模型），
+> 无需手动修改 alembic/env.py 即可被 autogenerate 扫描到。
 
 ```bash
 # 1. 启动干净 DB
@@ -376,8 +375,7 @@ class QuoteService:
             total += line_total
 
         quote.amount = total
-        await self.session.commit()
-        await self.session.refresh(quote)
+        await self.session.flush()
         return quote
 
     async def get_quote(self, quote_id: int, tenant_id: int) -> Quote:
@@ -419,7 +417,7 @@ class QuoteService:
                 discount=Decimal(str(item.get("discount", "0.00"))),
             )
             self.session.add(qi)
-        await self.session.commit()
+        await self.session.flush()
         return await self.get_quote(quote_id, tenant_id)
 
     async def send_quote(self, quote_id: int, tenant_id: int) -> Quote:
@@ -427,15 +425,13 @@ class QuoteService:
         if quote.status == QuoteStatus.SIGNED:
             raise ValidationException("Quote already signed")
         quote.status = QuoteStatus.SENT
-        await self.session.commit()
-        await self.session.refresh(quote)
+        await self.session.flush()
         return quote
 
     async def update_status(self, quote_id: int, tenant_id: int, status: QuoteStatus) -> Quote:
         quote = await self.get_quote(quote_id, tenant_id)
         quote.status = status
-        await self.session.commit()
-        await self.session.refresh(quote)
+        await self.session.flush()
         return quote
 ```
 
@@ -485,8 +481,7 @@ class ContractService:
             status=ContractStatus.DRAFT,
         )
         self.session.add(contract)
-        await self.session.commit()
-        await self.session.refresh(contract)
+        await self.session.flush()
         return contract
 
     async def get_contract(self, contract_id: int, tenant_id: int) -> Contract:
@@ -514,8 +509,7 @@ class ContractService:
         contract.status = status
         if signed_at is not None:
             contract.signed_at = signed_at
-        await self.session.commit()
-        await self.session.refresh(contract)
+        await self.session.flush()
         return contract
 ```
 
@@ -531,7 +525,7 @@ class ContractService:
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.routers.opportunities import get_db
+from db.connection import get_db
 from db.models.quote import QuoteStatus
 from services.quote_service import QuoteService
 
@@ -541,7 +535,7 @@ router = APIRouter(prefix="/quotes", tags=["Quotes"])
 @router.post("/")
 async def create_quote(
     payload: dict,
-    ctx=Depends(require_auth),
+    ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     svc = QuoteService(session)
@@ -560,7 +554,7 @@ async def list_quotes(
     status: QuoteStatus | None = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    ctx=Depends(require_auth),
+    ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     svc = QuoteService(session)
@@ -579,7 +573,7 @@ async def list_quotes(
 @router.get("/{quote_id}")
 async def get_quote(
     quote_id: int,
-    ctx=Depends(require_auth),
+    ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     svc = QuoteService(session)
@@ -591,7 +585,7 @@ async def get_quote(
 async def update_quote(
     quote_id: int,
     payload: dict,
-    ctx=Depends(require_auth),
+    ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     svc = QuoteService(session)
@@ -602,7 +596,7 @@ async def update_quote(
 @router.post("/{quote_id}/send")
 async def send_quote(
     quote_id: int,
-    ctx=Depends(require_auth),
+    ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     svc = QuoteService(session)
@@ -619,7 +613,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.routers.opportunities import get_db
+from db.connection import get_db
 from services.contract_service import ContractService
 
 router = APIRouter(prefix="/contracts", tags=["Contracts"])
@@ -633,7 +627,7 @@ class SignatureStatusPayload(BaseModel):
 @router.post("/")
 async def create_contract(
     payload: dict,
-    ctx=Depends(require_auth),
+    ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     svc = ContractService(session)
@@ -645,7 +639,7 @@ async def create_contract(
 async def list_contracts(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
-    ctx=Depends(require_auth),
+    ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     svc = ContractService(session)
@@ -664,7 +658,7 @@ async def list_contracts(
 @router.get("/{contract_id}")
 async def get_contract(
     contract_id: int,
-    ctx=Depends(require_auth),
+    ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     svc = ContractService(session)
@@ -676,7 +670,7 @@ async def get_contract(
 async def update_signature_status(
     contract_id: int,
     payload: SignatureStatusPayload,
-    ctx=Depends(require_auth),
+    ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     svc = ContractService(session)

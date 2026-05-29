@@ -232,8 +232,19 @@ class DashboardService:
         activities_future = asyncio.create_task(self.activity.get_recent_activities(tenant_id, 10))
         ticket_future = asyncio.create_task(self.ticket.get_ticket_summary(tenant_id))
         opp_future = asyncio.create_task(self.sales.get_top_opportunities(tenant_id, 5))
-        # asyncio.gather all futures
-        ...
+        revenue, pipeline, activities, ticket_summary, top_opps = await asyncio.gather(
+            revenue_future, pipeline_future, activities_future, ticket_future, opp_future, return_exceptions=True
+        )
+        return DashboardOverview(
+            revenue_today=revenue.get("today", 0.0) if isinstance(revenue, dict) else 0.0,
+            revenue_week=revenue.get("week", 0.0) if isinstance(revenue, dict) else 0.0,
+            revenue_month=revenue.get("month", 0.0) if isinstance(revenue, dict) else 0.0,
+            revenue_quarter=revenue.get("quarter", 0.0) if isinstance(revenue, dict) else 0.0,
+            pipeline=pipeline if isinstance(pipeline, list) else [],
+            activities=activities if isinstance(activities, list) else [],
+            ticket_summary=ticket_summary if hasattr(ticket_summary, "open") else None,
+            top_opportunities=top_opps if isinstance(top_opps, list) else [],
+        )
 ```
 
 **完成判定**：`PYTHONPATH=src pytest tests/unit/test_dashboard_service.py -v` → ≥ 8 passed
@@ -309,7 +320,7 @@ async def test_get_ticket_summary_counts(dashboard_service, mock_tenant_id):
     assert result.sla_at_risk >= 0
 ```
 
-**完成判定**：`PYTHONPATH=src pytest tests/unit/test_dashboard_service.py tests/unit/test_dashboard_service.py -v` → ≥ 8 passed；`PYTHONPATH=src pytest tests/integration/test_dashboard_integration.py -v` → 全 passed
+**完成判定**：`PYTHONPATH=src pytest tests/unit/test_dashboard_service.py tests/unit/test_ticket_service.py -v` → ≥ 8 passed；`PYTHONPATH=src pytest tests/integration/test_dashboard_integration.py -v` → 全 passed
 
 ### Step 5: 新建前端 Dashboard 页面和布局组件
 

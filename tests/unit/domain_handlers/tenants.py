@@ -66,14 +66,12 @@ def make_tenant_handler(state: MockState):
 
         if "update" in sql_text and "tenants" in sql_text:
             tenant_id = params.get("id", params.get("tenant_id"))
-            if tenant_id in state.tenants:
-                for k, v in params.items():
-                    if k not in ("id", "tenant_id"):
-                        state.tenants[tenant_id][k] = v
-                return MockResult([MockRow(state.tenants[tenant_id].copy())])
-            return MockResult(
-                [[1, "Updated Name", "updated-slug", "pro", "active", {}, {}, None, None]]
-            )
+            if tenant_id is None or tenant_id not in state.tenants:
+                return MockResult([])
+            for k, v in params.items():
+                if k not in ("id", "tenant_id"):
+                    state.tenants[tenant_id][k] = v
+            return MockResult([MockRow(state.tenants[tenant_id].copy())])
 
         if "select" in sql_text and "count" in sql_text and "from tenants" in sql_text:
             return MockResult([[len(state.tenants)]])
@@ -98,27 +96,7 @@ def make_tenant_handler(state: MockState):
                 if tenant_id is not None:
                     matching = [r for rid, r in state.tenants.items() if rid == tenant_id]
                     return MockResult([MockRow(r.copy()) for r in matching])
-                # Legacy fallback: return all in-memory state.
-                if state.tenants:
-                    rows = [MockRow(r.copy()) for r in state.tenants.values()]
-                else:
-                    rows = [
-                        MockRow(_FIXTURES[1].copy()),
-                        MockRow(
-                            {
-                                "id": 2,
-                                "name": "Tenant B",
-                                "slug": "tenant-b",
-                                "plan": "enterprise",
-                                "status": "active",
-                                "settings": {},
-                                "usage_limits": {},
-                                "created_at": None,
-                                "updated_at": None,
-                            }
-                        ),
-                    ]
-                return MockResult(rows)
+                return MockResult([])
 
             if tenant_id in state.tenants:
                 return MockResult([MockRow(state.tenants[tenant_id].copy())])

@@ -68,6 +68,7 @@ class TestTenantIntegration:
                 },
             )
             session.commit()
+            return
         except IntegrityError:
             return
         finally:
@@ -100,6 +101,7 @@ class TestTenantIntegration:
                 },
             )
             session.commit()
+            return
         except IntegrityError:
             return
         finally:
