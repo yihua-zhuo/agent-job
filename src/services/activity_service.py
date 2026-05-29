@@ -224,3 +224,30 @@ class ActivityService:
         recent = [_to_activity(row) for row in recent_result.scalars().all()]
 
         return {"total": total, "by_type": by_type, "recent_activities": recent}
+
+    async def get_recent_activities(self, tenant_id: int, limit: int = 10) -> list[Activity]:
+        result = await self.session.execute(
+            select(ActivityModel)
+            .where(ActivityModel.tenant_id == tenant_id)
+            .order_by(ActivityModel.created_at.desc())
+            .limit(limit)
+        )
+        return [_to_activity(row) for row in result.scalars().all()]
+
+    async def get_activity_by_type(self, tenant_id: int, activity_type: str) -> list[Activity]:
+        try:
+            activity_type_enum = ActivityType(activity_type)
+        except ValueError:
+            raise ValidationException(f"无效的活动类型: {activity_type}")
+
+        result = await self.session.execute(
+            select(ActivityModel)
+            .where(
+                and_(
+                    ActivityModel.tenant_id == tenant_id,
+                    ActivityModel.type == activity_type_enum.value,
+                )
+            )
+            .order_by(ActivityModel.created_at.desc())
+        )
+        return [_to_activity(row) for row in result.scalars().all()]

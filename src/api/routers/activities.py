@@ -190,3 +190,25 @@ async def search_activities(
     service = ActivityService(session)
     activities = await service.search_activities(body.keyword, tenant_id=ctx.tenant_id)
     return {"success": True, "data": [a.to_dict() for a in activities]}
+
+
+@activities_router.get("/recent")
+async def get_recent_activities(
+    limit: int = Query(10, ge=1, le=100),
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    service = ActivityService(session)
+    activities = await service.get_recent_activities(tenant_id=ctx.tenant_id, limit=limit)
+    return {"success": True, "data": [a.to_dict() for a in activities]}
+
+
+@activities_router.get("/by-type/{activity_type}")
+async def get_activity_by_type(
+    activity_type: str,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    service = ActivityService(session)
+    activities = await service.get_activity_by_type(tenant_id=ctx.tenant_id, activity_type=activity_type)
+    return {"success": True, "data": [a.to_dict() for a in activities]}

@@ -192,6 +192,126 @@ class TestDeleteActivity:
         assert 1 in activity_state.activities
 
 
+class TestGetRecentActivities:
+    """Tests for ActivityService.get_recent_activities."""
+
+    @pytest.mark.asyncio
+    async def test_returns_activities_sorted_created_at_desc(self, activity_service, activity_state):
+        """get_recent_activities returns activities sorted newest first."""
+        add_activity(
+            activity_state,
+            activity_id=1,
+            tenant_id=1,
+            created_at=datetime(2025, 1, 1, 10, 0),
+        )
+        add_activity(
+            activity_state,
+            activity_id=2,
+            tenant_id=1,
+            created_at=datetime(2025, 1, 1, 12, 0),
+        )
+        add_activity(
+            activity_state,
+            activity_id=3,
+            tenant_id=1,
+            created_at=datetime(2025, 1, 1, 11, 0),
+        )
+
+        result = await activity_service.get_recent_activities(tenant_id=1, limit=10)
+
+        ids = [a.id for a in result]
+        assert ids == [2, 3, 1]
+
+    @pytest.mark.asyncio
+    async def test_respects_limit(self, activity_service, activity_state):
+        """get_recent_activities respects the limit parameter."""
+        for i in range(1, 6):
+            add_activity(
+                activity_state,
+                activity_id=i,
+                tenant_id=1,
+                created_at=datetime(2025, 1, i, 0),
+            )
+
+        result = await activity_service.get_recent_activities(tenant_id=1, limit=3)
+
+        assert len(result) == 3
+
+    @pytest.mark.asyncio
+    async def test_returns_only_calling_tenant_activities(self, activity_service, activity_state):
+        """get_recent_activities returns only the calling tenant's activities."""
+        add_activity(activity_state, activity_id=1, tenant_id=1)
+        add_activity(activity_state, activity_id=2, tenant_id=2)
+
+        result = await activity_service.get_recent_activities(tenant_id=1, limit=10)
+
+        assert all(a.tenant_id == 1 for a in result)
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_empty_list_when_no_activities(self, activity_service):
+        """get_recent_activities returns an empty list when no activities exist."""
+        result = await activity_service.get_recent_activities(tenant_id=1, limit=10)
+
+        assert result == []
+
+
+class TestGetActivityByType:
+    """Tests for ActivityService.get_activity_by_type."""
+
+    @pytest.mark.asyncio
+    async def test_returns_activities_matching_given_type(self, activity_service, activity_state):
+        """get_activity_by_type returns activities matching the given type."""
+        add_activity(activity_state, activity_id=1, tenant_id=1, activity_type="call")
+        add_activity(activity_state, activity_id=2, tenant_id=1, activity_type="email")
+        add_activity(activity_state, activity_id=3, tenant_id=1, activity_type="call")
+
+        result = await activity_service.get_activity_by_type(tenant_id=1, activity_type="call")
+
+        assert all(a.type.value == "call" for a in result)
+        assert len(result) == 2
+
+    @pytest.mark.asyncio
+    async def test_raises_validation_exception_for_invalid_type(self, activity_service):
+        """get_activity_by_type raises ValidationException for invalid type string."""
+        with pytest.raises(ValidationException):
+            await activity_service.get_activity_by_type(tenant_id=1, activity_type="invalid_type")
+
+    @pytest.mark.asyncio
+    async def test_returns_only_calling_tenant_activities(self, activity_service, activity_state):
+        """get_activity_by_type returns only the calling tenant's activities."""
+        add_activity(activity_state, activity_id=1, tenant_id=1, activity_type="call")
+        add_activity(activity_state, activity_id=2, tenant_id=2, activity_type="call")
+
+        result = await activity_service.get_activity_by_type(tenant_id=1, activity_type="call")
+
+        assert all(a.tenant_id == 1 for a in result)
+        assert len(result) == 1
+
+    @pytest.mark.asyncio
+    async def test_returns_activities_sorted_created_at_desc(self, activity_service, activity_state):
+        """get_activity_by_type returns activities sorted newest first."""
+        add_activity(
+            activity_state,
+            activity_id=1,
+            tenant_id=1,
+            activity_type="call",
+            created_at=datetime(2025, 1, 1, 10, 0),
+        )
+        add_activity(
+            activity_state,
+            activity_id=2,
+            tenant_id=1,
+            activity_type="call",
+            created_at=datetime(2025, 1, 1, 12, 0),
+        )
+
+        result = await activity_service.get_activity_by_type(tenant_id=1, activity_type="call")
+
+        ids = [a.id for a in result]
+        assert ids == [2, 1]
+
+
 class TestListActivitiesPagination:
     """Tests for ActivityService.list_activities pagination and filters."""
 
