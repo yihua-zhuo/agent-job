@@ -267,6 +267,17 @@ class ChurnPredictionService:
         high_risk.sort(key=lambda x: x.score, reverse=True)
         return high_risk
 
+    async def get_churn_prediction(self, customer_id: int, tenant_id: int = 0) -> ChurnPrediction:
+        """Return a single-customer churn prediction (score + level + factors)."""
+        score = await self.calculate_churn_score(customer_id, tenant_id)
+        factors = await self.get_churn_risk_factors(customer_id, tenant_id)
+        return ChurnPrediction(
+            customer_id=customer_id,
+            score=score,
+            risk_level=self._get_risk_level(score),
+            factors=factors,
+        )
+
     async def recommend_actions(self, customer_id: int, tenant_id: int = 0) -> list[ChurnAction]:
         """根据流失风险推荐行动"""
         data = await self._get_customer_metrics(customer_id, tenant_id)
