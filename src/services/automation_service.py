@@ -70,68 +70,61 @@ def _match_conditions(conditions: list, context: dict) -> bool:
     return all(_eval_condition(c, context) for c in conditions)
 
 
-async def _execute_action(
-    action: dict,
-    context: dict,
-    session: AsyncSession,
-    tenant_id: int,
-    executed_by: int,
-) -> dict:
-    action_type = action.get("type")
-    params = action.get("params", {})
-
-    if action_type == "notification.send":
-        from services.notification_service import NotificationService
-
-        recipient_user_id = params["user_id"] if "user_id" in params else context.get("user_id")
-        if not recipient_user_id:
-            return {"type": action_type, "status": "skipped", "reason": "no user_id in context or params"}
-        svc = NotificationService(session)
-        result = await svc.send_notification(
-            user_id=recipient_user_id,
-            notification_type="automation",
-            title=params.get("title", "Automation triggered"),
-            content=params.get("message", f"Automation rule triggered: {context.get('rule_name')}"),
-            tenant_id=tenant_id,
-            related_type=context.get("entity_type"),
-            related_id=context.get("entity_id"),
-        )
-        return {"type": action_type, "status": "sent" if result else "failed"}
-
-    elif action_type == "task.create":
-        from services.task_service import TaskService
-
-        svc = TaskService(session)
-        task_result = await svc.create_task(
-            tenant_id=tenant_id,
-            title=params.get("title", "Automated task"),
-            description=params.get("description", ""),
-            assigned_to=params.get("assignee_id"),
-            created_by=executed_by,
-        )
-        return {"type": action_type, "status": "created" if task_result else "failed"}
-
-    elif action_type == "email.send":
-        return {"type": action_type, "status": "queued", "template": params.get("template")}
-    elif action_type == "webhook.call":
-        return {"type": action_type, "status": "queued", "url": params.get("url")}
-    elif action_type == "tag.add":
-        return {"type": action_type, "status": "added", "tag": params.get("tag")}
-    elif action_type == "ticket.assign":
-        return {"type": action_type, "status": "assigned", "assignee_id": params.get("assignee_id")}
-    elif action_type == "ticket.update_priority":
-        return {"type": action_type, "status": "updated", "priority": params.get("priority")}
-    elif action_type == "opportunity.add_note":
-        return {"type": action_type, "status": "added", "note": params.get("note")}
-    else:
-        return {"type": action_type, "status": "unknown_action"}
-
-
 class AutomationService:
     """DB-backed automation rule engine."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    async def _execute_action(self, action: dict, context: dict, tenant_id: int, executed_by: int) -> dict:
+        action_type = action.get("type")
+        params = action.get("params", {})
+
+        if action_type == "notification.send":
+            from services.notification_service import NotificationService
+
+            recipient_user_id = params["user_id"] if "user_id" in params else context.get("user_id")
+            if not recipient_user_id:
+                return {"type": action_type, "status": "skipped", "reason": "no user_id in context or params"}
+            svc = NotificationService(self.session)
+            result = await svc.send_notification(
+                user_id=recipient_user_id,
+                notification_type="automation",
+                title=params.get("title", "Automation triggered"),
+                content=params.get("message", f"Automation rule triggered: {context.get('rule_name')}"),
+                tenant_id=tenant_id,
+                related_type=context.get("entity_type"),
+                related_id=context.get("entity_id"),
+            )
+            return {"type": action_type, "status": "sent" if result else "failed"}
+
+        elif action_type == "task.create":
+            from services.task_service import TaskService
+
+            svc = TaskService(self.session)
+            task_result = await svc.create_task(
+                tenant_id=tenant_id,
+                title=params.get("title", "Automated task"),
+                description=params.get("description", ""),
+                assigned_to=params.get("assignee_id"),
+                created_by=executed_by,
+            )
+            return {"type": action_type, "status": "created" if task_result else "failed"}
+
+        elif action_type == "email.send":
+            return {"type": action_type, "status": "queued", "template": params.get("template")}
+        elif action_type == "webhook.call":
+            return {"type": action_type, "status": "queued", "url": params.get("url")}
+        elif action_type == "tag.add":
+            return {"type": action_type, "status": "added", "tag": params.get("tag")}
+        elif action_type == "ticket.assign":
+            return {"type": action_type, "status": "assigned", "assignee_id": params.get("assignee_id")}
+        elif action_type == "ticket.update_priority":
+            return {"type": action_type, "status": "updated", "priority": params.get("priority")}
+        elif action_type == "opportunity.add_note":
+            return {"type": action_type, "status": "added", "note": params.get("note")}
+        else:
+            return {"type": action_type, "status": "unknown_action"}
 
     # -------------------------------------------------------------------------
     # Rule CRUD
@@ -277,10 +270,9 @@ class AutomationService:
             errors = []
             for action in rule.actions:
                 try:
-                    action_result = await _execute_action(
+                    action_result = await self._execute_action(
                         action,
                         {**context, "rule_name": rule.name},
-                        self.session,
                         tenant_id,
                         executed_by,
                     )

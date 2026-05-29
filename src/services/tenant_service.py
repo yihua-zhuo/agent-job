@@ -49,21 +49,24 @@ class TenantService:
         await self.session.refresh(tenant)
         return self._to_dict(tenant)
 
-    async def _fetch(self, tenant_id: int) -> TenantModel:
-        result = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
+    async def _fetch(self, tenant_id: int, _tenant_id: int = 0) -> TenantModel:
+        conditions = [TenantModel.id == tenant_id]
+        if _tenant_id:
+            conditions.append(TenantModel.id == _tenant_id)
+        result = await self.session.execute(select(TenantModel).where(and_(*conditions)))
         tenant = result.scalar_one_or_none()
         if tenant is None or tenant.status == "deleted":
             raise NotFoundException(f"Tenant {tenant_id}")
         return tenant
 
     async def get_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
-        tenant = await self._fetch(tenant_id)
+        tenant = await self._fetch(tenant_id, _tenant_id)
         return self._to_dict(tenant)
 
     async def update_tenant(self, tenant_id: int, _tenant_id: int = 0, **kwargs) -> dict:
         if _tenant_id and tenant_id != _tenant_id:
             raise NotFoundException(f"Tenant {tenant_id}")
-        tenant = await self._fetch(tenant_id)
+        tenant = await self._fetch(tenant_id, _tenant_id)
 
         allowed = {"name", "plan", "status"}
         update_values: dict = {"updated_at": datetime.now(UTC)}
@@ -82,7 +85,10 @@ class TenantService:
         if settings_changed:
             update_values["settings"] = new_settings
 
-        await self.session.execute(update(TenantModel).where(TenantModel.id == tenant_id).values(**update_values))
+        conditions = [TenantModel.id == tenant_id]
+        if _tenant_id:
+            conditions.append(TenantModel.id == _tenant_id)
+        await self.session.execute(update(TenantModel).where(and_(*conditions)).values(**update_values))
         await self.session.flush()
 
         refreshed = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))

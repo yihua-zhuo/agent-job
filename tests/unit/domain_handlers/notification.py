@@ -20,7 +20,7 @@ def _notification_to_row(n: dict):
             "user_id": n.get("user_id"),
             "channel": n.get("channel"),
             "template": n.get("template"),
-            "params_": n.get("params_"),
+            "params": n.get("params_"),
             "status": n.get("status"),
             "priority": n.get("priority"),
             "created_at": n.get("created_at"),
@@ -51,11 +51,10 @@ def make_notification_handler(state):
     """Return a handler that manages an in-memory notification store in state."""
 
     def handler(sql_text: str, params: dict[str, Any]) -> MockResult | None:
-        sql_text_lower = sql_text.lower()
-        # Initialise per-state store
         if not hasattr(state, "_notifications"):
             state._notifications = {}
             state._notifications_next_id = 1
+        sql_text_lower = sql_text.lower()
 
         if "insert into notifications" in sql_text_lower:
             # Enforce the canonical bind key — must match NotificationModel.params_.
@@ -141,10 +140,10 @@ def make_reminder_handler(state):
     """Return a handler that manages an in-memory reminder store in state."""
 
     def handler(sql_text: str, params: dict[str, Any]) -> MockResult | None:
-        sql_text_lower = sql_text.lower()
         if not hasattr(state, "_reminders"):
             state._reminders = {}
             state._reminders_next_id = 1
+        sql_text_lower = sql_text.lower()
 
         if "insert into reminders" in sql_text_lower:
             assert "tenant_id" in params and "user_id" in params, (
@@ -192,15 +191,12 @@ def make_reminder_handler(state):
             is_completed_filter = params.get("is_completed")
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
-            now = datetime.now(UTC)
             rows = [
                 r
                 for r in state._reminders.values()
                 if r.get("tenant_id") == tenant_id
                 and r.get("user_id") == user_id
                 and (is_completed_filter is None or r.get("is_completed") == is_completed_filter)
-                and r.get("remind_at") is not None
-                and r.get("remind_at") > now
             ]
             return MockResult([_reminder_to_row(r) for r in rows[offset : offset + page_size]])
 

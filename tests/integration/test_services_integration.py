@@ -506,16 +506,9 @@ class TestNotificationIntegration:
         assert cancelled["id"] == result.id
 
     async def test_notification_cross_tenant_isolation(
-        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant
+        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant, _seed_tenant_2
     ):
         """Notification under tenant A is invisible to tenant B (Rule 126)."""
-        from db.models.tenant import TenantModel
-
-        # Seed second tenant
-        tenant2 = TenantModel(id=tenant_id_2, name="Tenant 2", plan="free", status="active")
-        async_session.add(tenant2)
-        await async_session.flush()
-
         svc = NotificationService(async_session)
 
         # Create user and notification under tenant 1

@@ -51,7 +51,7 @@ class _MockNotificationModel:
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params": self._params,
+            "params_": self._params,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -220,7 +220,9 @@ class TestMarkAllRead:
 
 
 class TestPreferences:
-    @pytest.mark.xfail(reason="notification_preferences table not yet implemented — storage is hardcoded in-memory")
+    # notification_preferences table not yet implemented — storage is hardcoded in-memory.
+    # These are placeholder tests to document the pending feature.
+
     def test_get_preferences_ok(self):
         client = _app()
         response = client.get("/api/v1/notifications/preferences")
@@ -228,7 +230,6 @@ class TestPreferences:
         data = response.json()["data"]
         assert "email" in data
 
-    @pytest.mark.xfail(reason="notification_preferences table not yet implemented — storage is hardcoded in-memory")
     def test_update_preferences_ok(self):
         client = _app()
         response = client.put("/api/v1/notifications/preferences", json={"email": False})
