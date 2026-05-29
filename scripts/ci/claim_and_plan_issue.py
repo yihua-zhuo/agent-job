@@ -17,6 +17,8 @@ import sys
 from pathlib import Path
 from typing import Any
 
+from dev_plan_context import build_dev_plan_prompt_block, build_source_contract_text, resolve_dev_plan_context
+
 
 LABEL_READY = "ready"
 LABEL_WIP = "wip"
@@ -112,6 +114,16 @@ def call_claude_for_plan(issue: dict[str, Any]) -> tuple[str | None, str]:
     title = issue.get("title") or ""
     body = (issue.get("body") or "").strip()
     number = issue["number"]
+    dev_plan_ctx, dev_plan_err = resolve_dev_plan_context(issue)
+    if dev_plan_err:
+        return None, dev_plan_err
+    dev_plan_block = build_dev_plan_prompt_block(dev_plan_ctx) if dev_plan_ctx else ""
+    source_of_truth = (
+        "The dev-plan contract below is the source of truth for scope and sequencing."
+        if dev_plan_ctx
+        else "The GitHub issue body is the source of truth for scope."
+    )
+    source_contract = build_source_contract_text(dev_plan_ctx)
 
     prompt = f"""You are writing an implementation plan for GitHub issue #{number}.
 
@@ -119,6 +131,9 @@ Title: {title}
 
 Body:
 {body}
+
+{source_of_truth}
+{dev_plan_block}
 
 Read whatever files you need from this repository to ground the plan in reality
 (file paths, function names, existing patterns). Then return ONLY the Markdown
@@ -131,6 +146,9 @@ Use this structure exactly:
 ## Goal
 <one short paragraph stating what is being changed and why>
 
+## Source Contract
+{source_contract}
+
 ## Affected Files
 - `path/to/file.py` — <what changes>
 - `path/to/test.py` — <what changes>
@@ -142,6 +160,7 @@ Use this structure exactly:
 ## Test Plan
 - Unit tests in `tests/unit/`: <files to add/modify and what they cover>
 - Integration tests in `tests/integration/`: <files to add/modify and what they cover>
+- Dev-plan verification: <for dev-plan issues, list each target-board §6 command or explain why the board has no command for that step>
 
 ## Acceptance Criteria
 - <testable condition>

@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix
+.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build
 
 # Create a local virtualenv on demand and use it by default.
 VENV_DIR := .venv
@@ -101,3 +101,34 @@ migrate-new: venv
 trigger-fix: venv
 	@if [ -z "$(ISSUE)" ]; then echo "Usage: make trigger-fix ISSUE=123"; exit 1; fi
 	$(PYTHON) "scripts/ci/trigger_fix_for_issue.py" $(ISSUE)
+
+# ── Local CI via act ───────────────────────────────────────────────────────
+# Runs the implement-ready-issues workflow in a local Docker runner via `act`.
+# Pass ISSUE=<n> to target a specific issue; omit to pick the oldest ready one
+# (same semantics as the scheduled run).
+#
+# Requirements:
+#   • brew install act
+#   • .secrets contains real ANTHROPIC_API_KEY and GITHUB_TOKEN (act cannot
+#     read GitHub repo secrets; see .secrets.example).
+#   • Docker is running — the workflow runs `docker compose` from inside the
+#     runner, so we mount the host socket via --bind + -v.
+#
+# Side effects: in --bind mode act operates on the working tree directly. If
+# the workflow gets to `git push`, it will push to the real origin and open a
+# real PR with the token in .secrets. Use a throwaway issue/branch if testing.
+ACT_IMAGE := act-runner-with-gh:latest
+
+act-build: ## Build the custom act runner image (catthehacker + gh CLI)
+	docker build --platform linux/amd64 -t $(ACT_IMAGE) -f .act/Dockerfile .act
+
+act-implement: ## Trigger implement-ready-issues.yml locally via act (ISSUE=123 to target one)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/implement-ready-issues.yml \
+		-j implement \
+		$(if $(ISSUE),--input issue_number=$(ISSUE),) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock

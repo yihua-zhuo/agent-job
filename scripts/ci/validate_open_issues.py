@@ -18,6 +18,8 @@ import sys
 from json import JSONDecoder
 from typing import Any
 
+from dev_plan_context import find_dev_plan_ref, resolve_dev_plan_context
+
 
 LABEL_READY = "ready"
 LABEL_NEEDS_INFO = "needs-clarification"
@@ -129,12 +131,23 @@ def open_blockers(deps: list[int]) -> list[int]:
 def build_prompt(issue: dict[str, Any], budget: int) -> str:
     title = issue.get("title") or "(no title)"
     body = (issue.get("body") or "(no body)").strip()
+    dev_plan_ref = find_dev_plan_ref(issue)
+    dev_plan_note = ""
+    if dev_plan_ref:
+        dev_plan_note = f"""
+This issue references a dev-plan board: `{dev_plan_ref}`.
+For dev-plan issues, prefer "ready" when the referenced board document exists
+and is independently executable. The board's own README/template/§5 steps/§6
+verification define the implementation scope, so do not split merely because
+the issue body is short.
+"""
     return f"""You are triaging a GitHub issue and deciding what should happen to it.
 
 Title: {title}
 
 Body:
 {body}
+{dev_plan_note}
 
 Pick ONE of three verdicts:
 
@@ -349,6 +362,22 @@ def process_issue(issue: dict[str, Any]) -> bool:
     number = issue["number"]
     title = issue.get("title") or ""
     log(f"validating issue=#{number} title={title!r}")
+
+    dev_plan_ctx, dev_plan_err = resolve_dev_plan_context(issue)
+    if dev_plan_err:
+        body = (
+            "**Needs clarification** ⚠️\n\n"
+            "This issue declares a dev-plan board, but the referenced document "
+            f"could not be resolved in the workflow checkout: `{dev_plan_err}`.\n\n"
+            "Use a `Dev-Plan: docs/dev-plan/<domain>/<board>.md` line and make "
+            "sure `docs/dev-plan/README.md`, the matching template, and the "
+            "target board file are present."
+        )
+        ok = comment_and_label(number, body, LABEL_NEEDS_INFO)
+        log(f"marked_needs_info issue=#{number} ok={ok} reason=bad_dev_plan_ref")
+        return True
+    if dev_plan_ctx:
+        log(f"dev_plan_detected issue=#{number} target={dev_plan_ctx.target_display} depth={dev_plan_ctx.depth}")
 
     deps = parse_dependencies(issue.get("body"))
     was_blocked = has_any_label(issue, {LABEL_BLOCKED})
