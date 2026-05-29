@@ -11,8 +11,8 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
-import sqlalchemy as sa
-from sqlalchemy import text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, and_, column, text
+from sqlalchemy.dialects.postgresql import JSON as PgJSON
 
 from alembic import op
 
@@ -23,14 +23,13 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # Phase 1: add new columns (nullable, default null)
-    op.add_column("notifications", sa.Column("channel", sa.String(length=50), nullable=True))
-    op.add_column("notifications", sa.Column("template", sa.String(length=255), nullable=True))
-    op.add_column("notifications", sa.Column("params_", sa.JSON().with_variant(sa.JSON(), "postgresql"), nullable=True))
-    op.add_column("notifications", sa.Column("status", sa.String(length=50), nullable=True))
-    op.add_column("notifications", sa.Column("priority", sa.String(length=20), nullable=True))
-    op.add_column("notifications", sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True))
-    op.add_column("notifications", sa.Column("read_at", sa.DateTime(timezone=True), nullable=True))
+    op.add_column("notifications", Column("channel", String(length=50), nullable=True))
+    op.add_column("notifications", Column("template", String(length=255), nullable=True))
+    op.add_column("notifications", Column("params_", JSON().with_variant(PgJSON(), "postgresql"), nullable=True))
+    op.add_column("notifications", Column("status", String(length=50), nullable=True))
+    op.add_column("notifications", Column("priority", String(length=20), nullable=True))
+    op.add_column("notifications", Column("delivered_at", DateTime(timezone=True), nullable=True))
+    op.add_column("notifications", Column("read_at", DateTime(timezone=True), nullable=True))
 
     # Phase 2: backfill new columns from old ones
     # Note: jsonb_build_object drops null values, so a row where only 'content' was set
@@ -72,9 +71,9 @@ def upgrade() -> None:
         "notifications",
         ["user_id", "tenant_id"],
         unique=False,
-        postgresql_where=sa.and_(
-            sa.column("channel") == "in_app",
-            sa.column("read_at").is_(None),
+        postgresql_where=and_(
+            column("channel") == "in_app",
+            column("read_at").is_(None),
         ),
     )
 
@@ -86,12 +85,12 @@ def downgrade() -> None:
     # Phase 4 (reversed): add back old columns first (needed before restore data step)
     # is_read is added as nullable first to avoid constraint violations from Phase 3
     # backfill — the NOT NULL constraint is applied after the UPDATE runs.
-    op.add_column("notifications", sa.Column("type", sa.String(length=50), nullable=True))
-    op.add_column("notifications", sa.Column("title", sa.String(length=255), nullable=True))
-    op.add_column("notifications", sa.Column("content", sa.Text(), nullable=True))
-    op.add_column("notifications", sa.Column("is_read", sa.Boolean(), nullable=True, server_default=sa.text("false")))
-    op.add_column("notifications", sa.Column("related_type", sa.String(length=50), nullable=True))
-    op.add_column("notifications", sa.Column("related_id", sa.Integer(), nullable=True))
+    op.add_column("notifications", Column("type", String(length=50), nullable=True))
+    op.add_column("notifications", Column("title", String(length=255), nullable=True))
+    op.add_column("notifications", Column("content", Text(), nullable=True))
+    op.add_column("notifications", Column("is_read", Boolean(), nullable=True, server_default=text("false")))
+    op.add_column("notifications", Column("related_type", String(length=50), nullable=True))
+    op.add_column("notifications", Column("related_id", Integer(), nullable=True))
 
     # Phase 3 (reversed): restore old data (must run after old columns exist)
     op.execute(text("UPDATE notifications SET type = channel WHERE channel IS NOT NULL"))
