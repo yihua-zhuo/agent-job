@@ -51,8 +51,14 @@ class TriggerImplementCliTests(unittest.TestCase):
         for stdout, expected in cases:
             with self.subTest(stdout=stdout):
                 completed = type("Completed", (), {"returncode": 0, "stdout": stdout})()
-                with patch.object(trigger_implement.subprocess, "run", return_value=completed):
+                with patch.object(trigger_implement.subprocess, "run", return_value=completed) as run_mock:
                     self.assertEqual(trigger_implement.detect_repo(), expected)
+                    run_mock.assert_called_once()
+                    call_args = run_mock.call_args
+                    self.assertIn("git", call_args.args[0])
+                    self.assertIn("remote", call_args.args[0])
+                    self.assertIn("get-url", call_args.args[0])
+                    self.assertIn("origin", call_args.args[0])
 
     def test_list_ready_sorts_oldest_first_and_filters_request(self) -> None:
         payload = {
@@ -64,6 +70,7 @@ class TriggerImplementCliTests(unittest.TestCase):
         with patch.object(trigger_implement, "api", return_value=(200, json.dumps(payload).encode())) as api:
             issues = trigger_implement.list_ready("acme", "agent-job", "token")
 
+        api.assert_called_once()
         self.assertEqual([issue["number"] for issue in issues], [7, 42])
         method, path, token = api.call_args.args
         self.assertEqual(method, "GET")
@@ -77,6 +84,7 @@ class TriggerImplementCliTests(unittest.TestCase):
             with redirect_stdout(io.StringIO()) as stdout:
                 trigger_implement.dispatch("acme", "agent-job", "token", "master", 123)
 
+        api.assert_called_once()
         method, path, token, body = api.call_args.args
         self.assertEqual(method, "POST")
         self.assertEqual(path, "/repos/acme/agent-job/actions/workflows/implement-ready-issues.yml/dispatches")
