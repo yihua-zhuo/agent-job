@@ -139,7 +139,7 @@ class TestCodeReviewModelToDict:
         for key in ("id", "language", "review_type", "code_snippet", "score", "summary", "created_at", "updated_at"):
             assert d[key] is None, f"expected {key} to be None, got {d[key]}"
 
-    def test_to_dict_score_boundary_values(self):
+    def test_to_dict_score_passthrough(self):
         """to_dict() accepts score values at and outside the typical 0-100 range."""
         for score in (0, 100, -1, 999):
             review = CodeReviewModel(tenant_id=1, user_id=1, score=score)

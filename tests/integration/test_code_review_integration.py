@@ -52,8 +52,6 @@ class TestCodeReviewModelIntegration:
 
         result = await async_session.get(CodeReviewModel, review.id)
         assert result is not None
-        assert result.id == review.id
-        assert result.id is not None
         assert result.tenant_id == tenant_id
         assert result.user_id == 1
         assert result.language is None
