@@ -540,3 +540,101 @@ class TestGetTicketActivityEndpoint:
         )
         resp = client.get("/api/v1/tickets/9999/activity")
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/sla/summary — aggregated SLA counts
+# ---------------------------------------------------------------------------
+
+
+class TestGetSlaSummaryEndpoint:
+    def test_success_returns_all_counts(self, client_with_service):
+        """Happy path: service returns counts, endpoint serialises as SLAStatCard."""
+        client, _, sla_svc = client_with_service
+        sla_svc.get_sla_summary = AsyncMock(
+            return_value={"breached": 3, "at_risk": 2, "on_track": 5, "total_tickets": 10}
+        )
+        resp = client.get("/api/v1/sla/summary")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        data = body["data"]
+        assert data["breached"] == 3
+        assert data["at_risk"] == 2
+        assert data["on_track"] == 5
+        assert data["total_tickets"] == 10
+
+    def test_response_contains_all_stat_card_fields(self, client_with_service):
+        """SLAStatCard schema exposes exactly breached/at_risk/on_track/total_tickets."""
+        client, _, sla_svc = client_with_service
+        sla_svc.get_sla_summary = AsyncMock(
+            return_value={"breached": 0, "at_risk": 0, "on_track": 0, "total_tickets": 0}
+        )
+        resp = client.get("/api/v1/sla/summary")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert set(data.keys()) == {"breached", "at_risk", "on_track", "total_tickets"}
+
+    def test_all_zeros_when_no_tickets(self, client_with_service):
+        """Empty dataset → all counts zero, endpoint still returns 200."""
+        client, _, sla_svc = client_with_service
+        sla_svc.get_sla_summary = AsyncMock(
+            return_value={"breached": 0, "at_risk": 0, "on_track": 0, "total_tickets": 0}
+        )
+        resp = client.get("/api/v1/sla/summary")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["breached"] == 0
+        assert data["at_risk"] == 0
+        assert data["on_track"] == 0
+        assert data["total_tickets"] == 0
+
+    def test_service_receives_tenant_id_from_auth_context(self, client_with_service):
+        """Endpoint must pass the authenticated tenant_id to the service."""
+        client, _, sla_svc = client_with_service
+        sla_svc.get_sla_summary = AsyncMock(
+            return_value={"breached": 1, "at_risk": 0, "on_track": 2, "total_tickets": 3}
+        )
+        resp = client.get("/api/v1/sla/summary")
+        assert resp.status_code == 200
+        # _make_auth_ctx() uses tenant_id=1; get_sla_summary must be called with tenant_id=1
+        sla_svc.get_sla_summary.assert_awaited_once_with(tenant_id=1)
+
+    def test_service_exception_propagates_as_500(self, client_with_service):
+        """Unhandled service error surfaces as a 500 (raise_server_exceptions=False)."""
+        client, _, sla_svc = client_with_service
+        sla_svc.get_sla_summary = AsyncMock(side_effect=RuntimeError("db gone"))
+        resp = client.get("/api/v1/sla/summary")
+        assert resp.status_code == 500
+
+    def test_all_breached_scenario(self, client_with_service):
+        """When every ticket is breached, on_track and at_risk are 0."""
+        client, _, sla_svc = client_with_service
+        sla_svc.get_sla_summary = AsyncMock(
+            return_value={"breached": 7, "at_risk": 0, "on_track": 0, "total_tickets": 7}
+        )
+        resp = client.get("/api/v1/sla/summary")
+        assert resp.status_code == 200
+        data = resp.json()["data"]
+        assert data["breached"] == 7
+        assert data["at_risk"] == 0
+        assert data["on_track"] == 0
+        assert data["total_tickets"] == 7
+
+    def test_requires_auth(self, monkeypatch):
+        """Without auth override the endpoint returns 401/403."""
+        from internal.middleware.fastapi_auth import require_auth
+
+        mock_sla_service = MagicMock()
+
+        monkeypatch.setattr("api.routers.tickets.SLAService", lambda session, ticket_service=None: mock_sla_service)
+        monkeypatch.setattr("api.routers.tickets.TicketService", lambda session: MagicMock())
+        monkeypatch.setattr("api.routers.tickets.UserService", lambda session: MagicMock())
+
+        app = FastAPI()
+        app.include_router(tickets_router)
+        app.dependency_overrides[get_db] = lambda: MagicMock()
+        # No override for require_auth — let it reject unauthenticated requests
+        unauthenticated_client = TestClient(app, raise_server_exceptions=False)
+        resp = unauthenticated_client.get("/api/v1/sla/summary")
+        assert resp.status_code in (401, 403, 422)

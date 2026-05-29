@@ -25,7 +25,7 @@ export function BulkActionsBar({ selectedIds, onClear }: BulkActionsBarProps) {
   const { data: usersData } = useUsers(1, 100);
   const bulkUpdate = useBulkUpdateTickets();
 
-  const users = (usersData?.data?.items ?? []) as Array<{ id: number; username: string; full_name?: string }>;
+  const users = usersData?.data?.items ?? [];
 
   if (selectedIds.size === 0) return null;
 
@@ -35,17 +35,18 @@ export function BulkActionsBar({ selectedIds, onClear }: BulkActionsBarProps) {
       return;
     }
     try {
-      const payload: { ticket_ids: number[]; assigned_to?: number; status?: string } = {
+      const payload: { ticket_ids: number[]; assigned_to?: number | null; status?: string } = {
         ticket_ids: Array.from(selectedIds),
       };
-      if (assigneeId) payload.assigned_to = Number(assigneeId);
+      if (assigneeId) payload.assigned_to = assigneeId === "0" ? null : Number(assigneeId);
       if (newStatus) payload.status = newStatus;
       await bulkUpdate.mutateAsync(payload);
       toast.success(`${selectedIds.size} tickets updated`);
       setAssigneeId("");
       setNewStatus("");
       onClear();
-    } catch {
+    } catch (err) {
+      console.error("Bulk update failed", err);
       toast.error("Bulk update failed");
     }
   }
@@ -63,6 +64,7 @@ export function BulkActionsBar({ selectedIds, onClear }: BulkActionsBarProps) {
           <SelectValue placeholder="Assign to..." />
         </SelectTrigger>
         <SelectContent>
+          <SelectItem value="0">Unassign</SelectItem>
           {users.map((u) => (
             <SelectItem key={u.id} value={String(u.id)}>
               {u.full_name || u.username}

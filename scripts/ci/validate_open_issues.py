@@ -18,6 +18,8 @@ import sys
 from json import JSONDecoder
 from typing import Any
 
+from dev_plan_context import find_dev_plan_ref, resolve_dev_plan_context
+
 
 LABEL_READY = "ready"
 LABEL_NEEDS_INFO = "needs-clarification"
@@ -49,14 +51,17 @@ def run_gh(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["gh", *args], capture_output=True, text=True, check=False)
 
 
-def list_open_issues() -> list[dict[str, Any]]:
-    """Return open issues (gh issue list excludes PRs by default)."""
+def list_candidate_issues() -> list[dict[str, Any]]:
+    """Return open issues that have not already been triaged."""
+    skip_terms = " ".join(f"-label:{label}" for label in sorted(SKIP_LABELS))
+    search = f"state:open type:issue {skip_terms}"
     result = run_gh(
         [
             "issue", "list",
             "--state", "open",
+            "--search", search,
             "--json", "number,title,body,labels",
-            "--limit", "100",
+            "--limit", "1000",
         ]
     )
     if result.returncode != 0:
@@ -126,12 +131,23 @@ def open_blockers(deps: list[int]) -> list[int]:
 def build_prompt(issue: dict[str, Any], budget: int) -> str:
     title = issue.get("title") or "(no title)"
     body = (issue.get("body") or "(no body)").strip()
+    dev_plan_ref = find_dev_plan_ref(issue)
+    dev_plan_note = ""
+    if dev_plan_ref:
+        dev_plan_note = f"""
+This issue references a dev-plan board: `{dev_plan_ref}`.
+For dev-plan issues, prefer "ready" when the referenced board document exists
+and is independently executable. The board's own README/template/§5 steps/§6
+verification define the implementation scope, so do not split merely because
+the issue body is short.
+"""
     return f"""You are triaging a GitHub issue and deciding what should happen to it.
 
 Title: {title}
 
 Body:
 {body}
+{dev_plan_note}
 
 Pick ONE of three verdicts:
 
@@ -347,6 +363,22 @@ def process_issue(issue: dict[str, Any]) -> bool:
     title = issue.get("title") or ""
     log(f"validating issue=#{number} title={title!r}")
 
+    dev_plan_ctx, dev_plan_err = resolve_dev_plan_context(issue)
+    if dev_plan_err:
+        body = (
+            "**Needs clarification** ⚠️\n\n"
+            "This issue declares a dev-plan board, but the referenced document "
+            f"could not be resolved in the workflow checkout: `{dev_plan_err}`.\n\n"
+            "Use a `Dev-Plan: docs/dev-plan/<domain>/<board>.md` line and make "
+            "sure `docs/dev-plan/README.md`, the matching template, and the "
+            "target board file are present."
+        )
+        ok = comment_and_label(number, body, LABEL_NEEDS_INFO)
+        log(f"marked_needs_info issue=#{number} ok={ok} reason=bad_dev_plan_ref")
+        return True
+    if dev_plan_ctx:
+        log(f"dev_plan_detected issue=#{number} target={dev_plan_ctx.target_display} depth={dev_plan_ctx.depth}")
+
     deps = parse_dependencies(issue.get("body"))
     was_blocked = has_any_label(issue, {LABEL_BLOCKED})
     if deps:
@@ -452,11 +484,8 @@ def process_issue(issue: dict[str, Any]) -> bool:
 def main() -> int:
     ensure_labels()
 
-    issues = list_open_issues()
-    log(f"open_issues_total={len(issues)}")
-
-    candidates = [i for i in issues if not has_any_label(i, SKIP_LABELS)]
-    log(f"candidates_after_filter={len(candidates)} skip_labels={sorted(SKIP_LABELS)}")
+    candidates = list_candidate_issues()
+    log(f"candidates_total={len(candidates)} search_excludes={sorted(SKIP_LABELS)}")
 
     if not candidates:
         log("nothing_to_do")
@@ -464,11 +493,18 @@ def main() -> int:
 
     max_per_run = int(os.environ.get("MAX_ISSUES_PER_RUN", "5"))
     processed = 0
-    for issue in candidates[:max_per_run]:
+    checked = 0
+    for issue in candidates:
+        if processed >= max_per_run:
+            break
+        checked += 1
         if process_issue(issue):
             processed += 1
 
-    log(f"done processed={processed} cap={max_per_run} remaining={max(0, len(candidates) - max_per_run)}")
+    log(
+        f"done processed={processed} checked={checked} cap={max_per_run} "
+        f"remaining_candidates={max(0, len(candidates) - checked)}"
+    )
     return 0
 
 
