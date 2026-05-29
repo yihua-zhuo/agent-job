@@ -29,12 +29,16 @@ class _MockNotificationModel:
         self.user_id = overrides.get("user_id", 99)
         self.channel = overrides.get("channel", "in_app")
         self.template = overrides.get("template", "Test")
-        self.params_ = overrides.get("params_", None)
+        self._params_raw = overrides.get("params_", None)
         self.status = overrides.get("status", "pending")
         self.priority = overrides.get("priority", "normal")
         self.created_at = overrides.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC)
         self.delivered_at = overrides.get("delivered_at")
         self.read_at = overrides.get("read_at")
+
+    @property
+    def params_(self):
+        return self._params_raw
 
     def to_dict(self) -> dict:
         return {
@@ -43,7 +47,7 @@ class _MockNotificationModel:
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params": self.params_,
+            "params": self._params_raw,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,

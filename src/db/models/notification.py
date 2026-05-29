@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -19,7 +19,7 @@ class NotificationModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     channel: Mapped[str | None] = mapped_column(String(50), nullable=True)
     template: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # serialized as 'params' in to_dict() to avoid shadowing the built-in.

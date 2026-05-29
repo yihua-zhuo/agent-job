@@ -98,6 +98,7 @@ class NotificationService:
             notification.read_at = datetime.now(UTC)
         notification.status = "read"
         await self.session.flush()
+        await self.session.refresh(notification)
         return notification
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int = 0) -> dict:
@@ -114,9 +115,12 @@ class NotificationService:
         unread = result.scalars().all()
         now = datetime.now(UTC)
         for n in unread:
-            n.read_at = now
-            n.status = "read"
+            if n.read_at is None:
+                n.read_at = now
+                n.status = "read"
         await self.session.flush()
+        for n in unread:
+            await self.session.refresh(n)
         return {"marked_count": len(unread)}
 
     async def delete_notification(self, notification_id: int, tenant_id: int = 0) -> dict:

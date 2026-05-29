@@ -104,7 +104,7 @@ def downgrade() -> None:
     )
     op.execute(
         text(
-            "UPDATE notifications SET related_id = (params_->>'related_id')::integer "
+            "UPDATE notifications SET related_id = (params_->>'related_id')::bigint "
             "WHERE params_ IS NOT NULL AND params_->>'related_id' IS NOT NULL"
         )
     )
