@@ -94,7 +94,7 @@ class CopilotService:
             return await self._get_recent_activities(tenant_id, customer_id)
 
         async def get_churn_risk_handler(tenant_id: int, customer_id: int):
-            return await ChurnPredictionService(self.session).get_churn_prediction(customer_id, tenant_id)
+            return await ChurnPredictionService(self.session).get_churn_prediction(tenant_id, customer_id)
 
         return {
             "get_customer": {

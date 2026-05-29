@@ -278,7 +278,7 @@ class ChurnPredictionService:
             factors=factors,
         )
 
-    async def recommend_actions(self, customer_id: int, tenant_id: int = 0) -> list[ChurnAction]:
+    async def recommend_actions(self, customer_id: int, tenant_id: int) -> list[ChurnAction]:
         """根据流失风险推荐行动"""
         data = await self._get_customer_metrics(customer_id, tenant_id)
         score = await self.calculate_churn_score(customer_id, tenant_id)
