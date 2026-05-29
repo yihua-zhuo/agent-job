@@ -20,7 +20,12 @@ class CustomerEnrichmentModel(Base):
         Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True
     )
 
-    __table_args__ = (UniqueConstraint("tenant_id", "customer_id", name="uq_enrichment_tenant_customer"),)
+    __table_args__ = (
+        # One enrichment record per provider per customer. Refresh scenarios are
+        # handled by application logic (upsert / re-insert with new timestamps) rather
+        # than updating the existing row, so this constraint prevents accidental overwrites.
+        UniqueConstraint("tenant_id", "customer_id", name="uq_enrichment_tenant_customer"),
+    )
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
     raw_data_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -35,6 +40,8 @@ class CustomerEnrichmentModel(Base):
     )
 
     def to_dict(self) -> dict:
+        # Note: raw_data_json is included verbatim. Ensure the Clearbit payload
+        # contains no credentials or sensitive data before serializing.
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,

@@ -14,10 +14,11 @@ from services.enrichment_service import EnrichmentService
 
 @pytest.fixture
 def mock_db_session():
-    # Minimal mock covering add / flush / execute.
+    # Configure each mock explicitly to catch attribute typos (e.g. execute vs exceute).
     session = MagicMock()
     session.add = MagicMock()
     session.flush = AsyncMock()
+    session.execute = AsyncMock()
     return session
 
 
@@ -160,6 +161,7 @@ class TestLookupDomainSuccess:
         assert added.customer_id == 1
         assert added.tenant_id == 1
         assert added.provider == "clearbit"
+        assert added.raw_data_json == {"name": "Acme", "domain": "acme.com"}
         mock_db_session.flush.assert_awaited_once()
 
 

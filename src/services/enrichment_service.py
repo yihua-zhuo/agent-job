@@ -58,20 +58,19 @@ class EnrichmentService:
         )
 
     async def _lookup_clearbit(
-        self, domain: str | None, company_name: str | None, tenant_id: int | None, customer_id: int
+        self, domain: str | None, company_name: str | None, tenant_id: int, customer_id: int
     ) -> dict[str, Any]:
         # Verify customer belongs to the requesting tenant
-        if customer_id is not None:
-            result = await self.session.execute(
-                select(CustomerModel).where(
-                    and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
-                )
+        result = await self.session.execute(
+            select(CustomerModel).where(
+                and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
             )
-            customer = result.scalar_one_or_none()
-            if customer is None:
-                raise NotFoundException("Customer")
+        )
+        customer = result.scalar_one_or_none()
+        if customer is None:
+            raise NotFoundException("Customer")
 
-        api_key = settings.clearbit_api_key
+        api_key: str = settings.clearbit_api_key
         if not api_key:
             raise ValidationException("Clearbit API key is not configured")
 
@@ -82,7 +81,10 @@ class EnrichmentService:
             params["name"] = company_name.strip()  # type: ignore[arg-type]
 
         async with httpx.AsyncClient(
-            timeout=httpx.Timeout(settings.clearbit_read_timeout, connect=settings.clearbit_connect_timeout)
+            timeout=httpx.Timeout(
+                settings.clearbit_read_timeout,
+                connect=settings.clearbit_connect_timeout or 5.0,
+            )
         ) as client:
             response = await client.get(
                 "https://company.clearbit.com/v2/companies/find",

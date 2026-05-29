@@ -145,3 +145,4 @@ class TestLookupEndpoint:
         assert "success" in body
         assert "data" in body
         assert "message" in body
+        assert isinstance(body["message"], str)
