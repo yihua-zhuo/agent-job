@@ -250,6 +250,25 @@ def tenant_id_2() -> int:
 
 
 @pytest_asyncio.fixture
+async def _seed_tenant(async_session, tenant_id: int) -> int:
+    """Seed a tenant record so FK constraints on notifications are satisfied.
+
+    Returns the tenant_id (same as input, for caller convenience).
+    """
+    from db.models.tenant import TenantModel
+
+    tenant = TenantModel(
+        id=tenant_id,
+        name="Integration Test Tenant",
+        plan="free",
+        status="active",
+    )
+    async_session.add(tenant)
+    await async_session.flush()
+    return tenant_id
+
+
+@pytest_asyncio.fixture
 async def _seed_customer(async_session, tenant_id):
     """Seed a customer record for the given tenant so FK constraints are satisfied.
 
@@ -332,12 +351,18 @@ def tenant_id_2_web() -> int:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def auth_headers_web(db_schema, tenant_id_web) -> dict[str, str]:
+async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str, str]:
     """Return a valid JWT Authorization header for the test tenant."""
     os.environ["JWT_SECRET"] = TEST_JWT_SECRET
     os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
+    from db.models.tenant import TenantModel
     from services.auth_service import AuthService
     from services.user_service import UserService
+
+    # Seed the tenant so notification FK constraints are satisfied.
+    tenant = TenantModel(id=tenant_id_web, name="Web Test Tenant", plan="free", status="active")
+    async_session.add(tenant)
+    await async_session.flush()
 
     factory = _get_test_async_session_factory()
     async with factory() as session:

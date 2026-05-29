@@ -119,8 +119,6 @@ class NotificationService:
                 n.read_at = now
                 n.status = "read"
         await self.session.flush()
-        for n in unread:
-            await self.session.refresh(n)
         return {"marked_count": len(unread)}
 
     async def delete_notification(self, notification_id: int, tenant_id: int = 0) -> dict:

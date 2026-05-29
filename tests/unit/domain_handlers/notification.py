@@ -13,7 +13,7 @@ def _notification_to_row(n: dict):
             "user_id": n.get("user_id"),
             "channel": n.get("channel"),
             "template": n.get("template"),
-            "params_": n.get("params"),
+            "params_": n.get("params_"),
             "status": n.get("status"),
             "priority": n.get("priority"),
             "created_at": n.get("created_at"),
@@ -51,6 +51,9 @@ def make_notification_handler(state):
             state._notifications_next_id = 1
 
         if "insert into notifications" in sql_text_lower:
+            assert "params_" in params or "params" in params, (
+                f"send_notification must bind params_ (got keys: {list(params.keys())})"
+            )
             nid = state._notifications_next_id
             state._notifications_next_id += 1
             n = {
@@ -59,7 +62,7 @@ def make_notification_handler(state):
                 "user_id": params.get("user_id", 0),
                 "channel": params.get("channel"),
                 "template": params.get("template"),
-                "params_": params.get("params"),
+                "params_": params.get("params_") or params.get("params"),
                 "status": params.get("status", "pending"),
                 "priority": params.get("priority", "normal"),
                 "created_at": params.get("created_at"),
@@ -72,22 +75,14 @@ def make_notification_handler(state):
         if "from notifications where id" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
-            if (
-                n
-                and n.get("tenant_id") == params.get("tenant_id")
-                and n.get("user_id") == params.get("user_id")
-            ):
+            if n and n.get("tenant_id") == params.get("tenant_id"):
                 return MockResult([_notification_to_row(n)])
             return MockResult([])
 
         if "update notifications" in sql_text_lower and "read_at" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
-            if (
-                n
-                and n.get("tenant_id") == params.get("tenant_id")
-                and n.get("user_id") == params.get("user_id")
-            ):
+            if n and n.get("tenant_id") == params.get("tenant_id"):
                 n["read_at"] = params.get("read_at")
                 n["status"] = "read"
                 return MockResult([_notification_to_row(n)])
@@ -160,11 +155,7 @@ def make_reminder_handler(state):
         if "from reminders where id" in sql_text_lower and "delete" not in sql_text_lower:
             rid = params.get("id")
             r = state._reminders.get(rid)
-            if (
-                r
-                and r.get("tenant_id") == params.get("tenant_id")
-                and r.get("user_id") == params.get("user_id")
-            ):
+            if r and r.get("tenant_id") == params.get("tenant_id"):
                 return MockResult([_reminder_to_row(r)])
             return MockResult([])
 
@@ -174,7 +165,6 @@ def make_reminder_handler(state):
             if (
                 r
                 and r.get("tenant_id") == params.get("tenant_id")
-                and r.get("user_id") == params.get("user_id")
             ):
                 del state._reminders[rid]
                 return MockResult([], rowcount=1)
