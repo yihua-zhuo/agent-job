@@ -22,6 +22,16 @@ from db.models.user import UserModel
 from db.models.user_credential import UserCredentialModel
 from db.models.webauthn_challenge import WebAuthnChallengeModel
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
+from internal.db.models import (
+    IdentityDepartmentModel,
+    IdentityOrganizationModel,
+    IdentityPermissionModel,
+    IdentityRoleModel,
+    IdentityRolePermissionModel,
+    IdentityTenantModel,
+    IdentityUserModel,
+    IdentityUserRoleModel,
+)
 
 __all__ = [
     "ActivityModel",
@@ -31,6 +41,14 @@ __all__ = [
     "CustomerModel",
     "DashboardModel",
     "DeviceTrustModel",
+    "IdentityDepartmentModel",
+    "IdentityOrganizationModel",
+    "IdentityPermissionModel",
+    "IdentityRoleModel",
+    "IdentityRolePermissionModel",
+    "IdentityTenantModel",
+    "IdentityUserModel",
+    "IdentityUserRoleModel",
     "NotificationModel",
     "OpportunityModel",
     "PipelineModel",
