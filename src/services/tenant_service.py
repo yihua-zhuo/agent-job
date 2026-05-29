@@ -85,8 +85,6 @@ class TenantService:
             update_values["settings"] = new_settings
 
         conditions = [TenantModel.id == tenant_id]
-        if _tenant_id:
-            conditions.append(TenantModel.tenant_id == tenant_id)
         await self.session.execute(update(TenantModel).where(and_(*conditions)).values(**update_values))
         await self.session.flush()
 
@@ -102,8 +100,6 @@ class TenantService:
         new_settings = dict(tenant.settings or {})
         new_settings["deleted_at"] = now.isoformat()
         conditions = [TenantModel.id == tenant_id]
-        if _tenant_id:
-            conditions.append(TenantModel.id == _tenant_id)
         await self.session.execute(
             update(TenantModel).where(and_(*conditions)).values(status="deleted", settings=new_settings, updated_at=now)
         )

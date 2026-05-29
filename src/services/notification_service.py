@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
+from db.models.user import UserModel
 from pkg.constants.notification_constants import VALID_NOTIFICATION_TYPES, VALID_PRIORITIES
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
@@ -106,6 +107,13 @@ class NotificationService:
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int) -> dict:
         """标记所有通知已读"""
+        user_check = await self.session.execute(
+            select(UserModel.id).where(
+                and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id)
+            )
+        )
+        if user_check.scalar_one_or_none() is None:
+            raise NotFoundException("通知")
         now = datetime.now(UTC)
         result = await self.session.execute(
             update(NotificationModel)
@@ -138,6 +146,13 @@ class NotificationService:
 
     async def get_unread_count(self, user_id: int, tenant_id: int) -> int:
         """获取未读通知数量"""
+        user_check = await self.session.execute(
+            select(UserModel.id).where(
+                and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id)
+            )
+        )
+        if user_check.scalar_one_or_none() is None:
+            return 0
         result = await self.session.execute(
             select(func.count(NotificationModel.id)).where(
                 and_(

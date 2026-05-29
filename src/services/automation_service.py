@@ -11,7 +11,7 @@ from services.notification_service import NotificationService
 from services.task_service import TaskService
 
 # Supported trigger events
-TRIGGER_EVENTS = [
+TRIGGER_EVENTS: tuple[str, ...] = (
     "ticket.created",
     "ticket.updated",
     "ticket.assigned",
@@ -21,7 +21,7 @@ TRIGGER_EVENTS = [
     "customer.updated",
     "user.login",
     "lead.created",
-]
+)
 
 # Supported action types
 ACTION_TYPES = [

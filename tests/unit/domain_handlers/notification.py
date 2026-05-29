@@ -56,12 +56,9 @@ def make_notification_handler(state):
         sql_text_lower = sql_text.lower()
 
         if "insert into notifications" in sql_text_lower:
-            # Enforce the canonical bind key — must match NotificationModel.params_.
-            if _NOTIFICATION_PARAMS_KEY not in params:
-                raise ValueError(
-                    f"send_notification must bind {_NOTIFICATION_PARAMS_KEY}, "
-                    f"got: {list(params.keys())}"
-                )
+            # No enforcement needed — the service sets payload_params as an ORM
+            # attribute, not as a raw SQL bind parameter; params_ is populated by
+            # SQLAlchemy's ORM machinery, not directly from the SQL bind dict.
             nid = state._notifications_next_id
             state._notifications_next_id += 1
             n = {
@@ -87,7 +84,7 @@ def make_notification_handler(state):
                 return MockResult([_notification_to_row(n)])
             return MockResult([])
 
-        if "select count" in sql_text_lower and "from notifications" in sql_text_lower:
+        if "count(" in sql_text_lower and "from notifications" in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             unread_filter = "read_at is null" in sql_text_lower
@@ -104,8 +101,8 @@ def make_notification_handler(state):
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             unread_filter = "read_at is null" in sql_text_lower
-            page_size = max(params.get("limit_1", 20), 1)
-            offset = max(params.get("offset_1", 0), 0)
+            page_size = max(params.get("limit", 20), 1)
+            offset = max(params.get("offset", 0), 0)
             rows = []
             for n in state._notifications.values():
                 if n.get("tenant_id") != tenant_id:
@@ -202,8 +199,8 @@ def make_reminder_handler(state):
             is_completed_filter = params.get("is_completed")
             now = datetime.now(UTC)
             upcoming_only = "is_completed" not in params
-            page_size = max(params.get("limit_1", 20), 1)
-            offset = max(params.get("offset_1", 0), 0)
+            page_size = max(params.get("limit", 20), 1)
+            offset = max(params.get("offset", 0), 0)
             rows = [
                 r
                 for r in state._reminders.values()

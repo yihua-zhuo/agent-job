@@ -159,6 +159,10 @@ class TestSendNotification:
             assert data["data"]["id"] == 5
             assert data["data"]["template"] == "New deal"
             svc.send_notification.assert_called_once()
+            call_kwargs = svc.send_notification.call_args.kwargs
+            assert call_kwargs["user_id"] == 2
+            assert call_kwargs["notification_type"] == "in_app"
+            assert call_kwargs["title"] == "New deal"
 
     def test_send_validation_error(self):
         client = _app()
@@ -225,8 +229,10 @@ class TestMarkAllRead:
 
 
 class TestPreferences:
-    # notification_preferences table not yet implemented — storage is hardcoded in-memory.
-    # These are placeholder tests to document the pending feature.
+    # notification_preferences table not yet implemented — storage is hardcoded in-router
+    # responses with no service involvement. These are placeholder tests documenting
+    # the hardcoded behavior; they pass for any tenant_id (tenant_id=0 has no real DB
+    # enforcement). Replace with real service tests once the preferences table is added.
 
     def test_get_preferences_ok(self):
         client = _app()
@@ -455,6 +461,7 @@ class TestCrossTenantIsolation:
             response = client.get("/api/v1/notifications")
             assert response.status_code == 200
             assert response.json()["data"]["items"] == []
+            assert response.json()["data"]["total"] == 0
             svc.get_user_notifications.assert_called_once()
             call_kwargs = svc.get_user_notifications.call_args.kwargs
             assert call_kwargs.get("tenant_id") == 2

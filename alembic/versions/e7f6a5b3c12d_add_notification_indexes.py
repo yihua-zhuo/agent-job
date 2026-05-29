@@ -11,7 +11,7 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, and_, column, text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, and_, column, text
 from sqlalchemy.dialects.postgresql import JSON as PgJSON
 
 from alembic import op

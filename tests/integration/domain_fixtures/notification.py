@@ -10,12 +10,14 @@ async def _seed_notification(
     tenant_id: int,
     user_id: int,
     *,
+    # 'title' param aligns with send_notification(template=title) semantics.
+    # Maps to ORM 'template' column (backfill migration sets template=title).
+    title: str = "default",
     channel: str = "in_app",
-    template: str = "default",
     payload_params: dict | None = None,
     status: str = "pending",
     priority: str = "normal",
-) -> "NotificationModel":
+) -> NotificationModel:
     """Seed a notification for integration tests."""
     from datetime import UTC, datetime
 
@@ -25,7 +27,7 @@ async def _seed_notification(
         tenant_id=tenant_id,
         user_id=user_id,
         channel=channel,
-        template=template,
+        template=title,
         payload_params=payload_params or {},
         status=status,
         priority=priority,
@@ -42,11 +44,11 @@ async def _seed_reminder(
     user_id: int,
     title: str,
     content: str,
-    remind_at: "datetime",
+    remind_at,
     *,
     related_type: str | None = None,
     related_id: int | None = None,
-) -> "ReminderModel":
+) -> ReminderModel:
     """Seed a reminder for integration tests."""
     from datetime import UTC, datetime
 
