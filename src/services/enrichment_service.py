@@ -17,7 +17,14 @@ class EnrichmentService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    async def lookup(self, domain: str | None = None, company_name: str | None = None) -> dict[str, Any]:
+    async def lookup(
+        self,
+        domain: str | None = None,
+        company_name: str | None = None,
+        *,
+        tenant_id: int | None = None,
+        customer_id: int | None = None,
+    ) -> dict[str, Any]:
         """Look up company enrichment data from a third-party provider.
 
         Requires exactly one of *domain* or *company_name*.
@@ -30,9 +37,19 @@ class EnrichmentService:
         if has_domain == has_name:
             raise ValidationException("Provide exactly one of domain or company_name")
 
-        return await self._lookup_clearbit(domain=domain, company_name=company_name)
+        if customer_id is None:
+            raise ValidationException("customer_id is required for enrichment lookup")
 
-    async def _lookup_clearbit(self, domain: str | None, company_name: str | None) -> dict[str, Any]:
+        return await self._lookup_clearbit(
+            domain=domain,
+            company_name=company_name,
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+        )
+
+    async def _lookup_clearbit(
+        self, domain: str | None, company_name: str | None, tenant_id: int | None, customer_id: int
+    ) -> dict[str, Any]:
         api_key = settings.clearbit_api_key
         if not api_key:
             raise ValidationException("Clearbit API key is not configured")
@@ -43,13 +60,15 @@ class EnrichmentService:
         else:
             params["name"] = company_name  # type: ignore[assignment]
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0)) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
             response = await client.get(
                 "https://company.clearbit.com/v2/companies/find",
                 params=params,
                 headers={"Authorization": f"Bearer {api_key}"},
             )
 
+        if response.status_code == 404:
+            return {}
         if not response.is_success:
             raise ValidationException("Clearbit API error")
 
@@ -59,7 +78,7 @@ class EnrichmentService:
         # Persist raw payload
         now = datetime.now(UTC)
         enrichment = CustomerEnrichmentModel(
-            customer_id=0,  # null until wired to a customer
+            customer_id=customer_id,
             provider="clearbit",
             raw_data_json=raw_data,
             enriched_at=now,

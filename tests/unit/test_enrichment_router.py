@@ -12,6 +12,7 @@ from api.routers.enrichment import enrichment_router
 from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
 from pkg.errors.app_exceptions import AppException, ValidationException
+from tests.unit.conftest import make_mock_session
 
 
 # ---------------------------------------------------------------------------
@@ -24,13 +25,14 @@ def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
 
 @pytest.fixture
 def mock_db_session():
-    return MagicMock()
+    return make_mock_session(handlers=[])
 
 
 @pytest.fixture
 def client_with_service(monkeypatch, mock_db_session):
     """Return a TestClient with EnrichmentService fully mocked."""
     from internal.middleware.fastapi_auth import require_auth
+    from services.enrichment_service import EnrichmentService
 
     mock_service = MagicMock()
 
@@ -71,7 +73,7 @@ class TestLookupEndpoint:
             }
         )
 
-        resp = client.post("/api/v1/enrichment/lookup", json={"domain": "stripe.com"})
+        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com"})
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -82,7 +84,7 @@ class TestLookupEndpoint:
         client, svc = client_with_service
         svc.lookup = AsyncMock(return_value={"name": "Acme Corp", "domain": "acme.com"})
 
-        resp = client.post("/api/v1/enrichment/lookup", json={"company_name": "Acme Corp"})
+        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"company_name": "Acme Corp"})
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -91,7 +93,7 @@ class TestLookupEndpoint:
         client, svc = client_with_service
         svc.lookup = AsyncMock(side_effect=ValidationException("exactly one"))
 
-        resp = client.post("/api/v1/enrichment/lookup", json={})
+        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={})
         assert resp.status_code == 422
         body = resp.json()
         assert body["success"] is False
@@ -101,7 +103,7 @@ class TestLookupEndpoint:
         client, svc = client_with_service
         svc.lookup = AsyncMock(side_effect=ValidationException("Clearbit API error"))
 
-        resp = client.post("/api/v1/enrichment/lookup", json={"domain": "notfound.com"})
+        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "notfound.com"})
         assert resp.status_code == 422
         body = resp.json()
         assert "Clearbit API error" in body["message"]
@@ -110,21 +112,21 @@ class TestLookupEndpoint:
         client, svc = client_with_service
         svc.lookup = AsyncMock(return_value={"name": "Stripe"})
 
-        client.post("/api/v1/enrichment/lookup", json={"domain": "stripe.com"})
-        svc.lookup.assert_awaited_once_with(domain="stripe.com", company_name=None)
+        client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com"})
+        svc.lookup.assert_awaited_once_with(domain="stripe.com", company_name=None, tenant_id=1, customer_id=42)
 
     def test_passes_company_name_to_service(self, client_with_service):
         client, svc = client_with_service
         svc.lookup = AsyncMock(return_value={"name": "Acme Corp"})
 
-        client.post("/api/v1/enrichment/lookup", json={"company_name": "Acme Corp"})
-        svc.lookup.assert_awaited_once_with(domain=None, company_name="Acme Corp")
+        client.post("/api/v1/enrichment/lookup?customer_id=42", json={"company_name": "Acme Corp"})
+        svc.lookup.assert_awaited_once_with(domain=None, company_name="Acme Corp", tenant_id=1, customer_id=42)
 
     def test_success_response_has_envelope_shape(self, client_with_service):
         client, svc = client_with_service
         svc.lookup = AsyncMock(return_value={"name": "Stripe", "domain": "stripe.com"})
 
-        resp = client.post("/api/v1/enrichment/lookup", json={"domain": "stripe.com"})
+        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com"})
         body = resp.json()
         assert "success" in body
         assert "data" in body

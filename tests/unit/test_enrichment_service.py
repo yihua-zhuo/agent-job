@@ -32,20 +32,25 @@ def service(mock_db_session):
 class TestLookupArgumentValidation:
     async def test_neither_domain_nor_name_raises(self, service):
         with pytest.raises(ValidationException) as exc_info:
-            await service.lookup(domain=None, company_name=None)
+            await service.lookup(domain=None, company_name=None, customer_id=1)
         assert "exactly one" in exc_info.value.detail
 
     async def test_both_domain_and_name_raises(self, service):
         with pytest.raises(ValidationException) as exc_info:
-            await service.lookup(domain="stripe.com", company_name="Stripe")
+            await service.lookup(domain="stripe.com", company_name="Stripe", customer_id=1)
         assert "exactly one" in exc_info.value.detail
+
+    async def test_missing_customer_id_raises(self, service):
+        with pytest.raises(ValidationException) as exc_info:
+            await service.lookup(domain="stripe.com", customer_id=None)
+        assert "customer_id" in exc_info.value.detail
 
 
 # ---------------------------------------------------------------------------
 # lookup — HTTP client mock factory
 # ---------------------------------------------------------------------------
 
-async def _make_http_response(is_success: bool, data: dict) -> MagicMock:
+def _make_http_response(is_success: bool, data: dict) -> MagicMock:
     """Return a mock httpx response matching httpx 0.28.x sync Response.json()."""
     mock_resp = MagicMock()
     mock_resp.is_success = is_success
@@ -89,7 +94,7 @@ class TestLookupDomainSuccess:
         with patch("services.enrichment_service.settings") as mock_settings, \
              patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client) as mock_client_cls:
             mock_settings.clearbit_api_key = "test-key"
-            result = await service.lookup(domain="stripe.com")
+            result = await service.lookup(domain="stripe.com", customer_id=1)
 
         assert result["name"] == "Stripe"
         assert result["domain"] == "stripe.com"
@@ -120,12 +125,13 @@ class TestLookupDomainSuccess:
         with patch("services.enrichment_service.settings") as mock_settings, \
              patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
             mock_settings.clearbit_api_key = "test-key"
-            await service.lookup(domain="acme.com")
+            await service.lookup(domain="acme.com", customer_id=1)
 
         mock_db_session.add.assert_called_once()
         added = mock_db_session.add.call_args[0][0]
-        assert added.customer_id == 0
+        assert added.customer_id == 1
         assert added.provider == "clearbit"
+        mock_db_session.flush.assert_awaited_once()
         mock_db_session.flush.assert_awaited_once()
 
 
@@ -148,7 +154,7 @@ class TestLookupCompanyNameSuccess:
         with patch("services.enrichment_service.settings") as mock_settings, \
              patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
             mock_settings.clearbit_api_key = "test-key"
-            result = await service.lookup(company_name="Acme Corp")
+            result = await service.lookup(company_name="Acme Corp", customer_id=1)
 
         call_kwargs = mock_client.get.call_args
         assert call_kwargs.kwargs["params"]["name"] == "Acme Corp"
@@ -160,7 +166,7 @@ class TestLookupCompanyNameSuccess:
 # ---------------------------------------------------------------------------
 
 class TestLookupHttpErrors:
-    async def test_http_404_raises_validation_exception(self, service):
+    async def test_http_404_returns_empty_dict(self, service):
         mock_resp = MagicMock()
         mock_resp.is_success = False
         mock_resp.status_code = 404
@@ -175,9 +181,8 @@ class TestLookupHttpErrors:
         with patch("services.enrichment_service.settings") as mock_settings, \
              patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
             mock_settings.clearbit_api_key = "test-key"
-            with pytest.raises(ValidationException) as exc_info:
-                await service.lookup(domain="notfound.example.com")
-        assert "Clearbit API error" in exc_info.value.detail
+            result = await service.lookup(domain="notfound.example.com", customer_id=1)
+        assert result == {}
 
     async def test_http_500_raises_validation_exception(self, service):
         mock_resp = MagicMock()
@@ -195,7 +200,7 @@ class TestLookupHttpErrors:
              patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
             mock_settings.clearbit_api_key = "test-key"
             with pytest.raises(ValidationException) as exc_info:
-                await service.lookup(domain="stripe.com")
+                await service.lookup(domain="stripe.com", customer_id=1)
         assert "Clearbit API error" in exc_info.value.detail
 
     async def test_missing_api_key_raises(self, service):
@@ -203,7 +208,7 @@ class TestLookupHttpErrors:
             mock_settings.clearbit_api_key = None
 
             with pytest.raises(ValidationException) as exc_info:
-                await service.lookup(domain="stripe.com")
+                await service.lookup(domain="stripe.com", customer_id=1)
             assert "not configured" in exc_info.value.detail
 
 
