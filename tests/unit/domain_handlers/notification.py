@@ -49,12 +49,13 @@ def make_notification_handler(state):
     from tests.unit.conftest import MockResult
 
     def handler(sql_text: str, params: dict):
+        sql_text_lower = sql_text.lower()
         # Initialise per-state store
         if not hasattr(state, "_notifications"):
             state._notifications = {}
             state._notifications_next_id = 1
 
-        if "insert into notifications" in sql_text:
+        if "insert into notifications" in sql_text_lower:
             nid = state._notifications_next_id
             state._notifications_next_id += 1
             n = {
@@ -73,14 +74,14 @@ def make_notification_handler(state):
             state._notifications[nid] = n
             return MockResult([_notification_to_row(n)])
 
-        if "from notifications where id" in sql_text:
+        if "from notifications where id" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
             if n and n.get("tenant_id") == params.get("tenant_id"):
                 return MockResult([_notification_to_row(n)])
             return MockResult([])
 
-        if "update notifications" in sql_text and "read_at" in sql_text:
+        if "update notifications" in sql_text_lower and "read_at" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
             if n and n.get("tenant_id") == params.get("tenant_id"):
@@ -89,10 +90,10 @@ def make_notification_handler(state):
                 return MockResult([_notification_to_row(n)])
             return MockResult([])
 
-        if "from notifications" in sql_text and "count" not in sql_text:
+        if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = "read_at is null" in sql_text or "read_at = null" in sql_text
+            unread_filter = "read_at is null" in sql_text_lower or "read_at = null" in sql_text_lower
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = []
@@ -104,10 +105,10 @@ def make_notification_handler(state):
                 rows.append(n)
             return MockResult([_notification_to_row(r) for r in rows[offset : offset + page_size]])
 
-        if "select" in sql_text and "count" in sql_text and "from notifications" in sql_text:
+        if "select" in sql_text_lower and "count" in sql_text_lower and "from notifications" in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = "read_at is null" in sql_text or "read_at = null" in sql_text
+            unread_filter = "read_at is null" in sql_text_lower or "read_at = null" in sql_text_lower
             count = sum(
                 1
                 for n in state._notifications.values()
@@ -127,11 +128,12 @@ def make_reminder_handler(state):
     from tests.unit.conftest import MockResult
 
     def handler(sql_text: str, params: dict):
+        sql_text_lower = sql_text.lower()
         if not hasattr(state, "_reminders"):
             state._reminders = {}
             state._reminders_next_id = 1
 
-        if "insert into reminders" in sql_text:
+        if "insert into reminders" in sql_text_lower:
             rid = state._reminders_next_id
             state._reminders_next_id += 1
             r = {
@@ -149,14 +151,14 @@ def make_reminder_handler(state):
             state._reminders[rid] = r
             return MockResult([_reminder_to_row(r)])
 
-        if "from reminders where id" in sql_text and "delete" not in sql_text:
+        if "from reminders where id" in sql_text_lower and "delete" not in sql_text_lower:
             rid = params.get("id")
             r = state._reminders.get(rid)
             if r and r.get("tenant_id") == params.get("tenant_id"):
                 return MockResult([_reminder_to_row(r)])
             return MockResult([])
 
-        if "delete from reminders" in sql_text:
+        if "delete from reminders" in sql_text_lower:
             rid = params.get("id")
             r = state._reminders.get(rid)
             if r and r.get("tenant_id") == params.get("tenant_id"):
@@ -164,7 +166,7 @@ def make_reminder_handler(state):
                 return MockResult([], rowcount=1)
             return MockResult([], rowcount=0)
 
-        if "from reminders" in sql_text and "count" not in sql_text:
+        if "from reminders" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             rows = [

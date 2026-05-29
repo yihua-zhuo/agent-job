@@ -8,7 +8,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - `src/services/notification_service.py` — Update field references to match the new model (field renames: type → channel, is_read → read_at check, title/content → template/params)
 - `alembic/versions/<new_revision>.py` — New migration (chains from `9d8e7f6a5b3c`) adding composite + partial indexes on `notifications`
 - `tests/unit/domain_handlers/notification.py` — New handler for unit-test mock SQL engine
-- `tests/unit/conftest.py` — Register the new notification handler in the module discovery list
+- `tests/unit/conftest.py` — Notification handler is auto-discovered by `ORDER`-sorted import; no manual registration needed
 - `tests/unit/test_notifications_router.py` — Update `to_dict` assertions if field names change in the router's serialization layer
 
 ## Implementation Steps
@@ -16,12 +16,12 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
    - Fields: `id` (pk), `user_id` (index=True), `tenant_id` (index=True), `channel` (String(50)), `template` (String(255)), `params_` (JSON, using `postgresql.JSON`), `status` (String(50)), `priority` (String(20)), `created_at` (DateTime, `server_default=func.now()`), `delivered_at` (DateTime, nullable), `read_at` (DateTime, nullable).
    - Add `__table_args__` with a composite index: `Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status")`.
    - Import `JSON` from `sqlalchemy.dialects.postgresql`.
-   - `to_dict()` must serialize `params_` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`.
+   - `to_dict()` must serialize `params_` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`. The dict key should use `'params'` (without trailing underscore) — `{"params": self.params_, ...}` — to present a clean API contract while the Python attribute remains `params_`.
    - Rename `params` to `params_` in Python (trailing underscore avoids the built-in shadow).
 
 2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
 
-3. **Add notification handler registration in `tests/unit/conftest.py`**: add `from tests.unit.domain_handlers.notification import ...` imports (re-export pattern matching the existing `from tests.unit.domain_handlers.sla` block).
+3. **Register in module discovery**: `tests/unit/domain_handlers/notification.py` is auto-discovered by `conftest.py`'s `ORDER`-sorted import mechanism (same pattern as `sla.py` and `counts.py`). No manual conftest.py edit is required.
 
 4. **Update `src/services/notification_service.py`**: replace all `NotificationModel` field references (`type`, `title`, `content`, `is_read`, `related_type`, `related_id`) with the new fields (`channel`, `template`, `params_`, `read_at`). The service logic (WHERE clauses, count queries) remains structurally the same.
 
@@ -32,9 +32,27 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
    - `docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;" && docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"`
    - `alembic upgrade head`
    - `alembic revision --autogenerate -m "add_notification_indexes"`
-   - Review `alembic/versions/<new>.py`: autogen will add a bare `op.create_index(...)` for the composite index but will NOT produce the partial index (autogenerate never handles partial/WHERE clauses). Manually add `op.create_index("ix_notifications_in_app_unread", "notifications", ["user_id", "tenant_id"], unique=False, postgresql_where=(and_(col("channel") == "in_app", col("read_at").is_(None))))`.
+   - Review `alembic/versions/<new>.py`: autogen will add a bare `op.create_index(...)` for the composite index but will NOT produce the partial index (autogenerate never handles partial/WHERE clauses). Manually add `op.create_index("ix_notifications_in_app_unread", "notifications", ["user_id", "tenant_id"], unique=False, postgresql_where=sa.and_(sa.column("channel") == "in_app", sa.column("read_at").is_(None)))`.
    - Run `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` to verify.
    - Run a second `alembic revision --autogenerate -m "drift_check"` to confirm an empty diff; delete the empty migration if both up/down are `pass`.
+
+6.5. **Write data transformation logic in the migration**:
+   - In `upgrade()`: add new nullable columns → backfill via SQL UPDATE → drop old columns → add indexes
+   - In `downgrade()`: drop indexes → add old columns back → reverse backfill via SQL UPDATE → drop new columns
+   - Use SQLAlchemy Core `op.execute()` with `text()` for backfill SQL — all migrations must be fully reversible and idempotent
+   - Example backfill in `upgrade()`:
+     - `UPDATE notifications SET channel = type WHERE type IS NOT NULL`
+     - `UPDATE notifications SET template = title WHERE title IS NOT NULL`
+     - `UPDATE notifications SET params_ = jsonb_build_object('content', content, 'related_type', related_type, 'related_id', related_id) WHERE ...`
+     - `UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END`
+     - `UPDATE notifications SET read_at = created_at WHERE is_read = true`
+   - Example backfill in `downgrade()` (recreates legacy columns, restores legacy data, drops new columns):
+     - Add old columns (type, title, content, is_read, related_type, related_id)
+     - `UPDATE notifications SET type = channel WHERE channel IS NOT NULL`
+     - `UPDATE notifications SET title = template WHERE template IS NOT NULL`
+     - `UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL`
+     - `UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL`
+     - Drop new columns (channel, template, params_, status, priority, delivered_at, read_at)
 
 ## Test Plan
 - Unit tests in `tests/unit/`: `test_notifications_router.py` updated for new field names; `tests/unit/domain_handlers/notification.py` covered implicitly by existing router tests patching `NotificationService`.
@@ -51,5 +69,5 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 
 ## Risks / Open Questions
 - The existing `NotificationService` in `notification_service.py` uses field names (`type`, `is_read`) that differ from the new model. These field references must be updated in the service — if the service is also used by other callers (e.g. API router), those callers' serialization layer may also need updating. The router tests patch `NotificationService` directly, so they are insulated, but any integration test that constructs `NotificationModel` directly will break until updated.
-- The partial index `WHERE channel='in_app' AND read_at IS NULL` cannot be produced by autogenerate; it must be written manually in the migration. Writing the PostgreSQL `WHERE` clause correctly in `op.create_index` requires care — use `postgresql.where()` from `sqlalchemy.dialects.postgresql`.
+- The partial index `WHERE channel='in_app' AND read_at IS NULL` cannot be produced by autogenerate; it must be written manually in the migration. Pass the predicate as a SQLAlchemy Core boolean expression via the `postgresql_where` parameter of `op.create_index()` (e.g., `postgresql_where=sa.and_(sa.column("channel") == "in_app", sa.column("read_at").is_(None))`), or use `text()` for raw SQL.
 - `docker compose -f configs/docker-compose.test.yml` is the correct compose file per CLAUDE.md; confirm it exposes the `test-db` container name as referenced in the steps above before running.

@@ -1,7 +1,7 @@
 """add_notification_indexes
 
 Revision ID: e7f6a5b3c12d
-Revises: dc4eeaaaea38
+Revises: 9d8e7f6a5b3c
 Create Date: 2026-05-23
 
 Transforms the notifications table from the old schema (type, title, content,
@@ -90,7 +90,7 @@ def downgrade() -> None:
     op.drop_index("ix_notifications_in_app_unread", table_name="notifications")
     op.drop_index("ix_notifications_user_tenant_status", table_name="notifications")
 
-    # Phase 4 (reversed): add back old columns
+    # Phase 4 (reversed): add back old columns first (needed before restore data step)
     op.add_column("notifications", sa.Column("type", sa.String(length=50), nullable=True))
     op.add_column("notifications", sa.Column("title", sa.String(length=255), nullable=True))
     op.add_column("notifications", sa.Column("content", sa.Text(), nullable=True))
@@ -98,7 +98,7 @@ def downgrade() -> None:
     op.add_column("notifications", sa.Column("related_type", sa.String(length=50), nullable=True))
     op.add_column("notifications", sa.Column("related_id", sa.Integer(), nullable=True))
 
-    # Phase 3 (reversed): restore old data
+    # Phase 3 (reversed): restore old data (must run after old columns exist)
     op.execute(
         "UPDATE notifications SET type = channel WHERE channel IS NOT NULL"
     )
@@ -113,7 +113,7 @@ def downgrade() -> None:
         "WHERE params_ IS NOT NULL AND params_->>'related_type' IS NOT NULL"
     )
     op.execute(
-        "UPDATE notifications SET related_id = NULLIF(params_->>'related_id', '')::integer "
+        "UPDATE notifications SET related_id = (params_->>'related_id')::integer "
         "WHERE params_ IS NOT NULL AND params_->>'related_id' IS NOT NULL"
     )
     op.execute(

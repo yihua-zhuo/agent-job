@@ -36,7 +36,7 @@ class NotificationModel(Base):
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params_": self.params_,
+            "params": self.params_,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,
