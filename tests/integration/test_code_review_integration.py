@@ -43,6 +43,7 @@ class TestCodeReviewModelIntegration:
         assert result.score == 90
         assert result.summary == "Clean and well-structured"
         assert result.created_at is not None
+        assert result.updated_at is not None
 
     async def test_insert_with_null_optional_fields(self, db_schema, tenant_id, async_session):
         """Only required fields (tenant_id, user_id) are needed — rest are nullable."""

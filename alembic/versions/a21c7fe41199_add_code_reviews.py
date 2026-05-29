@@ -29,8 +29,8 @@ def upgrade() -> None:
     sa.Column('summary', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
-    sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], name='fk_code_reviews_tenant'),
-    sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='fk_code_reviews_user'),
+    sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], name='fk_code_reviews_tenant', ondelete='CASCADE'),
+    sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='fk_code_reviews_user', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
     op.create_index('ix_code_reviews_tenant_id', 'code_reviews', ['tenant_id'], unique=False)

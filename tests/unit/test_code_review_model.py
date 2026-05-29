@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
+import pytest
+
 from db.models.code_review import CodeReviewModel
 
 
@@ -11,7 +13,12 @@ class TestCodeReviewModelInit:
     """Test __init__ field assignment and id state before flush."""
 
     def test_id_is_none_before_flush(self):
-        """id is None on a newly constructed instance before any flush."""
+        """id is None on a newly constructed instance before any flush.
+
+        id is None because CodeReviewModel.__init__ does not pre-generate IDs;
+        the DB assigns the primary key on INSERT (autoincrement). Until flush,
+        the instance has no id assigned.
+        """
         review = CodeReviewModel(tenant_id=1, user_id=1)
         assert review.id is None
 
@@ -139,9 +146,15 @@ class TestCodeReviewModelToDict:
         for key in ("id", "language", "review_type", "code_snippet", "score", "summary", "created_at", "updated_at"):
             assert d[key] is None, f"expected {key} to be None, got {d[key]}"
 
-    def test_to_dict_score_passthrough(self):
-        """to_dict() accepts any integer score value without modification."""
-        for score in (0, 100, -1, 999):
+    def test_score_range_validation(self):
+        """Score values outside 0-100 raise ValueError."""
+        for invalid in (-1, 999):
+            with pytest.raises(ValueError, match="score must be between 0 and 100"):
+                CodeReviewModel(tenant_id=1, user_id=1, score=invalid)
+
+    def test_score_serialization_valid_range(self):
+        """to_dict() returns the score unchanged for valid 0-100 values."""
+        for score in (0, 50, 100):
             review = CodeReviewModel(tenant_id=1, user_id=1, score=score)
             d = review.to_dict()
             assert d["score"] == score, f"expected score={score}, got {d['score']}"
