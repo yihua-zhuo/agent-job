@@ -40,7 +40,10 @@ Add a `CodeReview` ORM model to `src/db/models/code_review.py` for persisting co
    alembic upgrade head
    ```
 
-6. Confirm no residual drift with a second empty autogenerate:
+6. Confirm no divergent heads remain after the merge. Run `alembic history --verbose` and check for more than one head at the tip. If additional heads are reported:
+   - Document each head's revision ID and what it contains.
+   - Decide whether they need merging (via `alembic merge head <rev1> <rev2> -m "merge"`), re-basing, or re-baselining before proceeding.
+   Then run the drift-check autogenerate:
    ```bash
    alembic revision --autogenerate -m "drift_check"
    ```

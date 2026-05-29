@@ -156,3 +156,18 @@ class TestCodeReviewModelIntegration:
 
         assert all(r.tenant_id == tenant_id for r in rows)
         assert all(r.tenant_id == tenant_id_2 for r in rows_2)
+
+        # Negative guard: tenant A's session must not see tenant B's record
+        result_wrong = await async_session.execute(
+            select(CodeReviewModel).where(CodeReviewModel.id == review_b.id)
+        )
+        wrong_row = result_wrong.scalar_one_or_none()
+        assert wrong_row is None, "tenant A should not be able to see tenant B's record by ID"
+
+        # Verify total records across both tenants sum to 2 with no tenant filter
+        from sqlalchemy import func as sql_func
+
+        all_count = await async_session.execute(
+            select(sql_func.count(CodeReviewModel.id))
+        )
+        assert all_count.scalar() == 2
