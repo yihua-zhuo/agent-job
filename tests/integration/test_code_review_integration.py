@@ -129,7 +129,7 @@ class TestCodeReviewModelIntegration:
         )
         review_b = CodeReviewModel(
             tenant_id=tenant_id_2,
-            user_id=2,
+            user_id=1,
             language="typescript",
             review_type="style",
             code_snippet="// todo",

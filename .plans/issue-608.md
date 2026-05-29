@@ -15,7 +15,7 @@ Add a `CodeReview` ORM model to `src/db/models/code_review.py` for persisting co
 1. Create `src/db/models/code_review.py` following the same pattern as `customer.py`:
    - Subclass `Base`, set `__tablename__ = "code_reviews"`
    - Columns: `id` (Integer PK autoincrement), `tenant_id` (Integer, nullable=False, index=True), `user_id` (Integer, nullable=False), `language` (String(50)), `review_type` (String(50)), `code_snippet` (Text, nullable=True), `score` (Integer, nullable=True), `summary` (Text, nullable=True), `created_at` (DateTime with `server_default=func.now()`)
-   - Composite index on `(tenant_id, user_id)` for list queries
+   - Composite index on `(tenant_id, user_id)` via `__table_args__ = (Index("ix_code_reviews_tenant_user", "tenant_id", "user_id"),)`
    - Add `to_dict()` method returning all fields
 
 2. No changes to `alembic/env.py` — the wildcard `import db.models` (line 14) already auto-discovers all model modules via `pkgutil.iter_modules`
@@ -54,7 +54,7 @@ Add a `CodeReview` ORM model to `src/db/models/code_review.py` for persisting co
 ## Acceptance Criteria
 
 - `src/db/models/code_review.py` exists and exports a `CodeReviewModel` class that is a subclass of `Base`
-- Running `alembic revision --autogenerate -m "add_code_reviews"` produces a migration file in `alembic/versions/` that includes a `create_table('code_reviews', ...)` call with all 9 columns and a composite index named `ix_code_reviews_tenant_user` on `(tenant_id, user_id)`
+- Running `alembic revision --autogenerate -m "add_code_reviews"` produces a migration file in `alembic/versions/` that includes a `create_table('code_reviews', ...)` call with all 10 columns (id, tenant_id, user_id, language, review_type, code_snippet, score, summary, created_at, updated_at) and a composite index named `ix_code_reviews_tenant_user` on `(tenant_id, user_id)`
 - `alembic upgrade head` succeeds with no errors
 - `alembic downgrade -1` succeeds with no errors
 - Second autogenerate (drift check) produces a migration with `pass` in both up and down — confirming the DB state matches the model state
