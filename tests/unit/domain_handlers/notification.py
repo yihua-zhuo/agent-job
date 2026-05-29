@@ -137,12 +137,15 @@ def make_reminder_handler(state):
             state._reminders_next_id = 1
 
         if "insert into reminders" in sql_text_lower:
+            assert "tenant_id" in params and "user_id" in params, (
+                f"insert must bind tenant_id and user_id (got keys: {list(params.keys())})"
+            )
             rid = state._reminders_next_id
             state._reminders_next_id += 1
             r = {
                 "id": rid,
-                "tenant_id": params.get("tenant_id", 0),
-                "user_id": params.get("user_id", 0),
+                "tenant_id": params.get("tenant_id"),
+                "user_id": params.get("user_id"),
                 "title": params.get("title"),
                 "content": params.get("content"),
                 "remind_at": params.get("remind_at"),
@@ -176,24 +179,22 @@ def make_reminder_handler(state):
         if "from reminders" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            # Detect upcoming_only=True by checking for the is_completed filter in SQL.
-            # When upcoming_only=True, get_reminders adds ReminderModel.is_completed == False
-            # to the WHERE clause, which SQLAlchemy renders as "is_completed = :param".
-            upcoming_only = "is_completed" in sql_text_lower
+            # upcoming_only=True adds ReminderModel.is_completed == False to the WHERE clause.
+            # Read is_completed from params as the authoritative filter value (not SQL parsing).
+            is_completed_filter = params.get("is_completed")
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
+            now = datetime.now(UTC)
             rows = [
                 r
                 for r in state._reminders.values()
-                if r.get("tenant_id") == tenant_id and r.get("user_id") == user_id
+                if r.get("tenant_id") == tenant_id
+                and r.get("user_id") == user_id
+                and (is_completed_filter is None or r.get("is_completed") == is_completed_filter)
+                and r.get("is_completed") is False  # upcoming_only enforces is_completed=False
+                and r.get("remind_at") is not None
+                and r.get("remind_at") > now
             ]
-            if upcoming_only:
-                now = datetime.now(UTC)
-                rows = [
-                    r
-                    for r in rows
-                    if not r.get("is_completed") and r.get("remind_at") is not None and r.get("remind_at") > now
-                ]
             return MockResult([_reminder_to_row(r) for r in rows[offset : offset + page_size]])
 
         return None

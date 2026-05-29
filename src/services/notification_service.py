@@ -102,7 +102,7 @@ class NotificationService:
         await self.session.flush()
         return notification
 
-    async def mark_all_as_read(self, user_id: int, tenant_id: int = 0) -> dict:
+    async def mark_all_as_read(self, user_id: int, tenant_id: int) -> dict:
         """标记所有通知已读"""
         now = datetime.now(UTC)
         result = await self.session.execute(
@@ -119,7 +119,7 @@ class NotificationService:
         marked_count = result.rowcount or 0
         return {"marked_count": marked_count}
 
-    async def delete_notification(self, notification_id: int, tenant_id: int = 0) -> dict:
+    async def delete_notification(self, notification_id: int, tenant_id: int) -> dict:
         """删除通知"""
         result = await self.session.execute(
             delete(NotificationModel).where(

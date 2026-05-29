@@ -151,7 +151,7 @@ class TestAutomationRulesUIIntegration:
         get_resp = await api_client.get(f"/api/v1/automation/rules/{rule_id}")
         assert get_resp.status_code == 404
 
-    async def test_trigger_event_executes_matching_rules(self, api_client, tenant_id_web, _seed_tenant):
+    async def test_trigger_event_executes_matching_rules(self, api_client, tenant_id_web):
         """POST /api/v1/automation/trigger fires matching rules and returns execution data."""
         # Create a rule that matches customer.created
         create_resp = await api_client.post(
@@ -225,7 +225,7 @@ class TestAutomationRulesUIIntegration:
         for log in data["data"]["items"]:
             assert log["rule_id"] == rule_id
 
-    async def test_list_logs_filtered_by_status(self, api_client, tenant_id_web, _seed_tenant):
+    async def test_list_logs_filtered_by_status(self, api_client, tenant_id_web):
         """GET /api/v1/automation/logs?status=failed returns only failed logs seeded by an unknown action."""
         # Create a rule with an unknown action that will produce a failed log
         create_resp = await api_client.post(

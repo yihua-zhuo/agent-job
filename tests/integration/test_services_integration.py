@@ -498,6 +498,46 @@ class TestNotificationIntegration:
         cancelled = await svc.cancel_reminder(result.id, tenant_id=tenant_id)
         assert cancelled["id"] == result.id
 
+    async def test_notification_cross_tenant_isolation(
+        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant
+    ):
+        """Notification under tenant A is invisible to tenant B (Rule 126)."""
+        from db.models.tenant import TenantModel
+        from services.auth_service import AuthService
+
+        # Seed second tenant
+        tenant2 = TenantModel(id=tenant_id_2, name="Tenant 2", plan="free", status="active")
+        async_session.add(tenant2)
+        await async_session.flush()
+
+        svc = NotificationService(async_session)
+
+        # Create user and notification under tenant 1
+        uid1 = await self._seed_user(tenant_id, async_session)
+        await svc.send_notification(
+            user_id=uid1, notification_type="info", title="T1", content="m", tenant_id=tenant_id
+        )
+
+        # Create user under tenant 2
+        suffix = uuid.uuid4().hex[:8]
+        user_svc = UserService(async_session)
+        uid2 = await user_svc.create_user(
+            username=f"notif2_{suffix}",
+            email=f"notif2_{suffix}@example.com",
+            password="Test@Pass1234",
+            tenant_id=tenant_id_2,
+        )
+        uid2 = uid2.id
+
+        # Tenant 2 should see zero notifications
+        items2, total2 = await svc.get_user_notifications(user_id=uid2, tenant_id=tenant_id_2)
+        assert total2 == 0
+        assert len(items2) == 0
+
+        # Tenant 1 should still see its own notification
+        items1, total1 = await svc.get_user_notifications(user_id=uid1, tenant_id=tenant_id)
+        assert total1 == 1
+
 
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  Tenant integration tests
