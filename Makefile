@@ -100,7 +100,7 @@ migrate-new: venv
 
 trigger-fix: venv
 	@if [ -z "$(ISSUE)" ]; then echo "Usage: make trigger-fix ISSUE=123"; exit 1; fi
-	$(PYTHON) "scripts/ci/trigger_fix_for_issue.py" $(ISSUE)
+	$(PYTHON) ".agent-actions/scripts/trigger_fix_for_issue.py" $(ISSUE)
 
 # ── Local CI via act ───────────────────────────────────────────────────────
 # Runs the implement-ready-issues workflow in a local Docker runner via `act`.

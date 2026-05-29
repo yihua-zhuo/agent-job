@@ -34,6 +34,18 @@ jobs:
           # push events — fine for the master push itself, just no chained CI.
           token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
+      - name: Checkout agent-actions (CI scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: yihua-zhuo/agent-actions
+          ref: main
+          path: .agent-actions
+          # PAT required for private agent-actions repo. Same secret used
+          # for the main checkout / commit pushes. Falls back to GITHUB_TOKEN
+          # so local act runs (where COMMIT_GITHUB_TOKEN may not be set)
+          # don't crash the checkout with "Input required and not supplied".
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -65,4 +77,4 @@ jobs:
           # Set to '1' to write boards to /tmp instead of committing them.
           # Useful for safe end-to-end smoke tests via act.
           DEV_PLAN_DRY_RUN: ${{ vars.DEV_PLAN_DRY_RUN || '' }}
-        run: python3 scripts/ci/validate_open_issues.py
+        run: python3 .agent-actions/scripts/validate_open_issues.py

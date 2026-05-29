@@ -31,13 +31,13 @@
     "react-hook-form": "^7.75.0",
     "react-markdown": "^9.0.1",
     "recharts": "^3.8.1",
+    "remark-gfm": "^4.0.0",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
     "zod": "^4.4.2",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
-    "@IANVS/prettier": "^0.1.0",
     "@types/crypto-js": "^4.2.2",
     "@types/node": "20.19.39",
     "@types/react": "^19",
@@ -49,7 +49,7 @@
     "tailwindcss": "^4.2.4",
     "typescript": "5.9.3",
     "vitest": "^3",
-    "@testing-library/react": "^19",
+    "@testing-library/react": "^16",
     "jsdom": "^28"
   }
 }

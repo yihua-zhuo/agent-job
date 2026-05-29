@@ -172,19 +172,55 @@ Constraints you MUST honour (these come from `docs/dev-plan/README.md` §2):
 - Delete EVERY `<!-- ... -->` comment from the template before emitting.
 - Fill EVERY section. If you genuinely have no information for a sub-section, write `TBD - 待补充：<具体什么内容>` instead of leaving it blank.
 - Section headings stay in Chinese. The PROSE inside each section should match the language of the issue body — if the issue body is English, write the section content in English; if Chinese, write it in Chinese.
-- Code references use the form ``[`path`](../../path) L{{start}}-L{{end}}`` and include a 5-15 line code block. If the repository has no existing code for this issue (greenfield), write `N/A — 新建模块` in §2.1.
+- Code references use the form ``[`path`](../../path) L{{start}}-L{{end}}`` and include a 5-15 line code block ONLY when you are certain the path and line range exist (see anti-hallucination rules below). If the repository has no existing code for this issue (greenfield), write `N/A — 新建模块` in §2.1.
 - Acceptance criteria in §1.4 must be numeric / verifiable, not vague.
-- §3 "涉及文件清单" must clearly separate `要改` (modify existing) from `要建` (create new) — both lists may be empty but the headings must be present.
+- §3 "目标产物" must clearly separate `要改` (modify existing) from `要建` (create new) — both lists may be empty but the headings must be present.
 - §5 "实施步骤" must be machine-actionable: each step is either a shell command, a code diff, or "在 `foo.py` 第 N 行后插入 X". No "optimize the foo module" wording.
-- §6 "验证" gives exact commands AND expected output (e.g. `pytest tests/unit/test_x.py -v` → `3 passed`).
-- §7 "测试用例" lists at least 3 cases: 1 happy path + 1 boundary + 1 error.
+- §6 "验收" gives exact commands AND expected output (e.g. `pytest tests/unit/test_x.py -v` → `3 passed`).
 
-Project context you may use without further investigation (from this repo's CLAUDE.md):
-- Stack: FastAPI + SQLAlchemy 2.x async + PostgreSQL (asyncpg).
-- Multi-tenant: every SQL must `WHERE tenant_id = :tenant_id`.
-- Service layer returns ORM objects + raises AppException subclasses; routers serialize.
-- Tests split into `tests/unit/` (mock DB) and `tests/integration/` (real Postgres).
-- Lint = ruff only.
+ANTI-HALLUCINATION RULES (the previous prompt didn't enforce these and the
+output was full of invented refs — pay close attention):
+- You do NOT have file-system access. You CANNOT read this repo's source.
+- Do NOT invent file paths, line numbers, function names, alembic migration
+  revision ids (`abc123def456` style hex), git commits, GitHub issue numbers
+  other than the parent issue being processed, or sibling dev-plan boards.
+- When you need to reference an existing file you can't verify, write:
+    `TBD - 待验证：<grep-friendly hint, e.g. "src/db/models/<似乎叫 activity 的文件> L? — 现有 activity 表 schema">`
+  instead of fabricating a plausible-looking citation.
+- Do NOT emit URLs like `https://github.com/.../issues/N` with literal `...`.
+  If you don't know the owner/repo, just write `#N` and let GitHub render the link.
+- Do NOT invent dependency boards. Only reference sibling boards if you can
+  derive them from the issue body itself (e.g. "Depends on #N" lines).
+
+PROJECT-SPECIFIC LINTS for this CRM repo (FastAPI + SQLAlchemy 2.x async + PostgreSQL):
+- This repo's `PYTHONPATH=src`. Imports MUST be `from db.models...`,
+  `from services...`, `from api.routers...`. NEVER `from src.db.models...`.
+- SQLAlchemy: do NOT name a column `metadata` on a Base subclass — it
+  collides with `Base.metadata` (the MetaData object) and crashes at class
+  definition. Use `event_metadata`, `payload`, `attrs`, `meta`, etc.
+- Multi-tenant: every SQL filter must include `tenant_id`. Service `__init__`
+  takes `session: AsyncSession` with NO default.
+- Service returns ORM objects + raises AppException subclasses; routers
+  serialize via `.to_dict()`. NEVER call `.to_dict()` in services.
+- Routers inject session via `session: AsyncSession = Depends(get_db)`.
+  NEVER use `async with get_db() as session:`.
+- Tests split into `tests/unit/` (mock DB, fast) and `tests/integration/`
+  (real Postgres via docker compose). Each unit test file defines its own
+  `mock_db_session` fixture using helpers from `tests/unit/conftest.py`.
+- Lint = `ruff` only. NEVER recommend flake8 / pylint / black / isort.
+- Alembic autogen tends to emit `sa.JSON()` for what should be `sa.JSONB()`
+  and to drop `timezone=True` on DateTime columns. Note this in §4.4 「已知坑」
+  whenever the issue touches a migration.
+
+ALSO — about the template itself:
+- The template's metadata table has rows for `Issue` (GH issue number) and
+  `分类` (category code from this repo's docs/dev-plan/README.md §1.2). Do
+  NOT add a `周次` (W{{n}}.{{m}}) row — that was a leftover from a sibling
+  repo and does not apply here.
+- §8 does NOT include Slack notifications or `script/testnet/*` paths. The
+  template's §8 has the correct CRM-flavoured commands; follow it verbatim.
+- §6 verification is `pytest` + `ruff` + `alembic`. Do NOT add `forge test`,
+  `curl /healthz`, Prometheus, or Grafana checks unless they actually apply.
 
 The board will be written to `{board_relpath}`. Relative paths in the document should be computed against that location (so `../../src/...` reaches the source tree).
 
@@ -272,128 +308,9 @@ def run_git(args: list[str]) -> subprocess.CompletedProcess[str]:
     return subprocess.run(["git", *args], capture_output=True, text=True, check=False)
 
 
-def commit_and_push(path: Path, issue_number: int, push: bool) -> tuple[bool, bool]:
-    """Commit the board to a per-issue branch and open/refresh a PR.
-
-    Why a branch and not master:
-    - Pushing to master from a cron tick races with normal CI traffic and
-      gets rejected (non-fast-forward) as soon as anything else lands.
-    - Most repos have branch protection on master; the push would be
-      rejected with "protected branch hook declined" regardless.
-    - A PR-per-board fits the existing review flow and lets CI run on it.
-
-    Branch name: ``auto/dev-plan-issue-<N>``. Always re-cut from origin/master
-    so the diff stays minimal (only the board file). On re-runs we
-    force-with-lease push — the only writer of this branch is this script.
-    """
-    add = run_git(["add", str(path)])
-    if add.returncode != 0:
-        log(f"git_add_failed path={path} rc={add.returncode} stderr={add.stderr.strip()}")
-        return False, False
-    diff = run_git(["diff", "--cached", "--quiet"])
-    if diff.returncode == 0:
-        log(f"no_changes_to_commit path={path}")
-        return False, False
-
-    if not push:
-        msg = f"docs(dev-plan): board for issue #{issue_number}"
-        commit = run_git(["commit", "-m", msg])
-        if commit.returncode != 0:
-            log(f"git_commit_failed rc={commit.returncode} stderr={commit.stderr.strip()}")
-            return False, False
-        return True, False
-
-    # Push path: stash the staged file, re-cut a fresh branch from
-    # origin/master, restore the file, commit, push, open PR.
-    board_text = path.read_text(encoding="utf-8")
-
-    fetch = run_git(["fetch", "origin", "master", "--depth=1"])
-    if fetch.returncode != 0:
-        log(f"git_fetch_failed rc={fetch.returncode} stderr={fetch.stderr.strip()[:200]}")
-        # Fall back to a plain push to whatever the current HEAD branch is —
-        # better to attempt a push than silently lose the board.
-        return _commit_on_current_branch(path, issue_number)
-
-    branch = f"auto/dev-plan-issue-{issue_number}"
-    # `checkout -B` resets the working tree to origin/master, discarding
-    # the board file we just wrote — restore it after.
-    co = run_git(["checkout", "-B", branch, "origin/master"])
-    if co.returncode != 0:
-        log(f"git_checkout_failed branch={branch} rc={co.returncode} stderr={co.stderr.strip()[:200]}")
-        return _commit_on_current_branch(path, issue_number)
-
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(board_text, encoding="utf-8")
-
-    add = run_git(["add", str(path)])
-    if add.returncode != 0:
-        log(f"git_add_failed_post_checkout rc={add.returncode} stderr={add.stderr.strip()}")
-        return False, False
-    # If origin/master already has this exact file (e.g. previous board PR
-    # got merged), there's nothing to commit.
-    diff = run_git(["diff", "--cached", "--quiet"])
-    if diff.returncode == 0:
-        log(f"board_unchanged_vs_master issue=#{issue_number} — no PR needed")
-        return False, False
-
-    msg = f"docs(dev-plan): board for issue #{issue_number}"
-    commit = run_git(["commit", "-m", msg])
-    if commit.returncode != 0:
-        log(f"git_commit_failed rc={commit.returncode} stderr={commit.stderr.strip()}")
-        return False, False
-
-    push_r = run_git(["push", "-u", "--force-with-lease", "origin", branch])
-    if push_r.returncode != 0:
-        log(f"git_push_failed branch={branch} rc={push_r.returncode} stderr={push_r.stderr.strip()[:200]}")
-        return True, False
-
-    _open_or_update_pr(issue_number, branch)
-    return True, True
-
-
-def _commit_on_current_branch(path: Path, issue_number: int) -> tuple[bool, bool]:
-    """Fallback: commit + push to whatever branch we're on. Used only when
-    `git fetch` or `git checkout` fails — better than dropping the board."""
-    msg = f"docs(dev-plan): board for issue #{issue_number}"
-    commit = run_git(["commit", "-m", msg])
-    if commit.returncode != 0:
-        log(f"git_commit_failed_fallback rc={commit.returncode} stderr={commit.stderr.strip()}")
-        return False, False
-    push_r = run_git(["push", "origin", "HEAD"])
-    if push_r.returncode != 0:
-        log(f"git_push_failed_fallback rc={push_r.returncode} stderr={push_r.stderr.strip()[:200]}")
-        return True, False
-    return True, True
-
-
-def _open_or_update_pr(issue_number: int, branch: str) -> None:
-    """Open a PR from the board branch to master. If one already exists for
-    this branch, gh prints "a pull request for branch ... already exists" —
-    that's fine, just log and continue (force-pushed commits land in the
-    existing PR automatically)."""
-    title = f"docs(dev-plan): board for issue #{issue_number}"
-    body = (
-        f"Auto-generated dev-plan board for #{issue_number}.\n\n"
-        f"This PR adds the planning document only; the implementation PR "
-        f"is opened separately by `implement-ready-issues.yml` once the "
-        f"issue is `ready` and unblocked.\n\n"
-        f"Format reference: `docs/dev-plan/_template-medium.md`."
-    )
-    r = subprocess.run(
-        ["gh", "pr", "create",
-         "--title", title,
-         "--body", body,
-         "--base", "master",
-         "--head", branch,
-         "--label", "automated"],
-        capture_output=True, text=True, check=False,
-    )
-    if r.returncode != 0:
-        # Most commonly: PR already exists for this branch — not fatal.
-        log(f"pr_create_skipped issue=#{issue_number} branch={branch} stderr={r.stderr.strip()[:200]}")
-    else:
-        url = (r.stdout or "").strip()
-        log(f"pr_created issue=#{issue_number} branch={branch} url={url}")
+# Per-board commit logic removed — boards are now committed in one batch at
+# the end of the monitor tick by commit_pending_boards(). See that function
+# for the rationale (one PR per tick instead of one per board).
 
 
 def generate_board(issue: dict[str, Any]) -> tuple[GeneratedBoard | None, str]:
@@ -437,11 +354,174 @@ def generate_board(issue: dict[str, Any]) -> tuple[GeneratedBoard | None, str]:
     target.write_text(board if board.endswith("\n") else board + "\n", encoding="utf-8")
     log(f"board_written issue=#{number} path={target} bytes={target.stat().st_size}")
 
-    if dry_run:
-        return GeneratedBoard(number, target, committed=False, pushed=False), ""
+    # Boards are committed in one batch at end of run by commit_pending_boards.
+    # We always report committed=pushed=False from per-board generation now;
+    # the final batch step sets the real outcome via its own log line.
+    return GeneratedBoard(number, target, committed=False, pushed=False), ""
 
-    committed, pushed = commit_and_push(target, number, push=not no_push)
-    return GeneratedBoard(number, target, committed=committed, pushed=pushed), ""
+
+def commit_pending_boards() -> tuple[int, str, str | None]:
+    """Commit + push every uncommitted board under docs/dev-plan/ in ONE go.
+
+    Returns ``(count, status, pr_url)``:
+      - count: number of board files included in the commit
+      - status: one of "pushed", "committed_no_push", "nothing", "error"
+      - pr_url: URL of the opened/updated PR if status == "pushed", else None
+
+    Why end-of-run batching:
+      One commit + one PR per monitor tick keeps the PR list manageable
+      (vs one PR per generated board), and means a single `git push` race
+      can fail at most one tick's worth of work instead of failing each
+      board individually.
+
+    Env knobs:
+      DEV_PLAN_DRY_RUN=1   skip git entirely
+      DEV_PLAN_NO_PUSH=1   commit locally, skip push + PR
+    """
+    if os.environ.get("DEV_PLAN_DRY_RUN") == "1":
+        log("commit_pending_boards skipped reason=dry_run")
+        return 0, "nothing", None
+
+    # 1. Find every uncommitted board file under docs/dev-plan/.
+    st = run_git(["status", "--porcelain=v1", "--", str(DEV_PLAN_ROOT)])
+    if st.returncode != 0:
+        log(f"git_status_failed rc={st.returncode} stderr={st.stderr.strip()[:200]}")
+        return 0, "error", None
+    pending: list[Path] = []
+    for line in (st.stdout or "").splitlines():
+        # Porcelain format: "XY <path>" — XY is the status code.
+        if len(line) < 4:
+            continue
+        path_str = line[3:].strip()
+        # Quoted paths (e.g. with spaces) come back with surrounding quotes.
+        if path_str.startswith('"') and path_str.endswith('"'):
+            path_str = path_str[1:-1]
+        p = Path(path_str)
+        if p.suffix == ".md" and DEV_PLAN_ROOT.as_posix() in p.as_posix():
+            pending.append(p)
+    if not pending:
+        log("commit_pending_boards nothing_to_commit")
+        return 0, "nothing", None
+    log(f"commit_pending_boards count={len(pending)} files={[p.as_posix() for p in pending]}")
+
+    # 2. Snapshot contents — we may need to re-write them after a branch
+    # reset (git checkout -B from origin/master would clobber them).
+    payload: list[tuple[Path, str]] = []
+    for p in pending:
+        try:
+            payload.append((p, p.read_text(encoding="utf-8")))
+        except OSError as e:
+            log(f"read_failed path={p} err={e} — skipping")
+    if not payload:
+        return 0, "error", None
+
+    no_push = os.environ.get("DEV_PLAN_NO_PUSH") == "1"
+
+    # 3. If we're not pushing, commit on whatever HEAD is.
+    if no_push:
+        if not _stage_and_commit(payload, count_for_msg=len(payload)):
+            return len(payload), "error", None
+        return len(payload), "committed_no_push", None
+
+    # 4. Otherwise, cut a fresh branch from origin/master and commit there.
+    # Per-tick branch name keeps each tick's batch isolated — one PR per
+    # tick, no force-with-lease needed for normal traffic.
+    fetch = run_git(["fetch", "origin", "master", "--depth=1"])
+    if fetch.returncode != 0:
+        log(f"git_fetch_failed rc={fetch.returncode} stderr={fetch.stderr.strip()[:200]} — falling back to current branch")
+        if not _stage_and_commit(payload, count_for_msg=len(payload)):
+            return len(payload), "error", None
+        push = run_git(["push", "origin", "HEAD"])
+        if push.returncode != 0:
+            log(f"git_push_fallback_failed rc={push.returncode} stderr={push.stderr.strip()[:200]}")
+            return len(payload), "error", None
+        return len(payload), "pushed", None
+
+    ts = subprocess.run(
+        ["date", "-u", "+%Y%m%d-%H%M%S"], capture_output=True, text=True, check=False,
+    ).stdout.strip() or "batch"
+    branch = f"auto/dev-plan-batch-{ts}"
+
+    co = run_git(["checkout", "-B", branch, "origin/master"])
+    if co.returncode != 0:
+        log(f"git_checkout_failed branch={branch} rc={co.returncode} stderr={co.stderr.strip()[:200]}")
+        return len(payload), "error", None
+
+    # 5. Re-materialize the files (the checkout wiped them).
+    issue_numbers: list[int] = []
+    for p, content in payload:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(content, encoding="utf-8")
+        # Extract the issue number prefix (NNNN-) for the commit message body.
+        try:
+            issue_numbers.append(int(p.name.split("-", 1)[0]))
+        except ValueError:
+            pass
+
+    if not _stage_and_commit(payload, count_for_msg=len(payload), issue_numbers=issue_numbers):
+        return len(payload), "error", None
+
+    push = run_git(["push", "-u", "origin", branch])
+    if push.returncode != 0:
+        log(f"git_push_failed branch={branch} rc={push.returncode} stderr={push.stderr.strip()[:200]}")
+        return len(payload), "error", None
+
+    pr_url = _open_batch_pr(branch, issue_numbers)
+    return len(payload), "pushed", pr_url
+
+
+def _stage_and_commit(
+    payload: list[tuple[Path, str]],
+    count_for_msg: int,
+    issue_numbers: list[int] | None = None,
+) -> bool:
+    add = run_git(["add", "--", str(DEV_PLAN_ROOT)])
+    if add.returncode != 0:
+        log(f"git_add_failed rc={add.returncode} stderr={add.stderr.strip()[:200]}")
+        return False
+    diff = run_git(["diff", "--cached", "--quiet"])
+    if diff.returncode == 0:
+        log("nothing_to_commit_after_stage")
+        return False
+    nums = sorted(set(issue_numbers or []))
+    issue_clause = ", ".join(f"#{n}" for n in nums) if nums else ""
+    title = f"docs(dev-plan): generate {count_for_msg} board(s)"
+    body = f"Issues: {issue_clause}" if issue_clause else "Auto-generated dev-plan boards."
+    commit = run_git(["commit", "-m", title, "-m", body])
+    if commit.returncode != 0:
+        log(f"git_commit_failed rc={commit.returncode} stderr={commit.stderr.strip()[:200]}")
+        return False
+    return True
+
+
+def _open_batch_pr(branch: str, issue_numbers: list[int]) -> str | None:
+    nums = sorted(set(issue_numbers))
+    n_str = ", ".join(f"#{n}" for n in nums) if nums else "(see commit)"
+    title = f"docs(dev-plan): boards for {n_str}" if nums else "docs(dev-plan): board batch"
+    # GH PR titles are capped — fall back to a generic title if too long.
+    if len(title) > 100:
+        title = f"docs(dev-plan): board batch ({len(nums)} issues)"
+    body = (
+        f"Auto-generated dev-plan boards for: {n_str}.\n\n"
+        f"Planning documents only — implementation PRs are opened separately "
+        f"by `implement-ready-issues.yml` once each issue is `ready` and unblocked.\n\n"
+        f"Format reference: `docs/dev-plan/_template-medium.md`."
+    )
+    r = subprocess.run(
+        ["gh", "pr", "create",
+         "--title", title,
+         "--body", body,
+         "--base", "master",
+         "--head", branch,
+         "--label", "automated"],
+        capture_output=True, text=True, check=False,
+    )
+    if r.returncode != 0:
+        log(f"pr_create_skipped branch={branch} stderr={r.stderr.strip()[:200]}")
+        return None
+    url = (r.stdout or "").strip()
+    log(f"pr_created branch={branch} url={url}")
+    return url
 
 
 def board_ref_for(board_path: Path) -> str:

@@ -66,8 +66,8 @@ export function BulkActionsBar({ selectedIds, onClear }: BulkActionsBarProps) {
         <SelectContent>
           <SelectItem value="0">Unassign</SelectItem>
           {users.map((u) => (
-            <SelectItem key={u.id} value={String(u.id)}>
-              {u.full_name || u.username}
+            <SelectItem key={String(u.id)} value={String(u.id)}>
+              {String(u.full_name ?? u.username ?? "")}
             </SelectItem>
           ))}
         </SelectContent>

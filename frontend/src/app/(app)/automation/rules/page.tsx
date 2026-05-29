@@ -114,7 +114,7 @@ function RuleRow({
       </td>
       <td className="px-3 py-3">
         <span className="text-sm text-muted-foreground">
-          {formatDate(rule.last_run ?? rule.updated_at ?? rule.created_at)}
+          {formatDate(rule.last_run ?? rule.updated_at ?? rule.created_at ?? "")}
         </span>
       </td>
       <td className="px-3 py-3 w-10">

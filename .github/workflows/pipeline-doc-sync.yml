@@ -21,6 +21,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout agent-actions (CI scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: yihua-zhuo/agent-actions
+          ref: main
+          path: .agent-actions
+          # Fall back to GITHUB_TOKEN so local act runs (where
+          # COMMIT_GITHUB_TOKEN may not be in .secrets) still authenticate.
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -40,7 +50,7 @@ jobs:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           DOC_SYNC_RESULT_PATH: artifacts/doc-sync-result.json
-        run: python3 scripts/ci/run_claude_doc_sync_check.py
+        run: python3 .agent-actions/scripts/run_claude_doc_sync_check.py
 
       - name: Create or update doc-sync issue
         if: always()
@@ -48,7 +58,7 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITHUB_RUN_ID: ${{ github.run_id }}
           ARTIFACT_PATH: artifacts/doc-sync-result.json
-        run: python3 scripts/ci/create_doc_sync_issue.py
+        run: python3 .agent-actions/scripts/create_doc_sync_issue.py
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

@@ -19,7 +19,7 @@ from json import JSONDecoder
 from typing import Any
 
 from dev_plan_context import find_dev_plan_ref, resolve_dev_plan_context
-from generate_dev_plan_board import board_ref_for, generate_board
+from generate_dev_plan_board import board_ref_for, commit_pending_boards, generate_board
 
 
 LABEL_READY = "ready"
@@ -594,7 +594,7 @@ def main() -> int:
     # Bounded by MAX_BACKFILL_PER_RUN so a large historical backlog can't
     # blow the per-tick time budget. Runs FIRST so blocked-but-mapped issues
     # have a board ready when their deps close.
-    max_backfill = int(os.environ.get("MAX_BACKFILL_PER_RUN", "3"))
+    max_backfill = int(os.environ.get("MAX_BACKFILL_PER_RUN", "100"))
     pending_backfill = list_issues_needing_board()
     log(f"backfill_pending={len(pending_backfill)} cap={max_backfill}")
     backfilled = 0
@@ -620,11 +620,18 @@ def main() -> int:
         if process_issue(issue):
             processed += 1
 
+    # 3. End-of-tick batch commit. Every board written this tick is staged
+    # together into a single commit on a fresh `auto/dev-plan-batch-<ts>`
+    # branch and one PR is opened. No-op when nothing was generated.
+    n_committed, status, pr_url = commit_pending_boards()
+    log(f"batch_commit count={n_committed} status={status} pr_url={pr_url or '-'}")
+
     log(
         f"done processed={processed} checked={checked} cap={max_per_run} "
         f"backfilled={backfilled} backfill_cap={max_backfill} "
         f"remaining_candidates={max(0, len(candidates) - checked)} "
-        f"remaining_backfill={max(0, len(pending_backfill) - max_backfill)}"
+        f"remaining_backfill={max(0, len(pending_backfill) - max_backfill)} "
+        f"boards_committed={n_committed} batch_status={status}"
     )
     return 0
 

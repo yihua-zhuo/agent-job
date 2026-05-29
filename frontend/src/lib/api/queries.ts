@@ -38,6 +38,15 @@ interface ApiEnvelope<T> {
   data: PaginatedResponse<T>;
 }
 
+// For endpoints that return a single record (e.g. /resource/{id}) rather than
+// a paginated list. ApiEnvelope wraps `data` in PaginatedResponse, which is
+// wrong for detail fetches — the server returns the record directly.
+interface ApiEnvelopeSingle<T> {
+  success: boolean;
+  message?: string;
+  data: T;
+}
+
 export interface UserSummary {
   id: number;
   username: string;
@@ -449,7 +458,7 @@ export function useReminders(upcomingOnly = false) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.reminders(upcomingOnly),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -489,7 +498,7 @@ export function useAutomationRule(id: number) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.automationRule(id),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/automation/rules/${id}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelopeSingle<Record<string, unknown>>>(`/api/v1/automation/rules/${id}`, token ?? undefined),
     enabled: id > 0,
   });
 }

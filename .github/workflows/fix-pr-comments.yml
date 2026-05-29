@@ -1,7 +1,7 @@
 name: Fix · PR Comments
 
 # Manually triggered via workflow_dispatch with a PR number. The dispatcher
-# script (scripts/ci/dispatch_pr_fixes.py) is the intended caller: it scans
+# script (agent-actions/scripts/dispatch_pr_fixes.py) is the intended caller: it scans
 # open PRs, checks for unresolved feedback + absence of a running fix, and
 # fires this workflow only where it's actually needed.
 #
@@ -58,6 +58,21 @@ jobs:
           fetch-depth: 0
           token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
+      - name: Checkout agent-actions (CI scripts)
+        # Replaces the older "git show origin/master:scripts/ci/...->/tmp" dance.
+        # Always pulls from agent-actions main, so PR-branch staleness doesn't
+        # matter, AND the working tree stays pristine for the upcoming
+        # `git merge` step (agent-actions lives under .agent-actions/, not
+        # the repo's own tree).
+        uses: actions/checkout@v4
+        with:
+          repository: yihua-zhuo/agent-actions
+          ref: main
+          path: .agent-actions
+          # Fall back to GITHUB_TOKEN so local act runs (where
+          # COMMIT_GITHUB_TOKEN may not be in .secrets) still authenticate.
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -76,24 +91,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-
-      - name: Pull latest pipeline scripts from master to /tmp
-        # Always run the freshest version of the pipeline scripts, regardless
-        # of how stale the PR branch is. We extract them to /tmp/ci-scripts/
-        # instead of overwriting the git working tree so the working tree
-        # stays pristine — important because the next step does a real
-        # `git merge`, which would refuse to run if scripts/ci/ were staged.
-        # As a bonus, this means we never need to worry about excluding the
-        # refresh from the final commit either.
-        run: |
-          set -e
-          git fetch origin master --depth=1
-          mkdir -p /tmp/ci-scripts
-          git show origin/master:scripts/ci/fix_pr_comments.py > /tmp/ci-scripts/fix_pr_comments.py
-          git show origin/master:scripts/ci/fetch_pr_test_failures.py > /tmp/ci-scripts/fetch_pr_test_failures.py
-          git show origin/master:scripts/ci/resolve_merge_conflicts.py > /tmp/ci-scripts/resolve_merge_conflicts.py
-          echo "Refreshed pipeline scripts in /tmp/ci-scripts/ from origin/master"
-          ls -la /tmp/ci-scripts/
 
       - name: Install Python dependencies
         run: |
@@ -126,7 +123,7 @@ jobs:
           HEAD_REF: ${{ steps.pr.outputs.head_ref }}
           DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
           PYTHONPATH: src
-        run: python3 /tmp/ci-scripts/resolve_merge_conflicts.py
+        run: python3 .agent-actions/scripts/resolve_merge_conflicts.py
 
       - name: Fetch failing CI logs for this branch
         env:
@@ -138,7 +135,7 @@ jobs:
           # Which workflows count as "tests we want Claude to fix". Add more
           # workflow filenames separated by commas if you grow the test matrix.
           TEST_WORKFLOWS: 'ci.yml'
-        run: python3 /tmp/ci-scripts/fetch_pr_test_failures.py
+        run: python3 .agent-actions/scripts/fetch_pr_test_failures.py
 
       - name: Fetch comments and let Claude fix them
         env:
@@ -152,7 +149,7 @@ jobs:
           PR_FAILURES_FILE: /tmp/pr-${{ steps.pr.outputs.pr_number }}-failures.md
           DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
           PYTHONPATH: src
-        run: python3 /tmp/ci-scripts/fix_pr_comments.py
+        run: python3 .agent-actions/scripts/fix_pr_comments.py
 
       - name: Diagnostics (working tree after Claude)
         run: |
