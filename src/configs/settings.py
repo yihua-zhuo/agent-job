@@ -35,6 +35,8 @@ class Settings(BaseSettings):
 
     # Third-party enrichment
     clearbit_api_key: str | None = Field(default=None, description="Clearbit Company API key")
+    clearbit_connect_timeout: float = Field(default=5.0, ge=0.1, description="Clearbit connect timeout in seconds")
+    clearbit_read_timeout: float = Field(default=10.0, ge=0.1, description="Clearbit read timeout in seconds")
 
     model_config = SettingsConfigDict(
         env_file=".env",

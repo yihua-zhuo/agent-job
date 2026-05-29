@@ -31,7 +31,6 @@ async def lookup(
     result = await svc.lookup(
         domain=request.domain,
         company_name=request.company_name,
-        tenant_id=ctx.tenant_id,
         customer_id=customer_id,
     )
     return _success(result)

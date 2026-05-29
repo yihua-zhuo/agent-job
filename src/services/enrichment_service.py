@@ -1,6 +1,5 @@
 """Enrichment service — third-party company data enrichment via Clearbit."""
 
-from datetime import UTC, datetime
 from typing import Any
 
 import httpx
@@ -22,7 +21,6 @@ class EnrichmentService:
         domain: str | None = None,
         company_name: str | None = None,
         *,
-        tenant_id: int | None = None,
         customer_id: int | None = None,
     ) -> dict[str, Any]:
         """Look up company enrichment data from a third-party provider.
@@ -43,12 +41,11 @@ class EnrichmentService:
         return await self._lookup_clearbit(
             domain=domain,
             company_name=company_name,
-            tenant_id=tenant_id,
             customer_id=customer_id,
         )
 
     async def _lookup_clearbit(
-        self, domain: str | None, company_name: str | None, tenant_id: int | None, customer_id: int
+        self, domain: str | None, company_name: str | None, customer_id: int
     ) -> dict[str, Any]:
         api_key = settings.clearbit_api_key
         if not api_key:
@@ -60,7 +57,9 @@ class EnrichmentService:
         else:
             params["name"] = company_name  # type: ignore[assignment]
 
-        async with httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0)) as client:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(settings.clearbit_read_timeout, connect=settings.clearbit_connect_timeout)
+        ) as client:
             response = await client.get(
                 "https://company.clearbit.com/v2/companies/find",
                 params=params,
@@ -76,12 +75,10 @@ class EnrichmentService:
         normalised = self._normalise_clearbit(raw_data)
 
         # Persist raw payload
-        now = datetime.now(UTC)
         enrichment = CustomerEnrichmentModel(
             customer_id=customer_id,
             provider="clearbit",
             raw_data_json=raw_data,
-            enriched_at=now,
         )
         self.session.add(enrichment)
         await self.session.flush()

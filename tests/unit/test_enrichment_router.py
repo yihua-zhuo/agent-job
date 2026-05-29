@@ -91,13 +91,20 @@ class TestLookupEndpoint:
 
     def test_validation_exception_returns_422(self, client_with_service):
         client, svc = client_with_service
-        svc.lookup = AsyncMock(side_effect=ValidationException("exactly one"))
+        svc.lookup = AsyncMock(side_effect=ValidationException("service-level validation"))
 
-        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={})
+        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com"})
         assert resp.status_code == 422
         body = resp.json()
         assert body["success"] is False
-        assert "exactly one" in body["message"]
+        assert "service-level validation" in body["message"]
+
+    def test_model_validator_rejects_both_fields(self, client_with_service):
+        client, _svc = client_with_service
+        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com", "company_name": "Stripe"})
+        assert resp.status_code == 422
+        body = resp.json()
+        assert "Provide exactly one of domain or company_name" in body["detail"][0]["msg"]
 
     def test_clearbit_api_error_returns_422(self, client_with_service):
         client, svc = client_with_service
@@ -113,14 +120,14 @@ class TestLookupEndpoint:
         svc.lookup = AsyncMock(return_value={"name": "Stripe"})
 
         client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com"})
-        svc.lookup.assert_awaited_once_with(domain="stripe.com", company_name=None, tenant_id=1, customer_id=42)
+        svc.lookup.assert_awaited_once_with(domain="stripe.com", company_name=None, customer_id=42)
 
     def test_passes_company_name_to_service(self, client_with_service):
         client, svc = client_with_service
         svc.lookup = AsyncMock(return_value={"name": "Acme Corp"})
 
         client.post("/api/v1/enrichment/lookup?customer_id=42", json={"company_name": "Acme Corp"})
-        svc.lookup.assert_awaited_once_with(domain=None, company_name="Acme Corp", tenant_id=1, customer_id=42)
+        svc.lookup.assert_awaited_once_with(domain=None, company_name="Acme Corp", customer_id=42)
 
     def test_success_response_has_envelope_shape(self, client_with_service):
         client, svc = client_with_service

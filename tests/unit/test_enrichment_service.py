@@ -132,7 +132,6 @@ class TestLookupDomainSuccess:
         assert added.customer_id == 1
         assert added.provider == "clearbit"
         mock_db_session.flush.assert_awaited_once()
-        mock_db_session.flush.assert_awaited_once()
 
 
 # ---------------------------------------------------------------------------
