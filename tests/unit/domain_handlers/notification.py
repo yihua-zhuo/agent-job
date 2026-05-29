@@ -183,12 +183,14 @@ def make_reminder_handler(state):
         if "from reminders" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
+            page_size = max(params.get("limit", 20), 1)
+            offset = max(params.get("offset", 0), 0)
             rows = [
                 r
                 for r in state._reminders.values()
                 if r.get("tenant_id") == tenant_id and r.get("user_id") == user_id
             ]
-            return MockResult([_reminder_to_row(r) for r in rows])
+            return MockResult([_reminder_to_row(r) for r in rows[offset : offset + page_size]])
 
         return None
 

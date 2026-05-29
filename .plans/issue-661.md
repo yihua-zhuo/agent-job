@@ -31,7 +31,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
    - `docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;" && docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"`
    - `alembic upgrade head`
    - `alembic revision --autogenerate -m "add_notification_indexes"`
-   - Review `alembic/versions/<new>.py`: autogen will add a bare `op.create_index(...)` for the composite index but will NOT produce the partial index (autogenerate never handles partial/WHERE clauses). Manually add `op.create_index("ix_notifications_in_app_unread", "notifications", ["user_id", "tenant_id"], unique=False, postgresql_where=sa.and_(sa.column("channel") == "in_app", sa.column("read_at").is_(None)))`.
+   - Review `alembic/versions/<new>.py`: autogen will add a bare `op.create_index(...)` for the composite index but will NOT produce the partial index (autogenerate never handles partial/WHERE clauses). Manually add `op.create_index("ix_notifications_in_app_unread", "notifications", ["user_id", "tenant_id"], unique=False, postgresql_where=sa.and_(sa.column("channel") == "in_app", sa.column("read_at").is_(None)))` — note the required `unique=False` parameter on the partial index.
    - Run `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` to verify.
    - Run a second `alembic revision --autogenerate -m "drift_check"` to confirm an empty diff; delete the empty migration if both up/down are `pass`.
 
@@ -58,7 +58,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - Integration tests in `tests/integration/`: No new integration test files required — the existing `notifications` table is already covered by `db_schema` fixture; the new indexes are exercised by the existing notification integration flows (list, send, mark-read) with no new fixtures needed.
 
 ## Acceptance Criteria
-- `src/db/models/notification.py` contains `NotificationModel` with all nine fields (`id`, `user_id`, `tenant_id`, `channel`, `template`, `params_`, `status`, `priority`, `created_at`, `delivered_at`, `read_at`) and a `to_dict()` method serializing all fields correctly.
+- `src/db/models/notification.py` contains `NotificationModel` with all eleven fields (`id`, `user_id`, `tenant_id`, `channel`, `template`, `params_`, `status`, `priority`, `created_at`, `delivered_at`, `read_at`) and a `to_dict()` method serializing all fields correctly.
 - `NotificationModel.params_` is declared with `JSON` type from `sqlalchemy.dialects.postgresql`.
 - `__table_args__` defines `Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status")`.
 - The Alembic migration in `alembic/versions/` contains `op.create_index` for the composite index and a manually written partial index `ix_notifications_in_app_unread` with `WHERE channel='in_app' AND read_at IS NULL`.

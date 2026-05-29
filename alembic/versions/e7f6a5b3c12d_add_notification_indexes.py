@@ -110,6 +110,7 @@ def downgrade() -> None:
         )
     )
     op.execute(text("UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL"))
+    op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL"))
 
     # Apply NOT NULL constraint after backfill — rows with NULL status become False
     op.alter_column("is_read", nullable=False)
