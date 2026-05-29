@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.notification import NotificationModel
+from db.models.reminder import ReminderModel
+
 
 async def _seed_notification(
     session: AsyncSession,
@@ -20,8 +23,6 @@ async def _seed_notification(
 ) -> NotificationModel:
     """Seed a notification for integration tests."""
     from datetime import UTC, datetime
-
-    from db.models.notification import NotificationModel
 
     notification = NotificationModel(
         tenant_id=tenant_id,
@@ -51,8 +52,6 @@ async def _seed_reminder(
 ) -> ReminderModel:
     """Seed a reminder for integration tests."""
     from datetime import UTC, datetime
-
-    from db.models.reminder import ReminderModel
 
     reminder = ReminderModel(
         tenant_id=tenant_id,

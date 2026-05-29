@@ -87,7 +87,7 @@ def downgrade() -> None:
     # backfill — the NOT NULL constraint is applied after the UPDATE runs.
     op.add_column("notifications", Column("type", String(length=50), nullable=True))
     op.add_column("notifications", Column("title", String(length=255), nullable=True))
-    op.add_column("notifications", Column("content", Text(), nullable=True))
+    op.add_column("notifications", Column("content", String(length=2000), nullable=True))
     op.add_column("notifications", Column("is_read", Boolean(), nullable=True, server_default=text("false")))
     op.add_column("notifications", Column("related_type", String(length=50), nullable=True))
     op.add_column("notifications", Column("related_id", Integer(), nullable=True))
@@ -128,5 +128,3 @@ def downgrade() -> None:
     op.drop_column("notifications", "priority")
     op.drop_column("notifications", "status")
     op.drop_column("notifications", "params_")
-    op.drop_column("notifications", "template")
-    op.drop_column("notifications", "channel")

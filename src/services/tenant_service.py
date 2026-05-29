@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.tenant import TenantModel
 from db.models.user import UserModel
-from pkg.errors.app_exceptions import NotFoundException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 class TenantService:
@@ -49,7 +49,7 @@ class TenantService:
         await self.session.refresh(tenant)
         return self._to_dict(tenant)
 
-    async def _fetch(self, tenant_id: int, _tenant_id: int = 0) -> TenantModel:
+    async def _fetch_tenant(self, tenant_id: int, _tenant_id: int = 0) -> TenantModel:
         if _tenant_id and tenant_id != _tenant_id:
             raise NotFoundException(f"Tenant {tenant_id}")
         result = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
@@ -59,16 +59,19 @@ class TenantService:
         return tenant
 
     async def get_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
-        tenant = await self._fetch(tenant_id, _tenant_id)
+        tenant = await self._fetch_tenant(tenant_id, _tenant_id)
         return self._to_dict(tenant)
 
     async def update_tenant(self, tenant_id: int, _tenant_id: int = 0, **kwargs) -> dict:
         if _tenant_id and tenant_id != _tenant_id:
             raise NotFoundException(f"Tenant {tenant_id}")
-        tenant = await self._fetch(tenant_id, _tenant_id)
+        tenant = await self._fetch_tenant(tenant_id, _tenant_id)
 
         allowed = {"name", "plan", "status"}
         update_values: dict = {"updated_at": datetime.now(UTC)}
+        unknown = [k for k in kwargs if k not in allowed and k not in ("admin_email", "settings")]
+        if unknown:
+            raise ValidationException(f"Unknown fields: {', '.join(sorted(unknown))}")
         for key, value in kwargs.items():
             if key in allowed:
                 update_values[key] = value
@@ -93,7 +96,7 @@ class TenantService:
         return await self.update_tenant(tenant_id, _tenant_id=_tenant_id, status="suspended")
 
     async def delete_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
-        tenant = await self._fetch(tenant_id, _tenant_id)
+        tenant = await self._fetch_tenant(tenant_id, _tenant_id)
         now = datetime.now(UTC)
         new_settings = dict(tenant.settings or {})
         new_settings["deleted_at"] = now.isoformat()
@@ -126,7 +129,7 @@ class TenantService:
         return items, total
 
     async def get_tenant_stats(self, tenant_id: int = 0) -> dict:
-        await self._fetch(tenant_id)
+        await self._fetch_tenant(tenant_id)
         user_count_result = await self.session.execute(
             select(func.count(UserModel.id)).where(UserModel.tenant_id == tenant_id)
         )

@@ -1,8 +1,9 @@
 """Unit tests for src/api/routers/tenants.py — /api/v1/tenants endpoints."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from fastapi.testclient import TestClient
+
+import pytest
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from api.routers.tenants import tenants_router
 from db.connection import get_db
@@ -12,7 +13,6 @@ from pkg.errors.app_exceptions import (
     NotFoundException,
     ValidationException,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -39,9 +39,10 @@ TENANT_ROW = {
 
 @pytest.fixture
 def client_with_service(monkeypatch):
-    from internal.middleware.fastapi_auth import require_auth
     from starlette.requests import Request
     from starlette.responses import JSONResponse
+
+    from internal.middleware.fastapi_auth import require_auth
 
     mock_service = MagicMock()
 

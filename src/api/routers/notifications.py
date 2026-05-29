@@ -104,11 +104,11 @@ async def send_notification(
 
     svc = NotificationService(session)
     data = await svc.send_notification(
+        tenant_id=current_user.tenant_id,
         user_id=body.user_id,
         notification_type=body.notification_type,
         title=body.title,
         content=body.content,
-        tenant_id=current_user.tenant_id,
         related_type=body.related_type,
         related_id=body.related_id,
     )

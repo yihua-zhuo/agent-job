@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
 
 from api.routers.notifications import notifications_router
-from tests.unit.conftest import make_mock_session
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import AppException, NotFoundException
+from tests.unit.conftest import make_mock_session
 
 
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
@@ -78,6 +78,7 @@ def _make_auth_override(tenant_id: int = 1, user_id: int = 99):
 def _app(tenant_id: int = 1) -> TestClient:
     # AsyncSession is not needed here — the router under test patches
     # NotificationService entirely, so the DB session is never accessed.
+    # get_db override is present for completeness but unused due to full patching.
     app = FastAPI()
     app.include_router(notifications_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_override(tenant_id=tenant_id)
@@ -168,6 +169,7 @@ class TestSendNotification:
             assert data["data"]["template"] == "New deal"
             svc.send_notification.assert_called_once()
             call_kwargs = svc.send_notification.call_args.kwargs
+            assert call_kwargs["tenant_id"] == 1
             assert call_kwargs["user_id"] == 2
             assert call_kwargs["notification_type"] == "in_app"
             assert call_kwargs["title"] == "New deal"
@@ -291,6 +293,9 @@ class TestCreateReminder:
         client = _app()
         response = client.post("/api/v1/reminders", json={})
         assert response.status_code == 422
+        errors = response.json().get("detail", [])
+        error_fields = {e.get("loc")[-1] for e in errors}
+        assert {"title", "remind_at"}.issubset(error_fields)
 
 
 # ---------------------------------------------------------------------------

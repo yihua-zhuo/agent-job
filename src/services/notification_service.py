@@ -24,11 +24,11 @@ class NotificationService:
 
     async def send_notification(
         self,
+        tenant_id: int,
         user_id: int,
         notification_type: str,
         title: str,
         content: str,
-        tenant_id: int,
         **kwargs,
     ) -> NotificationModel:
         """Send a notification.
@@ -111,13 +111,6 @@ class NotificationService:
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int) -> dict:
         """标记所有通知已读"""
-        user_check = await self.session.execute(
-            select(UserModel.id).where(
-                and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id)
-            )
-        )
-        if user_check.scalar_one_or_none() is None:
-            raise NotFoundException("用户")
         now = datetime.now(UTC)
         result = await self.session.execute(
             update(NotificationModel)
