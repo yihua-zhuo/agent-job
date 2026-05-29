@@ -26,7 +26,7 @@ def upgrade() -> None:
     # Phase 1: add new columns (nullable, default null)
     op.add_column("notifications", sa.Column("channel", sa.String(length=50), nullable=True))
     op.add_column("notifications", sa.Column("template", sa.String(length=255), nullable=True))
-    op.add_column("notifications", sa.Column("params_", sa.JSON, nullable=True))
+    op.add_column("notifications", sa.Column("params_", sa.JSON().with_variant(sa.JSON(), "postgresql"), nullable=True))
     op.add_column("notifications", sa.Column("status", sa.String(length=50), nullable=True))
     op.add_column("notifications", sa.Column("priority", sa.String(length=20), nullable=True))
     op.add_column("notifications", sa.Column("delivered_at", sa.DateTime(timezone=True), nullable=True))
@@ -114,7 +114,8 @@ def downgrade() -> None:
     # Apply NOT NULL constraint after backfill — rows with NULL status become False
     op.alter_column("is_read", nullable=False)
 
-    # Phase 2 (reversed): drop new columns
+    # Phase 2 (reversed): drop new columns — done last so the downgrade remains
+    # individually reversible without relying on ordering of other migrations
     op.drop_column("notifications", "read_at")
     op.drop_column("notifications", "delivered_at")
     op.drop_column("notifications", "priority")

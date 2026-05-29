@@ -86,7 +86,11 @@ def make_notification_handler(state):
         if "update notifications" in sql_text_lower and "read_at" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
-            if n and n.get("tenant_id") == params.get("tenant_id"):
+            if (
+                n
+                and n.get("tenant_id") == params.get("tenant_id")
+                and n.get("user_id") == params.get("user_id")
+            ):
                 n["read_at"] = params.get("read_at")
                 n["status"] = "read"
                 return MockResult([_notification_to_row(n)])
@@ -95,13 +99,15 @@ def make_notification_handler(state):
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            # Fail open: if the SQL doesn't contain a recognizable unread pattern, return all rows
             unread_filter = "read_at is null" in sql_text_lower or "read_at = null" in sql_text_lower
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = []
             for n in state._notifications.values():
-                if n.get("tenant_id") != tenant_id or n.get("user_id") != user_id:
+                # user_id is always checked — unread_filter only adds an additional constraint
+                if n.get("tenant_id") != tenant_id:
+                    continue
+                if n.get("user_id") != user_id:
                     continue
                 if unread_filter and n.get("read_at") is not None:
                     continue
@@ -116,6 +122,7 @@ def make_notification_handler(state):
                 1
                 for n in state._notifications.values()
                 if n.get("tenant_id") == tenant_id
+                # user_id is always checked — unread_filter only adds an additional constraint
                 and n.get("user_id") == user_id
                 and (not unread_filter or n.get("read_at") is None)
             )
@@ -157,14 +164,22 @@ def make_reminder_handler(state):
         if "from reminders where id" in sql_text_lower and "delete" not in sql_text_lower:
             rid = params.get("id")
             r = state._reminders.get(rid)
-            if r and r.get("tenant_id") == params.get("tenant_id"):
+            if (
+                r
+                and r.get("tenant_id") == params.get("tenant_id")
+                and r.get("user_id") == params.get("user_id")
+            ):
                 return MockResult([_reminder_to_row(r)])
             return MockResult([])
 
         if "delete from reminders" in sql_text_lower:
             rid = params.get("id")
             r = state._reminders.get(rid)
-            if r and r.get("tenant_id") == params.get("tenant_id"):
+            if (
+                r
+                and r.get("tenant_id") == params.get("tenant_id")
+                and r.get("user_id") == params.get("user_id")
+            ):
                 del state._reminders[rid]
                 return MockResult([], rowcount=1)
             return MockResult([], rowcount=0)

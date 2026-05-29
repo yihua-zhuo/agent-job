@@ -21,14 +21,12 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 
 2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
 
-3. **Register in module discovery**: `tests/unit/domain_handlers/notification.py` is auto-discovered via `ORDER`-sorted import; no conftest.py edit needed.
-
-4. **Update `src/services/notification_service.py`**: replace all `NotificationModel` field references (`type`, `title`, `content`, `is_read`, `related_type`, `related_id`) with the new fields (`channel`, `template`, `params_`, `read_at`). The service logic (WHERE clauses, count queries) remains structurally the same.
+3. **Update `src/services/notification_service.py`**: replace all `NotificationModel` field references (`type`, `title`, `content`, `is_read`, `related_type`, `related_id`) with the new fields (`channel`, `template`, `params_`, `read_at`). The service logic (WHERE clauses, count queries) remains structurally the same.
    - Also ensure the router's request schema (`NotificationCreate`) maps `notification_type→channel`, `title→template`, and bundles `content`/`related_type`/`related_id` into `params_` before calling the service — or document that the service performs this bundling as a design decision.
 
-5. **Update `tests/unit/test_notifications_router.py`** — the tests patch `NotificationService` directly, so model field names in `to_dict()` don't affect them. What DOES need updating is the mock return dicts in `test_send_ok` and `test_mark_read_ok` which use the old field layout (`type`, `title`, `content`, `is_read`) and must be updated to the new schema (`channel`, `template`, `params`, `status`, `read_at`).
+4. **Update `tests/unit/test_notifications_router.py`** — the tests patch `NotificationService` directly, so model field names in `to_dict()` don't affect them. What DOES need updating is the mock return dicts in `test_send_ok` and `test_mark_read_ok` which use the old field layout (`type`, `title`, `content`, `is_read`) and must be updated to the new schema (`channel`, `template`, `params`, `status`, `read_at`).
 
-6. **Generate the migration** (follow CLAUDE.md exactly):
+5. **Generate the migration** (follow CLAUDE.md exactly):
    - `docker compose -f configs/docker-compose.test.yml up -d test-db`
    - `docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;" && docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"`
    - `alembic upgrade head`
@@ -37,7 +35,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
    - Run `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` to verify.
    - Run a second `alembic revision --autogenerate -m "drift_check"` to confirm an empty diff; delete the empty migration if both up/down are `pass`.
 
-6.5. **Write data transformation logic in the migration**:
+6. **Write data transformation logic in the migration**:
    - In `upgrade()`: add new nullable columns → backfill via SQL UPDATE → drop old columns → add indexes
    - In `downgrade()`: drop indexes → add old columns back → reverse backfill via SQL UPDATE → drop new columns
    - Use SQLAlchemy Core `op.execute()` with `text()` for backfill SQL — all migrations must be fully reversible and idempotent

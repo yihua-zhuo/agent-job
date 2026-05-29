@@ -1,4 +1,5 @@
 """Unit tests for src/api/routers/notifications.py — /api/v1/notifications and /api/v1/reminders."""
+from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
@@ -13,6 +14,46 @@ from pkg.errors.app_exceptions import AppException, NotFoundException
 
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
+
+
+class _MockNotificationModel:
+    """Minimal mock that behaves like NotificationModel for Pydantic serialization.
+
+    jsonable_encoder calls dict(obj) for non-BaseModel, non-Enum objects.
+    Implementing __iter__ to yield (key, value) pairs makes dict(mock) work.
+    """
+
+    def __init__(self, overrides: dict):
+        self.id = overrides.get("id", 1)
+        self.tenant_id = overrides.get("tenant_id", 1)
+        self.user_id = overrides.get("user_id", 99)
+        self.channel = overrides.get("channel", "in_app")
+        self.template = overrides.get("template", "Test")
+        self.params_ = overrides.get("params_", None)
+        self.status = overrides.get("status", "pending")
+        self.priority = overrides.get("priority", "normal")
+        self.created_at = overrides.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC)
+        self.delivered_at = overrides.get("delivered_at")
+        self.read_at = overrides.get("read_at")
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "tenant_id": self.tenant_id,
+            "user_id": self.user_id,
+            "channel": self.channel,
+            "template": self.template,
+            "params": self.params_,
+            "status": self.status,
+            "priority": self.priority,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
+            "read_at": self.read_at.isoformat() if self.read_at else None,
+        }
+
+    def __iter__(self):
+        # Required for dict(mock) to work in jsonable_encoder (Pydantic serialization)
+        yield from self.to_dict().items()
 
 
 def _app():
@@ -74,12 +115,12 @@ class TestSendNotification:
     def test_send_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.send_notification = AsyncMock(return_value={
-                "id": 5, "tenant_id": 1, "user_id": 2, "channel": "info",
-                "template": "New deal", "params_": {"content": "Deal closed!"}, "status": "pending",
-                "priority": "normal", "created_at": "2026-01-01T00:00:00",
-                "delivered_at": None, "read_at": None,
+            mock_notif = _MockNotificationModel({
+                "id": 5, "tenant_id": 1, "user_id": 2,
+                "channel": "info", "template": "New deal",
+                "params_": {"content": "Deal closed!"},
             })
+            svc.send_notification = AsyncMock(return_value=mock_notif)
             client = _app()
             response = client.post("/api/v1/notifications/send", json={
                 "user_id": 2, "notification_type": "info",
@@ -94,6 +135,9 @@ class TestSendNotification:
         client = _app()
         response = client.post("/api/v1/notifications/send", json={})
         assert response.status_code == 422
+        errors = response.json().get("detail", [])
+        error_fields = {e.get("loc")[-1] for e in errors}
+        assert error_fields == {"user_id", "notification_type", "title", "content"}
 
 
 # ---------------------------------------------------------------------------
@@ -104,12 +148,13 @@ class TestMarkRead:
     def test_mark_read_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.mark_as_read = AsyncMock(return_value={
-                "id": 1, "tenant_id": 1, "user_id": 99, "channel": "in_app",
-                "template": "Test", "params_": None, "status": "read",
-                "priority": "normal", "created_at": "2026-01-01T00:00:00",
-                "delivered_at": None, "read_at": "2026-01-01T00:00:00",
+            mock_notif = _MockNotificationModel({
+                "id": 1, "tenant_id": 1, "user_id": 99,
+                "channel": "in_app", "template": "Test",
+                "status": "read",
+                "read_at": datetime(2026, 1, 1, tzinfo=UTC),
             })
+            svc.mark_as_read = AsyncMock(return_value=mock_notif)
             client = _app()
             response = client.put("/api/v1/notifications/1/read")
             assert response.status_code == 200
