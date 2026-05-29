@@ -182,6 +182,12 @@ class TestUpdateTenantEndpoint:
         svc.update_tenant = AsyncMock(
             side_effect=NotFoundException("Tenant")
         )
+        # Use matching tenant_id so the authorization check passes;
+        # ForbiddenException would be raised before reaching the service.
+        app = client.app
+        from internal.middleware.fastapi_auth import require_auth
+
+        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=9999)
         resp = client.put("/api/v1/tenants/9999", json={"name": "X"})
         assert resp.status_code == 404
 

@@ -24,7 +24,7 @@ TRIGGER_EVENTS: tuple[str, ...] = (
 )
 
 # Supported action types
-ACTION_TYPES = [
+ACTION_TYPES: tuple[str, ...] = (
     "notification.send",
     "ticket.assign",
     "ticket.update_priority",
@@ -33,7 +33,7 @@ ACTION_TYPES = [
     "email.send",
     "webhook.call",
     "tag.add",
-]
+)
 
 
 def _eval_condition(condition: dict, context: dict) -> bool:
@@ -96,7 +96,7 @@ class AutomationService:
                 related_type=context.get("entity_type"),
                 related_id=context.get("entity_id"),
             )
-            return {"type": action_type, "status": "sent" if result else "failed"}
+            return {"type": action_type, "status": "sent" if result is not None else "failed"}
 
         elif action_type == "task.create":
             svc = TaskService(self.session)
@@ -107,7 +107,7 @@ class AutomationService:
                 assigned_to=params.get("assignee_id"),
                 created_by=executed_by,
             )
-            return {"type": action_type, "status": "created" if task_result else "failed"}
+            return {"type": action_type, "status": "created" if task_result is not None else "failed"}
 
         elif action_type == "email.send":
             return {"type": action_type, "status": "not_implemented", "template": params.get("template")}

@@ -210,7 +210,7 @@ def make_reminder_handler(state):
                     is_completed_filter is None
                     or r.get("is_completed") == is_completed_filter
                 )
-                and not (upcoming_only and (r.get("is_completed") or (r.get("remind_at") and r.get("remind_at") <= now)))
+                and not (upcoming_only and (r.get("is_completed") or (r.get("remind_at") and r.get("remind_at") < now)))
             ]
             return MockResult([_reminder_to_row(r) for r in rows[offset : offset + page_size]])
 

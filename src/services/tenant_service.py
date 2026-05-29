@@ -85,11 +85,9 @@ class TenantService:
             update_values["settings"] = new_settings
 
         conditions = [TenantModel.id == tenant_id]
-        await self.session.execute(update(TenantModel).where(and_(*conditions)).values(**update_values))
-        await self.session.flush()
-
-        refreshed = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
-        return self._to_dict(refreshed.scalar_one())
+        stmt = update(TenantModel).where(and_(*conditions)).values(**update_values).returning(TenantModel)
+        result = await self.session.execute(stmt)
+        return self._to_dict(result.scalar_one())
 
     async def suspend_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
         return await self.update_tenant(tenant_id, _tenant_id=_tenant_id, status="suspended")

@@ -1575,13 +1575,13 @@ class TestEdgeCases:
         resp = await api_client.get("/api/v1/tenants/999999999")
         assert resp.status_code == 404, f"Body: {resp.text}"
 
-    async def test_update_nonexistent_tenant_returns_404(self, api_client: AsyncClient):
-        """Update a non-existent tenant returns 404."""
+    async def test_update_nonexistent_tenant_returns_403(self, api_client: AsyncClient):
+        """Updating a tenant you don't own is forbidden (403) before the not-found check runs."""
         resp = await api_client.put(
             "/api/v1/tenants/999999999",
             json={"name": "Does Not Exist"},
         )
-        assert resp.status_code == 404, f"Body: {resp.text}"
+        assert resp.status_code == 403, f"Body: {resp.text}"
 
     async def test_create_tenant_invalid_plan(self, api_client: AsyncClient):
         """Create tenant with invalid plan returns 422."""

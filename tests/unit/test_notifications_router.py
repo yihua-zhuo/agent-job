@@ -5,11 +5,12 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
 
 from api.routers.notifications import notifications_router
+from tests.unit.conftest import make_mock_session
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import AppException, NotFoundException
@@ -67,13 +68,20 @@ class _MockNotificationModel:
         yield from self.to_dict().items()
 
 
+def _make_auth_override(tenant_id: int = 1, user_id: int = 99):
+    """Mimics real JWT-based AuthContext creation: raises 401 for invalid tenants."""
+    if not isinstance(tenant_id, int) or tenant_id <= 0:
+        raise HTTPException(status_code=401, detail="Token is missing a valid tenant_id")
+    return _make_auth_ctx(tenant_id=tenant_id, user_id=user_id)
+
+
 def _app(tenant_id: int = 1) -> TestClient:
     # AsyncSession is not needed here — the router under test patches
     # NotificationService entirely, so the DB session is never accessed.
     app = FastAPI()
     app.include_router(notifications_router)
-    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=tenant_id)
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[require_auth] = lambda: _make_auth_override(tenant_id=tenant_id)
+    app.dependency_overrides[get_db] = lambda: make_mock_session([])
 
     @app.exception_handler(AppException)
     async def _handler(request, exc):
@@ -438,7 +446,7 @@ class TestInvalidTenant:
         app = FastAPI()
         app.include_router(notifications_router)
         app.dependency_overrides[require_auth] = lambda: AuthContext(user_id=99, tenant_id=None, roles=[])
-        app.dependency_overrides[get_db] = lambda: MagicMock()
+        app.dependency_overrides[get_db] = lambda: make_mock_session([])
         client = TestClient(app, raise_server_exceptions=False)
         response = client.get("/api/v1/notifications")
         assert response.status_code == 401

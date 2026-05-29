@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -13,11 +13,22 @@ class NotificationModel(Base):
     """Notification entity mapped to the `notifications` table."""
 
     __tablename__ = "notifications"
-    __table_args__ = (Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status"),)
+    __table_args__ = (
+        # Partial index for the unread in-app notifications query.
+        Index(
+            "ix_notifications_unread_in_app",
+            "user_id",
+            "tenant_id",
+            postgresql_where=(Column("status") == "unread"),
+        ),
+        # Covering index for per-tenant listing / counting queries.
+        Index("ix_notifications_tenant_id", "tenant_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    # No index=True here — the __table_args__ Index handles it to avoid duplication.
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     channel: Mapped[str | None] = mapped_column(String(50), nullable=True)
     template: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Trailing underscore avoids collision with ORM/DB column names.

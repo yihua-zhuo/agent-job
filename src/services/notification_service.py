@@ -31,7 +31,11 @@ class NotificationService:
         tenant_id: int,
         **kwargs,
     ) -> NotificationModel:
-        """发送通知。tenant_id must be supplied explicitly for multi-tenant soundness."""
+        """Send a notification.
+
+        Flushes and refreshes the model; actual commit is owned by the router
+        transaction boundary.
+        """
         priority = kwargs.get("priority", "normal")
         if priority not in VALID_PRIORITIES:
             raise ValidationException(f"priority must be one of {sorted(VALID_PRIORITIES)}, got {priority!r}")
@@ -113,7 +117,7 @@ class NotificationService:
             )
         )
         if user_check.scalar_one_or_none() is None:
-            raise NotFoundException("通知")
+            raise NotFoundException("用户")
         now = datetime.now(UTC)
         result = await self.session.execute(
             update(NotificationModel)
@@ -145,7 +149,12 @@ class NotificationService:
         return {"id": notification_id}
 
     async def get_unread_count(self, user_id: int, tenant_id: int) -> int:
-        """获取未读通知数量"""
+        """Get unread notification count for a user.
+
+        Silently returns 0 when the user does not exist (no-op). This is acceptable
+        for a count endpoint but could hide upstream bugs if callers assume the user
+        was validated before calling this method.
+        """
         user_check = await self.session.execute(
             select(UserModel.id).where(
                 and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id)
