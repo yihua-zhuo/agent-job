@@ -76,9 +76,7 @@ class TestTenantModel:
 
     def test_no_tenant_id(self):
         """TenantModel must not have a tenant_id column."""
-        assert not hasattr(TenantModel, "__table__") or "tenant_id" not in [
-            c.name for c in TenantModel.__table__.columns
-        ]
+        assert "tenant_id" not in [c.name for c in TenantModel.__table__.columns]
 
 
 class TestOrganizationModel:
@@ -243,7 +241,6 @@ class TestUserModel:
         assert d["tenant_id"] == 10
         assert d["username"] == "carol"
         assert d["email"] == "carol@example.com"
-        assert d["password_hash"] == "hash123"
         assert d["full_name"] == "Carol Jones"
         assert d["bio"] == "Bio here"
         assert d["status"] == "active"

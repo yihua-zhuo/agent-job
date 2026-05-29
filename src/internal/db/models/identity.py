@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
+from sqlalchemy import DateTime, ForeignKey, ForeignKeyConstraint, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,7 +18,7 @@ class TenantModel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     plan: Mapped[str] = mapped_column(String(50), default="free", nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="active", nullable=False)
-    settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    settings: Mapped[dict] = mapped_column(JSON, default=lambda: dict, nullable=False)
     created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     updated_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -51,7 +51,9 @@ class OrganizationModel(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "slug", name="uq_org_tenant_slug"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True, default=0)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     slug: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -91,17 +93,25 @@ class DepartmentModel(Base):
     """Department entity mapped to the ``departments`` table."""
 
     __tablename__ = "departments"
+    __table_args__ = (
+        ForeignKeyConstraint(
+            ["parent_id", "tenant_id"],
+            ["departments.id", "departments.tenant_id"],
+            ondelete="SET NULL",
+            name="fk_department_parent_tenant",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True, default=0)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    parent_id: Mapped[int | None] = mapped_column(
-        ForeignKey("departments.id", ondelete="SET NULL"), nullable=True, index=True
-    )
+    parent_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -139,7 +149,9 @@ class UserModel(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True, default=0)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     username: Mapped[str] = mapped_column(String(100), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False)
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -160,7 +172,6 @@ class UserModel(Base):
             "tenant_id": self.tenant_id,
             "username": self.username,
             "email": self.email,
-            "password_hash": self.password_hash,
             "full_name": self.full_name,
             "bio": self.bio,
             "status": self.status,
@@ -179,7 +190,9 @@ class RoleModel(Base):
     __table_args__ = (UniqueConstraint("tenant_id", "name", name="uq_role_tenant_name"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True, default=0)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     name: Mapped[str] = mapped_column(String(50), nullable=False)
     display_name: Mapped[str] = mapped_column(String(100), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -283,6 +296,12 @@ class UserRoleModel(Base):
 
     __tablename__ = "user_roles"
     __table_args__ = (
+        ForeignKeyConstraint(
+            ["user_id", "tenant_id"],
+            ["users.id", "users.tenant_id"],
+            ondelete="CASCADE",
+            name="fk_userrole_user_tenant",
+        ),
         UniqueConstraint("user_id", "tenant_id", "role_id", name="uq_user_role_tenant"),
     )
 
@@ -291,7 +310,9 @@ class UserRoleModel(Base):
     role_id: Mapped[int] = mapped_column(
         ForeignKey("roles.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True, default=0)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="RESTRICT"), nullable=False, index=True
+    )
     granted_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     granted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     is_deleted: Mapped[bool] = mapped_column(default=False, nullable=False)

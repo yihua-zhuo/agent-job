@@ -1,7 +1,7 @@
 # Implementation Plan — Issue #273
 
 ## Goal
-Define SQLAlchemy ORM models for eight identity tables (Tenant, Organization, Department, User, Role, Permission, RolePermission, UserRole) in `src/internal/db/models/identity.py`, subclassing `Base` from `src/internal/db/engine.py`. All models include full tenant scoping, soft delete, timestamps, and audit fields, matching existing ORM patterns in `src/db/models/`. A unit test suite verifies model instantiation and `to_dict()` output for all eight models.
+Define SQLAlchemy ORM models for eight identity tables (Tenant, Organization, Department, User, Role, Permission, RolePermission, UserRole) in `src/internal/db/models/identity.py`, subclassing `Base` from `src/internal/db/engine.py`. All models include full tenant scoping, soft delete, timestamps, and audit fields, matching existing ORM patterns in `src/internal/db/models/`. A unit test suite verifies model instantiation and `to_dict()` output for all eight models.
 
 ## Affected Files
 - `src/internal/db/models/identity.py` — **create** with all eight ORM model classes
@@ -33,7 +33,7 @@ Define SQLAlchemy ORM models for eight identity tables (Tenant, Organization, De
 4. **Create `src/internal/db/models/__init__.py`** that re-exports all eight classes and sets `__all__`.
 
 ## Test Plan
-- Unit tests in `tests/unit/test_identity_models.py`: Test all eight models by instantiating each class directly (no DB required). Cover field defaults (soft delete False, timestamps set), relationship resolution on back-populates pairs, and `to_dict()` output for each model. Also test that `TenantModel`, `OrganizationModel`, and `DepartmentModel` do NOT have `tenant_id` as nullable key (org/dept have it; tenant is the root).
+- Unit tests in `tests/unit/test_identity_models.py`: Test all eight models by instantiating each class directly (no DB required). Cover field defaults (soft delete False, timestamps set), relationship resolution on back-populates pairs, and `to_dict()` output for each model. Also test that `TenantModel` has no `tenant_id`, while `OrganizationModel` and `DepartmentModel` include non-null `tenant_id` (tenant-scoped).
 
 ## Acceptance Criteria
 - `src/internal/db/models/identity.py` defines all 8 classes, each inheriting from the `Base` exported by `internal.db.engine`.
