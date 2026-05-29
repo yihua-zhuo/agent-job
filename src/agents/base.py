@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from internal.ai_gateway import AIChatGateway
 
-_F = TypeVar("_F", bound=Callable[..., object])
+_F = TypeVar("_F", bound=type)
 
 _registry: AgentRegistry | None = None
 
@@ -21,6 +21,15 @@ def register(name: str) -> Callable[[_F], _F]:
 
     def decorator(cls: _F) -> _F:
         global _registry
+        if not isinstance(cls, type):
+            raise TypeError(f"Registered object must be a class: {cls!r}")
+        try:
+            if not issubclass(cls, BaseAgent):
+                raise TypeError(
+                    f"Registered object must be a BaseAgent subclass: {cls!r}"
+                )
+        except NameError:
+            pass
         if _registry is None:
             _registry = AgentRegistry()
         if name in _registry._agents:
@@ -43,14 +52,21 @@ class AgentRegistry:
             _registry._agents = {}
         return _registry
 
+    def _ensure_base(self) -> None:
+        """Lazily register 'base' if it was reset or never registered."""
+        if "base" not in self._agents:
+            self._agents["base"] = BaseAgent
+
     def get(self, name: str) -> type[BaseAgent]:
         """Return the registered agent class for *name*."""
+        self._ensure_base()
         if name not in self._agents:
             raise LookupError(f"Agent not registered: {name!r}")
         return self._agents[name]
 
     def list_agents(self) -> list[str]:
         """Return a sorted list of all registered agent names."""
+        self._ensure_base()
         return sorted(self._agents.keys())
 
 
@@ -76,4 +92,3 @@ class BaseAgent(ABC):
         Returns:
             Dictionary with at minimum ``"success"`` and ``"data"`` keys.
         """
-        raise NotImplementedError

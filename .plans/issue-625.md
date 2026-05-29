@@ -10,6 +10,8 @@ Introduce the agent abstraction layer for the multi-agent CRM system by creating
 - `tests/unit/test_base_agent.py` — **new** — unit tests for `BaseAgent` abstract interface
 - `tests/unit/test_agent_registry.py` — **new** — unit tests for `AgentRegistry` singleton
 
+> **Note:** Test file paths and naming are verified by acceptance criterion 4, which runs the specific test files by name — moving or renaming them will cause the acceptance test to fail.
+
 ## Implementation Steps
 
 1. **Create `src/agents/` as a Python package.** Add `src/agents/__init__.py` exporting `BaseAgent`, `AgentRegistry`, and `register`. Ruff linting for this new package will be active automatically since `ruff check src/` covers the whole `src/` tree.
@@ -31,15 +33,15 @@ Introduce the agent abstraction layer for the multi-agent CRM system by creating
 
 ## Test Plan
 
-- Unit tests in `tests/unit/`:  
-  - `tests/unit/test_base_agent.py` — verifies `BaseAgent` is abstract (cannot be instantiated directly), `run` raises `NotImplementedError` when called on a concrete subclass, and the constructor accepts both `llm` and `session` kwargs. Uses a minimal concrete subclass to exercise the interface.
-  - `tests/unit/test_agent_registry.py` — tests singleton identity (`AgentRegistry() is AgentRegistry()`), `@register` decorator adds entries, `get` returns the correct class, `get` raises `LookupError` for unknown names, `list_agents` returns sorted names including the pre-registered entry, and that registering the same name twice raises `ValueError`.
+- Unit tests in `tests/unit/`:
+  - `tests/unit/test_base_agent.py` — verifies `BaseAgent` is abstract (cannot be instantiated directly), `BaseAgent.run` (or a subclass that does not override `run`) raises `NotImplementedError` when called, and the constructor accepts both `llm` and `session` kwargs. Uses a minimal concrete subclass to exercise the interface. Both `llm` and `session` are mocked (no real DB connections or SQL execution).
+  - `tests/unit/test_agent_registry.py` — tests singleton identity (`AgentRegistry() is AgentRegistry()`), `@register` decorator adds entries, `get` returns the correct class, `get` raises `LookupError` for unknown names, `list_agents` returns sorted names including the pre-registered entry, and that registering the same name twice raises `ValueError`. The file defines its own `mock_db_session` fixture; no real SQL is executed.
 
 - Integration tests in `tests/integration/`: **none** — this scope is pure Python with no DB or API surface; integration tests belong to future subtasks.
 
 ## Acceptance Criteria
 - `src/agents/base.py` defines `class BaseAgent(ABC)` with `@abstractmethod def run(self, task: str) -> dict[str, Any]` and a constructor accepting typed `llm` and `session` parameters
-- `src/agents/registry.py` exposes `AgentRegistry`, `register`, `get`, and `list_agents`; calling `AgentRegistry()` twice returns the same object instance
+- `src/agents/registry.py` exposes `AgentRegistry`, `BaseAgent`, `register`, `get`, and `list_agents`; calling `AgentRegistry()` twice returns the same object instance
 - `@register("base")` above `BaseAgent` causes `"base"` to appear in `list_agents()` output
 - `pytest tests/unit/test_base_agent.py tests/unit/test_agent_registry.py -v` passes with zero errors
-- `ruff check src/agents/` reports no lint errors
+- `ruff check src/agents` reports no lint errors
