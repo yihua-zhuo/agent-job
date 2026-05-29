@@ -34,20 +34,23 @@ def ws_c():
 
 
 class TestJoin:
-    async def test_join_adds_connection(self, manager, ws_a):
+    async def test_join_adds_connection(self, manager, ws_a, ws_b):
         await manager.join("room1", ws_a)
         await manager.join("room1", ws_a)
-        async with manager._lock:
-            assert manager._rooms == {"room1": {ws_a}}
-        assert len(manager._rooms["room1"]) == 1
+        await manager.join("room1", ws_b)
+        await manager.broadcast("room1", "hello")
+        ws_a.send_text.assert_called_once_with("hello")
+        ws_b.send_text.assert_called_once_with("hello")
 
 
 class TestLeave:
-    async def test_leave_removes_connection(self, manager, ws_a):
+    async def test_leave_removes_connection(self, manager, ws_a, ws_b):
         await manager.join("room1", ws_a)
+        await manager.join("room1", ws_b)
         await manager.leave("room1", ws_a)
-        async with manager._lock:
-            assert manager._rooms == {}
+        await manager.broadcast("room1", "hello")
+        ws_a.send_text.assert_not_called()
+        ws_b.send_text.assert_called_once_with("hello")
 
 
 class TestBroadcast:

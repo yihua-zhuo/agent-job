@@ -27,7 +27,7 @@ Create `src/websocket/manager.py` with a `ConnectionManager` class that manages 
   - `test_broadcast_sends_to_all_in_room` — join 3 websockets to "room1", broadcast, assert `send_text` was called exactly once on each.
   - `test_broadcast_to_empty_room_is_noop` — call `manager.broadcast("nonexistent", "msg")`, assert no `send_text` was called on any mock.
   - `test_client_in_room_a_does_not_receive_broadcast_to_room_b` — join ws1 to "roomA" and ws2 to "roomB", broadcast to "roomA", assert ws2's `send_text` was never called.
-  - Tests use `unittest.mock.MagicMock()` as WebSocket stand-ins with `send_text = AsyncMock()` injected. No database, no `pytest-asyncio` DB fixtures needed. Use `pytest.mark.asyncio` for all test methods. Import `ConnectionManager` from `src.websocket.manager` after ensuring `src/` is on `sys.path` (already handled by the existing conftest.py `sys.path` setup).
+  - Tests use `unittest.mock.MagicMock()` as WebSocket stand-ins with `send_text = AsyncMock()` injected. No database, no explicit `pytest.mark.asyncio` markers needed — pytest-asyncio's auto mode detects and runs the `async def` test methods automatically. Import `ConnectionManager` from `src.websocket.manager` after ensuring `src/` is on `sys.path` (already handled by the existing conftest.py `sys.path` setup).
 
 ## Acceptance Criteria
 - `manager.join("room", ws)` followed by `manager.leave("room", ws)` results in an empty room — no errors raised.

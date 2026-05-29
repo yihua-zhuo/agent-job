@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import Any
+
+_logger = logging.getLogger(__name__)
 
 
 class ConnectionManager:
@@ -12,6 +15,7 @@ class ConnectionManager:
     async def join(self, room: str, websocket: Any) -> None:
         async with self._lock:
             self._rooms.setdefault(room, set()).add(websocket)
+        _logger.debug("WebSocket joined room %s", room)
 
     async def leave(self, room: str, websocket: Any) -> None:
         async with self._lock:
@@ -19,13 +23,28 @@ class ConnectionManager:
                 self._rooms[room].discard(websocket)
                 if not self._rooms[room]:
                     del self._rooms[room]
+        _logger.debug("WebSocket left room %s", room)
 
     async def broadcast(self, room: str, message: str) -> None:
         async with self._lock:
             websockets = list(self._rooms.get(room, []))
 
+        if not websockets:
+            _logger.debug("Broadcast to room %s: no clients connected", room)
+            return
+
+        await asyncio.sleep(0)
+
         for ws in websockets:
-            await ws.send_text(message)
+            try:
+                await ws.send_text(message)
+            except Exception:
+                _logger.warning("Failed to send to WebSocket in room %s, removing", room)
+                async with self._lock:
+                    if room in self._rooms:
+                        self._rooms[room].discard(ws)
+                continue
+        _logger.debug("Broadcast to room %s delivered to %d clients", room, len(websockets))
 
     async def subscribe(self, channel: str, websocket: Any) -> None:
         async with self._lock:
