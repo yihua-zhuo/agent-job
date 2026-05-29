@@ -1,7 +1,7 @@
 """Integration tests for RBAC schema.
 
 Requires a real PostgreSQL database — run with:
-    DATABASE_URL="postgresql+asyncpg://..." pytest tests/integration/test_rbac_integration.py -v
+    DATABASE_URL="postgresql+asyncpg://..." pytest tests/integration/ -m integration -v
 
 The RBAC migration (195a79d95b41) is applied against the test DB at session start
 to ensure the roles, permissions, user_roles, and role_permissions tables are
@@ -10,13 +10,10 @@ present before tests run.
 
 from __future__ import annotations
 
-import subprocess
-import os
-
 import pytest
 
-from pkg.errors.app_exceptions import NotFoundException
-from services.rbac_service import RBACService, Permission
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
+from services.rbac_service import RBACService
 
 
 def _seed_rbac_data():
@@ -31,9 +28,12 @@ def _seed_rbac_data():
     """
     import os
 
-    db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL", "")
+    db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
     if not db_url:
-        return
+        raise RuntimeError(
+            "TEST_DATABASE_URL or DATABASE_URL must be set to run integration tests. "
+            "Example: DATABASE_URL='postgresql+asyncpg://user:pass@host:5432/db' pytest tests/integration/ -m integration -v"
+        )
 
     sync_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1)
     import psycopg2
@@ -67,10 +67,10 @@ def _seed_rbac_data():
         cur.execute("""
             INSERT INTO roles (tenant_id, name, display_name, description, is_system, priority)
             VALUES
-                (0,'admin','Administrator','Full system access',true,100),
+                (0,'owner','Owner','Full system ownership',true,100),
+                (0,'admin','Administrator','Full system access',true,90),
                 (0,'manager','Manager','Manage team',true,80),
-                (0,'sales','Sales Representative','Manage customers',true,60),
-                (0,'support','Support Agent','Support tasks',true,50),
+                (0,'member','Member','Standard tenant member',true,50),
                 (0,'viewer','Viewer','Read-only',true,10)
             ON CONFLICT DO NOTHING
         """)
@@ -86,7 +86,7 @@ def _seed_rbac_data():
             )
             ON CONFLICT DO NOTHING
         """)
-        # manager: 8 perms
+        # manager: 9 perms
         cur.execute("""
             INSERT INTO role_permissions (role_id, permission_id)
             SELECT r.id, p.id FROM roles r, permissions p
@@ -97,23 +97,13 @@ def _seed_rbac_data():
             )
             ON CONFLICT DO NOTHING
         """)
-        # sales: 6 perms
+        # member: 6 perms
         cur.execute("""
             INSERT INTO role_permissions (role_id, permission_id)
             SELECT r.id, p.id FROM roles r, permissions p
-            WHERE r.name='sales' AND p.name IN (
+            WHERE r.name='member' AND p.name IN (
                 'customer:read','customer:create','customer:update',
                 'opportunity:read','opportunity:create','opportunity:update'
-            )
-            ON CONFLICT DO NOTHING
-        """)
-        # support: 5 perms
-        cur.execute("""
-            INSERT INTO role_permissions (role_id, permission_id)
-            SELECT r.id, p.id FROM roles r, permissions p
-            WHERE r.name='support' AND p.name IN (
-                'customer:read','opportunity:read',
-                'ticket:read','ticket:create','ticket:update'
             )
             ON CONFLICT DO NOTHING
         """)
@@ -304,7 +294,7 @@ class TestRBACIntegration:
             is_system=False,
             priority=20,
         )
-        with pytest.raises(Exception):  # ValidationException
+        with pytest.raises(ValidationException):
             await svc.set_role_permissions(
                 role_id=role.id,
                 permission_names=["customer:read", "nonexistent:permission"],

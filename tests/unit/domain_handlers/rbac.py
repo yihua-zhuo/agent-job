@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime as dt, UTC
+from datetime import UTC
+from datetime import datetime as dt
 
-from sqlalchemy.orm import Mapper
-
-from tests.unit.conftest import MockResult, MockRow, MockState
+from tests.unit.conftest import MockResult, MockState
 
 ORDER = 20
 
@@ -69,6 +68,14 @@ def _make_permission(**kwargs):
     )
 
 
+def _parse_str_param(params: dict, name: str) -> str | None:
+    """Extract a string value for a named param, handling SQLAlchemy _N suffixes."""
+    for key, val in params.items():
+        if key == name or key.startswith(f"{name}_"):
+            return str(val)
+    return None
+
+
 def _parse_int_param(sql_text: str, params: dict, name: str) -> int | None:
     """Extract integer value for named param handling SQLAlchemy's _N suffix.
 
@@ -78,7 +85,7 @@ def _parse_int_param(sql_text: str, params: dict, name: str) -> int | None:
     import re
     # Check params dict for name_N style
     for key, val in params.items():
-        if key == name or key.endswith(f"_{name}"):
+        if key == name or key.startswith(f"{name}_") or key.endswith(f"_{name}"):
             try:
                 return int(val)
             except (TypeError, ValueError):
@@ -217,20 +224,24 @@ def make_permission_handler(state: RBACMockState):
     def handler(sql_text, params):
         # Count from permissions
         if "select" in sql_text and "count" in sql_text and "from permissions" in sql_text:
-            return MockResult([[len(state.permissions)]])
+            rows = [p for p in state.permissions.values()]
+            if "where" in sql_text and "category" in sql_text:
+                cat = _parse_str_param(params, "category")
+                if cat is not None:
+                    rows = [r for r in rows if r["category"] == cat]
+            return MockResult([[len(rows)]])
 
         # Select from permissions
         if "select" in sql_text and "from permissions" in sql_text:
             rows = [p.copy() for p in state.permissions.values()]
             if "where" in sql_text and "name" in sql_text and "in" in sql_text:
-                names = [v for k, v in params.items() if k.startswith("name")]
-                if not names:
-                    names = [v for k, v in params.items() if k.startswith("param")]
+                # Handle permission_names IN clause: SQLAlchemy binds as name_1, name_2, ...
+                names = [str(params[k]) for k in sorted(params) if k == "name" or k.startswith("name_")]
                 rows = [r for r in rows if r["name"] in (names or [])]
             elif "where" in sql_text and "category" in sql_text:
-                cat = _parse_int_param(sql_text, params, "category")
+                cat = _parse_str_param(params, "category")
                 if cat is not None:
-                    rows = [r for r in rows if r["category"] == str(cat)]
+                    rows = [r for r in rows if r["category"] == cat]
             rows.sort(key=lambda r: (r["category"], r["id"]))
             if "limit" in sql_text:
                 limit = _parse_int_param(sql_text, params, "limit") or 50
@@ -284,7 +295,7 @@ def make_user_role_handler(state: RBACMockState):
             return MockResult([], rowcount=before - len(state.user_roles))
 
         # Select from user_roles -> return RoleModel objects
-        if "select" in sql_text and "from user_roles" in sql_text:
+        if "select" in sql_text and ("from user_roles" in sql_text or "join user_roles" in sql_text):
             uid = _extract_int(sql_text, params, "user_id")
             tid = _extract_int(sql_text, params, "tenant_id")
             role_ids = [ur["role_id"] for ur in state.user_roles if ur["user_id"] == uid and ur["tenant_id"] == tid]

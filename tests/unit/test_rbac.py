@@ -8,14 +8,7 @@ real DB.
 
 from __future__ import annotations
 
-import pytest
-
 from src.services.rbac_service import RBACService
-
-
-@pytest.fixture
-def rbac_service():
-    return RBACService(MagicMock())
 
 
 class TestRBACServiceStatic:

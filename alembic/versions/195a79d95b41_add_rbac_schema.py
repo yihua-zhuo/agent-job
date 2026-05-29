@@ -10,19 +10,20 @@ Creates the RBAC schema:
 - user_roles: role assignments per user per tenant
 - role_permissions: many-to-many role ↔ permission mapping
 
-Includes full seeding of the 5 system roles and 13 permissions defined in
+Includes full seeding of the 5 system roles and 15 permissions defined in
 services/rbac_service.py.
 """
-from typing import Sequence, Union
+from collections.abc import Sequence
+
+import sqlalchemy as sa
 
 from alembic import op
-import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = "195a79d95b41"
-down_revision: Union[str, None] = "c94d682d4b03"
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | None = "c94d682d4b03"
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -32,11 +33,11 @@ depends_on: Union[str, Sequence[str], None] = None
 ROLE_INSERT = """
 INSERT INTO roles (tenant_id, name, display_name, description, is_system, priority, created_at)
 VALUES
-    (0, 'admin',  'Administrator',          'Full system access with all permissions', true,  100, now()),
-    (0, 'manager','Manager',                'Manage team and view reports',              true,   80, now()),
-    (0, 'sales',  'Sales Representative',  'Manage customers and opportunities',        true,   60, now()),
-    (0, 'support','Support Agent',         'View customers and tickets, manage tasks',   true,   50, now()),
-    (0, 'viewer', 'Viewer',                 'Read-only access to assigned resources',     true,   10, now())
+    (0, 'owner',   'Owner',                  'Full system ownership with all permissions',   true,  100, now()),
+    (0, 'admin',  'Administrator',          'Full system access',                            true,   90, now()),
+    (0, 'manager','Manager',                'Manage team',                                   true,   80, now()),
+    (0, 'member', 'Member',                  'Standard tenant member',                        true,   50, now()),
+    (0, 'viewer', 'Viewer',                   'Read-only access',                              true,   10, now())
 ON CONFLICT DO NOTHING
 """
 
@@ -92,8 +93,6 @@ WHERE (r.name, p.name) IN (
 ON CONFLICT DO NOTHING
 """
 
-# Import models so they are registered with Base.metadata for future autogenerate
-import db.models  # noqa: F401 - registers rbac models with Base.metadata
 
 
 def upgrade() -> None:
