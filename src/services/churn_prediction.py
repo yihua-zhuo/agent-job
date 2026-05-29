@@ -76,7 +76,7 @@ class ChurnPredictionService:
         )
         customer = result.scalar_one_or_none()
         if customer is None:
-            raise NotFoundException("Customer")
+            raise NotFoundException("客户")
         return customer
 
     async def _get_customer_metrics(self, customer_id: int, tenant_id: int) -> dict:

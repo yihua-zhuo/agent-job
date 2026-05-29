@@ -82,6 +82,7 @@ class CopilotService:
         pass
 
     def get_tool_registry(self) -> dict[str, dict]:
+        """Return the copilot tool registry dict."""
         return {
             "get_customer": {
                 "description": "Retrieve a customer record by customer_id",

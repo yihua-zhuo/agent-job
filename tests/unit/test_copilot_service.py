@@ -17,6 +17,8 @@ def copilot_service(mock_db_session):
 
 @pytest.mark.asyncio
 async def test_build_system_prompt_raises_not_found(copilot_service):
+    # Empty handlers cause _execute_side_effect to return MockResult([]),
+    # making scalar_one_or_none() return None and triggering NotFoundException.
     with pytest.raises(NotFoundException):
         await copilot_service.build_system_prompt(tenant_id=1, customer_id=9999)
 
@@ -30,5 +32,5 @@ def test_tool_registry_returns_six_tools(copilot_service):
     assert set(deferred) == {"send_email", "create_task"}
 
 
-def test_constructor_no_default_session(copilot_service, mock_db_session):
+def test_session_attribute_is_mock_session(copilot_service, mock_db_session):
     assert copilot_service.session is mock_db_session
