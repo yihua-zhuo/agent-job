@@ -1,6 +1,4 @@
 """Tests for the test infrastructure helpers added in tests/unit/conftest.py."""
-import asyncio
-
 import pytest
 from sqlalchemy.exc import MultipleResultsFound
 
@@ -149,19 +147,16 @@ class TestMockResultScalars:
 class TestMakeMockSession:
     """Tests for the session mock's SQL dispatch logic updated in this PR."""
 
-    def test_insert_customers_returns_row(self):
+    async def test_insert_customers_returns_row(self):
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
 
         session = make_mock_session()
         sql = text("INSERT INTO customers (...) RETURNING *")
-        result = session.execute(sql, {"tenant_id": 5, "name": "Test"})
-        # execute is AsyncMock, get the return value synchronously
-        if asyncio.iscoroutine(result):
-            result = asyncio.run(result)
+        result = await session.execute(sql, {"tenant_id": 5, "name": "Test"})
         assert result is not None
 
-    def test_select_from_customers_where_id_returns_single_row_for_id_1(self):
+    async def test_select_from_customers_where_id_returns_single_row_for_id_1(self):
         """New SQL-matching logic: 'from customers where id' returns row only for id=1."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
@@ -169,13 +164,12 @@ class TestMakeMockSession:
         session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE id = :id")
 
-        coro = session.execute(sql, {"id": 1})
-        result = asyncio.run(coro)
+        result = await session.execute(sql, {"id": 1})
         row = result.mappings().one_or_none()
         assert row is not None
         assert row["id"] == 1
 
-    def test_select_from_customers_where_id_returns_empty_for_id_9999(self):
+    async def test_select_from_customers_where_id_returns_empty_for_id_9999(self):
         """New SQL-matching logic: non-fixture IDs return empty result."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
@@ -183,12 +177,11 @@ class TestMakeMockSession:
         session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE id = :id")
 
-        coro = session.execute(sql, {"id": 9999})
-        result = asyncio.run(coro)
+        result = await session.execute(sql, {"id": 9999})
         row = result.mappings().one_or_none()
         assert row is None
 
-    def test_select_all_customers_returns_two_rows(self):
+    async def test_select_all_customers_returns_two_rows(self):
         """New logic: SELECT without WHERE id returns list of 2 fixture rows."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
@@ -196,12 +189,11 @@ class TestMakeMockSession:
         session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE tenant_id = :tenant_id LIMIT 20 OFFSET 0")
 
-        coro = session.execute(sql, {"tenant_id": 1})
-        result = asyncio.run(coro)
+        result = await session.execute(sql, {"tenant_id": 1})
         rows = result.fetchall()
         assert len(rows) == 2
 
-    def test_delete_customers_returns_row(self):
+    async def test_delete_customers_returns_row(self):
         """New logic: DELETE FROM customers returns a row with id."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
@@ -209,24 +201,22 @@ class TestMakeMockSession:
         session = make_mock_session()
         sql = text("DELETE FROM customers WHERE id = :id RETURNING id")
 
-        coro = session.execute(sql, {"id": 1})
-        result = asyncio.run(coro)
+        result = await session.execute(sql, {"id": 1})
         row = result.mappings().one_or_none()
         assert row is not None
         assert row["id"] == 1
 
-    def test_count_query_returns_scalar(self):
+    async def test_count_query_returns_scalar(self):
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
 
         session = make_mock_session()
         sql = text("SELECT count(*) FROM customers WHERE tenant_id = :tenant_id")
 
-        coro = session.execute(sql, {"tenant_id": 1})
-        result = asyncio.run(coro)
+        result = await session.execute(sql, {"tenant_id": 1})
         assert result.scalar() == 3
 
-    def test_unknown_sql_returns_empty(self):
+    async def test_unknown_sql_returns_empty(self):
         """Default case: unrecognised SQL returns empty MockResult."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
@@ -234,6 +224,5 @@ class TestMakeMockSession:
         session = make_mock_session()
         sql = text("SELECT * FROM unknown_table WHERE x = :x")
 
-        coro = session.execute(sql, {"x": 1})
-        result = asyncio.run(coro)
+        result = await session.execute(sql, {"x": 1})
         assert result.fetchall() == []
