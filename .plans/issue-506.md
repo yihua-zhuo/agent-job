@@ -18,7 +18,7 @@ Reading order followed:
 ## Affected Files
 
 - `src/services/copilot_service.py` — **新建** `CopilotService` class with `__init__(session: AsyncSession)`, `build_system_prompt`, `persist_message`, `get_tool_registry`, and private helpers `_get_customer`, `_get_opportunities`, `_get_recent_activities`
-- `tests/unit/test_copilot_service.py` — **新建** unit tests using `make_mock_session`, `MockState`, and domain handlers from `tests/unit/conftest.py`
+- `tests/unit/test_copilot_service.py` — **新建** unit tests using `make_mock_session` and domain handlers from `tests/unit/conftest.py`
 
 ## Implementation Steps
 
@@ -153,7 +153,7 @@ Create the test file using `tests/unit/conftest.py` helpers (`MockState`, `make_
 
 ```python
 import pytest
-from tests.unit.conftest import make_mock_session, MockState
+from tests.unit.conftest import make_mock_session
 from pkg.errors.app_exceptions import NotFoundException
 from services.copilot_service import CopilotService
 

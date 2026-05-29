@@ -267,7 +267,7 @@ class ChurnPredictionService:
         high_risk.sort(key=lambda x: x.score, reverse=True)
         return high_risk
 
-    async def get_churn_prediction(self, customer_id: int, tenant_id: int = 0) -> ChurnPrediction:
+    async def get_churn_prediction(self, customer_id: int, tenant_id: int) -> ChurnPrediction:
         """Return a single-customer churn prediction (score + level + factors)."""
         score = await self.calculate_churn_score(customer_id, tenant_id)
         factors = await self.get_churn_risk_factors(customer_id, tenant_id)
