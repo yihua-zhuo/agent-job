@@ -11,67 +11,9 @@ from sqlalchemy import pool
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
+import db.models  # noqa: F401 - imports all model modules for Base.metadata
 from alembic import context
 from db.base import Base
-from db.models import (
-    ActivityModel,
-    ApiClientModel,
-    CampaignEventModel,
-    CampaignModel,
-    CustomerModel,
-    DashboardModel,
-    DeviceTrustModel,
-    NotificationModel,
-    OpportunityModel,
-    PermissionModel,
-    PipelineModel,
-    PipelineStageModel,
-    RefreshTokenModel,
-    ReminderModel,
-    ReportModel,
-    RoleModel,
-    RolePermissionModel,
-    TaskModel,
-    TenantModel,
-    TicketModel,
-    TicketReplyModel,
-    UserCredentialModel,
-    UserModel,
-    UserRoleModel,
-    WebAuthnChallengeModel,
-    WorkflowExecutionModel,
-    WorkflowModel,
-)
-
-_ALEMBIC_MODEL_IMPORTS = (
-    ActivityModel,
-    ApiClientModel,
-    CampaignEventModel,
-    CampaignModel,
-    CustomerModel,
-    DashboardModel,
-    DeviceTrustModel,
-    NotificationModel,
-    OpportunityModel,
-    PermissionModel,
-    PipelineModel,
-    PipelineStageModel,
-    RefreshTokenModel,
-    ReminderModel,
-    ReportModel,
-    RoleModel,
-    RolePermissionModel,
-    TaskModel,
-    TenantModel,
-    TicketModel,
-    TicketReplyModel,
-    UserCredentialModel,
-    UserModel,
-    UserRoleModel,
-    WebAuthnChallengeModel,
-    WorkflowExecutionModel,
-    WorkflowModel,
-)
 
 config = context.config
 

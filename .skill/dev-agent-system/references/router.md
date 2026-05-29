@@ -13,10 +13,10 @@ from internal.middleware.fastapi_auth import AuthContext, require_auth
 from services.my_service import MyService
 from models.my_entity import MyEntityCreate, MyEntityUpdate
 
-router = APIRouter(prefix="/my-entities", tags=["MyEntities"])
+my_entities_router = APIRouter(prefix="/my-entities", tags=["MyEntities"])
 
 
-@router.get("/")
+@my_entities_router.get("/")
 async def list_entities(
     page: int = 1,
     page_size: int = 20,
@@ -38,7 +38,7 @@ async def list_entities(
     }
 
 
-@router.get("/{entity_id}")
+@my_entities_router.get("/{entity_id}")
 async def get_entity(
     entity_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -49,7 +49,7 @@ async def get_entity(
     return {"success": True, "data": entity.to_dict()}
 
 
-@router.post("/", status_code=201)
+@my_entities_router.post("/", status_code=201)
 async def create_entity(
     body: MyEntityCreate,
     ctx: AuthContext = Depends(require_auth),
@@ -60,7 +60,7 @@ async def create_entity(
     return {"success": True, "data": entity.to_dict()}
 
 
-@router.put("/{entity_id}")
+@my_entities_router.put("/{entity_id}")
 async def update_entity(
     entity_id: int,
     body: MyEntityUpdate,
@@ -74,7 +74,7 @@ async def update_entity(
     return {"success": True, "data": entity.to_dict()}
 
 
-@router.delete("/{entity_id}", status_code=204)
+@my_entities_router.delete("/{entity_id}", status_code=204)
 async def delete_entity(
     entity_id: int,
     ctx: AuthContext = Depends(require_auth),
@@ -84,12 +84,11 @@ async def delete_entity(
     await svc.delete_entity(entity_id, tenant_id=ctx.tenant_id)
 ```
 
-## Register the router in `main.py`
+## Router Registration
 
-```python
-from api.routers.my_entities import router as my_entities_router
-app.include_router(my_entities_router)
-```
+Do not edit `main.py` or `src/api/__init__.py` for new domains. Any `APIRouter`
+exported from `src/api/routers/<domain>.py` is discovered by `api.iter_routers()`
+and included by the app.
 
 ## Rules
 
@@ -98,3 +97,4 @@ app.include_router(my_entities_router)
 - Serialize with `.to_dict()` here, **not** in the service.
 - Wrap every response in `{"success": True, "data": ...}`.
 - `tenant_id` always comes from `ctx.tenant_id`, never from the request body.
+- Export a named router such as `my_entities_router`; avoid anonymous local-only router variables.

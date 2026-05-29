@@ -20,3 +20,5 @@ scripts/push-and-watch.sh
 .omc
 uv.lock
 code-review-result.json
+.secrets
+.agent-actions

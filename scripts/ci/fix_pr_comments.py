@@ -22,7 +22,6 @@ import subprocess
 import sys
 import time
 
-
 # Markers identifying SUMMARY-style bot comments we should NOT ask Claude to
 # "address" — they're status updates, not actionable feedback. Notably absent:
 # `agent-job-code-review-inline`. Those inline comments contain real
@@ -42,7 +41,7 @@ def log(msg: str) -> None:
 
 
 def run_gh(args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["gh", *args], capture_output=True, text=True, check=False)
+    return subprocess.run(["gh", *args], capture_output=True, text=True, check=False, timeout=30)
 
 
 def infer_repo() -> str | None:
