@@ -8,6 +8,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
 
+VALID_PRIORITIES = {"low", "normal", "high", "urgent"}
+
 
 class NotificationModel(Base):
     """Notification entity mapped to the `notifications` table."""

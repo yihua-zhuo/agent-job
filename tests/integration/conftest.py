@@ -351,6 +351,7 @@ async def client(fresh_schema, fastapi_app, async_session) -> AsyncGenerator[Asy
     fastapi_app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
+        await async_session.execute(text("SELECT 1"))
         yield ac
     fastapi_app.dependency_overrides.pop(get_db, None)
 

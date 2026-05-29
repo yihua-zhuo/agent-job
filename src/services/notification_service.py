@@ -5,9 +5,9 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.notification import NotificationModel
+from db.models.notification import VALID_PRIORITIES, NotificationModel
 from db.models.reminder import ReminderModel
-from pkg.errors.app_exceptions import NotFoundException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 class NotificationService:
@@ -30,6 +30,9 @@ class NotificationService:
         **kwargs,
     ) -> NotificationModel:
         """发送通知"""
+        priority = kwargs.get("priority", "normal")
+        if priority not in VALID_PRIORITIES:
+            raise ValidationException(f"priority must be one of {sorted(VALID_PRIORITIES)}, got {priority!r}")
         params = {"content": content}
         if kwargs.get("related_type") is not None:
             params["related_type"] = kwargs["related_type"]
@@ -42,7 +45,7 @@ class NotificationService:
             template=title,
             params_=params,
             status="pending",
-            priority=kwargs.get("priority", "normal"),
+            priority=priority,
         )
         self.session.add(notification)
         await self.session.flush()
@@ -80,24 +83,21 @@ class NotificationService:
 
     async def mark_as_read(self, notification_id: int, tenant_id: int = 0) -> NotificationModel:
         """标记通知已读"""
+        now = datetime.now(UTC)
         result = await self.session.execute(
-            select(NotificationModel).where(
+            update(NotificationModel)
+            .where(
                 and_(
                     NotificationModel.id == notification_id,
                     NotificationModel.tenant_id == tenant_id,
                 )
             )
+            .values(read_at=now, status="read")
+            .returning(NotificationModel)
         )
         notification = result.scalar_one_or_none()
         if notification is None:
             raise NotFoundException("通知")
-        # Idempotent: transitioning from any status (including NULL legacy rows) to 'read'
-        # is accepted silently — no guard is needed since marking an already-read
-        # notification as read again is a no-op at the data level.
-        if notification.read_at is None:
-            notification.read_at = datetime.now(UTC)
-        notification.status = "read"
-        await self.session.flush()
         return notification
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int) -> dict:

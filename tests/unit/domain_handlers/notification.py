@@ -93,12 +93,11 @@ def make_notification_handler(state):
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = "read_at is null" in sql_text_lower or "read_at = null" in sql_text_lower
+            unread_filter = "read_at is null" in sql_text_lower
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = []
             for n in state._notifications.values():
-                # user_id is always checked — unread_filter only adds an additional constraint
                 if n.get("tenant_id") != tenant_id:
                     continue
                 if n.get("user_id") != user_id:
@@ -111,17 +110,21 @@ def make_notification_handler(state):
         if "select count" in sql_text_lower and "from notifications" in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = "read_at is null" in sql_text_lower or "read_at = null" in sql_text_lower
+            unread_filter = "read_at is null" in sql_text_lower
             count = sum(
                 1
                 for n in state._notifications.values()
                 if n.get("tenant_id") == tenant_id
-                # user_id is always checked — unread_filter only adds an additional constraint
                 and n.get("user_id") == user_id
                 and (not unread_filter or n.get("read_at") is None)
             )
             return MockResult([[count]])
 
+        if "notifications" in sql_text_lower:
+            # Within the notification domain but pattern not recognised — fail loudly.
+            raise ValueError(f"Unhandled notification SQL pattern: {sql_text[:80]}")
+
+        # SQL targets a different domain — fall through so other handlers can respond.
         return None
 
     return handler
@@ -151,7 +154,6 @@ def make_reminder_handler(state):
                 "remind_at": params.get("remind_at"),
                 "related_type": params.get("related_type"),
                 "related_id": params.get("related_id"),
-                # NOTE: must stay in sync with ReminderModel.is_completed default=False
                 "is_completed": params.get("is_completed", False),
                 "created_at": params.get("created_at"),
             }
@@ -168,10 +170,7 @@ def make_reminder_handler(state):
         if "delete from reminders" in sql_text_lower:
             rid = params.get("id")
             r = state._reminders.get(rid)
-            if (
-                r
-                and r.get("tenant_id") == params.get("tenant_id")
-            ):
+            if r and r.get("tenant_id") == params.get("tenant_id"):
                 del state._reminders[rid]
                 return MockResult([], rowcount=1)
             return MockResult([], rowcount=0)
@@ -179,8 +178,7 @@ def make_reminder_handler(state):
         if "from reminders" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            # upcoming_only=True adds ReminderModel.is_completed == False to the WHERE clause.
-            # Read is_completed from params as the authoritative filter value (not SQL parsing).
+            # is_completed_filter comes from params (set by the service via upcoming_only).
             is_completed_filter = params.get("is_completed")
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
@@ -191,11 +189,13 @@ def make_reminder_handler(state):
                 if r.get("tenant_id") == tenant_id
                 and r.get("user_id") == user_id
                 and (is_completed_filter is None or r.get("is_completed") == is_completed_filter)
-                and r.get("is_completed") is False  # upcoming_only enforces is_completed=False
                 and r.get("remind_at") is not None
                 and r.get("remind_at") > now
             ]
             return MockResult([_reminder_to_row(r) for r in rows[offset : offset + page_size]])
+
+        if "reminders" in sql_text_lower:
+            raise ValueError(f"Unhandled reminder SQL pattern: {sql_text[:80]}")
 
         return None
 
