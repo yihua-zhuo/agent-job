@@ -93,12 +93,84 @@ class TestTenantHandler:
     async def test_select_tenant_by_id(self, mock_db_session):
         from sqlalchemy import text
 
+        # Seed a tenant first so there's something to select.
+        await mock_db_session.execute(
+            text(
+                "INSERT INTO tenants (name, slug, plan, status, settings, usage_limits) "
+                "VALUES (:name, :slug, :plan, :status, :settings, :usage_limits)"
+            ),
+            {
+                "name": "Alpha Corp",
+                "slug": "alpha-corp",
+                "plan": "enterprise",
+                "status": "active",
+                "settings": {},
+                "usage_limits": {"users": 200},
+            },
+        )
+
         result = await mock_db_session.execute(
             text("SELECT id, name, slug, plan FROM tenants WHERE id = :id LIMIT 1"),
             {"id": 1},
         )
         row = result.fetchone()
         assert row is not None
+        assert row.name == "Alpha Corp"
+        assert row.slug == "alpha-corp"
+        assert row.plan == "enterprise"
+
+    @pytest.mark.asyncio
+    async def test_select_tenant_isolation(self, mock_db_session):
+        """Verify the handler correctly scopes reads to a specific tenant_id."""
+        from sqlalchemy import text
+
+        # Seed two tenants with different IDs into the handler state.
+        await mock_db_session.execute(
+            text(
+                "INSERT INTO tenants (name, slug, plan, status, settings, usage_limits) "
+                "VALUES (:name, :slug, :plan, :status, :settings, :usage_limits)"
+            ),
+            {
+                "name": "Tenant One",
+                "slug": "tenant-one",
+                "plan": "free",
+                "status": "active",
+                "settings": {},
+                "usage_limits": {},
+            },
+        )
+        await mock_db_session.execute(
+            text(
+                "INSERT INTO tenants (name, slug, plan, status, settings, usage_limits) "
+                "VALUES (:name, :slug, :plan, :status, :settings, :usage_limits)"
+            ),
+            {
+                "name": "Tenant Two",
+                "slug": "tenant-two",
+                "plan": "pro",
+                "status": "active",
+                "settings": {},
+                "usage_limits": {},
+            },
+        )
+
+        # Query by id=1 — the second tenant (id=2) must not be returned.
+        result = await mock_db_session.execute(
+            text("SELECT id, name FROM tenants WHERE id = :id LIMIT 1"),
+            {"id": 1},
+        )
+        row = result.fetchone()
+        assert row is not None
+        assert row.name == "Tenant One"
+
+        # Query by id=2 — the first tenant (id=1) must not be returned.
+        result2 = await mock_db_session.execute(
+            text("SELECT id, name FROM tenants WHERE id = :id LIMIT 1"),
+            {"id": 2},
+        )
+        row2 = result2.fetchone()
+        assert row2 is not None
+        assert row2.name == "Tenant Two"
 
     @pytest.mark.asyncio
     async def test_count_tenants(self, mock_db_session):

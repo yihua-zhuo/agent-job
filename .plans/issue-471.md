@@ -60,8 +60,8 @@ Add `slug` and `usage_limits` columns to `TenantModel` and generate a new Alembi
 
 ## Test Plan
 
-- **Unit tests in `tests/unit/`**: Create `tests/unit/test_tenant_model.py`. Define a `MockState` with `tenant` state, a `make_tenant_handler(state)` in `tests/unit/conftest.py` following the existing pattern (factory + stateful, similar to `make_customer_handler`), and a `mock_db_session` fixture combining it. Test: constructing `TenantModel`, calling `to_dict()` with all fields including `slug` and `usage_limits`, and verifying the model has the correct column definitions. Mock DB only — no real SQL executed.
-- **Integration tests in `tests/integration/`**: Create `tests/integration/test_tenant_integration.py`. Use `db_schema`, `tenant_id`, `async_session` fixtures. Test that the `tenants` table can be inserted with a non-null `slug` and `usage_limits`, and that selecting the row back yields the correct values. Use `pytest.raises(NotFoundException)` for any not-found error case if a service is later added.
+- **Unit tests in `tests/unit/`**: Create `tests/unit/test_tenant_model.py`. Define a `MockState` with `tenant` state, a `make_tenant_handler(state)` in `tests/unit/domain_handlers/tenants.py` (following the same pattern as existing domain handlers there), and a `mock_db_session` fixture combining it. Test: constructing `TenantModel`, calling `to_dict()` with all fields including `slug` and `usage_limits`, and verifying the model has the correct column definitions. Mock DB only — no real SQL executed.
+- **Integration tests in `tests/integration/`**: Create `tests/integration/test_tenant_integration.py`. Use `db_schema`, `tenant_id`, `async_session` fixtures. Seed helpers for tenant data should go in `tests/integration/domain_fixtures/tenant.py` rather than the shared conftest. Test that the `tenants` table can be inserted with a non-null `slug` and `usage_limits`, and that selecting the row back yields the correct values. Use `pytest.raises(NotFoundException)` for any not-found error case if a service is later added.
 
 ## Acceptance Criteria
 

@@ -76,7 +76,7 @@ def make_tenant_handler(state: MockState):
             )
 
         if "select" in sql_text and "count" in sql_text and "from tenants" in sql_text:
-            return MockResult([[len(state.tenants) or 2]])
+            return MockResult([[len(state.tenants)]])
 
         if "select" in sql_text and "from tenants" in sql_text and "count" not in sql_text:
             # 'id' bind → direct PK lookup; 'tenant_id' bind → tenant-scoped query.
