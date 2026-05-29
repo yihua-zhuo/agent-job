@@ -1,0 +1,268 @@
+"""Unit tests for AutomationRuleModel and AutomationLogModel ORM models."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+import sqlalchemy as sa
+
+from db.models.automation_log import AutomationLogModel
+from db.models.automation_rule import AutomationRuleModel
+
+
+class TestAutomationRuleModelToDict:
+    """Test AutomationRuleModel.to_dict() serialization."""
+
+    def test_to_dict_includes_all_fields(self):
+        """to_dict returns all fields including tenant_id, name, trigger_event, conditions, actions."""
+        now = datetime(2024, 6, 15, 10, 30, 0, tzinfo=UTC)
+        rule = AutomationRuleModel(
+            id=1,
+            tenant_id=5,
+            name="Welcome Email",
+            description="Send welcome on signup",
+            trigger_event="user.signup",
+            conditions=[{"field": "plan", "operator": "eq", "value": "free"}],
+            actions=[{"type": "send_email", "template": "welcome"}],
+            enabled=True,
+            created_by=2,
+            created_at=now,
+            updated_at=now,
+        )
+        d = rule.to_dict()
+        assert d["id"] == 1
+        assert d["tenant_id"] == 5
+        assert d["name"] == "Welcome Email"
+        assert d["description"] == "Send welcome on signup"
+        assert d["trigger_event"] == "user.signup"
+        assert d["conditions"] == [{"field": "plan", "operator": "eq", "value": "free"}]
+        assert d["actions"] == [{"type": "send_email", "template": "welcome"}]
+        assert d["enabled"] is True
+        assert d["created_by"] == 2
+        assert d["created_at"] == now.isoformat()
+        assert d["updated_at"] == now.isoformat()
+
+    def test_to_dict_serializes_datetime_as_iso_string(self):
+        """Datetime fields are serialized as ISO 8601 strings."""
+        now = datetime(2024, 1, 1, 12, 0, 0, tzinfo=UTC)
+        rule = AutomationRuleModel(
+            id=2,
+            tenant_id=1,
+            name="Test",
+            trigger_event="deal.created",
+            created_at=now,
+            updated_at=now,
+        )
+        d = rule.to_dict()
+        assert d["created_at"] == "2024-01-01T12:00:00+00:00"
+        assert d["updated_at"] == "2024-01-01T12:00:00+00:00"
+
+    def test_to_dict_handles_none_datetime(self):
+        """None datetime fields return None from isoformat guard on fully-constructed instance."""
+        rule = AutomationRuleModel(
+            id=3,
+            tenant_id=1,
+            name="Test",
+            trigger_event="deal.created",
+            created_at=None,
+            updated_at=None,
+        )
+        d = rule.to_dict()
+        assert d["created_at"] is None
+        assert d["updated_at"] is None
+
+    def test_to_dict_handles_empty_conditions_and_actions(self):
+        """conditions and actions default to [] when falsy."""
+        rule = AutomationRuleModel(
+            id=4,
+            tenant_id=1,
+            name="Test",
+            trigger_event="deal.created",
+        )
+        d = rule.to_dict()
+        assert d["conditions"] == []
+        assert d["actions"] == []
+
+
+class TestAutomationRuleModelDefaults:
+    """Test AutomationRuleModel column default values."""
+
+    def test_enabled_column_python_default_is_true(self):
+        """The enabled column uses Python default=True; no server_default is set."""
+        col = AutomationRuleModel.__table__.c.enabled
+        assert isinstance(col.type, sa.Boolean)
+        assert col.nullable is False
+        python_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert python_val is True, "Python default must be True"
+        assert server_val is None, "No server_default should be set (migration sets it)"
+
+    def test_enabled_column_has_no_server_default(self):
+        """The enabled column has no server_default in the ORM model (server_default is in migration only)."""
+        col = AutomationRuleModel.__table__.c.enabled
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert server_val is None, "ORM model should not set server_default (migration does)"
+
+    def test_conditions_column_has_callable_default(self):
+        """The conditions column has a callable default (empty list factory)."""
+        col = AutomationRuleModel.__table__.c.conditions
+        assert col.default is not None
+        assert callable(col.default.arg)
+
+    def test_actions_column_has_callable_default(self):
+        """The actions column has a callable default (empty list factory)."""
+        col = AutomationRuleModel.__table__.c.actions
+        assert col.default is not None
+        assert callable(col.default.arg)
+
+    def test_created_by_column_python_default_is_zero(self):
+        """The created_by column uses Python default=0; no server_default is set."""
+        col = AutomationRuleModel.__table__.c.created_by
+        python_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert python_val == 0, "Python default must be 0"
+        assert server_val is None, "No server_default should be set (migration sets it)"
+
+    def test_created_by_column_has_no_server_default(self):
+        """The created_by column has no server_default in the ORM model (server_default is in migration only)."""
+        col = AutomationRuleModel.__table__.c.created_by
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert server_val is None, "ORM model should not set server_default (migration does)"
+
+
+class TestAutomationLogModelToDict:
+    """Test AutomationLogModel.to_dict() serialization."""
+
+    def test_to_dict_includes_all_fields(self):
+        """to_dict returns all fields including nested JSON and datetime."""
+        now = datetime(2024, 7, 20, 14, 0, 0, tzinfo=UTC)
+        log = AutomationLogModel(
+            id=1,
+            rule_id=10,
+            tenant_id=5,
+            trigger_event="user.signup",
+            trigger_context={"user_id": 42, "email": "a@b.com"},
+            actions_executed=[{"type": "send_email", "sent": True}],
+            status="success",
+            error_message=None,
+            executed_by=1,
+            executed_at=now,
+        )
+        d = log.to_dict()
+        assert d["id"] == 1
+        assert d["rule_id"] == 10
+        assert d["tenant_id"] == 5
+        assert d["trigger_event"] == "user.signup"
+        assert d["trigger_context"] == {"user_id": 42, "email": "a@b.com"}
+        assert d["actions_executed"] == [{"type": "send_email", "sent": True}]
+        assert d["status"] == "success"
+        assert d["error_message"] is None
+        assert d["executed_by"] == 1
+        assert d["executed_at"] == now.isoformat()
+
+    def test_to_dict_serializes_datetime_as_iso_string(self):
+        """executed_at is serialized as an ISO 8601 string."""
+        now = datetime(2024, 3, 10, 8, 45, 0, tzinfo=UTC)
+        log = AutomationLogModel(
+            id=2,
+            rule_id=1,
+            tenant_id=1,
+            trigger_event="x",
+            executed_at=now,
+        )
+        d = log.to_dict()
+        assert d["executed_at"] == "2024-03-10T08:45:00+00:00"
+
+    def test_to_dict_handles_none_executed_at(self):
+        """None executed_at returns None from isoformat guard on fully-constructed instance."""
+        log = AutomationLogModel(
+            id=3,
+            rule_id=1,
+            tenant_id=1,
+            trigger_event="x",
+            executed_at=None,
+        )
+        d = log.to_dict()
+        assert d["executed_at"] is None
+
+    def test_to_dict_handles_empty_trigger_context(self):
+        """trigger_context defaults to {} when falsy."""
+        log = AutomationLogModel(
+            id=4,
+            rule_id=1,
+            tenant_id=1,
+            trigger_event="x",
+        )
+        d = log.to_dict()
+        assert d["trigger_context"] == {}
+
+    def test_to_dict_handles_empty_actions_executed(self):
+        """actions_executed defaults to [] when falsy."""
+        log = AutomationLogModel(
+            id=5,
+            rule_id=1,
+            tenant_id=1,
+            trigger_event="x",
+        )
+        d = log.to_dict()
+        assert d["actions_executed"] == []
+
+
+class TestAutomationLogModelDefaults:
+    """Test AutomationLogModel column default values."""
+
+    def test_status_column_default_is_success(self):
+        """The status column defaults to 'success'."""
+        col = AutomationLogModel.__table__.c.status
+        python_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        if hasattr(col.type, "enums") and col.type.enums:
+            assert col.type.enums[0] == "success"
+        else:
+            assert python_val == "success" or server_val == "'success'"
+
+    def test_trigger_context_column_has_callable_default(self):
+        """The trigger_context column has a callable default (empty dict factory)."""
+        col = AutomationLogModel.__table__.c.trigger_context
+        assert col.default is not None
+        assert callable(col.default.arg)
+
+    def test_actions_executed_column_has_callable_default(self):
+        """The actions_executed column has a callable default (empty list factory)."""
+        col = AutomationLogModel.__table__.c.actions_executed
+        assert col.default is not None
+        assert callable(col.default.arg)
+
+    def test_executed_by_column_default_is_zero(self):
+        """The executed_by column defaults to 0."""
+        col = AutomationLogModel.__table__.c.executed_by
+        python_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert python_val == 0 or server_val == "0"
+
+
+def _col_is_indexed(table, col_name: str) -> bool:
+    """Return True if col_name appears in any table index."""
+    return any(col_name in idx.columns for idx in table.indexes)
+
+
+class TestAutomationModelsIndexing:
+    """Test that tenant_id and other key columns are indexed."""
+
+    def test_rule_tenant_id_is_indexed(self):
+        """AutomationRuleModel.tenant_id column is indexed."""
+        assert _col_is_indexed(AutomationRuleModel.__table__, "tenant_id")
+
+    def test_log_tenant_id_is_indexed(self):
+        """AutomationLogModel.tenant_id column is indexed."""
+        assert _col_is_indexed(AutomationLogModel.__table__, "tenant_id")
+
+    def test_rule_trigger_event_is_indexed(self):
+        """AutomationRuleModel.trigger_event column is indexed."""
+        assert _col_is_indexed(AutomationRuleModel.__table__, "trigger_event")
+
+    def test_log_rule_id_is_indexed(self):
+        """AutomationLogModel.rule_id column is indexed."""
+        assert _col_is_indexed(AutomationLogModel.__table__, "rule_id")
+
+
