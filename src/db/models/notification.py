@@ -22,8 +22,9 @@ class NotificationModel(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     channel: Mapped[str | None] = mapped_column(String(50), nullable=True)
     template: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    # serialized as 'params' in to_dict() to avoid shadowing the built-in.
-    params_: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    # Trailing underscore avoids collision with ORM/DB column names.
+    # Serialized as 'params' in to_dict() for a cleaner API surface.
+    payload_params: Mapped[dict | None] = mapped_column("params_", JSON, nullable=True)
     status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     priority: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -39,7 +40,7 @@ class NotificationModel(Base):
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params": self.params_,
+            "params": self.payload_params,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,

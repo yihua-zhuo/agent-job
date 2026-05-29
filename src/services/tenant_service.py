@@ -98,13 +98,16 @@ class TenantService:
         return await self.update_tenant(tenant_id, status="suspended")
 
     async def delete_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
-        tenant = await self._fetch(tenant_id)
+        tenant = await self._fetch(tenant_id, _tenant_id)
         now = datetime.now(UTC)
         new_settings = dict(tenant.settings or {})
         new_settings["deleted_at"] = now.isoformat()
+        conditions = [TenantModel.id == tenant_id]
+        if _tenant_id:
+            conditions.append(TenantModel.id == _tenant_id)
         await self.session.execute(
             update(TenantModel)
-            .where(TenantModel.id == tenant_id)
+            .where(and_(*conditions))
             .values(status="deleted", settings=new_settings, updated_at=now)
         )
         await self.session.flush()

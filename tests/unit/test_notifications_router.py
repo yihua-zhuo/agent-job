@@ -43,6 +43,10 @@ class _MockNotificationModel:
     def params_(self):
         return self._params
 
+    @property
+    def payload_params(self):
+        return self._params
+
     def to_dict(self) -> dict:
         return {
             "id": self.id,
@@ -453,4 +457,7 @@ class TestCrossTenantIsolation:
             client = _app(tenant_id=2)
             response = client.get("/api/v1/notifications")
             assert response.status_code == 404
+            svc.get_user_notifications.assert_called_once()
+            call_kwargs = svc.get_user_notifications.call_args.kwargs
+            assert call_kwargs.get("tenant_id") == 2
 

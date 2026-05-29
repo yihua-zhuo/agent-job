@@ -48,7 +48,7 @@ class NotificationService:
             user_id=user_id,
             channel=notification_type,
             template=title,
-            params_=params,
+            payload_params=params,
             status="pending",
             priority=priority,
         )
@@ -147,7 +147,7 @@ class NotificationService:
                 )
             )
         )
-        return result.scalar_one()
+        return result.scalar_one_or_none() or 0
 
     # -------------------------------------------------------------------------
     # Reminders

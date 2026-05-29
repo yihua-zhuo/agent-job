@@ -517,19 +517,23 @@ class TestNotificationIntegration:
             user_id=uid1, notification_type="in_app", title="T1", content="m", tenant_id=tenant_id
         )
 
-        # Create user under tenant 2
+        # Create user under tenant 2 and send a notification to them
         uid2 = await self._seed_user(tenant_id_2, async_session)
+        await svc.send_notification(
+            user_id=uid2, notification_type="in_app", title="T2", content="m", tenant_id=tenant_id_2
+        )
 
-        # Both directions verified: tenant B sees nothing from tenant A, and tenant A
-        # still sees exactly its own notification after the cross-tenant check.
+        # Tenant 2 sees only their own T2 notification, not tenant 1's T1.
         items2, total2 = await svc.get_user_notifications(user_id=uid2, tenant_id=tenant_id_2)
-        assert total2 == 0
-        assert len(items2) == 0
+        assert total2 == 1
+        assert len(items2) == 1
+        assert items2[0].template == "T2"
 
-        # Tenant 1 should still see its own notification
+        # Tenant 1 sees only their own T1 notification, not tenant 2's T2.
         items1, total1 = await svc.get_user_notifications(user_id=uid1, tenant_id=tenant_id)
         assert total1 == 1
         assert len(items1) == 1
+        assert items1[0].template == "T1"
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

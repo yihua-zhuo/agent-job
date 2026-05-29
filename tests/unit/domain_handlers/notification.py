@@ -57,10 +57,11 @@ def make_notification_handler(state):
 
         if "insert into notifications" in sql_text_lower:
             # Enforce the canonical bind key — must match NotificationModel.params_.
-            assert _NOTIFICATION_PARAMS_KEY in params, (
-                f"send_notification must bind {_NOTIFICATION_PARAMS_KEY} "
-                f"(got keys: {list(params.keys())})"
-            )
+            if _NOTIFICATION_PARAMS_KEY not in params:
+                raise ValueError(
+                    f"send_notification must bind {_NOTIFICATION_PARAMS_KEY}, "
+                    f"got: {list(params.keys())}"
+                )
             nid = state._notifications_next_id
             state._notifications_next_id += 1
             n = {
