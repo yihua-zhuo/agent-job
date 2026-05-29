@@ -42,12 +42,38 @@ async def _seed_message(
     return msg
 
 
-@pytest.mark.integration
+async def _seed_user(async_session, tenant_id: int, user_id: int):
+    """Seed a user record so chat endpoint does not violate FK constraints."""
+    from sqlalchemy import select
+
+    from db.models.user import UserModel
+
+    # Check if user already exists (id is globally unique across tenants).
+    result = await async_session.execute(select(UserModel).where(UserModel.id == user_id))
+    if result.scalar_one_or_none() is not None:
+        return  # already seeded
+    user = UserModel(
+        id=user_id,
+        tenant_id=tenant_id,
+        username=f"testuser_{user_id}",
+        email=f"testuser_{user_id}@example.com",
+        password_hash="dummy_hash",
+        role="admin",
+        status="active",
+    )
+    async_session.add(user)
+    await async_session.flush()
+    return user
+
+
 class TestCopilotIntegration:
     """End-to-end integration tests for copilot router endpoints."""
 
-    async def test_chat_integration(self, api_client):
+    async def test_chat_integration(self, api_client, async_session, tenant_id_web: int):
         """POST /copilot/chat returns 200 with {"success": True, ...}."""
+        # Seed user 999 (hardcoded in mock auth override) in the same tenant.
+        await _seed_user(async_session, tenant_id_web, user_id=999)
+
         response = await api_client.post("/copilot/chat?message=hello")
         assert response.status_code == 200
         data = response.json()
@@ -91,4 +117,44 @@ class TestCopilotIntegration:
         data = response.json()
         assert data["success"] is True
         assert len(data["data"]["messages"]) == 20
-        assert data["data"]["total"] == 20
+        assert data["data"]["total"] == 25
+
+    async def test_chat_cross_tenant_isolation(
+        self,
+        db_schema,
+        async_session,
+        api_client,
+        api_client_tenant_2,
+        tenant_id_web: int,
+        tenant_id_2_web: int,
+    ):
+        """A second tenant gets its own conversation, not the first tenant's."""
+        # Seed user 999 in both tenants.
+        await _seed_user(async_session, tenant_id_web, user_id=999)
+        await _seed_user(async_session, tenant_id_2_web, user_id=999)
+        await async_session.commit()
+
+        # Create a conversation in tenant 1 (with user 999) so there IS something to find.
+        conv_tenant_1 = await _seed_conversation(
+            async_session, tenant_id_web, user_id=999
+        )
+        await _seed_message(
+            async_session, conv_tenant_1.id, tenant_id_web, "user", "Tenant 1 message"
+        )
+        await async_session.commit()
+
+        # Chat as tenant 2 with the same user_id — should get its own new conversation.
+        response_tenant_2 = await api_client_tenant_2.post("/copilot/chat?message=hello")
+        assert response_tenant_2.status_code == 200
+        data_tenant_2 = response_tenant_2.json()
+        assert data_tenant_2["success"] is True
+
+        # Verify tenant 2's history only shows tenant 2 messages, not tenant 1's.
+        history_tenant_2 = await api_client_tenant_2.get(f"/copilot/{conv_tenant_1.id}/history")
+        # Tenant 2 should have no messages for tenant 1's conversation_id.
+        assert history_tenant_2.status_code == 200
+        history_data = history_tenant_2.json()
+        # Tenant 2 has no messages in the DB for conv_tenant_1, but since the
+        # conversation belongs to tenant 1 the query filters it out via tenant_id.
+        # The endpoint should return an empty list (no cross-tenant data leak).
+        assert history_data["data"]["messages"] == []

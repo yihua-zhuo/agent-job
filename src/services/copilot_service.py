@@ -1,9 +1,11 @@
 """Copilot service — builds system prompts from CRM context and exposes a tool registry."""
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.activity import ActivityModel
+from db.models.conversation import ConversationModel
+from db.models.conversation_message import ConversationMessageModel
 from db.models.customer import CustomerModel
 from db.models.opportunity import OpportunityModel
 from pkg.errors.app_exceptions import NotFoundException
@@ -55,6 +57,39 @@ class CopilotService:
         return list(result.scalars().all())
 
     # ------------------------------------------------------------------
+    # Conversation management
+    # ------------------------------------------------------------------
+
+    async def get_or_create_conversation(
+        self,
+        tenant_id: int,
+        user_id: int,
+        channel: str = "copilot",
+    ) -> ConversationModel:
+        """Return the most recent conversation for tenant+user, creating one if none exist."""
+        result = await self.session.execute(
+            select(ConversationModel)
+            .where(
+                and_(
+                    ConversationModel.tenant_id == tenant_id,
+                    ConversationModel.user_id == user_id,
+                )
+            )
+            .order_by(ConversationModel.id.desc())
+            .limit(1)
+        )
+        conversation = result.scalar_one_or_none()
+        if conversation is None:
+            conversation = ConversationModel(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                channel=channel,
+            )
+            self.session.add(conversation)
+            await self.session.flush()
+        return conversation
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
@@ -76,10 +111,48 @@ class CopilotService:
             lines.append(f"Activity[{act.type}]: {act.content or ''} at {act.created_at}")
         return "\n".join(lines)
 
-    async def persist_message(self, tenant_id: int, customer_id: int, role: str, content: str) -> None:
-        """Persist a conversation message. DB write is deferred until the message schema is defined."""
-        # TODO: Replace with ConversationMessageModel insert once schema is finalized (issue #505).
-        return
+    async def persist_message(
+        self,
+        conversation_id: int,
+        tenant_id: int,
+        role: str,
+        content: str,
+    ) -> None:
+        """Persist a conversation message to the database."""
+        msg = ConversationMessageModel(
+            conversation_id=conversation_id,
+            tenant_id=tenant_id,
+            role=role,
+            content=content,
+        )
+        self.session.add(msg)
+        await self.session.flush()
+
+    async def get_history(self, conversation_id: int, tenant_id: int) -> tuple[list[ConversationMessageModel], int]:
+        """Return (messages, total_count) for a conversation, newest first, capped at 20."""
+        count_result = await self.session.execute(
+            select(func.count(ConversationMessageModel.id)).where(
+                and_(
+                    ConversationMessageModel.conversation_id == conversation_id,
+                    ConversationMessageModel.tenant_id == tenant_id,
+                )
+            )
+        )
+        total = count_result.scalar_one()
+
+        result = await self.session.execute(
+            select(ConversationMessageModel)
+            .where(
+                and_(
+                    ConversationMessageModel.conversation_id == conversation_id,
+                    ConversationMessageModel.tenant_id == tenant_id,
+                )
+            )
+            .order_by(ConversationMessageModel.created_at.desc())
+            .limit(20)
+        )
+        messages = list(result.scalars().all())
+        return messages, total
 
     def get_tool_registry(self) -> dict[str, dict]:
         """Return the copilot tool registry dict."""

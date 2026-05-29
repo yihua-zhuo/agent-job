@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from httpx import ASGITransport, AsyncClient
@@ -60,18 +60,20 @@ class TestCopilotRouter:
     @pytest.mark.asyncio
     async def test_chat_returns_envelope(self, mock_db_session):
         """POST /copilot/chat returns {"success": True, "data": {"response": ..., "tool_calls": []}}."""
-        # First call (find conversation): return None so a new one is created.
-        # Second call (find conversation again): return the new conversation.
-        new_conv = MagicMock()
-        new_conv.id = 1
-        mock_db_session.execute.side_effect = [
-            _make_mock_result(scalar_or_none=None),  # no existing conversation
-            _make_mock_result(scalar_or_none=new_conv),  # conversation created
-        ]
+        from services.copilot_service import CopilotService
 
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.post("/copilot/chat?message=hello")
+        # Mock the service so get_or_create_conversation returns a mock conversation.
+        mock_conv = MagicMock()
+        mock_conv.id = 42
+
+        with patch.object(CopilotService, "get_or_create_conversation", new_callable=AsyncMock) as mock_get_or_create, \
+             patch.object(CopilotService, "persist_message", new_callable=AsyncMock):
+
+            mock_get_or_create.return_value = mock_conv
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                response = await ac.post("/copilot/chat?message=hello")
 
         assert response.status_code == 200
         data = response.json()
@@ -83,11 +85,14 @@ class TestCopilotRouter:
     @pytest.mark.asyncio
     async def test_history_returns_envelope(self, mock_db_session):
         """GET /copilot/1/history returns {"success": True, "data": {"messages": [], "total": 0}}."""
-        mock_db_session.execute.return_value = _make_mock_result(scalars_all=[])
+        from services.copilot_service import CopilotService
 
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/copilot/1/history")
+        with patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history:
+            mock_get_history.return_value = ([], 0)
+
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                response = await ac.get("/copilot/1/history")
 
         assert response.status_code == 200
         data = response.json()
@@ -96,10 +101,17 @@ class TestCopilotRouter:
         assert "messages" in data["data"]
         assert "total" in data["data"]
         assert isinstance(data["data"]["messages"], list)
+        # Verify the service was called with correct conversation_id and tenant_id.
+        mock_get_history.assert_called_once()
+        call_args = mock_get_history.call_args
+        assert call_args.kwargs.get("conversation_id") == 1  # from URL path
+        assert call_args.kwargs.get("tenant_id") == 100  # from mock AuthContext
 
     @pytest.mark.asyncio
     async def test_history_caps_at_20(self, mock_db_session):
         """History endpoint returns at most 20 messages even when more exist in DB."""
+        from services.copilot_service import CopilotService
+
         mock_messages = []
         for i in range(25):
             msg = MagicMock()
@@ -115,12 +127,17 @@ class TestCopilotRouter:
             }
             mock_messages.append(msg)
 
-        mock_db_session.execute.return_value = _make_mock_result(scalars_all=mock_messages)
+        with patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history:
+            mock_get_history.return_value = (mock_messages[:20], 25)
 
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.get("/copilot/1/history")
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                response = await ac.get("/copilot/1/history")
 
         assert response.status_code == 200
         data = response.json()
         assert len(data["data"]["messages"]) == 20
+        # Verify the total reflects the full count (25), not the capped slice (20).
+        assert data["data"]["total"] == 25
+        # Verify specific serialized fields.
+        assert data["data"]["messages"][0]["role"] == "user"
