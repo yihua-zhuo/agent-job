@@ -86,6 +86,16 @@ class TestSubscribe:
         await manager.subscribe("channel1", ws_b)
         assert len(manager._rooms["channel1"]) == 2
 
+    async def test_subscribe_channel_sends_to_all(self, manager, ws_a, ws_b, ws_c):
+        """Subscribe mirrors join/leave pattern — verify broadcast reaches all subscribers."""
+        await manager.subscribe("channel1", ws_a)
+        await manager.subscribe("channel1", ws_b)
+        await manager.subscribe("channel1", ws_c)
+        await manager.broadcast("channel1", "hello")
+        ws_a.send_text.assert_called_once_with("hello")
+        ws_b.send_text.assert_called_once_with("hello")
+        ws_c.send_text.assert_called_once_with("hello")
+
 
 class TestUnsubscribe:
     async def test_unsubscribe_removes_connection(self, manager, ws_a, ws_b):
@@ -99,9 +109,26 @@ class TestUnsubscribe:
     async def test_unsubscribe_nonexistent_is_noop(self, manager, ws_a):
         await manager.unsubscribe("nonexistent", ws_a)
 
+    async def test_unsubscribe_prevents_future_broadcast(self, manager, ws_a, ws_b):
+        """Unsubscribe mirrors leave — unsubscribed client must not receive future broadcasts."""
+        await manager.subscribe("channel1", ws_a)
+        await manager.subscribe("channel1", ws_b)
+        await manager.unsubscribe("channel1", ws_a)
+        await manager.broadcast("channel1", "hello")
+        ws_a.send_text.assert_not_called()
+        ws_b.send_text.assert_called_once_with("hello")
+
     async def test_client_in_room_a_does_not_receive_broadcast_to_room_b(
         self, manager, ws_a, ws_b
     ):
+        """Deduplication: clients in the same room must not receive duplicate messages."""
+        await manager.join("roomA", ws_a)
+        await manager.join("roomA", ws_a)  # join twice — set deduplication
+        await manager.broadcast("roomA", "hello")
+        ws_a.send_text.assert_called_once_with("hello")
+
+    async def test_ws_in_room_b_isolation(self, manager, ws_a, ws_b):
+        """Cross-room isolation: ws_b in roomB must never be called when broadcasting to roomA."""
         await manager.join("roomA", ws_a)
         await manager.join("roomB", ws_b)
         await manager.broadcast("roomA", "hello")

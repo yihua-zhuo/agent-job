@@ -27,7 +27,11 @@ Create `src/websocket/manager.py` with a `ConnectionManager` class that manages 
   - `test_broadcast_sends_to_all_in_room` — join 3 websockets to "room1", broadcast, assert `send_text` was called exactly once on each.
   - `test_broadcast_to_empty_room_is_noop` — call `manager.broadcast("nonexistent", "msg")`, assert no `send_text` was called on any mock.
   - `test_client_in_room_a_does_not_receive_broadcast_to_room_b` — join ws1 to "roomA" and ws2 to "roomB", broadcast to "roomA", assert ws2's `send_text` was never called.
-  - Tests use `unittest.mock.MagicMock()` as WebSocket stand-ins with `send_text = AsyncMock()` injected. No database, no explicit `pytest.mark.asyncio` markers needed — pytest-asyncio's auto mode detects and runs the `async def` test methods automatically. Import `ConnectionManager` from `src.websocket.manager` after ensuring `src/` is on `sys.path` (already handled by the existing conftest.py `sys.path` setup).
+  - `test_subscribe_adds_connection` — subscribe then verify the channel entry exists with the websocket.
+  - `test_unsubscribe_removes_connection` — subscribe then unsubscribe, verify the websocket is removed.
+  - Tests use `unittest.mock.MagicMock()` as WebSocket stand-ins with `send_text = AsyncMock()` injected. No database. Requires pytest-asyncio in auto mode (``asyncio_mode = auto`` in ``pytest.ini`` or ``pytestmark = pytest.mark.asyncio`` on the module) so that explicit ``pytest.mark.asyncio`` markers on each ``async def`` test are unnecessary. Import ``ConnectionManager`` from ``src.websocket.manager`` after ensuring ``src/`` is on ``sys.path`` (already handled by the existing conftest.py ``sys.path`` setup).
+
+> **Note:** Rooms and channels share the same internal namespace (``self._rooms``). If a client joins room ``"foo"`` and subscribes to channel ``"foo"``, both entries merge into the same set. This is by design — callers must use distinct names for rooms and channels to avoid collisions.
 
 ## Acceptance Criteria
 - `manager.join("room", ws)` followed by `manager.leave("room", ws)` results in an empty room — no errors raised.
