@@ -22,10 +22,17 @@ jobs:
     name: Validate open issues
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # write contents because validate_open_issues.py now commits dev-plan
+      # boards to docs/dev-plan/issues/ for every ready issue.
+      contents: write
       issues: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # PAT so the board commit fires downstream CI (Dev Agent CI).
+          # Falls back to GITHUB_TOKEN, which doesn't trigger workflows on
+          # push events — fine for the master push itself, just no chained CI.
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
@@ -41,10 +48,21 @@ jobs:
             npm install -g @anthropic-ai/claude-code
           fi
 
+      - name: Configure git
+        # Needed because validate_open_issues.py shells out to `git commit`
+        # when it writes a board. Use the github-actions[bot] identity so
+        # the commit shows up consistently in the history.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Validate open issues
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAX_ISSUES_PER_RUN: '5'
+          # Set to '1' to write boards to /tmp instead of committing them.
+          # Useful for safe end-to-end smoke tests via act.
+          DEV_PLAN_DRY_RUN: ${{ vars.DEV_PLAN_DRY_RUN || '' }}
         run: python3 scripts/ci/validate_open_issues.py

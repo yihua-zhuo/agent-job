@@ -19,6 +19,7 @@ from json import JSONDecoder
 from typing import Any
 
 from dev_plan_context import find_dev_plan_ref, resolve_dev_plan_context
+from generate_dev_plan_board import board_ref_for, generate_board
 
 
 LABEL_READY = "ready"
@@ -293,6 +294,26 @@ def call_claude(prompt: str) -> tuple[dict[str, Any] | None, str]:
     return None, last_err
 
 
+def _append_dev_plan_ref_to_issue(number: int, current_body: str, ref_line: str) -> bool:
+    """Append `Dev-Plan: ...` to the issue body if it's not already there.
+
+    Used after generating a board so the issue carries the canonical
+    reference that `dev_plan_context.find_dev_plan_ref` looks for.
+    """
+    if ref_line in (current_body or ""):
+        return True
+    new_body = (current_body or "").rstrip() + f"\n\n{ref_line}\n"
+    # gh issue edit reads --body-file - from stdin to avoid ARG_MAX on long bodies.
+    r = subprocess.run(
+        ["gh", "issue", "edit", str(number), "--body-file", "-"],
+        input=new_body, capture_output=True, text=True, check=False,
+    )
+    if r.returncode != 0:
+        log(f"issue_body_edit_failed issue=#{number} stderr={r.stderr.strip()[:200]}")
+        return False
+    return True
+
+
 def comment_and_label(number: int, body: str, label: str) -> bool:
     # Apply the skip-label BEFORE commenting. If the label step fails (rate
     # limit, transient error), we abort without commenting — that way the next
@@ -426,9 +447,28 @@ def process_issue(issue: dict[str, Any]) -> bool:
     subtasks = [s for s in subtasks if isinstance(s, dict)]
 
     if raw_verdict == "ready":
+        # Author a dev-plan board UNLESS the issue already references one
+        # (the dev-plan-first flow described in dev_plan_context.py). For
+        # autogen boards we add a Dev-Plan ref to the issue body so the
+        # downstream implementor reads the board as its source of truth.
+        board_note = ""
+        if not find_dev_plan_ref(issue):
+            board, gen_err = generate_board(issue)
+            if gen_err:
+                log(f"board_generation_skipped issue=#{number} err={gen_err}")
+            elif board is not None:
+                ref = board_ref_for(board.path)
+                board_note = f"\n\n📋 Generated dev-plan board: [`{ref.split(': ', 1)[1]}`]({ref.split(': ', 1)[1]})"
+                # Append the canonical reference to the issue body so the
+                # next monitor tick — and the implement workflow's
+                # dev_plan_context — can find it.
+                _append_dev_plan_ref_to_issue(number, issue.get("body") or "", ref)
+                log(f"board_generated issue=#{number} path={board.path} committed={board.committed} pushed={board.pushed}")
+
         body = "**Ready to implement** ✅"
         if reason:
             body += f"\n\n{reason}"
+        body += board_note
         ok = comment_and_label(number, body, LABEL_READY)
         log(f"marked_ready issue=#{number} ok={ok}")
         return True
