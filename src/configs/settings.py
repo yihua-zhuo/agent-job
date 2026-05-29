@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # OpenAPI
     openapi_enabled: bool = Field(default=True)
 
+    # Third-party enrichment
+    clearbit_api_key: str | None = Field(default=None, description="Clearbit Company API key")
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
