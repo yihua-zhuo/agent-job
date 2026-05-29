@@ -521,13 +521,92 @@ def process_issue(issue: dict[str, Any]) -> bool:
     return True
 
 
+# Labels whose presence DISQUALIFIES an issue from backfill — boards for
+# these would be wasted Claude work:
+#   - needs-clarification: the issue isn't actionable yet
+#   - split: parent tracking issue, subtasks get their own boards
+#   - doc-sync / code-review / pipeline: auto-generated bookkeeping issues
+BACKFILL_SKIP_LABELS = {LABEL_NEEDS_INFO, LABEL_SPLIT, "doc-sync", "code-review", "pipeline"}
+
+
+def list_issues_needing_board() -> list[dict[str, Any]]:
+    """Open issues that should have a dev-plan board but don't yet.
+
+    Includes ready, blocked, AND untriaged issues — anything that's a real
+    work-item. Excludes needs-clarification / split / pipeline-bookkeeping
+    issues. An issue is "covered" if it already carries a `Dev-Plan: ...`
+    ref in its body OR a board file with the matching number prefix exists
+    on disk.
+    """
+    from generate_dev_plan_board import board_already_exists  # local: avoid cycle at import time
+
+    result = run_gh([
+        "issue", "list",
+        "--state", "open",
+        "--json", "number,title,body,labels",
+        "--limit", "1000",
+    ])
+    if result.returncode != 0:
+        log(f"list_issues_failed rc={result.returncode} stderr={result.stderr.strip()}")
+        return []
+    try:
+        issues = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return []
+
+    pending: list[dict[str, Any]] = []
+    for issue in issues:
+        if has_any_label(issue, BACKFILL_SKIP_LABELS):
+            continue
+        if find_dev_plan_ref(issue):
+            continue
+        if board_already_exists(int(issue["number"])) is not None:
+            continue
+        pending.append(issue)
+    return pending
+
+
+def backfill_dev_plan_board(issue: dict[str, Any]) -> bool:
+    """Generate + persist a dev-plan board for an issue that is already `ready`.
+
+    Returns True on success (board produced, ref appended to issue body),
+    False on any failure — caller logs and continues.
+    """
+    number = int(issue["number"])
+    title = issue.get("title") or ""
+    log(f"backfilling issue=#{number} title={title!r}")
+    board, gen_err = generate_board(issue)
+    if gen_err or board is None:
+        log(f"backfill_failed issue=#{number} err={gen_err or 'no_board_returned'}")
+        return False
+    ref = board_ref_for(board.path)
+    _append_dev_plan_ref_to_issue(number, issue.get("body") or "", ref)
+    log(f"backfilled issue=#{number} path={board.path} committed={board.committed} pushed={board.pushed}")
+    return True
+
+
 def main() -> int:
     ensure_labels()
 
+    # 1. Backfill: generate boards for any open work-item (ready, blocked, or
+    # untriaged) that doesn't have one yet. Excludes needs-clarification +
+    # split + pipeline-bookkeeping labels — see BACKFILL_SKIP_LABELS.
+    # Bounded by MAX_BACKFILL_PER_RUN so a large historical backlog can't
+    # blow the per-tick time budget. Runs FIRST so blocked-but-mapped issues
+    # have a board ready when their deps close.
+    max_backfill = int(os.environ.get("MAX_BACKFILL_PER_RUN", "3"))
+    pending_backfill = list_issues_needing_board()
+    log(f"backfill_pending={len(pending_backfill)} cap={max_backfill}")
+    backfilled = 0
+    for issue in pending_backfill[:max_backfill]:
+        if backfill_dev_plan_board(issue):
+            backfilled += 1
+
+    # 2. Normal triage pass — unchanged behaviour.
     candidates = list_candidate_issues()
     log(f"candidates_total={len(candidates)} search_excludes={sorted(SKIP_LABELS)}")
 
-    if not candidates:
+    if not candidates and not pending_backfill:
         log("nothing_to_do")
         return 0
 
@@ -543,7 +622,9 @@ def main() -> int:
 
     log(
         f"done processed={processed} checked={checked} cap={max_per_run} "
-        f"remaining_candidates={max(0, len(candidates) - checked)}"
+        f"backfilled={backfilled} backfill_cap={max_backfill} "
+        f"remaining_candidates={max(0, len(candidates) - checked)} "
+        f"remaining_backfill={max(0, len(pending_backfill) - max_backfill)}"
     )
     return 0
 

@@ -2,8 +2,9 @@
 
 > **版本**：v0.1（自动生成 + 人工补全）
 > **目标读者**：(1) 接手开发的人类工程师；(2) 拿到本文档直接写代码的 AI Agent
-> **来源**：每个 `ready` 状态的 GitHub Issue，由 `scripts/ci/validate_open_issues.py` 在 monitor-issues 流水线里自动产出对应板块文档
-> **存放**：`docs/dev-plan/issues/<issue-number>-<slug>.md`
+> **来源**：每个开放状态的 GitHub Issue（ready / blocked / 未triaged），由 `scripts/ci/validate_open_issues.py` 在 monitor-issues 流水线里自动产出对应板块文档
+> **存放**：`docs/dev-plan/<category>/<NNNN>-<slug>.md`
+> **分类**：见 §1.2 「分类总览」。`generate_dev_plan_board.py` 在落盘前先调用 Claude 做一次轻量分类
 
 ---
 
@@ -22,12 +23,33 @@
 
 ## 1. 总览
 
-| 来源 issue | 板块文档 | 模板深度 | 状态 |
+### 1.1 文档列表（按分类）
+
+| 分类 | 板块文档 | 模板深度 | 状态 |
 |------|---------|---------|--------|
 | 自动维护 | _以下条目由 validate_open_issues.py 在写入板块文档时自动追加_ | - | - |
 
 <!-- AUTO-INDEX:START -->
 <!-- AUTO-INDEX:END -->
+
+### 1.2 分类总览
+
+每份板块文档落在唯一的分类目录下。分类码（如 `20-sales`）作为目录名，前缀数字决定排序。
+
+| 分类码 | 中文说明 | 涵盖范围（关键词） |
+|---|---|---|
+| `00-foundations` | 基础设施 | 数据库连接 / 认证 / 中间件 / Alembic 迁移 / `db.base` / `models.response` |
+| `10-customers` | 客户管理 | CustomerModel / 联系人 / 分群 / 客户标签 / CRM 主体对象 |
+| `20-sales` | 销售流程 | Opportunity / Pipeline / Stage / Kanban 后端 / Deal / Sales Activity |
+| `30-tickets` | 工单支持 | Ticket / SLA / Escalation / 客服会话 |
+| `40-campaigns` | 营销活动 | Campaign / Notification / Email/SMS 触达 / 模板 |
+| `50-automation` | 自动化 | AutomationRule / 触发器 / 执行引擎 / 规则评估 / 工作流 |
+| `60-analytics` | 数据分析 | ChurnPrediction / RFM / Report / BI / 预测模型 / KPI 仪表盘 |
+| `70-platform` | 平台能力 | Import / Export / RBAC / User / Settings / Audit Log |
+| `90-frontend` | 前端 / Web UI | Vue/React 组件 / 拖拽 / 路由 / 状态管理 / 切片浏览器 |
+| `99-misc` | 兜底 | 暂无明确分类 / 需要二次人工归档（自动分类失败时默认进入这里） |
+
+> 添加新分类前先评估能否归到上述任一类目；只有当你能给出 ≥ 3 个无法落入现有分类的真实例子时再扩。
 
 ---
 
