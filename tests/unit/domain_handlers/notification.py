@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
+from tests.unit.conftest import MockResult, MockRow
+
 
 def _notification_to_row(n: dict):
-    from tests.unit.conftest import MockRow
-
     return MockRow(
         {
             "id": n.get("id"),
@@ -24,8 +24,6 @@ def _notification_to_row(n: dict):
 
 
 def _reminder_to_row(r: dict):
-    from tests.unit.conftest import MockRow
-
     return MockRow(
         {
             "id": r.get("id"),
@@ -44,7 +42,6 @@ def _reminder_to_row(r: dict):
 
 def make_notification_handler(state):
     """Return a handler that manages an in-memory notification store in state."""
-    from tests.unit.conftest import MockResult
 
     def handler(sql_text: str, params: dict):
         sql_text_lower = sql_text.lower()
@@ -135,7 +132,6 @@ def make_notification_handler(state):
 
 def make_reminder_handler(state):
     """Return a handler that manages an in-memory reminder store in state."""
-    from tests.unit.conftest import MockResult
 
     def handler(sql_text: str, params: dict):
         sql_text_lower = sql_text.lower()
