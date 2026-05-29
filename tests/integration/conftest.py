@@ -314,7 +314,6 @@ async def client(fresh_schema, fastapi_app, async_session) -> AsyncGenerator[Asy
     fastapi_app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        await async_session.execute(text("SELECT 1"))
         yield ac
     fastapi_app.dependency_overrides.pop(get_db, None)
 
@@ -356,7 +355,8 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
     await async_session.flush()
     # Retrieve the actual DB-assigned user id (not hardcoded 999).
     created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
-    actual_user_id = created_user.id if created_user else 999
+    assert created_user is not None, "auth_headers_web failed to seed the test user"
+    actual_user_id = created_user.id
 
     auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
     token = auth_svc.generate_token(

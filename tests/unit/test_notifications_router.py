@@ -1,4 +1,5 @@
 """Unit tests for src/api/routers/notifications.py — /api/v1/notifications and /api/v1/reminders."""
+
 from __future__ import annotations
 
 from datetime import UTC, datetime
@@ -32,7 +33,7 @@ class _MockNotificationModel:
         self.user_id = overrides.get("user_id", 99)
         self.channel = overrides.get("channel", "in_app")
         self.template = overrides.get("template", "Test")
-        self._params_raw = overrides.get("params_")
+        self._params = overrides.get("params_")
         self.status = overrides.get("status", "pending")
         self.priority = overrides.get("priority", "normal")
         self.created_at = overrides.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC)
@@ -41,7 +42,7 @@ class _MockNotificationModel:
 
     @property
     def params_(self):
-        return self._params_raw
+        return self._params
 
     def to_dict(self) -> dict:
         return {
@@ -50,7 +51,7 @@ class _MockNotificationModel:
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params": self._params_raw,
+            "params": self._params,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,
@@ -90,6 +91,7 @@ def _app_invalid_tenant(tenant_id: int = 0):
 # GET /notifications
 # ---------------------------------------------------------------------------
 
+
 class TestListNotifications:
     def test_list_notifications_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
@@ -120,21 +122,32 @@ class TestListNotifications:
 # POST /notifications/send
 # ---------------------------------------------------------------------------
 
+
 class TestSendNotification:
     def test_send_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            mock_notif = _MockNotificationModel({
-                "id": 5, "tenant_id": 1, "user_id": 2,
-                "channel": "info", "template": "New deal",
-                "params_": {"content": "Deal closed!"},
-            })
+            mock_notif = _MockNotificationModel(
+                {
+                    "id": 5,
+                    "tenant_id": 1,
+                    "user_id": 2,
+                    "channel": "info",
+                    "template": "New deal",
+                    "params_": {"content": "Deal closed!"},
+                }
+            )
             svc.send_notification = AsyncMock(return_value=mock_notif)
             client = _app()
-            response = client.post("/api/v1/notifications/send", json={
-                "user_id": 2, "notification_type": "info",
-                "title": "New deal", "content": "Deal closed!",
-            })
+            response = client.post(
+                "/api/v1/notifications/send",
+                json={
+                    "user_id": 2,
+                    "notification_type": "info",
+                    "title": "New deal",
+                    "content": "Deal closed!",
+                },
+            )
             assert response.status_code == 200
             data = response.json()
             assert data["success"] is True
@@ -155,16 +168,22 @@ class TestSendNotification:
 # PUT /notifications/{id}/read
 # ---------------------------------------------------------------------------
 
+
 class TestMarkRead:
     def test_mark_read_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            mock_notif = _MockNotificationModel({
-                "id": 1, "tenant_id": 1, "user_id": 99,
-                "channel": "in_app", "template": "Test",
-                "status": "read",
-                "read_at": datetime(2026, 1, 1, tzinfo=UTC),
-            })
+            mock_notif = _MockNotificationModel(
+                {
+                    "id": 1,
+                    "tenant_id": 1,
+                    "user_id": 99,
+                    "channel": "in_app",
+                    "template": "Test",
+                    "status": "read",
+                    "read_at": datetime(2026, 1, 1, tzinfo=UTC),
+                }
+            )
             svc.mark_as_read = AsyncMock(return_value=mock_notif)
             client = _app()
             response = client.put("/api/v1/notifications/1/read")
@@ -183,6 +202,7 @@ class TestMarkRead:
 # POST /notifications/mark-all-read
 # ---------------------------------------------------------------------------
 
+
 class TestMarkAllRead:
     def test_mark_all_read_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
@@ -197,6 +217,7 @@ class TestMarkAllRead:
 # ---------------------------------------------------------------------------
 # GET /notifications/preferences
 # ---------------------------------------------------------------------------
+
 
 class TestPreferences:
     @pytest.mark.xfail(reason="notification_preferences table not yet implemented — storage is hardcoded in-memory")
@@ -218,20 +239,30 @@ class TestPreferences:
 # POST /reminders
 # ---------------------------------------------------------------------------
 
+
 class TestCreateReminder:
     def test_create_reminder_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.create_reminder = AsyncMock(return_value={
-                "id": 1, "tenant_id": 1, "user_id": 99, "title": "Standup",
-                "content": "Daily meeting", "remind_at": "2026-12-31T09:00:00",
-            })
+            svc.create_reminder = AsyncMock(
+                return_value={
+                    "id": 1,
+                    "tenant_id": 1,
+                    "user_id": 99,
+                    "title": "Standup",
+                    "content": "Daily meeting",
+                    "remind_at": "2026-12-31T09:00:00",
+                }
+            )
             client = _app()
-            response = client.post("/api/v1/reminders", json={
-                "title": "Standup",
-                "content": "Daily meeting",
-                "remind_at": "2026-12-31T09:00:00",
-            })
+            response = client.post(
+                "/api/v1/reminders",
+                json={
+                    "title": "Standup",
+                    "content": "Daily meeting",
+                    "remind_at": "2026-12-31T09:00:00",
+                },
+            )
             assert response.status_code == 200
             assert response.json()["data"]["title"] == "Standup"
 
@@ -244,6 +275,7 @@ class TestCreateReminder:
 # ---------------------------------------------------------------------------
 # GET /reminders
 # ---------------------------------------------------------------------------
+
 
 class TestListReminders:
     def test_list_reminders_empty(self):
@@ -258,9 +290,15 @@ class TestListReminders:
     def test_list_reminders_with_items(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.get_reminders = AsyncMock(return_value=[{
-                "id": 1, "title": "Standup", "remind_at": "2026-12-31T09:00:00",
-            }])
+            svc.get_reminders = AsyncMock(
+                return_value=[
+                    {
+                        "id": 1,
+                        "title": "Standup",
+                        "remind_at": "2026-12-31T09:00:00",
+                    }
+                ]
+            )
             client = _app()
             response = client.get("/api/v1/reminders")
             assert response.status_code == 200
@@ -270,6 +308,7 @@ class TestListReminders:
 # ---------------------------------------------------------------------------
 # DELETE /reminders/{id}
 # ---------------------------------------------------------------------------
+
 
 class TestCancelReminder:
     def test_cancel_reminder_ok(self):
@@ -294,6 +333,7 @@ class TestCancelReminder:
 # Invalid tenant tests
 # ---------------------------------------------------------------------------
 
+
 class TestInvalidTenant:
     def test_list_notifications_invalid_tenant(self):
         client = _app_invalid_tenant(tenant_id=0)
@@ -302,10 +342,15 @@ class TestInvalidTenant:
 
     def test_send_notification_invalid_tenant(self):
         client = _app_invalid_tenant(tenant_id=0)
-        response = client.post("/api/v1/notifications/send", json={
-            "user_id": 1, "notification_type": "info",
-            "title": "Test", "content": "Test",
-        })
+        response = client.post(
+            "/api/v1/notifications/send",
+            json={
+                "user_id": 1,
+                "notification_type": "info",
+                "title": "Test",
+                "content": "Test",
+            },
+        )
         assert response.status_code == 401
 
     def test_mark_read_invalid_tenant(self):
@@ -330,9 +375,13 @@ class TestInvalidTenant:
 
     def test_create_reminder_invalid_tenant(self):
         client = _app_invalid_tenant(tenant_id=0)
-        response = client.post("/api/v1/reminders", json={
-            "title": "Test", "remind_at": "2026-12-31T09:00:00",
-        })
+        response = client.post(
+            "/api/v1/reminders",
+            json={
+                "title": "Test",
+                "remind_at": "2026-12-31T09:00:00",
+            },
+        )
         assert response.status_code == 401
 
     def test_list_reminders_invalid_tenant(self):

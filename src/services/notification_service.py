@@ -27,17 +27,10 @@ class NotificationService:
         notification_type: str,
         title: str,
         content: str,
-        tenant_id: int = 0,
+        tenant_id: int,
         **kwargs,
     ) -> NotificationModel:
-        """发送通知。
-
-        Args:
-            tenant_id: Must be passed explicitly for multi-tenant soundness.
-            The default of 0 is preserved for backwards compatibility with
-            existing callers that pass it explicitly; automation rules always
-            supply it from their execution context.
-        """
+        """发送通知。tenant_id must be supplied explicitly for multi-tenant soundness."""
         priority = kwargs.get("priority", "normal")
         if priority not in VALID_PRIORITIES:
             raise ValidationException(f"priority must be one of {sorted(VALID_PRIORITIES)}, got {priority!r}")
@@ -63,10 +56,10 @@ class NotificationService:
     async def get_user_notifications(
         self,
         user_id: int,
+        tenant_id: int,
         unread_only: bool = False,
         page: int = 1,
         page_size: int = 20,
-        tenant_id: int = 0,
     ) -> tuple[list[NotificationModel], int]:
         """获取用户通知列表"""
         conditions = [
@@ -91,21 +84,20 @@ class NotificationService:
 
     async def mark_as_read(self, notification_id: int, tenant_id: int) -> NotificationModel:
         """标记通知已读"""
-        now = datetime.now(UTC)
         result = await self.session.execute(
-            update(NotificationModel)
-            .where(
+            select(NotificationModel).where(
                 and_(
                     NotificationModel.id == notification_id,
                     NotificationModel.tenant_id == tenant_id,
                 )
             )
-            .values(read_at=now, status="read")
-            .returning(NotificationModel)
         )
         notification = result.scalar_one_or_none()
         if notification is None:
             raise NotFoundException("通知")
+        notification.read_at = datetime.now(UTC)
+        notification.status = "read"
+        await self.session.flush()
         return notification
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int) -> dict:
@@ -140,7 +132,7 @@ class NotificationService:
         await self.session.flush()
         return {"id": notification_id}
 
-    async def get_unread_count(self, user_id: int, tenant_id: int = 0) -> int:
+    async def get_unread_count(self, user_id: int, tenant_id: int) -> int:
         """获取未读通知数量"""
         result = await self.session.execute(
             select(func.count(NotificationModel.id)).where(
@@ -163,7 +155,7 @@ class NotificationService:
         title: str,
         content: str,
         remind_at: datetime,
-        tenant_id: int = 0,
+        tenant_id: int,
         related_type: str | None = None,
         related_id: int | None = None,
     ) -> ReminderModel:
@@ -185,7 +177,7 @@ class NotificationService:
         await self.session.refresh(reminder)
         return reminder
 
-    async def cancel_reminder(self, reminder_id: int, tenant_id: int = 0) -> dict:
+    async def cancel_reminder(self, reminder_id: int, tenant_id: int) -> dict:
         """取消提醒"""
         result = await self.session.execute(
             delete(ReminderModel).where(
@@ -203,8 +195,8 @@ class NotificationService:
     async def get_reminders(
         self,
         user_id: int,
+        tenant_id: int,
         upcoming_only: bool = True,
-        tenant_id: int = 0,
     ) -> list[ReminderModel]:
         """获取用户的提醒列表"""
         conditions = [

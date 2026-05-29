@@ -510,7 +510,6 @@ class TestNotificationIntegration:
     ):
         """Notification under tenant A is invisible to tenant B (Rule 126)."""
         from db.models.tenant import TenantModel
-        from services.auth_service import AuthService
 
         # Seed second tenant
         tenant2 = TenantModel(id=tenant_id_2, name="Tenant 2", plan="free", status="active")
@@ -526,9 +525,7 @@ class TestNotificationIntegration:
         )
 
         # Create user under tenant 2
-        suffix = uuid.uuid4().hex[:8]
-        user_svc = UserService(async_session)
-        uid2 = uid2.id
+        uid2 = await self._seed_user(tenant_id_2, async_session)
 
         # Both directions verified: tenant B sees nothing from tenant A, and tenant A
         # still sees exactly its own notification after the cross-tenant check.
