@@ -61,7 +61,7 @@ class EnrichmentService:
         self, domain: str | None, company_name: str | None, tenant_id: int | None, customer_id: int
     ) -> dict[str, Any]:
         # Verify customer belongs to the requesting tenant
-        if tenant_id is not None and customer_id is not None:
+        if customer_id is not None:
             result = await self.session.execute(
                 select(CustomerModel).where(
                     and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
@@ -100,6 +100,7 @@ class EnrichmentService:
 
         # Persist raw payload
         enrichment = CustomerEnrichmentModel(
+            tenant_id=tenant_id,
             customer_id=customer_id,
             provider="clearbit",
             raw_data_json=raw_data,

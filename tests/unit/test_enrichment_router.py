@@ -74,7 +74,7 @@ class TestLookupEndpoint:
             }
         )
 
-        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com"})
+        resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -85,7 +85,7 @@ class TestLookupEndpoint:
         client, svc = client_with_service
         svc.lookup = AsyncMock(return_value={"name": "Acme Corp", "domain": "acme.com"})
 
-        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"company_name": "Acme Corp"})
+        resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "company_name": "Acme Corp"})
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -94,7 +94,7 @@ class TestLookupEndpoint:
         client, svc = client_with_service
         svc.lookup = AsyncMock(side_effect=ValidationException("service-level validation"))
 
-        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com"})
+        resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
         assert resp.status_code == 422
         body = resp.json()
         assert body["success"] is False
@@ -102,16 +102,14 @@ class TestLookupEndpoint:
 
     def test_model_validator_rejects_both_fields(self, client_with_service):
         client, _svc = client_with_service
-        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com", "company_name": "Stripe"})
+        resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com", "company_name": "Stripe"})
         assert resp.status_code == 422
         body = resp.json()
         assert "Provide exactly one of domain or company_name" in body["detail"][0]["msg"]
 
-    def test_missing_customer_id_raises_validation(self, client_with_service):
-        """When customer_id is absent from the query string the service raises ValidationException."""
-        client, svc = client_with_service
-        svc.lookup = AsyncMock(side_effect=ValidationException("customer_id is required for enrichment lookup"))
-
+    def test_missing_customer_id_raises_422(self, client_with_service):
+        """When customer_id is absent from the request body FastAPI returns 422."""
+        client, _svc = client_with_service
         resp = client.post("/api/v1/enrichment/lookup", json={"domain": "stripe.com"})
         assert resp.status_code == 422
 
@@ -119,7 +117,7 @@ class TestLookupEndpoint:
         client, svc = client_with_service
         svc.lookup = AsyncMock(side_effect=ValidationException("Clearbit API error: 404"))
 
-        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "notfound.com"})
+        resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "notfound.com"})
         assert resp.status_code == 422
         body = resp.json()
         assert "Clearbit API error" in body["message"]
@@ -128,21 +126,21 @@ class TestLookupEndpoint:
         client, svc = client_with_service
         svc.lookup = AsyncMock(return_value={"name": "Stripe"})
 
-        client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com"})
+        client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
         svc.lookup.assert_awaited_once_with(domain="stripe.com", company_name=None, tenant_id=1, customer_id=42)
 
     def test_passes_company_name_to_service(self, client_with_service):
         client, svc = client_with_service
         svc.lookup = AsyncMock(return_value={"name": "Acme Corp"})
 
-        client.post("/api/v1/enrichment/lookup?customer_id=42", json={"company_name": "Acme Corp"})
+        client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "company_name": "Acme Corp"})
         svc.lookup.assert_awaited_once_with(domain=None, company_name="Acme Corp", tenant_id=1, customer_id=42)
 
     def test_success_response_has_envelope_shape(self, client_with_service):
         client, svc = client_with_service
         svc.lookup = AsyncMock(return_value={"name": "Stripe", "domain": "stripe.com"})
 
-        resp = client.post("/api/v1/enrichment/lookup?customer_id=42", json={"domain": "stripe.com"})
+        resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
         body = resp.json()
         assert "success" in body
         assert "data" in body

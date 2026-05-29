@@ -1,6 +1,6 @@
 """Enrichment API router — ``POST /api/v1/enrichment/lookup``."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
@@ -20,7 +20,6 @@ async def lookup(
     request: EnrichmentLookupRequest,
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
-    customer_id: int | None = Query(default=None, description="ID of the customer to associate the enrichment with"),
 ) -> dict:
     """Look up company enrichment data by domain or company name.
 
@@ -32,6 +31,6 @@ async def lookup(
         domain=request.domain,
         company_name=request.company_name,
         tenant_id=ctx.tenant_id,
-        customer_id=customer_id,
+        customer_id=request.customer_id,
     )
     return _success(result)

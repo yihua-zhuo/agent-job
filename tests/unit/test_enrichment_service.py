@@ -14,7 +14,7 @@ from services.enrichment_service import EnrichmentService
 
 @pytest.fixture
 def mock_db_session():
-    # Router delegates to service; no DB queries needed in this fixture.
+    # Minimal mock covering add / flush / execute.
     session = MagicMock()
     session.add = MagicMock()
     session.flush = AsyncMock()
@@ -130,6 +130,7 @@ class TestLookupDomainSuccess:
         added = mock_db_session.add.call_args[0][0]
         assert added.provider == "clearbit"
         assert added.raw_data_json == clearbit_payload
+        assert added.tenant_id == 42
 
     async def test_inserts_enrichment_row(self, service, mock_db_session):
         mock_resp = MagicMock()
@@ -157,6 +158,7 @@ class TestLookupDomainSuccess:
         mock_db_session.add.assert_called_once()
         added = mock_db_session.add.call_args[0][0]
         assert added.customer_id == 1
+        assert added.tenant_id == 1
         assert added.provider == "clearbit"
         mock_db_session.flush.assert_awaited_once()
 
@@ -211,27 +213,6 @@ class TestLookupCrossTenantIsolation:
             with pytest.raises(NotFoundException) as exc_info:
                 await service.lookup(domain="stripe.com", customer_id=1, tenant_id=999)
             assert "Customer" in exc_info.value.detail
-
-    async def test_lookup_without_tenant_id_skips_tenant_check(self, service, mock_db_session):
-        """When tenant_id is None, no customer lookup is performed."""
-        mock_resp = MagicMock()
-        mock_resp.is_success = True
-        mock_resp.json = MagicMock(return_value={"name": "Stripe", "domain": "stripe.com"})
-        mock_get = AsyncMock(return_value=mock_resp)
-
-        mock_client = MagicMock()
-        mock_client.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client.__aexit__ = AsyncMock(return_value=None)
-        mock_client.get = mock_get
-
-        with patch("services.enrichment_service.settings") as mock_settings, \
-             patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
-            mock_settings.clearbit_api_key = "test-key"
-            # tenant_id=None skips the customer lookup — no execute call
-            result = await service.lookup(domain="stripe.com", customer_id=1, tenant_id=None)
-
-        mock_db_session.execute.assert_not_called()
-        assert result["name"] == "Stripe"
 
 
 # ---------------------------------------------------------------------------
@@ -319,6 +300,13 @@ class TestLookupHttpErrors:
         assert "Clearbit API error: 503" in exc_info.value.detail
 
     async def test_missing_api_key_raises(self, service, mock_db_session):
+        mock_customer = MagicMock()
+        mock_customer.id = 1
+        mock_customer.tenant_id = 1
+        mock_result = MagicMock()
+        mock_result.scalar_one_or_none = MagicMock(return_value=mock_customer)
+        mock_db_session.execute = AsyncMock(return_value=mock_result)
+
         with patch("services.enrichment_service.settings") as mock_settings:
             mock_settings.clearbit_api_key = None
 

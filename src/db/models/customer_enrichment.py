@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,9 +15,12 @@ class CustomerEnrichmentModel(Base):
     __tablename__ = "customer_enrichments"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     customer_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True
     )
+
+    __table_args__ = (UniqueConstraint("tenant_id", "customer_id", name="uq_enrichment_tenant_customer"),)
     provider: Mapped[str] = mapped_column(String(100), nullable=False)
     raw_data_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     enriched_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -34,6 +37,7 @@ class CustomerEnrichmentModel(Base):
     def to_dict(self) -> dict:
         return {
             "id": self.id,
+            "tenant_id": self.tenant_id,
             "customer_id": self.customer_id,
             "provider": self.provider,
             "raw_data_json": self.raw_data_json or {},

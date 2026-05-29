@@ -6,6 +6,7 @@ from pydantic import BaseModel, field_validator, model_validator
 class EnrichmentLookupRequest(BaseModel):
     """Request body for ``POST /api/v1/enrichment/lookup``."""
 
+    customer_id: int
     domain: str | None = None
     company_name: str | None = None
 
