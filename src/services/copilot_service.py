@@ -76,7 +76,7 @@ class CopilotService:
             lines.append(f"Activity[{act.type}]: {act.content or ''} at {act.created_at}")
         return "\n".join(lines)
 
-    async def persist_message(self, tenant_id: int, role: str, content: str) -> None:
+    async def persist_message(self, tenant_id: int, customer_id: int, role: str, content: str) -> None:
         """Persist a conversation message. DB write is deferred until the message schema is defined."""
         # TODO: Replace with ConversationMessageModel insert once schema is finalized (issue #505).
         return
@@ -94,7 +94,7 @@ class CopilotService:
             return await self._get_recent_activities(tenant_id, customer_id)
 
         async def get_churn_risk_handler(tenant_id: int, customer_id: int):
-            return await ChurnPredictionService(self.session).get_churn_prediction(tenant_id, customer_id)
+            return await ChurnPredictionService(self.session).get_churn_prediction(customer_id, tenant_id)
 
         return {
             "get_customer": {
