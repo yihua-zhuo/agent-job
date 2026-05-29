@@ -30,6 +30,11 @@ def make_customer_handler(state: MockState):
                 "tags": tags_val,
                 "created_at": params.get("created_at"),
                 "updated_at": params.get("updated_at"),
+                "score": None,
+                "tier": None,
+                "score_factors": None,
+                "top_factors": None,
+                "recommendations": None,
             }
             state.customers[cid] = record
             return MockResult([MockRow(record.copy())])
@@ -58,6 +63,11 @@ def make_customer_handler(state: MockState):
                                 "tags": _json.dumps(params.get("tags", [])),
                                 "created_at": None,
                                 "updated_at": None,
+                                "score": None,
+                                "tier": None,
+                                "score_factors": None,
+                                "top_factors": None,
+                                "recommendations": None,
                             }
                         )
                     ]
@@ -96,6 +106,11 @@ def make_customer_handler(state: MockState):
                     "tags": "[]",
                     "created_at": None,
                     "updated_at": None,
+                    "score": None,
+                    "tier": None,
+                    "score_factors": None,
+                    "top_factors": None,
+                    "recommendations": None,
                 },
             }
             if customer_id in fixtures:
@@ -123,6 +138,11 @@ def make_customer_handler(state: MockState):
                             "tags": "[]",
                             "created_at": None,
                             "updated_at": None,
+                            "score": None,
+                            "tier": None,
+                            "score_factors": None,
+                            "top_factors": None,
+                            "recommendations": None,
                         }
                     ),
                     MockRow(
@@ -138,6 +158,11 @@ def make_customer_handler(state: MockState):
                             "tags": "[]",
                             "created_at": None,
                             "updated_at": None,
+                            "score": None,
+                            "tier": None,
+                            "score_factors": None,
+                            "top_factors": None,
+                            "recommendations": None,
                         }
                     ),
                 ]

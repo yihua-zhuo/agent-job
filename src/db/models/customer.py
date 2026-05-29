@@ -26,6 +26,11 @@ class CustomerModel(Base):
     assigned_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     recycle_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     recycle_history: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    score_factors: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    top_factors: Mapped[list | None] = mapped_column(JSON, nullable=True)
+    recommendations: Mapped[list | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -51,6 +56,11 @@ class CustomerModel(Base):
             "assigned_at": self.assigned_at.isoformat() if self.assigned_at else None,
             "recycle_count": self.recycle_count or 0,
             "recycle_history": self.recycle_history or [],
+            "score": self.score,
+            "tier": self.tier,
+            "score_factors": self.score_factors or {},
+            "top_factors": self.top_factors or [],
+            "recommendations": self.recommendations or [],
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
