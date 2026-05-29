@@ -57,7 +57,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
      - Drop new columns (channel, template, params_, status, priority, delivered_at, read_at)
 
 ## Test Plan
-- Unit tests in `tests/unit/`: `test_notifications_router.py` updated for new field names — specifically, update mock return dicts in `test_send_ok` and `test_mark_read_ok` to use the new field names (`channel`, `template`, `params`, `status`, `read_at`) matching `NotificationModel.to_dict()` output; `tests/unit/domain_handlers/notification.py` covered implicitly by existing router tests patching `NotificationService`.
+- Unit tests in `tests/unit/test_notifications_router.py`: methods `test_list_notifications_ok`, `test_list_unread_only`, `test_list_pagination_params`, `test_send_ok`, `test_send_validation_error`, `test_mark_read_ok`, `test_mark_read_not_found`, `test_mark_all_read_ok`, `test_delete_notification_ok`, `test_delete_notification_not_found`, `test_cancel_reminder_ok`, `test_cancel_reminder_not_found`, `test_cross_tenant_read_returns_empty_list`.
 - Integration tests in `tests/integration/`: No new integration test files required — the existing `notifications` table is already covered by `db_schema` fixture; the new indexes are exercised by the existing notification integration flows (list, send, mark-read) with no new fixtures needed.
 
 ## Acceptance Criteria
@@ -66,7 +66,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - `__table_args__` defines `Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status")`.
 - The Alembic migration in `alembic/versions/` contains `op.create_index` for the composite index and a manually written partial index `ix_notifications_in_app_unread` with `WHERE channel='in_app' AND read_at IS NULL`.
 - Migration upgrades and downgrades cleanly against a real PostgreSQL instance with `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`.
-- `src/services/notification_service.py` uses the new model fields (`channel`, `template`, `params_`, `status`, `read_at`) throughout. `mark_as_read` calls `flush()` then `refresh()`; `mark_all_as_read` returns a plain `{"marked_count": <int>}` dict without calling `refresh()`.
+- `src/services/notification_service.py` uses the new model fields (`channel`, `template`, `params_`, `status`, `read_at`) throughout. `mark_as_read` calls `flush()` only (no `refresh()`); `mark_all_as_read` returns a plain `{"marked_count": <int>}` dict without calling `refresh()`.
 - Ruff linting clean: `PYTHONPATH=src ruff check src/`.
 
 ## Risks / Open Questions

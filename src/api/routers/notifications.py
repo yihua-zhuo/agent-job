@@ -86,7 +86,7 @@ async def list_notifications(
         page=page,
         page_size=page_size,
     )
-    return _paginated_dicts(items, total, page, page_size)
+    return _paginated_dicts([i.to_dict() for i in items], total, page, page_size)
 
 
 @notifications_router.post(

@@ -50,10 +50,9 @@ class TenantService:
         return self._to_dict(tenant)
 
     async def _fetch(self, tenant_id: int, _tenant_id: int = 0) -> TenantModel:
-        conditions = [TenantModel.id == tenant_id]
-        if _tenant_id:
-            conditions.append(TenantModel.id == _tenant_id)
-        result = await self.session.execute(select(TenantModel).where(and_(*conditions)))
+        if _tenant_id and tenant_id != _tenant_id:
+            raise NotFoundException(f"Tenant {tenant_id}")
+        result = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
         tenant = result.scalar_one_or_none()
         if tenant is None or tenant.status == "deleted":
             raise NotFoundException(f"Tenant {tenant_id}")
@@ -95,7 +94,7 @@ class TenantService:
         return self._to_dict(refreshed.scalar_one())
 
     async def suspend_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
-        return await self.update_tenant(tenant_id, status="suspended")
+        return await self.update_tenant(tenant_id, _tenant_id=_tenant_id, status="suspended")
 
     async def delete_tenant(self, tenant_id: int, _tenant_id: int = 0) -> dict:
         tenant = await self._fetch(tenant_id, _tenant_id)

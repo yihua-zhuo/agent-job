@@ -89,7 +89,7 @@ class AutomationService:
             svc = NotificationService(self.session)
             result = await svc.send_notification(
                 user_id=recipient_user_id,
-                notification_type="automation",
+                notification_type=params.get("channel", "in_app"),
                 title=params.get("title", "Automation triggered"),
                 content=params.get("message", f"Automation rule triggered: {context.get('rule_name')}"),
                 tenant_id=tenant_id,

@@ -82,10 +82,6 @@ def _app(tenant_id: int = 1) -> TestClient:
     return TestClient(app, raise_server_exceptions=False)
 
 
-def _app_invalid_tenant(tenant_id: int = 0):
-    return _app(tenant_id=tenant_id)
-
-
 # ---------------------------------------------------------------------------
 # GET /notifications
 # ---------------------------------------------------------------------------
@@ -371,12 +367,12 @@ class TestDeleteReminder:
 
 class TestInvalidTenant:
     def test_list_notifications_invalid_tenant(self):
-        client = _app_invalid_tenant(tenant_id=0)
+        client = _app(tenant_id=0)
         response = client.get("/api/v1/notifications")
         assert response.status_code == 401
 
     def test_send_notification_invalid_tenant(self):
-        client = _app_invalid_tenant(tenant_id=0)
+        client = _app(tenant_id=0)
         response = client.post(
             "/api/v1/notifications/send",
             json={
@@ -389,27 +385,27 @@ class TestInvalidTenant:
         assert response.status_code == 401
 
     def test_mark_read_invalid_tenant(self):
-        client = _app_invalid_tenant(tenant_id=0)
+        client = _app(tenant_id=0)
         response = client.put("/api/v1/notifications/1/read")
         assert response.status_code == 401
 
     def test_mark_all_read_invalid_tenant(self):
-        client = _app_invalid_tenant(tenant_id=0)
+        client = _app(tenant_id=0)
         response = client.post("/api/v1/notifications/mark-all-read")
         assert response.status_code == 401
 
     def test_get_preferences_invalid_tenant(self):
-        client = _app_invalid_tenant(tenant_id=0)
+        client = _app(tenant_id=0)
         response = client.get("/api/v1/notifications/preferences")
         assert response.status_code == 401
 
     def test_update_preferences_invalid_tenant(self):
-        client = _app_invalid_tenant(tenant_id=0)
+        client = _app(tenant_id=0)
         response = client.put("/api/v1/notifications/preferences", json={"email": False})
         assert response.status_code == 401
 
     def test_create_reminder_invalid_tenant(self):
-        client = _app_invalid_tenant(tenant_id=0)
+        client = _app(tenant_id=0)
         response = client.post(
             "/api/v1/reminders",
             json={
@@ -420,12 +416,12 @@ class TestInvalidTenant:
         assert response.status_code == 401
 
     def test_list_reminders_invalid_tenant(self):
-        client = _app_invalid_tenant(tenant_id=0)
+        client = _app(tenant_id=0)
         response = client.get("/api/v1/reminders")
         assert response.status_code == 401
 
     def test_cancel_reminder_invalid_tenant(self):
-        client = _app_invalid_tenant(tenant_id=0)
+        client = _app(tenant_id=0)
         response = client.delete("/api/v1/reminders/1")
         assert response.status_code == 401
 
@@ -447,16 +443,15 @@ class TestInvalidTenant:
 class TestCrossTenantIsolation:
     """Rule 126: notifications are invisible across tenant boundaries."""
 
-    def test_cross_tenant_read_returns_404(self):
-        """Tenant A's auth context cannot read a notification belonging to tenant B."""
+    def test_cross_tenant_read_returns_empty_list(self):
+        """Tenant A's auth context cannot read tenant B's notifications; returns empty list."""
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.get_user_notifications = AsyncMock(
-                side_effect=NotFoundException("通知")
-            )
+            svc.get_user_notifications = AsyncMock(return_value=([], 0))
             client = _app(tenant_id=2)
             response = client.get("/api/v1/notifications")
-            assert response.status_code == 404
+            assert response.status_code == 200
+            assert response.json()["data"]["items"] == []
             svc.get_user_notifications.assert_called_once()
             call_kwargs = svc.get_user_notifications.call_args.kwargs
             assert call_kwargs.get("tenant_id") == 2

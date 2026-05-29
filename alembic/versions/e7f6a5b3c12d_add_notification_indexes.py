@@ -93,6 +93,10 @@ def downgrade() -> None:
     op.add_column("notifications", Column("related_id", Integer(), nullable=True))
 
     # Phase 3 (reversed): restore old data (must run after old columns exist)
+    # Note: jsonb_build_object silently drops NULL values on upgrade, so to restore
+    # the original state we can only recover rows where related_type or related_id
+    # were non-NULL. Rows where both were originally NULL will remain NULL after
+    # downgrade — this asymmetry is an inherent limitation of the one-way migration.
     op.execute(text("UPDATE notifications SET type = channel WHERE channel IS NOT NULL"))
     op.execute(text("UPDATE notifications SET title = template WHERE template IS NOT NULL"))
     op.execute(text("UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL"))
