@@ -121,13 +121,17 @@ def make_role_permission_handler(state: RBACMockState):
         if "insert into role_permissions" in sql_text:
             rid = state.role_permissions_next_id
             state.role_permissions_next_id += 1
-            rp = {"id": rid, "role_id": params.get("role_id"), "permission_id": params.get("permission_id")}
+            role_id = _parse_int_param(sql_text, params, "role_id")
+            permission_id = _parse_int_param(sql_text, params, "permission_id")
+            rp = {"id": rid, "role_id": role_id, "permission_id": permission_id}
             state.role_permissions.append(rp)
             return MockResult([rp])
 
         # Delete from role_permissions
         if "delete from role_permissions" in sql_text:
-            role_id = params.get("role_id")
+            role_id = _parse_int_param(sql_text, params, "role_id")
+            # role_permissions is cross-tenant via FK to roles (which has tenant isolation),
+            # so explicit tenant_id filtering here is not needed.
             state.role_permissions = [rp for rp in state.role_permissions if rp["role_id"] != role_id]
             return MockResult([])
 

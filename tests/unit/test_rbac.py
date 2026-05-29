@@ -92,6 +92,7 @@ class TestRBACServiceStatic:
         assert "user:read" in perms
         assert "customer:delete" not in perms
         assert "opportunity:delete" not in perms
+        assert "ticket:delete" not in perms
 
     def test_get_role_permissions_sales(self):
         perms = RBACService.get_role_permissions("sales")
@@ -103,6 +104,7 @@ class TestRBACServiceStatic:
         assert "opportunity:update" in perms
         assert "customer:delete" not in perms
         assert "opportunity:delete" not in perms
+        assert "ticket:delete" not in perms
 
     def test_get_role_permissions_support(self):
         perms = RBACService.get_role_permissions("support")

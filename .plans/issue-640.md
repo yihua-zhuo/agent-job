@@ -58,8 +58,8 @@ Add a new alembic migration that creates the RBAC schema (`roles`, `permissions`
 
 ## Test Plan
 
-- **Unit tests in `tests/unit/`**: `tests/unit/test_rbac.py` tests `RBACService` static methods (`has_permission`, `get_role_permissions`, `check_permission_by_value`) and the `Permission` value object. `tests/unit/test_rbac_service.py` provides equivalent coverage using `Permission` value-object instances for stronger type checking.
-- **Integration tests in `tests/integration/`**: Create `tests/integration/test_rbac_integration.py` using `db_schema`, `tenant_id`, `async_session` fixtures. Test: roles table accepts seeded system roles, permissions table is readable, `user_roles` join works. Use `pytest.raises(NotFoundException)` for error cases.
+- **Unit tests in `tests/unit/`**: `tests/unit/domain_handlers/rbac.py` provides mock SQL handlers for RBAC tables. `tests/unit/test_rbac.py` tests `RBACService` static methods (`has_permission`, `get_role_permissions`, `check_permission_by_value`) and the `Permission` value object using those handlers.
+- **Integration tests in `tests/integration/`**: `tests/integration/test_rbac_integration.py` covers RBAC service behavior against a real PostgreSQL database using `db_schema`, `tenant_id`, and `async_session` fixtures. Test: roles table accepts seeded system roles, permissions table is readable, `user_roles` join works. Use `pytest.raises(NotFoundException)` for error cases.
 
 ## Acceptance Criteria
 

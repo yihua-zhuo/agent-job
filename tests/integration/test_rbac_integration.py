@@ -34,7 +34,9 @@ async def _seed_rbac_data():
             "DATABASE_URL must be set to run integration tests. "
             "Example: DATABASE_URL='postgresql+asyncpg://user:pass@host:5432/db' pytest tests/integration/ -m integration -v"
         )
-    sync_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1).replace("postgresql+psycopg2://", "postgresql://", 1)
+    # Strip async driver prefix so asyncpg gets a valid postgresql:// DSN
+    sync_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    sync_url = sync_url.replace("postgresql+psycopg2://", "postgresql://", 1)
 
     conn = await asyncpg.connect(sync_url)
     try:
@@ -66,7 +68,7 @@ async def _seed_rbac_data():
                 (0,'admin','Administrator','Full system access',true,100),
                 (0,'manager','Manager','Manage team',true,80),
                 (0,'sales','Sales Representative','Manage customers and opportunities',true,60),
-                (0,'support','Support Agent','View customers and tickets, manage support tasks',true,50),
+                (0,'support','Support Agent','View customers and tickets, manage support',true,50),
                 (0,'viewer','Viewer','Read-only access',true,10)
             ON CONFLICT DO NOTHING
         """)
@@ -376,7 +378,6 @@ class TestRBACIntegration:
 
     async def test_custom_role_invisible_to_other_tenant(self, db_schema, tenant_id, async_session):
         """Tenant 1's custom role must not be visible when querying from tenant 2."""
-        import services.user_service as us
         import random
 
         svc = RBACService(async_session)
@@ -394,12 +395,11 @@ class TestRBACIntegration:
         # Create another tenant with a different ID
         other_tenant = tenant_id + random.randint(100, 1000)
 
-        # Query roles from the other tenant — tenant_specific_role must not appear
-        roles_other, total_other = await svc.list_roles(tenant_id=other_tenant)
-        other_names = {r.name for r in roles_other}
-        assert "tenant_specific_role" not in other_names
-
-        # Verify system roles (tenant_id=0) are still visible to the other tenant
+        # Query roles from the other tenant — system roles (tenant 0) are visible,
+        # but tenant_specific_role must not appear
         roles_same, total_same = await svc.list_roles(tenant_id=other_tenant)
+        names = {r.name for r in roles_same}
+        assert "tenant_specific_role" not in names
+        assert total_same >= 5
         assert any(r.name == "admin" for r in roles_same)
         assert any(r.name == "viewer" for r in roles_same)
