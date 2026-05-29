@@ -41,6 +41,7 @@ class NotificationCreate(BaseModel):
     content: str = Field(..., min_length=1)
     related_type: str | None = Field(None, max_length=50)
     related_id: int | None = Field(None, ge=1)
+    channel: str | None = Field(None, max_length=20)
 
 
 class PreferencesData(BaseModel):
@@ -111,6 +112,7 @@ async def send_notification(
         tenant_id=current_user.tenant_id,
         related_type=body.related_type,
         related_id=body.related_id,
+        channel=body.channel,
     )
     return {"success": True, "data": data, "message": "通知发送成功"}
 

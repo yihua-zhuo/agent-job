@@ -77,17 +77,20 @@ class TestSendNotification:
             svc.send_notification = AsyncMock(return_value={
                 "id": 5, "tenant_id": 1, "user_id": 2, "type": "info",
                 "title": "New deal", "content": "Deal closed!", "is_read": False,
-                "related_type": "opportunity", "related_id": 10, "created_at": "2026-01-01T00:00:00",
+                "related_type": "opportunity", "related_id": 10,
+                "channel": "sms", "created_at": "2026-01-01T00:00:00",
             })
             client = _app()
             response = client.post("/api/v1/notifications/send", json={
                 "user_id": 2, "notification_type": "info",
                 "title": "New deal", "content": "Deal closed!",
+                "channel": "sms",
             })
             assert response.status_code == 200
             data = response.json()
             assert data["data"]["id"] == 5
             assert data["data"]["title"] == "New deal"
+            assert data["data"]["channel"] == "sms"
 
     def test_send_validation_error(self):
         client = _app()
