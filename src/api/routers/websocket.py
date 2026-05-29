@@ -1,6 +1,6 @@
 """WebSocket router — JWT-authenticated channel subscription."""
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from starlette.status import WS_1008_POLICY_VIOLATION
 
 from internal.middleware.fastapi_auth import AuthContext, _decode_jwt
@@ -31,7 +31,7 @@ def verify_ws_token(websocket: WebSocket) -> AuthContext | None:
 
     try:
         return _decode_jwt(raw_token)
-    except HTTPException:
+    except Exception:
         return None
 
 

@@ -144,6 +144,27 @@ class TestWsChannel:
         ws.accept.assert_not_called()
         patch_connection_manager.join.assert_not_called()
 
+    async def test_cross_tenant_cannot_join_other_tenant_channel(self, auth_service, patch_connection_manager):
+        """A token for tenant 2 cannot join a channel constructed for tenant 1."""
+        from src.api.routers.websocket import ws_channel
+
+        token_tenant2 = auth_service.generate_token(user_id=2, username="bob", role="user", tenant_id=2)
+        ws = AsyncMock()
+        ws.query_params.get = MagicMock(return_value=token_tenant2)
+        ws.headers.get = MagicMock(return_value="")
+        ws.accept = AsyncMock()
+        ws.close = AsyncMock()
+        ws.receive_text = AsyncMock(side_effect=WebSocketDisconnect())
+
+        await ws_channel(ws, "ticket", "42")
+
+        ws.accept.assert_called_once()
+        # Channel is keyed with tenant_id=2 from the token — it cannot be constructed
+        # with tenant_id=1 without changing the token, so the channel name confirms isolation
+        channel = patch_connection_manager.join.call_args[0][0]
+        assert channel.startswith("2:"), "Channel must be keyed with the authenticated tenant_id"
+        assert not channel.startswith("1:"), "Channel must not be keyed with a different tenant_id"
+
     async def test_invalid_token_closes_connection(self, patch_connection_manager):
         """Invalid token should close with 1008 and not call accept()."""
         from src.api.routers.websocket import ws_channel
