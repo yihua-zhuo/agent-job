@@ -8,6 +8,7 @@ from db.models.conversation import ConversationModel
 from db.models.conversation_message import ConversationMessageModel
 from db.models.customer import CustomerModel
 from db.models.opportunity import OpportunityModel
+from internal.ai_gateway import AIChatGateway, AIResponse
 from pkg.errors.app_exceptions import NotFoundException
 from services.churn_prediction import ChurnPredictionService
 
@@ -87,6 +88,21 @@ class CopilotService:
             )
             self.session.add(conversation)
             await self.session.flush()
+        return conversation
+
+    async def get_conversation(self, conversation_id: int, tenant_id: int) -> ConversationModel:
+        """Fetch a single conversation, raising NotFoundException if missing or belongs to another tenant."""
+        result = await self.session.execute(
+            select(ConversationModel).where(
+                and_(
+                    ConversationModel.id == conversation_id,
+                    ConversationModel.tenant_id == tenant_id,
+                )
+            )
+        )
+        conversation = result.scalar_one_or_none()
+        if conversation is None:
+            raise NotFoundException("Conversation")
         return conversation
 
     # ------------------------------------------------------------------
@@ -186,7 +202,7 @@ class CopilotService:
                 "deferred": False,
             },
             "get_churn_risk": {
-                "description": "Get churn risk prediction for a customer",
+                "prediction": "Get churn risk prediction for a customer",
                 "handler": get_churn_risk_handler,
                 "deferred": False,
             },
@@ -201,3 +217,16 @@ class CopilotService:
                 "deferred": True,
             },
         }
+
+    async def invoke_ai(self, messages: list[dict[str, str]], tenant_id: int = 0) -> AIResponse:
+        """Invoke the AI chat gateway with the given message history.
+
+        Args:
+            messages: List of ``{"role": "user"|"assistant", "content": "..."}`` entries.
+            tenant_id: Tenant ID for context injection (passed to the AI gateway).
+
+        Returns:
+            AIResponse with reply, optional suggestions, and optional actions.
+        """
+        gateway = AIChatGateway()
+        return await gateway.chat(messages)

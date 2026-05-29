@@ -82,9 +82,7 @@ class TestCopilotIntegration:
         assert "response" in data["data"]
         assert "tool_calls" in data["data"]
 
-    async def test_history_integration(
-        self, db_schema, async_session, api_client, tenant_id_web: int
-    ):
+    async def test_history_integration(self, db_schema, async_session, api_client, tenant_id_web: int):
         """GET /copilot/{conv_id}/history returns {"success": True, "messages": [...], "total": N}}."""
         # Use tenant_id_web so seeded data matches the JWT-authenticated tenant.
         conv = await _seed_conversation(async_session, tenant_id_web, user_id=1)
@@ -103,9 +101,7 @@ class TestCopilotIntegration:
         assert data["data"]["total"] == 2
         assert len(data["data"]["messages"]) == 2
 
-    async def test_history_caps_at_20(
-        self, db_schema, async_session, api_client, tenant_id_web: int
-    ):
+    async def test_history_caps_at_20(self, db_schema, async_session, api_client, tenant_id_web: int):
         """History endpoint returns at most 20 messages even when more are seeded."""
         conv = await _seed_conversation(async_session, tenant_id_web, user_id=1)
         for i in range(25):
@@ -135,12 +131,8 @@ class TestCopilotIntegration:
         await async_session.commit()
 
         # Create a conversation in tenant 1 (with user 999) so there IS something to find.
-        conv_tenant_1 = await _seed_conversation(
-            async_session, tenant_id_web, user_id=999
-        )
-        await _seed_message(
-            async_session, conv_tenant_1.id, tenant_id_web, "user", "Tenant 1 message"
-        )
+        conv_tenant_1 = await _seed_conversation(async_session, tenant_id_web, user_id=999)
+        await _seed_message(async_session, conv_tenant_1.id, tenant_id_web, "user", "Tenant 1 message")
         await async_session.commit()
 
         # Chat as tenant 2 with the same user_id — should get its own new conversation.
@@ -151,10 +143,23 @@ class TestCopilotIntegration:
 
         # Verify tenant 2's history only shows tenant 2 messages, not tenant 1's.
         history_tenant_2 = await api_client_tenant_2.get(f"/copilot/{conv_tenant_1.id}/history")
-        # Tenant 2 should have no messages for tenant 1's conversation_id.
-        assert history_tenant_2.status_code == 200
-        history_data = history_tenant_2.json()
-        # Tenant 2 has no messages in the DB for conv_tenant_1, but since the
-        # conversation belongs to tenant 1 the query filters it out via tenant_id.
-        # The endpoint should return an empty list (no cross-tenant data leak).
-        assert history_data["data"]["messages"] == []
+        # Tenant 2 cannot access tenant 1's conversation — returns 404.
+        assert history_tenant_2.status_code == 404
+
+        # Verify tenant 2 created its own separate conversation (not the same as tenant 1's).
+        # The response to tenant 2's chat does not expose a conversation_id directly, so we
+        # look up by tenant+user via the service to find tenant 2's conversation and confirm
+        # it is different from conv_tenant_1.id.
+        from sqlalchemy import select
+        from db.models.conversation import ConversationModel
+        from services.copilot_service import CopilotService
+
+        svc = CopilotService(async_session)
+        conv_tenant_2 = await svc.get_or_create_conversation(tenant_id=tenant_id_2_web, user_id=999, channel="copilot")
+        await async_session.commit()
+        assert conv_tenant_2.id != conv_tenant_1.id, "Tenant 2 must not share tenant 1's conversation_id"
+        history_2 = await api_client_tenant_2.get(f"/copilot/{conv_tenant_2.id}/history")
+        assert history_2.status_code == 200
+        history_2_data = history_2.json()
+        # Tenant 2 has two messages: user (input) and assistant (AI reply).
+        assert history_2_data["data"]["total"] == 2
