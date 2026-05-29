@@ -4,22 +4,22 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-from typing import Any, TypeVar
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from internal.ai_gateway import AIChatGateway
 
-_F = TypeVar("_F", bound=type)
-
-_registry: AgentRegistry | None = None
-
-
-def register(name: str) -> Callable[[_F], _F]:
-    """Decorator that registers an agent class under *name*."""
+if TYPE_CHECKING:
     from agents.registry import AgentRegistry
 
-    def decorator(cls: _F) -> _F:
+
+def register(name: str) -> Callable[[type], type]:
+    """Decorator that registers an agent class under *name*."""
+
+    def decorator(cls: type) -> type:
+        from agents.registry import AgentRegistry
+
         global _registry
         if not isinstance(cls, type):
             raise TypeError(f"Registered object must be a class: {cls!r}")
@@ -32,6 +32,11 @@ def register(name: str) -> Callable[[_F], _F]:
             pass
         if _registry is None:
             _registry = AgentRegistry()
+            # Sync with registry._registry so both modules reference the same
+            # singleton after AgentRegistry.__new__ stores it there.
+            import agents.registry
+
+            agents.registry._registry = _registry
         if name in _registry._agents:
             raise ValueError(f"Agent name already registered: {name!r}")
         _registry._agents[name] = cls
@@ -40,34 +45,14 @@ def register(name: str) -> Callable[[_F], _F]:
     return decorator
 
 
-class AgentRegistry:
-    """Singleton registry mapping agent names to BaseAgent subclasses."""
-
-    __slots__ = ("_agents",)
-
-    def __new__(cls) -> AgentRegistry:
-        global _registry
-        if _registry is None:
-            _registry = super().__new__(cls)
-            _registry._agents = {}
-        return _registry
-
-    def _ensure_base(self) -> None:
-        """Lazily register 'base' if it was reset or never registered."""
-        if "base" not in self._agents:
-            self._agents["base"] = BaseAgent
-
-    def get(self, name: str) -> type[BaseAgent]:
-        """Return the registered agent class for *name*."""
-        self._ensure_base()
-        if name not in self._agents:
-            raise LookupError(f"Agent not registered: {name!r}")
-        return self._agents[name]
-
-    def list_agents(self) -> list[str]:
-        """Return a sorted list of all registered agent names."""
-        self._ensure_base()
-        return sorted(self._agents.keys())
+# Module-level sentinel used by register().
+# AgentRegistry is imported lazily (inside functions) to avoid a circular
+# import: base.py defines BaseAgent and register; registry.py imports
+# BaseAgent and defines AgentRegistry; BaseAgent is decorated with @register
+# at import time, which triggers the lazy import of AgentRegistry.
+# The sentinel is synced with registry._registry after AgentRegistry() is first
+# called so that both modules reference the same singleton instance.
+_registry: AgentRegistry | None = None
 
 
 @register("base")

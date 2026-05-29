@@ -1,21 +1,18 @@
 """Unit tests for AgentRegistry singleton."""
 
 import pytest
-from unittest.mock import MagicMock
 
 import agents.base as agent_base
-from agents.base import AgentRegistry, register
-
-
-@pytest.fixture
-def mock_db_session():
-    """Minimal mock DB session for unit tests."""
-    return MagicMock()
+from agents.base import register
+from agents.registry import AgentRegistry
 
 
 def _reset_registry() -> None:
     """Reset the singleton so tests are independent."""
+    import agents.registry as agent_registry
+
     agent_base._registry = None
+    agent_registry._registry = None
 
 
 class TestAgentRegistrySingleton:
