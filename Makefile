@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review
+.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review act-monitor
 
 # Create a local virtualenv on demand and use it by default.
 VENV_DIR := .venv
@@ -100,7 +100,7 @@ migrate-new: venv
 
 trigger-fix: venv
 	@if [ -z "$(ISSUE)" ]; then echo "Usage: make trigger-fix ISSUE=123"; exit 1; fi
-	$(PYTHON) "scripts/ci/trigger_fix_for_issue.py" $(ISSUE)
+	$(PYTHON) ".agent-actions/scripts/trigger_fix_for_issue.py" $(ISSUE)
 
 # ── Local CI via act ───────────────────────────────────────────────────────
 # Runs the implement-ready-issues workflow in a local Docker runner via `act`.
@@ -144,5 +144,20 @@ act-review: ## Trigger review-open-prs.yml locally via act (PR=123 logs intent; 
 		-W .github/workflows/review-open-prs.yml \
 		-j review \
 		$(if $(PR),--input pr_number=$(PR),) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock
+
+# Triggers the issue-monitor agent (now also generates dev-plan boards for
+# ready issues). By default writes boards to docs/dev-plan/issues/ and pushes
+# to master via the .secrets GITHUB_TOKEN. Set DRY=1 to write to /tmp without
+# committing — the recommended way to smoke-test changes to the generator.
+act-monitor: ## Trigger monitor-issues.yml locally via act (DRY=1 to skip commit+push)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/monitor-issues.yml \
+		-j validate \
+		$(if $(DRY),--env DEV_PLAN_DRY_RUN=1,) \
 		--bind \
 		--container-daemon-socket /var/run/docker.sock

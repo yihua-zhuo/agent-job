@@ -343,12 +343,10 @@ def process_pr(repo: str, pr: dict[str, Any]) -> str:
     mergeable = (state.get("mergeable") or "").upper()
     merge_state = (state.get("mergeStateStatus") or "").upper()
 
-    if mergeable == "UNKNOWN":
-        # GH is still computing — try again next tick.
-        log(f"skip pr=#{number} reason=mergeable_unknown")
-        return "SKIPPED"
-
-    # Branch is conflicted with base — let fix-pr-comments resolve it.
+    # Conflict detection requires a known mergeable state. When UNKNOWN, skip
+    # this branch and fall through — we can still dispatch fixes based on CI
+    # failures and critical reviewer findings, which don't depend on the merge
+    # computation. The merge step at the bottom re-checks mergeable.
     # All dispatch_fix calls pass head_ref so the resulting run is associated
     # with the PR's branch in the Actions UI (not master).
     if mergeable == "CONFLICTING" or merge_state == "DIRTY":
@@ -358,6 +356,7 @@ def process_pr(repo: str, pr: dict[str, Any]) -> str:
         return "ERROR"
 
     # Failing required checks — fix-pr-comments has the CI-fix prompt.
+    # Independent of mergeability; runs even when mergeable=UNKNOWN.
     if has_failing_checks(state):
         if dispatch_fix(number, head_ref=head):
             log(f"dispatched pr=#{number} reason=failing_checks")
@@ -365,6 +364,7 @@ def process_pr(repo: str, pr: dict[str, Any]) -> str:
         return "ERROR"
 
     # Unresolved critical reviewer findings — fix-pr-comments addresses them.
+    # Independent of mergeability; runs even when mergeable=UNKNOWN.
     threads = fetch_review_threads(repo, number)
     critical = unresolved_critical_threads(threads)
     if critical:
@@ -372,6 +372,12 @@ def process_pr(repo: str, pr: dict[str, Any]) -> str:
         if dispatch_fix(number, head_ref=head):
             return "DISPATCHED"
         return "ERROR"
+
+    # Beyond this point we'd enable auto-merge. We can't safely do that
+    # while GH is still computing mergeability — defer to the next tick.
+    if mergeable == "UNKNOWN":
+        log(f"skip pr=#{number} reason=mergeable_unknown_after_fix_checks")
+        return "SKIPPED"
 
     # Feature-completeness check vs linked issue (if any).
     issue_number = parse_linked_issue(pr.get("body"))

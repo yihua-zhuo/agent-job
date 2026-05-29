@@ -36,6 +36,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Checkout agent-actions (CI scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: yihua-zhuo/agent-actions
+          ref: main
+          path: .agent-actions
+          # Fall back to GITHUB_TOKEN so local act runs (where
+          # COMMIT_GITHUB_TOKEN may not be in .secrets) still authenticate.
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -70,4 +80,4 @@ jobs:
           if [ -n "$REQUESTED_PR_NUMBER" ]; then
             echo "Note: workflow_dispatch input pr_number=$REQUESTED_PR_NUMBER ignored; script scans all open PRs."
           fi
-          python3 scripts/ci/review_open_prs.py
+          python3 .agent-actions/scripts/review_open_prs.py

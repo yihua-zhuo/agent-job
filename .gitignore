@@ -21,3 +21,4 @@ scripts/push-and-watch.sh
 uv.lock
 code-review-result.json
 .secrets
+.agent-actions
