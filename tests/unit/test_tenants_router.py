@@ -187,24 +187,15 @@ class TestUpdateTenantEndpoint:
 
 
 # ---------------------------------------------------------------------------
-# DELETE /api/v1/tenants/{tenant_id} — delete tenant
+# DELETE /api/v1/tenants/{tenant_id} — delete tenant (not exposed)
 # ---------------------------------------------------------------------------
 
 class TestDeleteTenantEndpoint:
-    def test_success(self, client_with_service):
-        client, svc = client_with_service
-        svc.delete_tenant = AsyncMock(return_value=TENANT_ROW)
+    def test_returns_405(self, client_with_service):
+        """DELETE is not allowed on /api/v1/tenants/{id} — returns 405 Method Not Allowed."""
+        client, _ = client_with_service
         resp = client.delete("/api/v1/tenants/1")
-        assert resp.status_code == 200
-        assert resp.json()["success"] is True
-
-    def test_not_found_returns_404(self, client_with_service):
-        client, svc = client_with_service
-        svc.delete_tenant = AsyncMock(
-            side_effect=NotFoundException("Tenant")
-        )
-        resp = client.delete("/api/v1/tenants/9999")
-        assert resp.status_code == 404
+        assert resp.status_code == 405
 
 
 # ---------------------------------------------------------------------------

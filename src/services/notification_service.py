@@ -2,7 +2,7 @@
 
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.notification import NotificationModel
@@ -47,6 +47,8 @@ class NotificationService:
         self.session.add(notification)
         await self.session.flush()
         await self.session.refresh(notification)
+        if notification.id is None:
+            raise RuntimeError("Failed to persist notification")
         return notification
 
     async def get_user_notifications(
@@ -98,28 +100,24 @@ class NotificationService:
             notification.read_at = datetime.now(UTC)
         notification.status = "read"
         await self.session.flush()
-        await self.session.refresh(notification)
         return notification
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int = 0) -> dict:
         """标记所有通知已读"""
+        now = datetime.now(UTC)
         result = await self.session.execute(
-            select(NotificationModel).where(
+            update(NotificationModel)
+            .where(
                 and_(
                     NotificationModel.tenant_id == tenant_id,
                     NotificationModel.user_id == user_id,
                     NotificationModel.read_at.is_(None),
                 )
             )
+            .values(read_at=now, status="read")
         )
-        unread = result.scalars().all()
-        now = datetime.now(UTC)
-        for n in unread:
-            if n.read_at is None:
-                n.read_at = now
-                n.status = "read"
-        await self.session.flush()
-        return {"marked_count": len(unread)}
+        marked_count = result.rowcount or 0
+        return {"marked_count": marked_count}
 
     async def delete_notification(self, notification_id: int, tenant_id: int = 0) -> dict:
         """删除通知"""

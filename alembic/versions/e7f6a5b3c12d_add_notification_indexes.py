@@ -11,7 +11,7 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, and_, column, text
+from sqlalchemy import JSON, Column, DateTime, Integer, String, Text, and_, column, text
 from sqlalchemy.dialects.postgresql import JSON as PgJSON
 
 from alembic import op
@@ -49,6 +49,8 @@ def upgrade() -> None:
     )
     op.execute(text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END"))
     op.execute(text("UPDATE notifications SET read_at = created_at WHERE is_read = true"))
+    op.execute(text("UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL"))
+    op.execute(text("UPDATE notifications SET priority = 'normal' WHERE priority IS NULL"))
 
     # Phase 3: drop old columns
     op.drop_column("notifications", "related_id")

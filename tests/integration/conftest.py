@@ -338,6 +338,10 @@ async def client(fresh_schema, fastapi_app, async_session) -> AsyncGenerator[Asy
 
     Overrides get_db to share the same session/connection as the test's async_session
     fixture, ensuring data seeded by auth fixtures is visible to request handlers.
+
+    Note: async_session is intentionally consumed here (not used directly by this
+    fixture) to guarantee write ordering with auth_headers_web — the session
+    dependency override is established before any request runs.
     """
     from db.connection import get_db
 

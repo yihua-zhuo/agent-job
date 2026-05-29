@@ -9,7 +9,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - `alembic/versions/<new_revision>.py` — New migration (chains from `9d8e7f6a5b3c`) adding composite + partial indexes on `notifications`
 - `tests/unit/domain_handlers/notification.py` — New handler for unit-test mock SQL engine
 - `tests/unit/conftest.py` — Notification handler is auto-discovered by `ORDER`-sorted import; no manual registration needed
-- `tests/unit/test_notifications_router.py` — Update `to_dict` assertions if field names change in the router's serialization layer
+- `tests/unit/test_notifications_router.py` — Tests already use the new field names (`channel`, `template`, `params`, `status`, `read_at`); no updates required
 
 ## Implementation Steps
 1. **Replace `src/db/models/notification.py`** with the new `NotificationModel`:
@@ -24,7 +24,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 3. **Update `src/services/notification_service.py`**: replace all `NotificationModel` field references (`type`, `title`, `content`, `is_read`, `related_type`, `related_id`) with the new fields (`channel`, `template`, `params_`, `read_at`). The service logic (WHERE clauses, count queries) remains structurally the same.
    - Also ensure the router's request schema (`NotificationCreate`) maps `notification_type→channel`, `title→template`, and bundles `content`/`related_type`/`related_id` into `params_` before calling the service — or document that the service performs this bundling as a design decision.
 
-4. **Update `tests/unit/test_notifications_router.py`** — the tests patch `NotificationService` directly, so model field names in `to_dict()` don't affect them. What DOES need updating is the mock return dicts in `test_send_ok` and `test_mark_read_ok` which use the old field layout (`type`, `title`, `content`, `is_read`) and must be updated to the new schema (`channel`, `template`, `params`, `status`, `read_at`).
+4. **Update `tests/unit/test_notifications_router.py`** — Tests already reflect the new schema (`channel`, `template`, `params`, `status`, `read_at`); no updates required.
 
 5. **Generate the migration** (follow CLAUDE.md exactly):
    - `docker compose -f configs/docker-compose.test.yml up -d test-db`
@@ -47,6 +47,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
      - `UPDATE notifications SET read_at = created_at WHERE is_read = true`
      - `UPDATE notifications SET priority = 'normal' WHERE priority IS NULL` (new field — defaults to 'normal')
      - `UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL` (new field — set to creation time)
+     - `UPDATE notifications SET priority = 'normal' WHERE priority IS NULL` (new field — defaults to 'normal')
    - Example backfill in `downgrade()` (recreates legacy columns, restores legacy data, drops new columns):
      - Add old columns (type, title, content, is_read, related_type, related_id)
      - `UPDATE notifications SET type = channel WHERE channel IS NOT NULL`

@@ -124,14 +124,3 @@ async def update_tenant(
     update_data = body.model_dump(exclude_none=True)
     data = await service.update_tenant(tenant_id, **update_data)
     return {"success": True, "data": data, "message": "租户更新成功"}
-
-
-@tenants_router.delete("/{tenant_id}")
-async def delete_tenant(
-    tenant_id: int,
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    service = TenantService(session)
-    data = await service.delete_tenant(tenant_id)
-    return {"success": True, "data": data, "message": "租户删除成功"}
