@@ -178,7 +178,7 @@ def make_role_handler(state: RBACMockState):
 
         # Count from roles
         if "select" in sql_text and "count" in sql_text and "from roles" in sql_text:
-            rows = [r for r in state.roles.values() if r["tenant_id"] == tenant_id]
+            rows = [r for r in state.roles.values() if r["tenant_id"] == tenant_id or r["tenant_id"] == 0]
             return MockResult([[len(rows)]])
 
         # Select from roles
@@ -193,9 +193,9 @@ def make_role_handler(state: RBACMockState):
             if has_id_param:
                 rid = _parse_int_param(sql_text, params, "id")
                 rows = [r for r in rows if r["id"] == rid]
-            # Just tenant_id filter (list_roles)
-            elif "tenant_id" in sql_text and "offset" in sql_text:
-                rows = [r for r in rows if r["tenant_id"] == tenant_id]
+            # No id param: filter to tenant + system roles (mimics or_ query in rbac_service.py)
+            else:
+                rows = [r for r in rows if r["tenant_id"] == tenant_id or r["tenant_id"] == 0]
 
             if rows:
                 rows.sort(key=lambda r: (-r["priority"], r["id"]))
@@ -209,7 +209,7 @@ def make_role_handler(state: RBACMockState):
         # Update roles
         if sql_text.startswith("update") and "roles" in sql_text:
             rid = params.get("id")
-            if rid in state.roles:
+            if rid in state.roles and state.roles[rid]["tenant_id"] == tenant_id:
                 for k, v in params.items():
                     if k != "id":
                         state.roles[rid][k] = v
@@ -219,7 +219,7 @@ def make_role_handler(state: RBACMockState):
         # Delete from roles
         if sql_text.startswith("delete") and "roles" in sql_text:
             rid = params.get("id")
-            if rid in state.roles:
+            if rid in state.roles and state.roles[rid]["tenant_id"] == tenant_id:
                 role = state.roles[rid]
                 del state.roles[rid]
                 return MockResult([_build_role_model(role)])
@@ -235,6 +235,8 @@ def make_permission_handler(state: RBACMockState):
     def handler(sql_text, params):
         # Count from permissions
         if "select" in sql_text and "count" in sql_text and "from permissions" in sql_text:
+            # Permissions are tenant-agnostic (no tenant_id column), so no tenant
+            # filtering is needed here.
             rows = [p for p in state.permissions.values()]
             if "where" in sql_text and "category" in sql_text:
                 cat = _parse_str_param(params, "category")
@@ -247,7 +249,10 @@ def make_permission_handler(state: RBACMockState):
             rows = [p.copy() for p in state.permissions.values()]
             if "where" in sql_text and "name" in sql_text and "in" in sql_text:
                 # Handle permission_names IN clause: SQLAlchemy binds as name_1, name_2, ...
-                names = [str(params[k]) for k in sorted(params) if k == "name" or k.startswith("name_")]
+                # Only collect 'name_N' variants (not bare 'name') to avoid duplicates
+                # when both forms appear in params simultaneously.
+                import re
+                names = [str(params[k]) for k in sorted(params) if re.match(rf"name_\d+", k)]
                 rows = [r for r in rows if r["name"] in (names or [])]
             elif "where" in sql_text and "category" in sql_text:
                 cat = _parse_str_param(params, "category")
@@ -299,6 +304,8 @@ def make_user_role_handler(state: RBACMockState):
             uid = _extract_int(sql_text, params, "user_id")
             rid = _extract_int(sql_text, params, "role_id")
             tid = _extract_int(sql_text, params, "tenant_id")
+            if tid is None:
+                raise ValueError("tenant_id could not be determined from query parameters")
             before = len(state.user_roles)
             state.user_roles = [ur for ur in state.user_roles if not (
                 ur["user_id"] == uid and ur["role_id"] == rid and ur["tenant_id"] == tid

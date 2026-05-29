@@ -3,12 +3,17 @@
 Async DB-backed methods are tested via integration tests
 (tests/integration/test_rbac_integration.py) which use a real PostgreSQL
 database. Unit tests here focus on the static helpers that don't need a
-real DB.
+real DB, plus a test that exercises the SQL mock infrastructure via
+make_mock_session + RBACMockState + get_handlers.
 """
 
 from __future__ import annotations
 
+import pytest
+
 from src.services.rbac_service import RBACService
+from tests.unit.conftest import make_mock_session
+from tests.unit.domain_handlers.rbac import RBACMockState, get_handlers
 
 
 class TestRBACServiceStatic:
@@ -145,6 +150,59 @@ class TestRBACServiceStatic:
     def test_check_permission_by_value_case_sensitive(self):
         assert RBACService.check_permission_by_value("admin", "CUSTOMER:READ") is False
         assert RBACService.check_permission_by_value("Admin", "admin:all") is False
+
+    @pytest.mark.asyncio
+    async def test_list_roles_uses_sql_mock_via_make_mock_session(self):
+        """Exercise RBACMockState + get_handlers via make_mock_session.
+
+        The static tests above only cover DEFAULT_ROLE_PERMISSIONS. This test
+        verifies the SQL mock infrastructure is reachable through a service method
+        that queries the DB — list_roles uses the role SELECT handler from
+        get_handlers, which filters by tenant_id (and system roles via the OR
+        clause that the mock cannot fully evaluate, returning system roles).
+        """
+        from tests.unit.domain_handlers.rbac import RBACMockState, get_handlers
+
+        state = RBACMockState()
+        session = make_mock_session(get_handlers(state), state=state)
+
+        svc = RBACService(session)
+
+        # With include_system=True (default), the OR clause includes system roles
+        # (tenant_id=0). The mock cannot evaluate or_() conditions so it returns
+        # all system roles as well as any matching tenant roles.
+        roles_all, total_all = await svc.list_roles(tenant_id=42, include_system=True)
+        assert total_all == 5  # 5 system roles from RBACMockState
+        names = {r.name for r in roles_all}
+        assert "admin" in names
+        assert "viewer" in names
+
+        from datetime import UTC, datetime
+
+        # Seed a custom role for tenant 42
+        state.roles[999] = {
+            "id": 999,
+            "tenant_id": 42,
+            "name": "custom_role",
+            "display_name": "Custom Role",
+            "description": None,
+            "is_system": False,
+            "priority": 50,
+            "created_at": datetime.now(UTC),
+        }
+        state.roles_next_id = 1000
+
+        roles_with_custom, total_custom = await svc.list_roles(tenant_id=42, include_system=True)
+        assert total_custom == 6  # 5 system + 1 custom
+        custom = [r for r in roles_with_custom if r.name == "custom_role"]
+        assert len(custom) == 1
+        assert custom[0].tenant_id == 42
+
+        # Verify role ordering by priority (admin first, viewer last)
+        role_names = [r.name for r in roles_with_custom]
+        admin_idx = role_names.index("admin")
+        viewer_idx = role_names.index("viewer")
+        assert admin_idx < viewer_idx, "admin should come before viewer (higher priority)"
 
 
 class TestPermissionValueObject:

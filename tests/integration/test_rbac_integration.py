@@ -138,13 +138,6 @@ async def seed_rbac_data(db_schema):
     await _seed_rbac_data()
 
 
-def _get_role_id_by_name(roles, name):
-    for role in roles:
-        if role.name == name:
-            return role.id
-    return None
-
-
 @pytest.mark.integration
 class TestRBACIntegration:
     """Integration tests for RBACService against a real DB."""
@@ -378,8 +371,6 @@ class TestRBACIntegration:
 
     async def test_custom_role_invisible_to_other_tenant(self, db_schema, tenant_id, async_session):
         """Tenant 1's custom role must not be visible when querying from tenant 2."""
-        import random
-
         svc = RBACService(async_session)
 
         # Create a custom role for tenant_id
@@ -392,14 +383,17 @@ class TestRBACIntegration:
         )
         assert role.tenant_id == tenant_id
 
-        # Create another tenant with a different ID
-        other_tenant = tenant_id + random.randint(100, 1000)
+        # Create another tenant with a different ID — use a fixed large offset
+        # to avoid collision with real seeded tenant IDs in parallel test runs.
+        other_tenant = tenant_id + 99999
 
         # Query roles from the other tenant — system roles (tenant 0) are visible,
-        # but tenant_specific_role must not appear
+        # but tenant_specific_role must not appear.
         roles_same, total_same = await svc.list_roles(tenant_id=other_tenant)
         names = {r.name for r in roles_same}
         assert "tenant_specific_role" not in names
         assert total_same >= 5
-        assert any(r.name == "admin" for r in roles_same)
-        assert any(r.name == "viewer" for r in roles_same)
+        assert any(r.name == "admin" and r.tenant_id == 0 for r in roles_same), \
+            "admin should be a system role with tenant_id=0"
+        assert any(r.name == "viewer" and r.tenant_id == 0 for r in roles_same), \
+            "viewer should be a system role with tenant_id=0"
