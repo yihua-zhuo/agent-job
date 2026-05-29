@@ -10,16 +10,16 @@ Add a new alembic migration that creates the RBAC schema (`roles`, `permissions`
 
 ## Affected Files
 
-- `alembic/versions/<new_revision>_add_rbac_schema.py` — creates `roles`, `permissions`, `user_roles` tables, seeds roles and permissions, imports models to register them with `Base.metadata`
+- `alembic/versions/<new_revision>_add_rbac_schema.py` — creates `roles`, `permissions`, `user_roles` tables, seeds roles and permissions
 - `src/db/models/rbac.py` — already exists with all four ORM models (`RoleModel`, `PermissionModel`, `RolePermissionModel`, `UserRoleModel`); no changes needed
 - `alembic/env.py` — already imports `import db.models` which auto-discovers all models including `rbac.py` via `src/db/models/__init__.py`; no changes needed
-- `tests/unit/test_rbac.py` — new unit test file for `RoleService` / `PermissionService`
+- `tests/unit/test_rbac.py` — new unit test file for `RBACService` static methods and `Permission` value object
 - `tests/integration/test_rbac_integration.py` — new integration test file for RBAC schema
 
 ## Implementation Steps
 
 1. **Spin up a clean disposable DB** (`alembic_dev`) and stamp it to current head so autogenerate sees only the desired diff:
-   ```
+   ```bash
    docker compose -f configs/docker-compose.test.yml up -d test-db
    docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;"
    docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"
@@ -29,7 +29,7 @@ Add a new alembic migration that creates the RBAC schema (`roles`, `permissions`
    ```
 
 2. **Run autogenerate** to produce the initial migration:
-   ```
+   ```bash
    alembic revision --autogenerate -m "add_rbac_schema"
    ```
 
@@ -37,29 +37,29 @@ Add a new alembic migration that creates the RBAC schema (`roles`, `permissions`
    - `op.create_table('permissions', ...)` with `id`, `name` (unique/indexed), `resource`, `action`, `description`, `created_at`
    - `op.create_table('roles', ...)` with `id`, `name`, `is_custom`, `tenant_id` (indexed), `created_at` + unique composite index on `(tenant_id, name)`
    - `op.create_table('user_roles', ...)` with `user_id`, `role_id`, `tenant_id` (indexed) + unique composite index on `(user_id, tenant_id, role_id)`
-   - `op.execute(batch_insert(...))` to seed 5 system roles: `owner`, `admin`, `manager`, `member`, `viewer` (all with `is_custom=False`)
+   - `op.execute(batch_insert(...))` to seed 5 system roles (admin, manager, sales, support, viewer)
    - `op.execute(batch_insert(...))` to seed all permission rows (resource + action combinations)
-   - `import db.models` (or a bare `import db.models.role`) to register `RoleModel`, `PermissionModel`, `UserRoleModel` with `Base.metadata` so autogenerate can diff them
+   - `op.execute(batch_insert(...))` to seed role_permissions for each role
 
 4. **Edit `downgrade()`** in the migration to drop tables in reverse dependency order (`user_roles` → `permissions` → `roles`).
 
 5. **Verify migration applies and downgrades cleanly:**
-   ```
+   ```bash
    alembic upgrade head
    alembic downgrade -1
    alembic upgrade head
    ```
 
 6. **Run a second empty autogenerate to confirm no drift** (re-autogenerate should produce a migration with `pass` in both upgrade/downgrade):
-   ```
+   ```bash
    alembic revision --autogenerate -m "drift_check"
    ```
    If the new file has `pass` in both up/down, delete it. If not, the migration is incomplete.
 
 ## Test Plan
 
-- **Unit tests in `tests/unit/`**: Create `tests/unit/test_rbac.py` with a `mock_db_session` fixture that includes only the handlers needed for role/permission queries. Test: role CRUD via `RoleService(mock_db_session)`, permission listing, multi-tenancy filtering (queries include `tenant_id`).
-- **Integration tests in `tests/integration/`**: Create `tests/integration/test_rbac_integration.py` using `db_schema`, `tenant_id`, `async_session` fixtures. Test: roles table accepts a seeded owner role, permissions table is readable, `user_roles` join works. Use `pytest.raises(NotFoundException)` for error cases.
+- **Unit tests in `tests/unit/`**: `tests/unit/test_rbac.py` tests `RBACService` static methods (`has_permission`, `get_role_permissions`, `check_permission_by_value`) and the `Permission` value object. `tests/unit/test_rbac_service.py` provides equivalent coverage using `Permission` value-object instances for stronger type checking.
+- **Integration tests in `tests/integration/`**: Create `tests/integration/test_rbac_integration.py` using `db_schema`, `tenant_id`, `async_session` fixtures. Test: roles table accepts seeded system roles, permissions table is readable, `user_roles` join works. Use `pytest.raises(NotFoundException)` for error cases.
 
 ## Acceptance Criteria
 

@@ -33,11 +33,11 @@ depends_on: str | Sequence[str] | None = None
 ROLE_INSERT = """
 INSERT INTO roles (tenant_id, name, display_name, description, is_system, priority, created_at)
 VALUES
-    (0, 'owner',   'Owner',                  'Full system ownership with all permissions',   true,  100, now()),
-    (0, 'admin',  'Administrator',          'Full system access',                            true,   90, now()),
-    (0, 'manager','Manager',                'Manage team',                                   true,   80, now()),
-    (0, 'member', 'Member',                  'Standard tenant member',                        true,   50, now()),
-    (0, 'viewer', 'Viewer',                   'Read-only access',                              true,   10, now())
+    (0, 'admin',  'Administrator',          'Full system access',                            true,   100, now()),
+    (0, 'manager','Manager',                'Manage team',                                   true,    80, now()),
+    (0, 'sales', 'Sales Representative',   'Manage customers and opportunities',           true,    60, now()),
+    (0, 'support','Support Agent',          'View customers and tickets, manage support',    true,    50, now()),
+    (0, 'viewer', 'Viewer',                 'Read-only access',                              true,    10, now())
 ON CONFLICT DO NOTHING
 """
 
@@ -73,7 +73,7 @@ WHERE (r.name, p.name) IN (
     ('admin', 'opportunity:create'), ('admin', 'opportunity:read'), ('admin', 'opportunity:update'), ('admin', 'opportunity:delete'),
     ('admin', 'ticket:create'), ('admin', 'ticket:read'), ('admin', 'ticket:update'), ('admin', 'ticket:delete'),
     ('admin', 'user:manage'), ('admin', 'user:read'), ('admin', 'admin:all'),
-    -- manager: read + limited write
+    -- manager: read + limited write + user:read
     ('manager', 'customer:read'), ('manager', 'customer:update'),
     ('manager', 'opportunity:read'), ('manager', 'opportunity:create'), ('manager', 'opportunity:update'),
     ('manager', 'ticket:read'), ('manager', 'ticket:create'), ('manager', 'ticket:update'),

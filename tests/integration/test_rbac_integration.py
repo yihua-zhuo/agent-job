@@ -10,40 +10,36 @@ present before tests run.
 
 from __future__ import annotations
 
+import os
+
+import asyncpg
 import pytest
 
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.rbac_service import RBACService
 
 
-def _seed_rbac_data():
+async def _seed_rbac_data():
     """Seed RBAC roles and permissions directly via raw SQL.
 
     The RBAC migration (195a79d95b41) creates and seeds the tables, but
     integration tests start from ORM create_all() which creates empty tables.
     This function inserts the seed data into already-existing tables.
 
-    Import psycopg2 here so the test file can be imported even if it's not
-    available (it will be used at runtime when the fixture runs).
+    Uses asyncpg (async) so it is safe to call inside async test fixtures.
     """
-    import os
-
-    db_url = os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL")
+    db_url = os.environ.get("DATABASE_URL")
     if not db_url:
         raise RuntimeError(
-            "TEST_DATABASE_URL or DATABASE_URL must be set to run integration tests. "
+            "DATABASE_URL must be set to run integration tests. "
             "Example: DATABASE_URL='postgresql+asyncpg://user:pass@host:5432/db' pytest tests/integration/ -m integration -v"
         )
-
     sync_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1)
-    import psycopg2
 
-    conn = psycopg2.connect(sync_url)
-    conn.autocommit = True
+    conn = await asyncpg.connect(sync_url)
     try:
-        cur = conn.cursor()
         # Permissions
-        cur.execute("""
+        await conn.execute("""
             INSERT INTO permissions (name, display_name, category, description)
             VALUES
                 ('customer:create','Create Customer','customer',''),
@@ -63,19 +59,19 @@ def _seed_rbac_data():
                 ('admin:all','Full Admin Access','admin','')
             ON CONFLICT DO NOTHING
         """)
-        # Roles
-        cur.execute("""
+        # Roles — must match services/rbac_service.py DEFAULT_ROLES
+        await conn.execute("""
             INSERT INTO roles (tenant_id, name, display_name, description, is_system, priority)
             VALUES
-                (0,'owner','Owner','Full system ownership',true,100),
-                (0,'admin','Administrator','Full system access',true,90),
+                (0,'admin','Administrator','Full system access',true,100),
                 (0,'manager','Manager','Manage team',true,80),
-                (0,'member','Member','Standard tenant member',true,50),
-                (0,'viewer','Viewer','Read-only',true,10)
+                (0,'sales','Sales Representative','Manage customers and opportunities',true,60),
+                (0,'support','Support Agent','View customers and tickets, manage support tasks',true,50),
+                (0,'viewer','Viewer','Read-only access',true,10)
             ON CONFLICT DO NOTHING
         """)
-        # Role permissions (admin: all 15)
-        cur.execute("""
+        # Role permissions — admin: all 15
+        await conn.execute("""
             INSERT INTO role_permissions (role_id, permission_id)
             SELECT r.id, p.id FROM roles r, permissions p
             WHERE r.name='admin' AND p.name IN (
@@ -86,8 +82,8 @@ def _seed_rbac_data():
             )
             ON CONFLICT DO NOTHING
         """)
-        # manager: 9 perms
-        cur.execute("""
+        # manager: 9 perms + user:read
+        await conn.execute("""
             INSERT INTO role_permissions (role_id, permission_id)
             SELECT r.id, p.id FROM roles r, permissions p
             WHERE r.name='manager' AND p.name IN (
@@ -97,36 +93,54 @@ def _seed_rbac_data():
             )
             ON CONFLICT DO NOTHING
         """)
-        # member: 6 perms
-        cur.execute("""
+        # sales: 6 perms
+        await conn.execute("""
             INSERT INTO role_permissions (role_id, permission_id)
             SELECT r.id, p.id FROM roles r, permissions p
-            WHERE r.name='member' AND p.name IN (
+            WHERE r.name='sales' AND p.name IN (
                 'customer:read','customer:create','customer:update',
                 'opportunity:read','opportunity:create','opportunity:update'
             )
             ON CONFLICT DO NOTHING
         """)
+        # support: 5 perms
+        await conn.execute("""
+            INSERT INTO role_permissions (role_id, permission_id)
+            SELECT r.id, p.id FROM roles r, permissions p
+            WHERE r.name='support' AND p.name IN (
+                'customer:read',
+                'opportunity:read',
+                'ticket:read','ticket:create','ticket:update'
+            )
+            ON CONFLICT DO NOTHING
+        """)
         # viewer: 3 perms
-        cur.execute("""
+        await conn.execute("""
             INSERT INTO role_permissions (role_id, permission_id)
             SELECT r.id, p.id FROM roles r, permissions p
             WHERE r.name='viewer' AND p.name IN ('customer:read','opportunity:read','ticket:read')
             ON CONFLICT DO NOTHING
         """)
     finally:
-        conn.close()
+        await conn.close()
 
 
 @pytest.fixture(scope="function", autouse=True)
-def seed_rbac_data(db_schema, tenant_id):
+async def seed_rbac_data(db_schema):
     """Seed RBAC data after db_schema truncates, before each test.
 
     The db_schema fixture resets all tables between tests; this fixture
     re-populates the RBAC seed rows so every test starts with the same
     baseline state.
     """
-    _seed_rbac_data()
+    await _seed_rbac_data()
+
+
+def _get_role_id_by_name(roles, name):
+    for role in roles:
+        if role.name == name:
+            return role.id
+    return None
 
 
 @pytest.mark.integration
@@ -151,12 +165,20 @@ class TestRBACIntegration:
 
     async def test_admin_role_has_all_permissions(self, db_schema, tenant_id, async_session):
         svc = RBACService(async_session)
-        perms = await svc.list_role_permissions(role_id=1, tenant_id=0)
+        # Look up admin role dynamically — do not hardcode role_id
+        roles, _ = await svc.list_roles(tenant_id=0)
+        admin_role = next((r for r in roles if r.name == "admin"), None)
+        assert admin_role is not None, "admin role not found in seed data"
+        perms = await svc.list_role_permissions(role_id=admin_role.id, tenant_id=0)
         assert len(perms) == 15
 
     async def test_viewer_role_has_read_only_permissions(self, db_schema, tenant_id, async_session):
         svc = RBACService(async_session)
-        perms = await svc.list_role_permissions(role_id=5, tenant_id=0)
+        # Look up viewer role dynamically — do not hardcode role_id
+        roles, _ = await svc.list_roles(tenant_id=0)
+        viewer_role = next((r for r in roles if r.name == "viewer"), None)
+        assert viewer_role is not None, "viewer role not found in seed data"
+        perms = await svc.list_role_permissions(role_id=viewer_role.id, tenant_id=0)
         assert len(perms) == 3
         names = {p.name for p in perms}
         assert "customer:read" in names
@@ -208,8 +230,12 @@ class TestRBACIntegration:
         )
 
         svc = RBACService(async_session)
-        result = await svc.assign_role_to_user(user_id=user.id, role_id=1, tenant_id=tenant_id)
-        assert result["role_id"] == 1
+        # Look up admin role dynamically
+        roles, _ = await svc.list_roles(tenant_id=0)
+        admin_role = next((r for r in roles if r.name == "admin"), None)
+        assert admin_role is not None
+        result = await svc.assign_role_to_user(user_id=user.id, role_id=admin_role.id, tenant_id=tenant_id)
+        assert result["role_id"] == admin_role.id
         assert result.get("already_assigned") is not True
 
     async def test_assign_duplicate_role_returns_already_assigned(self, db_schema, tenant_id, async_session):
@@ -225,8 +251,11 @@ class TestRBACIntegration:
         )
 
         svc = RBACService(async_session)
-        await svc.assign_role_to_user(user_id=user.id, role_id=1, tenant_id=tenant_id)
-        result = await svc.assign_role_to_user(user_id=user.id, role_id=1, tenant_id=tenant_id)
+        roles, _ = await svc.list_roles(tenant_id=0)
+        admin_role = next((r for r in roles if r.name == "admin"), None)
+        assert admin_role is not None
+        await svc.assign_role_to_user(user_id=user.id, role_id=admin_role.id, tenant_id=tenant_id)
+        result = await svc.assign_role_to_user(user_id=user.id, role_id=admin_role.id, tenant_id=tenant_id)
         assert result.get("already_assigned") is True
 
     async def test_revoke_role_from_user(self, db_schema, tenant_id, async_session):
@@ -242,14 +271,20 @@ class TestRBACIntegration:
         )
 
         svc = RBACService(async_session)
-        await svc.assign_role_to_user(user_id=user.id, role_id=1, tenant_id=tenant_id)
-        result = await svc.revoke_role_from_user(user_id=user.id, role_id=1, tenant_id=tenant_id)
-        assert result["role_id"] == 1
+        roles, _ = await svc.list_roles(tenant_id=0)
+        admin_role = next((r for r in roles if r.name == "admin"), None)
+        assert admin_role is not None
+        await svc.assign_role_to_user(user_id=user.id, role_id=admin_role.id, tenant_id=tenant_id)
+        result = await svc.revoke_role_from_user(user_id=user.id, role_id=admin_role.id, tenant_id=tenant_id)
+        assert result["role_id"] == admin_role.id
 
     async def test_revoke_nonexistent_role_raises(self, db_schema, tenant_id, async_session):
         svc = RBACService(async_session)
+        roles, _ = await svc.list_roles(tenant_id=0)
+        admin_role = next((r for r in roles if r.name == "admin"), None)
+        assert admin_role is not None
         with pytest.raises(NotFoundException):
-            await svc.revoke_role_from_user(user_id=99999, role_id=1, tenant_id=tenant_id)
+            await svc.revoke_role_from_user(user_id=99999, role_id=admin_role.id, tenant_id=tenant_id)
 
     async def test_get_user_roles(self, db_schema, tenant_id, async_session):
         from services.user_service import UserService
@@ -264,10 +299,14 @@ class TestRBACIntegration:
         )
 
         svc = RBACService(async_session)
-        await svc.assign_role_to_user(user_id=user.id, role_id=1, tenant_id=tenant_id)
-        await svc.assign_role_to_user(user_id=user.id, role_id=5, tenant_id=tenant_id)
-        roles = await svc.get_user_roles(user_id=user.id, tenant_id=tenant_id)
-        assert len(roles) == 2
+        roles, _ = await svc.list_roles(tenant_id=0)
+        admin_role = next((r for r in roles if r.name == "admin"), None)
+        viewer_role = next((r for r in roles if r.name == "viewer"), None)
+        assert admin_role is not None and viewer_role is not None
+        await svc.assign_role_to_user(user_id=user.id, role_id=admin_role.id, tenant_id=tenant_id)
+        await svc.assign_role_to_user(user_id=user.id, role_id=viewer_role.id, tenant_id=tenant_id)
+        user_roles = await svc.get_user_roles(user_id=user.id, tenant_id=tenant_id)
+        assert len(user_roles) == 2
 
     async def test_set_role_permissions(self, db_schema, tenant_id, async_session):
         svc = RBACService(async_session)

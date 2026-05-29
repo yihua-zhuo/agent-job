@@ -98,12 +98,16 @@ class TestRBACServiceStatic:
         perms = RBACService.get_role_permissions("support")
         assert "customer:read" in perms
         assert "opportunity:read" in perms
+        assert "ticket:read" in perms
+        assert "ticket:create" in perms
+        assert "ticket:update" in perms
         assert len(perms) == 5
 
     def test_get_role_permissions_viewer(self):
         perms = RBACService.get_role_permissions("viewer")
         assert "customer:read" in perms
         assert "opportunity:read" in perms
+        assert "ticket:read" in perms
         assert len(perms) == 3
 
     def test_get_role_permissions_unknown(self):

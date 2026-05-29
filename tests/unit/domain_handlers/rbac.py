@@ -140,6 +140,19 @@ def make_role_permission_handler(state: RBACMockState):
             state.role_permissions = [rp for rp in state.role_permissions if rp["role_id"] != role_id]
             return MockResult([])
 
+        # Select from role_permissions (join with permissions for list_role_permissions)
+        if "select" in sql_text and "from role_permissions" in sql_text:
+            role_id = _parse_int_param(sql_text, params, "role_id")
+            if role_id is not None:
+                perm_ids = {
+                    rp["permission_id"]
+                    for rp in state.role_permissions
+                    if rp["role_id"] == role_id
+                }
+                rows = [_build_permission_model(state.permissions[pid]) for pid in perm_ids if pid in state.permissions]
+                rows.sort(key=lambda r: (r.category, r.id))
+                return MockResult(rows)
+
         return None
 
     return handler
@@ -176,14 +189,18 @@ def make_role_handler(state: RBACMockState):
         if "select" in sql_text and "from roles" in sql_text:
             rows = [r.copy() for r in state.roles.values()]
 
+            # Determine whether a specific role ID is being queried by inspecting
+            # bound params (more robust than SQL-text string matching).
+            has_id_param = any(k == "id" or k.startswith("id_") for k in params)
+
             # WHERE role.id = :id_1 (get_role / update_role / delete_role)
-            if "where role.id" in sql_text:
+            if has_id_param:
                 rid = _parse_int_param(sql_text, params, "id")
                 rows = [r for r in rows if r["id"] == rid]
                 if "tenant_id" in sql_text and rows:
                     rows = [r for r in rows if r["tenant_id"] == tenant_id or r["tenant_id"] == 0]
             # Just tenant_id filter (list_roles)
-            elif "tenant_id" in sql_text and "order_by" not in sql_text and "offset" in sql_text:
+            elif "tenant_id" in sql_text and "offset" in sql_text:
                 rows = [r for r in rows if r["tenant_id"] == tenant_id or r["tenant_id"] == 0]
 
             if rows:
@@ -308,9 +325,7 @@ def make_user_role_handler(state: RBACMockState):
     return handler
 
 
-def get_handlers(state: MockState):
-    if not isinstance(state, RBACMockState):
-        state = RBACMockState()
+def get_handlers(state: RBACMockState):
     return [
         make_role_handler(state),
         make_permission_handler(state),
