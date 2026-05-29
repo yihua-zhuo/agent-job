@@ -23,13 +23,15 @@ GitHub issue #511 body and repository files inspected during planning:
 
 ## Implementation Steps
 1. **Add `clearbit_api_key` to settings**: In `src/configs/settings.py`, add `clearbit_api_key: str | None = Field(default=None)` alongside the other auth/API fields. No validation gate is needed (enrichment is optional functionality).
-2. **Create `src/services/enrichment_service.py`**: Define `EnrichmentService(session: AsyncSession)` (no gateway/default). Implement `async def lookup(self, domain: str | None, company_name: str | None) -> dict` that:
+2. **Create `src/services/enrichment_service.py`**: Define `EnrichmentService(session: AsyncSession)` (no gateway/default). Implement `async def lookup(self, domain: str | None, company_name: str | None, *, tenant_id: int | None = None, customer_id: int | None = None) -> dict` that:
+   - Normalises `domain` and `company_name` by stripping whitespace and treating blank strings as absent.
    - Requires exactly one of `domain`/`company_name` (raise `ValidationException` if both or neither given).
+   - When `tenant_id` is provided, looks up the customer and raises `NotFoundException` if the `customer_id` does not belong to that tenant.
    - Dispatches to `_lookup_clearbit()` for `provider="clearbit"`.
    - Uses `httpx.AsyncClient` to `GET https://company.clearbit.com/v2/companies/find?name=<company_name>` or `?domain=<domain>` with `Authorization: Bearer <clearbit_api_key>` header.
-   - On non-2xx HTTP response (including 404 "company not found") raise `ValidationException("Clearbit API error")`.
+   - On HTTP 404 raise `ValidationException("No company found for the given domain or name")`; on other non-2xx responses raise `ValidationException(f"Clearbit API error: {status_code}")`.
    - Normalize the Clearbit JSON into a flat `dict` with keys such as `name`, `domain`, `legal_name`, `category`, `geo`, `metrics`, `linkedin`, `logo` (include only present keys).
-   - Insert a `CustomerEnrichmentModel` row with `customer_id=None` (null for now; future flow will pass `customer_id`), `provider="clearbit"`, `raw_data_json=clearbit_response`, `enriched_at=now`.
+   - Insert a `CustomerEnrichmentModel` row with `customer_id`, `provider="clearbit"`, `raw_data_json=clearbit_response`, `enriched_at=now`.
    - Return the normalized dict.
    - Raise `ValidationException` for unknown `provider`.
 3. **Create `src/api/routers/enrichment.py`**: Define an `enrichment_router = APIRouter(prefix="/api/v1/enrichment", tags=["enrichment"])`. Add `POST /lookup` with body `EnrichmentLookupRequest(domain: str | None = None, company_name: str | None = None)` (Pydantic model in `models/enrichment.py`). The endpoint calls `EnrichmentService(session).lookup(...)`, wraps in `_success()`, and returns the envelope dict.
@@ -46,7 +48,7 @@ GitHub issue #511 body and repository files inspected during planning:
 - `EnrichmentService.lookup(domain="stripe.com", provider="clearbit")` returns a `dict` with at least `name` and `domain` when Clearbit responds 200.
 - `EnrichmentService.lookup(domain=None, company_name=None)` raises `ValidationException`.
 - `EnrichmentService.lookup(domain=None, company_name=None)` when both are provided raises `ValidationException`.
-- HTTP404 from Clearbit raises `ValidationException("Clearbit API error")`.
+- HTTP404 from Clearbit raises `ValidationException("No company found for the given domain or name")`; other non-2xx raises `ValidationException("Clearbit API error: {status_code}")`.
 - `CustomerEnrichmentModel` is inserted into the session on every successful lookup.
 - `pytest tests/unit/test_enrichment_service.py tests/unit/test_enrichment_router.py -v` passes with zero test errors.
 - No Apollo, ZoomInfo, or other provider code is present in the implementation.

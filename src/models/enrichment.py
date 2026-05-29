@@ -1,6 +1,6 @@
 """Pydantic request / response schemas for the enrichment API."""
 
-from pydantic import BaseModel, model_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 
 class EnrichmentLookupRequest(BaseModel):
@@ -8,6 +8,13 @@ class EnrichmentLookupRequest(BaseModel):
 
     domain: str | None = None
     company_name: str | None = None
+
+    @field_validator("domain", "company_name")
+    @classmethod
+    def strip_whitespace(cls, v: str | None) -> str | None:
+        if v is not None:
+            v = v.strip()
+        return v if v else None
 
     @model_validator(mode="after")
     def require_exactly_one(self) -> "EnrichmentLookupRequest":

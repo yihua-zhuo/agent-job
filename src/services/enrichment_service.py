@@ -1,13 +1,16 @@
 """Enrichment service — third-party company data enrichment via Clearbit."""
 
+from datetime import UTC, datetime
 from typing import Any
 
 import httpx
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from configs.settings import settings
+from db.models.customer import CustomerModel
 from db.models.customer_enrichment import CustomerEnrichmentModel
-from pkg.errors.app_exceptions import ValidationException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 class EnrichmentService:
@@ -21,6 +24,7 @@ class EnrichmentService:
         domain: str | None = None,
         company_name: str | None = None,
         *,
+        tenant_id: int | None = None,
         customer_id: int | None = None,
     ) -> dict[str, Any]:
         """Look up company enrichment data from a third-party provider.
@@ -29,6 +33,14 @@ class EnrichmentService:
         Persists the raw provider payload to ``customer_enrichments`` and returns
         a normalised dict of enriched fields.
         """
+        # Normalise: treat blank strings as absent
+        if domain is not None:
+            domain = domain.strip()
+            domain = domain if domain else None
+        if company_name is not None:
+            company_name = company_name.strip()
+            company_name = company_name if company_name else None
+
         has_domain = domain is not None
         has_name = company_name is not None
 
@@ -41,21 +53,33 @@ class EnrichmentService:
         return await self._lookup_clearbit(
             domain=domain,
             company_name=company_name,
+            tenant_id=tenant_id,
             customer_id=customer_id,
         )
 
     async def _lookup_clearbit(
-        self, domain: str | None, company_name: str | None, customer_id: int
+        self, domain: str | None, company_name: str | None, tenant_id: int | None, customer_id: int
     ) -> dict[str, Any]:
+        # Verify customer belongs to the requesting tenant
+        if tenant_id is not None and customer_id is not None:
+            result = await self.session.execute(
+                select(CustomerModel).where(
+                    and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
+                )
+            )
+            customer = result.scalar_one_or_none()
+            if customer is None:
+                raise NotFoundException("Customer")
+
         api_key = settings.clearbit_api_key
         if not api_key:
             raise ValidationException("Clearbit API key is not configured")
 
         params: dict[str, str] = {}
         if domain:
-            params["domain"] = domain
+            params["domain"] = domain.strip()
         else:
-            params["name"] = company_name  # type: ignore[assignment]
+            params["name"] = company_name.strip()  # type: ignore[arg-type]
 
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(settings.clearbit_read_timeout, connect=settings.clearbit_connect_timeout)
@@ -67,9 +91,9 @@ class EnrichmentService:
             )
 
         if response.status_code == 404:
-            return {}
+            raise ValidationException("No company found for the given domain or name")
         if not response.is_success:
-            raise ValidationException("Clearbit API error")
+            raise ValidationException(f"Clearbit API error: {response.status_code}")
 
         raw_data: dict[str, Any] = response.json()
         normalised = self._normalise_clearbit(raw_data)
@@ -79,6 +103,7 @@ class EnrichmentService:
             customer_id=customer_id,
             provider="clearbit",
             raw_data_json=raw_data,
+            enriched_at=datetime.now(UTC),
         )
         self.session.add(enrichment)
         await self.session.flush()
