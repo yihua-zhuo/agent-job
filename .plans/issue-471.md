@@ -60,15 +60,16 @@ Add `slug` and `usage_limits` columns to `TenantModel` and generate a new Alembi
 
 ## Test Plan
 
-- **Unit tests in `tests/unit/`**: Create `tests/unit/test_tenant_model.py`. Define a `MockState` with `tenant` state, a `make_tenant_handler(state)` in `tests/unit/domain_handlers/tenants.py` (following the same pattern as existing domain handlers there), and a `mock_db_session` fixture combining it. Test: constructing `TenantModel`, calling `to_dict()` with all fields including `slug` and `usage_limits`, and verifying the model has the correct column definitions. Mock DB only — no real SQL executed.
+- **Unit tests in `tests/unit/`**: Create `tests/unit/test_tenant_model.py`. Define a `MockState` with `tenant` state, a `make_tenant_handler(state)` in `tests/unit/domain_handlers/tenants.py` (following the same pattern as existing domain handlers there), and a `mock_db_session` fixture combining it. Test: constructing `TenantModel`, calling `to_dict()` with all fields including `slug` and `usage_limits`, and using SQLAlchemy's inspector to verify column definitions. Mock DB only — no real SQL executed.
+
 - **Integration tests in `tests/integration/`**: Create `tests/integration/test_tenant_integration.py`. Use `db_schema`, `tenant_id`, `async_session` fixtures. Seed helpers for tenant data should go in `tests/integration/domain_fixtures/tenant.py` rather than the shared conftest. Test that the `tenants` table can be inserted with a non-null `slug` and `usage_limits`, and that selecting the row back yields the correct values. Use `pytest.raises(NotFoundException)` for any not-found error case if a service is later added.
 
 ## Acceptance Criteria
 
-- `TenantModel` in `src/db/models/tenant.py` has `slug: Mapped[str]` and `usage_limits: Mapped[dict]` columns
-- `to_dict()` on a `TenantModel` instance includes `slug` and `usage_limits` keys
+- `PYTHONPATH=src python -c "from db.models.tenant import TenantModel; cols = [c.name for c in TenantModel.__table__.columns]; assert 'slug' in cols and 'usage_limits' in cols"` → exits 0
+- `PYTHONPATH=src python -c "from db.models.tenant import TenantModel; t = TenantModel(id=1, name='x', slug='x', plan='free', status='active', settings={}, usage_limits={}, created_at=None, updated_at=None); d = t.to_dict(); assert 'slug' in d and 'usage_limits' in d"` → exits 0
 - `TenantModel` is exported from `src/db/models/__init__.py` (already done — confirm)
-- `TenantModel` appears in `alembic/env.py` `_ALEMBIC_MODEL_IMPORTS` (already done — confirm)
+- `grep -c TenantModel alembic/env.py` → 1 or more
 - A new alembic migration exists in `alembic/versions/` with `down_revision: 9d8e7f6a5b3c`, creates `slug` and `usage_limits` as NOT NULL, and has a correct `downgrade()` that drops both columns
 - `alembic upgrade head` and `alembic downgrade -1` both succeed on `alembic_dev` with no errors
 - A subsequent autogenerate produces an empty diff (no unapplied model changes remain)

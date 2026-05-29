@@ -58,6 +58,13 @@ def make_tenant_handler(state: MockState):
 
         if "delete" in sql_text and "tenants" in sql_text:
             tenant_id = params.get("id", params.get("tenant_id"))
+            # Rule 134: validate ownership before deletion.
+            # In multi-tenant SQL, the WHERE clause filters by tenant_id; if both id and
+            # requesting_tenant_id are present, confirm the record belongs to the caller.
+            requesting_tenant_id = params.get("tenant_id")
+            if tenant_id is not None and requesting_tenant_id is not None and tenant_id != requesting_tenant_id:
+                # Mismatched: the caller passed an id that does not match their tenant scope
+                return MockResult([])
             if tenant_id and tenant_id not in state.tenants:
                 return MockResult([])
             if tenant_id in state.tenants:
@@ -66,6 +73,10 @@ def make_tenant_handler(state: MockState):
 
         if "update" in sql_text and "tenants" in sql_text:
             tenant_id = params.get("id", params.get("tenant_id"))
+            # Rule 134: validate ownership before updates — skip if no tenant context.
+            requesting_tenant_id = params.get("tenant_id")
+            if tenant_id is not None and requesting_tenant_id is not None and tenant_id != requesting_tenant_id:
+                return MockResult([])
             if tenant_id is None or tenant_id not in state.tenants:
                 return MockResult([])
             for k, v in params.items():
@@ -91,10 +102,10 @@ def make_tenant_handler(state: MockState):
                 return MockResult([])
 
             if "where id" not in sql_text:
-                # Filter to rows matching tenant_id if present in params; return empty result if tenant_id is absent or None.
-                tenant_id = params.get("tenant_id")
-                if tenant_id is not None:
-                    matching = [r for rid, r in state.tenants.items() if rid == tenant_id]
+                # tenant-scoped list query: filter by tenant_id param, return empty if absent.
+                filter_tenant_id = params.get("tenant_id")
+                if filter_tenant_id is not None:
+                    matching = [r for rid, r in state.tenants.items() if rid == filter_tenant_id]
                     return MockResult([MockRow(r.copy()) for r in matching])
                 return MockResult([])
 

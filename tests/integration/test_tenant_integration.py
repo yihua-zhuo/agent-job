@@ -52,7 +52,7 @@ class TestTenantIntegration:
                 session.execute(
                     text("""
                         INSERT INTO tenants (id, name, slug, plan, status, settings, usage_limits, created_at, updated_at)
-                        VALUES (:id, :name, :slug, :plan, :status, '{}', '{}', :created_at, :updated_at)
+                        VALUES (:id, :name, :slug, :plan, :status, :settings, :usage_limits, :created_at, :updated_at)
                     """),
                     {
                         "id": tenant_id,
@@ -60,6 +60,8 @@ class TestTenantIntegration:
                         "slug": None,
                         "plan": "free",
                         "status": "active",
+                        "settings": '{"theme": "light"}',
+                        "usage_limits": '{"users": 1}',
                         "created_at": now,
                         "updated_at": now,
                     },
@@ -81,7 +83,7 @@ class TestTenantIntegration:
                 session.execute(
                     text("""
                         INSERT INTO tenants (id, name, slug, plan, status, settings, usage_limits, created_at, updated_at)
-                        VALUES (:id, :name, :slug, :plan, :status, '{}', :usage_limits, :created_at, :updated_at)
+                        VALUES (:id, :name, :slug, :plan, :status, :settings, :usage_limits, :created_at, :updated_at)
                     """),
                     {
                         "id": tenant_id,
@@ -89,6 +91,7 @@ class TestTenantIntegration:
                         "slug": "null-limits",
                         "plan": "free",
                         "status": "active",
+                        "settings": '{"theme": "light"}',
                         "usage_limits": None,
                         "created_at": now,
                         "updated_at": now,

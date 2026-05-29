@@ -18,7 +18,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.add_column('tenants', sa.Column('slug', sa.String(length=100), server_default='', nullable=False))
+    # Adding NOT NULL columns with server_default.
+    # Existing rows (created before this migration) need the defaults applied:
+    #   slug    → ''
+    #   usage_limits → '{}'::jsonb
+    # The server_default handles new rows; existing rows are backfilled by the
+    # defaults since add_column applies them when the column is first added as
+    # nullable then immediately marked non-nullable (PostgreSQL applies the
+    # server_default to all pre-existing rows during the DDL step).
+    op.add_column('tenants', sa.Column('slug', sa.String(length=100), server_default=sa.text("''::character varying"), nullable=False))
     op.add_column('tenants', sa.Column('usage_limits', sa.JSONB(), nullable=False, server_default=sa.text("'{}'::jsonb")))
 
 
