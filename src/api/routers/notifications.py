@@ -242,12 +242,12 @@ async def list_reminders(
         raise HTTPException(status_code=401, detail="无效的租户信息")
 
     svc = NotificationService(session)
-    reminders = await svc.get_reminders(
+    reminders, total = await svc.get_reminders(
         user_id=current_user.user_id,
         tenant_id=current_user.tenant_id,
         upcoming_only=upcoming_only,
     )
-    return {"success": True, "data": reminders}
+    return {"success": True, "data": {"items": reminders, "total": total}}
 
 
 @notifications_router.delete(

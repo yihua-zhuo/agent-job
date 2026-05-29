@@ -13,9 +13,7 @@ class NotificationModel(Base):
     """Notification entity mapped to the `notifications` table."""
 
     __tablename__ = "notifications"
-    __table_args__ = (
-        Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status"),
-    )
+    __table_args__ = (Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
@@ -34,6 +32,8 @@ class NotificationModel(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
+        # payload_params contains only safe context values (content, related_type, related_id).
+        # If credential-class values are ever stored here, add redaction before serializing.
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,

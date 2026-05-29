@@ -192,7 +192,7 @@ class TestUpdateTenantEndpoint:
 
 class TestDeleteTenantEndpoint:
     def test_returns_405(self, client_with_service):
-        """DELETE is not allowed on /api/v1/tenants/{id} — returns 405 Method Not Allowed."""
+        """DELETE is not defined on /api/v1/tenants/{id} — FastAPI returns 405 Method Not Allowed."""
         client, _ = client_with_service
         resp = client.delete("/api/v1/tenants/1")
         assert resp.status_code == 405

@@ -110,9 +110,9 @@ class AutomationService:
             return {"type": action_type, "status": "created" if task_result else "failed"}
 
         elif action_type == "email.send":
-            return {"type": action_type, "status": "queued", "template": params.get("template")}
+            return {"type": action_type, "status": "not_implemented", "template": params.get("template")}
         elif action_type == "webhook.call":
-            return {"type": action_type, "status": "queued", "url": params.get("url")}
+            return {"type": action_type, "status": "not_implemented", "url": params.get("url")}
         elif action_type == "tag.add":
             return {"type": action_type, "status": "added", "tag": params.get("tag")}
         elif action_type == "ticket.assign":

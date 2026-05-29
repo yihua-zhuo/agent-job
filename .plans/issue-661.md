@@ -13,11 +13,11 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 
 ## Implementation Steps
 1. **Replace `src/db/models/notification.py`** with the new `NotificationModel`:
-   - Fields: `id` (pk), `user_id` (index=True), `tenant_id` (index=True), `channel` (String(50)), `template` (String(255)), `params_` (JSON, using `postgresql.JSON`), `status` (String(50)), `priority` (String(20)), `created_at` (DateTime, `server_default=func.now()`), `delivered_at` (DateTime, nullable), `read_at` (DateTime, nullable).
+   - Fields: `id` (pk), `user_id` (index=True), `tenant_id` (index=True), `channel` (String(50)), `template` (String(255)), `payload_params` (JSON, mapped_column `params_`, using `postgresql.JSON`), `status` (String(50)), `priority` (String(20)), `created_at` (DateTime, `server_default=func.now()`), `delivered_at` (DateTime, nullable), `read_at` (DateTime, nullable).
    - Add `__table_args__` with a composite index: `Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status")`.
    - Import `JSON` from `sqlalchemy.dialects.postgresql`.
-   - `to_dict()` must serialize `params_` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`. The dict key should use `'params'` (without trailing underscore) — `{"params": self.params_, ...}` — to present a clean API contract while the Python attribute remains `params_`.
-   - Rename `params` to `params_` in Python (trailing underscore avoids the built-in shadow).
+   - `to_dict()` must serialize `payload_params` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`. The dict key should use `'params'` (without trailing underscore) — `{"params": self.payload_params, ...}` — to present a clean API contract while the Python attribute remains `payload_params`.
+   - Python attribute is `payload_params` (mapped to DB column `params_`).
 
 2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
 

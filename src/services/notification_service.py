@@ -201,7 +201,7 @@ class NotificationService:
         user_id: int,
         tenant_id: int,
         upcoming_only: bool = True,
-    ) -> list[ReminderModel]:
+    ) -> tuple[list[ReminderModel], int]:
         """获取用户的提醒列表"""
         conditions = [
             ReminderModel.tenant_id == tenant_id,
@@ -211,7 +211,10 @@ class NotificationService:
             conditions.append(ReminderModel.is_completed == False)  # noqa: E712
             conditions.append(ReminderModel.remind_at > datetime.now(UTC))
 
+        count_result = await self.session.execute(select(func.count(ReminderModel.id)).where(and_(*conditions)))
+        total = count_result.scalar_one()
+
         result = await self.session.execute(
             select(ReminderModel).where(and_(*conditions)).order_by(ReminderModel.remind_at)
         )
-        return result.scalars().all()
+        return result.scalars().all(), total

@@ -104,8 +104,8 @@ def make_notification_handler(state):
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             unread_filter = "read_at is null" in sql_text_lower
-            page_size = max(params.get("limit", 20), 1)
-            offset = max(params.get("offset", 0), 0)
+            page_size = max(params.get("limit_1", 20), 1)
+            offset = max(params.get("offset_1", 0), 0)
             rows = []
             for n in state._notifications.values():
                 if n.get("tenant_id") != tenant_id:
@@ -125,6 +125,14 @@ def make_notification_handler(state):
                 n["status"] = "read"
                 return MockResult([_notification_to_row(n)])
             return MockResult([])
+
+        if "delete from notifications" in sql_text_lower:
+            nid = params.get("id")
+            n = state._notifications.get(nid)
+            if n and n.get("tenant_id") == params.get("tenant_id"):
+                del state._notifications[nid]
+                return MockResult([], rowcount=1)
+            return MockResult([], rowcount=0)
 
         if "notifications" in sql_text_lower:
             # Within the notification domain but pattern not recognised — fail loudly.
@@ -188,15 +196,24 @@ def make_reminder_handler(state):
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             # is_completed_filter comes from params (set by the service via upcoming_only).
+            # When "is_completed" is absent from params, upcoming_only=True was used server-side
+            # (service appended is_completed==False as a bound param). We treat is_completed=None
+            # in params as a signal to exclude completed reminders by default.
             is_completed_filter = params.get("is_completed")
-            page_size = max(params.get("limit", 20), 1)
-            offset = max(params.get("offset", 0), 0)
+            now = datetime.now(UTC)
+            upcoming_only = "is_completed" not in params
+            page_size = max(params.get("limit_1", 20), 1)
+            offset = max(params.get("offset_1", 0), 0)
             rows = [
                 r
                 for r in state._reminders.values()
                 if r.get("tenant_id") == tenant_id
                 and r.get("user_id") == user_id
-                and (is_completed_filter is None or r.get("is_completed") == is_completed_filter)
+                and (
+                    is_completed_filter is None
+                    or r.get("is_completed") == is_completed_filter
+                )
+                and not (upcoming_only and (r.get("is_completed") or (r.get("remind_at") and r.get("remind_at") <= now)))
             ]
             return MockResult([_reminder_to_row(r) for r in rows[offset : offset + page_size]])
 

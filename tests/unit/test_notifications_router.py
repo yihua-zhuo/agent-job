@@ -288,28 +288,31 @@ class TestListReminders:
     def test_list_reminders_empty(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.get_reminders = AsyncMock(return_value=[])
+            svc.get_reminders = AsyncMock(return_value=([], 0))
             client = _app()
             response = client.get("/api/v1/reminders")
             assert response.status_code == 200
-            assert response.json()["data"] == []
+            assert response.json()["data"] == {"items": [], "total": 0}
 
     def test_list_reminders_with_items(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
             svc.get_reminders = AsyncMock(
-                return_value=[
-                    {
-                        "id": 1,
-                        "title": "Standup",
-                        "remind_at": "2026-12-31T09:00:00",
-                    }
-                ]
+                return_value=(
+                    [
+                        {
+                            "id": 1,
+                            "title": "Standup",
+                            "remind_at": "2026-12-31T09:00:00",
+                        }
+                    ],
+                    1,
+                )
             )
             client = _app()
             response = client.get("/api/v1/reminders")
             assert response.status_code == 200
-            assert len(response.json()["data"]) == 1
+            assert len(response.json()["data"]["items"]) == 1
 
 
 # ---------------------------------------------------------------------------
@@ -317,7 +320,7 @@ class TestListReminders:
 # ---------------------------------------------------------------------------
 
 
-class TestDeleteNotification:
+class TestDeleteNotificationEndpoint:
     def test_delete_notification_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
@@ -341,7 +344,7 @@ class TestDeleteNotification:
 # ---------------------------------------------------------------------------
 
 
-class TestDeleteReminder:
+class TestCancelReminderEndpoint:
     def test_cancel_reminder_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
