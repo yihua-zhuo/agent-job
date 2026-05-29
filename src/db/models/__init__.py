@@ -11,7 +11,7 @@ import importlib
 import pkgutil
 
 from db.base import Base
-from internal.db.models import (
+from internal.db.models import (  # noqa: F401 — auto-discovery populates globals from module
     IdentityDepartmentModel,
     IdentityOrganizationModel,
     IdentityPermissionModel,
@@ -22,26 +22,18 @@ from internal.db.models import (
     IdentityUserRoleModel,
 )
 
-_package_name = __name__
-_model_names: list[str] = []
-_identity_model_names = [
-    "IdentityDepartmentModel",
-    "IdentityOrganizationModel",
-    "IdentityPermissionModel",
-    "IdentityRoleModel",
-    "IdentityRolePermissionModel",
-    "IdentityTenantModel",
-    "IdentityUserModel",
-    "IdentityUserRoleModel",
-]
-
-for _info in sorted(pkgutil.iter_modules(__path__, prefix=f"{_package_name}."), key=lambda item: item.name):
-    if _info.name == _package_name:
+# Auto-discover old-style ORM models registered under src/db/models/
+for _info in sorted(pkgutil.iter_modules(__path__, prefix=f"{__name__}."), key=lambda item: item.name):
+    if _info.name == __name__:
         continue
     _module = importlib.import_module(_info.name)
     for _name, _value in vars(_module).items():
         if isinstance(_value, type) and issubclass(_value, Base) and _value is not Base:
             globals()[_name] = _value
-            _model_names.append(_name)
 
-__all__ = sorted(set(_model_names + _identity_model_names))
+# __all__ = all discovered old-style models + explicitly imported identity models
+__all__ = sorted(
+    name
+    for name, value in globals().items()
+    if isinstance(value, type) and issubclass(value, Base) and value is not Base
+)

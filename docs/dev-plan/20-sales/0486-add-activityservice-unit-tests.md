@@ -6,7 +6,7 @@
 | 分类 | [20-sales](../README.md#12-分类总览) |
 | 优先级 | 推荐 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [052-add-missing-activityservice-integration-tests](./052-add-missing-activityservice-integration-tests.md), [0485-add-get-activity-methods-to-activityservice](./0485-add-get-activity-methods-to-activityservice.md) |
+| 依赖 | [0487-add-missing-activityservice-integration-tests](./0487-add-missing-activityservice-integration-tests.md), [0485-add-missing-activityservice-methods](./0485-add-missing-activityservice-methods.md) |
 | 启用后赋能 | [0487-add-missing-activityservice-integration-tests](./0487-add-missing-activityservice-integration-tests.md) |
 | 状态 | 📋 待开始 |
 

@@ -6,7 +6,7 @@
 | 分类 | [20-sales](../README.md#12-分类总览) |
 | 优先级 | 推荐 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [板 #486](), [板 #452]() |
+| 依赖 | [板 #486](https://github.com/yihua-zhuo/agent-job/issues/486), [板 #452](https://github.com/yihua-zhuo/agent-job/issues/452) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
