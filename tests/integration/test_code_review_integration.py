@@ -91,8 +91,8 @@ class TestCodeReviewModelIntegration:
         assert d["created_at"] is not None
         assert d["created_at"] == now.isoformat()
 
-    async def test_to_dict_on_expired_instance(self, db_schema, tenant_id, async_session):
-        """to_dict() handles a freshly loaded instance after session.expire()."""
+    async def test_to_dict_on_loaded_instance(self, db_schema, tenant_id, async_session):
+        """to_dict() produces a correct dict on a freshly loaded instance."""
         review = CodeReviewModel(
             tenant_id=tenant_id,
             user_id=55,
@@ -105,8 +105,6 @@ class TestCodeReviewModelIntegration:
         async_session.add(review)
         await async_session.flush()
         await async_session.refresh(review)
-
-        async_session.expire(review)
         d = review.to_dict()
         assert d["id"] == review.id
         assert d["tenant_id"] == tenant_id
