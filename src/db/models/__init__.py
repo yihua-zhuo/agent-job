@@ -11,9 +11,29 @@ import importlib
 import pkgutil
 
 from db.base import Base
+from internal.db.models import (
+    IdentityDepartmentModel,
+    IdentityOrganizationModel,
+    IdentityPermissionModel,
+    IdentityRoleModel,
+    IdentityRolePermissionModel,
+    IdentityTenantModel,
+    IdentityUserModel,
+    IdentityUserRoleModel,
+)
 
 _package_name = __name__
 _model_names: list[str] = []
+_identity_model_names = [
+    "IdentityDepartmentModel",
+    "IdentityOrganizationModel",
+    "IdentityPermissionModel",
+    "IdentityRoleModel",
+    "IdentityRolePermissionModel",
+    "IdentityTenantModel",
+    "IdentityUserModel",
+    "IdentityUserRoleModel",
+]
 
 for _info in sorted(pkgutil.iter_modules(__path__, prefix=f"{_package_name}."), key=lambda item: item.name):
     if _info.name == _package_name:
@@ -24,4 +44,4 @@ for _info in sorted(pkgutil.iter_modules(__path__, prefix=f"{_package_name}."), 
             globals()[_name] = _value
             _model_names.append(_name)
 
-__all__ = sorted(set(_model_names))
+__all__ = sorted(set(_model_names + _identity_model_names))
