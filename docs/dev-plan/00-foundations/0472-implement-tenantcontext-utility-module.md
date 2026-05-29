@@ -44,7 +44,13 @@
 
 N/A — 新建模块
 
-`src/internal/middleware/` 目录尚未存在，`tenant_context.py` 为全新创建。相关已有代码参考：
+**注意：迁移已有实现**。`src/utils/tenant_context.py` 已存在（线程本地存储）。本板块新增 `src/internal/middleware/tenant_context.py` 作为canonical实现后，需将消费者迁移过来：
+
+- 将所有 `from utils.tenant_context import` 的导入改为 `from internal.middleware.tenant_context import`
+- 在 `src/utils/tenant_context.py` 保留兼容桥接层（proxy to new module），并标注 `@deprecated`（后续 PR 清理）
+- 新模块 README / docstring 需注明迁移来源和时间线
+
+相关已有代码参考：
 
 - `src/dependencies/` 下有 `require_auth` 和 `AuthContext` 定义（从属 #473），其中 `AuthContext` 包含 `tenant_id: int` 字段
 - 现有 service 构造签名均为 `__init__(self, session: AsyncSession)`，尚无从 context 读取 tenant 的先例

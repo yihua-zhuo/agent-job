@@ -1,16 +1,8 @@
 """Unit tests for identity ORM models."""
 
-import sys
 from datetime import datetime
-from pathlib import Path
 
-# Ensure src/ is on sys.path (must be before other imports to avoid import errors)
-_project_root = Path(__file__).resolve().parents[2]
-_src_root = _project_root / "src"
-if str(_src_root) not in sys.path:
-    sys.path.insert(0, str(_src_root))
-
-from internal.db.models.identity import (  # noqa: E402
+from internal.db.models.identity import (
     IdentityDepartmentModel,
     IdentityOrganizationModel,
     IdentityPermissionModel,
