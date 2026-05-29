@@ -43,10 +43,12 @@ WebhookDeliveryService 已由 #722 实现完毕，但目前仅有单元测试覆
 
 WebhookDeliveryService 已由 #722 交付，位于 `src/services/webhook_service.py`。其核心方法包括：
 
-- `register_webhook(session, tenant_id, url, event_type, secret)` → 注册新 webhook
-- `list_webhooks(session, tenant_id, page, page_size)` → 列表查询
-- `delete_webhook(session, webhook_id, tenant_id)` → 删除
-- `deliver_webhook(session, webhook_id, payload)` → 执行投递（含重试逻辑）
+- `WebhookService.register_webhook(tenant_id, url, events, secret)` → 注册新 webhook（`events` 为 `list[str]`，如 `["ticket.created"]`）
+- `WebhookService.list_webhooks(tenant_id)` → 列表查询
+- `WebhookService.delete_webhook(webhook_id, tenant_id)` → 删除
+- `WebhookDeliveryService.deliver(event_type, payload, tenant_id)` → 执行投递（`event_type` 为单个字符串，如 `"ticket.created"`）
+
+> **注意**：以上签名需在实施前对照 `src/services/webhook_service.py` 确认（#722 交付后）。特别是 `register_webhook` 的 `events` 参数为 `list[str]`，不是 scalar `event_type`；`deliver` 的事件类型参数为单个 `event_type` 字符串。
 
 关键 ORM 模型：`WebhookModel` / `WebhookDeliveryModel`（见 `src/db/models/webhook.py`；#719 后确认列名）。
 
@@ -137,7 +139,7 @@ from services.webhook_service import WebhookDeliveryService
 class TestWebhookServiceIntegration:
     async def test_webhook_crud(self, db_schema, tenant_id, async_session):
         svc = WebhookDeliveryService(async_session)
-        webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", "deal.created", "secret123")
+        webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", events=["deal.created"], secret="secret123")
         assert webhook.id is not None
 
         webhooks = await svc.list_webhooks(tenant_id)
@@ -157,7 +159,7 @@ class TestWebhookServiceIntegration:
 ```python
     async def test_deliver_success_inserts_record(self, db_schema, tenant_id, async_session):
         svc = WebhookDeliveryService(async_session)
-        webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", "deal.created", "secret123")
+        webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", events=["deal.created"], secret="secret123")
 
         # Patch path must match how httpx is imported in webhook_service.py:
         # If `import httpx` → patch "services.webhook_service.httpx.AsyncClient"
@@ -167,9 +169,17 @@ class TestWebhookServiceIntegration:
             mock_instance.post.return_value = AsyncMock(status_code=200)
             mock_client.return_value.__aenter__.return_value = mock_instance
 
-            result = await svc.deliver(webhook.id, {"event": "deal.created"}, tenant_id)
+            await svc.deliver("deal.created", {"event": "deal.created"}, tenant_id)
 
-        assert result.status == "success"
+        # Verify delivery record was inserted (query DB)
+        from sqlalchemy import select
+        from db.models.webhook_delivery import WebhookDeliveryModel
+        result = await async_session.execute(
+            select(WebhookDeliveryModel).where(WebhookDeliveryModel.webhook_id == webhook.id)
+        )
+        record = result.scalars().first()
+        assert record is not None
+        assert record.status == "success"
 ```
 
 **完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py::TestWebhookServiceIntegration::test_deliver_success_inserts_record -v` → `1 passed`
@@ -179,17 +189,24 @@ class TestWebhookServiceIntegration:
 ```python
     async def test_deliver_failure_sets_next_retry_at(self, db_schema, tenant_id, async_session):
         svc = WebhookDeliveryService(async_session)
-        webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", "deal.created", "secret123")
+        webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", events=["deal.created"], secret="secret123")
 
         with patch("services.webhook_service.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
             mock_instance.post.return_value = AsyncMock(status_code=500)
             mock_client.return_value.__aenter__.return_value = mock_instance
 
-            result = await svc.deliver("deal.created", {"event": "deal.created"}, tenant_id)
+            await svc.deliver("deal.created", {"event": "deal.created"}, tenant_id)
 
-        assert result.status == "failed"
-        assert result.next_retry_at is not None
+        from sqlalchemy import select
+        from db.models.webhook_delivery import WebhookDeliveryModel
+        result = await async_session.execute(
+            select(WebhookDeliveryModel).where(WebhookDeliveryModel.webhook_id == webhook.id)
+        )
+        record = result.scalars().first()
+        assert record is not None
+        assert record.status == "failed"
+        assert record.next_retry_at is not None
 ```
 
 **完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py::TestWebhookServiceIntegration::test_deliver_failure_sets_next_retry_at -v` → `1 passed`
@@ -200,9 +217,10 @@ class TestWebhookServiceIntegration:
 
 ```python
     async def test_deliver_max_retries_sets_permanent_failure(self, db_schema, tenant_id, async_session):
-        from sqlalchemy import text
+        from sqlalchemy import text, select
+        from db.models.webhook_delivery import WebhookDeliveryModel
         svc = WebhookDeliveryService(async_session)
-        webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", "deal.created", "secret123")
+        webhook = await svc.register_webhook(tenant_id, "https://example.com/hook", events=["deal.created"], secret="secret123")
 
         with patch("services.webhook_service.httpx.AsyncClient") as mock_client:
             mock_instance = AsyncMock()
@@ -212,13 +230,16 @@ class TestWebhookServiceIntegration:
             for i in range(5):
                 await svc.deliver("deal.created", {"event": "deal.created"}, tenant_id)
 
-        # 查询最后一条投递记录
+        # Query last delivery record for this webhook
         result = await async_session.execute(
-            text("SELECT status FROM webhook_delivery WHERE webhook_id=:wid ORDER BY id DESC LIMIT 1"),
-            {"wid": webhook.id}
+            select(WebhookDeliveryModel)
+            .where(WebhookDeliveryModel.webhook_id == webhook.id)
+            .order_by(WebhookDeliveryModel.id.desc())
+            .limit(1)
         )
-        row = result.scalar_one_or_none()
-        assert row == "failed"  # permanent failure
+        record = result.scalars().first()
+        assert record is not None
+        assert record.status == "failed"  # permanent failure
 ```
 
 **完成判定**：`PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py::TestWebhookServiceIntegration::test_deliver_max_retries_sets_permanent_failure -v` → `1 passed`
@@ -231,8 +252,8 @@ class TestWebhookServiceIntegration:
     async def test_tenant_isolation(self, db_schema, tenant_id, async_session):
         svc = WebhookDeliveryService(async_session)
 
-        webhook_a = await svc.register_webhook(tenant_id, "https://a.com/hook", "deal.created", "secret")
-        webhook_b = await svc.register_webhook(tenant_id + 1000, "https://b.com/hook", "deal.created", "secret")
+        webhook_a = await svc.register_webhook(tenant_id, "https://a.com/hook", events=["deal.created"], secret="secret")
+        webhook_b = await svc.register_webhook(tenant_id + 1000, "https://b.com/hook", events=["deal.created"], secret="secret")
 
         list_a = await svc.list_webhooks(tenant_id)
         ids_a = [w.id for w in list_a]

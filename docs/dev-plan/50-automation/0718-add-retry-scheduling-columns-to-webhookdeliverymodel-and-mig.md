@@ -61,6 +61,7 @@ TBD - 待验证：`src/services/webhook_delivery_service.py L? — 现有 delive
 - [ ] `WebhookDeliveryModel` 无 `last_attempt_at` 字段，无法记录最近一次尝试时间
 - [ ] `WebhookDeliveryModel` 无 `error_message` 字段，调用方无法拿到失败原因文本
 - [ ] 无 Alembic migration 脚本将上述列加到数据库 schema
+- [ ] 无 `next_retry_at` 部分索引（部分索引只能在 migration 中声明，不在 ORM model）
 
 ---
 
@@ -120,7 +121,7 @@ TBD - 待验证：`src/services/webhook_delivery_service.py L? — 现有 delive
 
 ```python
 from datetime import datetime
-from sqlalchemy import DateTime, Text, Index, column, text
+from sqlalchemy import DateTime, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 class WebhookDeliveryModel(Base):
@@ -134,15 +135,11 @@ class WebhookDeliveryModel(Base):
         DateTime(timezone=True), nullable=True
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    __table_args__ = (
-        Index(
-            "ix_delivery_next_retry",
-            "next_retry_at",
-            postgresql_where=column("next_retry_at").is_(None),
-        ),
-    )
+    # NOTE: next_retry_at is always set programmatically (no ORM default needed);
+    # the partial index is defined only in the Alembic migration.
 ```
+
+> **注意**：不要在 ORM model 中使用 `__table_args__` 定义部分索引。SQLAlchemy 的 `Index` 构造不支持 `postgresql_where` 参数；部分索引只能在 Alembic migration 的 `upgrade()` 中通过 `op.create_index(..., postgresql_where=column('next_retry_at').is_(None))` 声明。
 
 **完成判定**：`ruff check src/db/models/webhook.py` → 0 errors
 

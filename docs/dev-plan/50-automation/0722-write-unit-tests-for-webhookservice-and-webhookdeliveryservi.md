@@ -159,11 +159,13 @@ Locate the service source and confirm the mock session pattern in the reference 
 Create the test file and define the mock session fixture with all required handlers.
 
 操作：
-- a) Add imports: `make_mock_session`, `MockState`, `make_webhook_handler`, `make_webhook_delivery_handler`, `make_count_handler` from `tests.unit.conftest`
+- a) Add imports: `make_mock_session`, `MockState`, `make_webhook_handler`, `make_webhook_delivery_handler`, `make_count_handler` from `tests.unit.conftest` (these are auto-discovered via `_load_domain_handler_modules()` in conftest — no need to edit conftest itself)
 - b) Add `WebhookService` and `WebhookDeliveryService` imports from the service module
 - c) Define `mock_db_session` fixture with all three handlers (webhook, webhook_delivery, count)
 - d) Define `webhook_service` fixture: `WebhookService(mock_db_session)`
 - e) Define `delivery_service` fixture: `WebhookDeliveryService(mock_db_session)`
+
+> **注意**：`tests/unit/domain_handlers/webhook.py` 必须通过 `__all__` 导出 `make_webhook_handler`、`make_webhook_delivery_handler`、`get_handlers`，这样 conftest 的 `_load_domain_handler_modules()` 才能自动发现它们。
 
 示例代码：
 
@@ -218,7 +220,7 @@ async def test_register_webhook_success(webhook_service, mock_db_session):
     result = await webhook_service.register_webhook(
         tenant_id=1,
         url="https://example.com/hook",
-        event_type="ticket.created",
+        events=["ticket.created"],
     )
     assert result.url == "https://example.com/hook"
     assert result.tenant_id == 1
@@ -229,7 +231,7 @@ async def test_register_webhook_invalid_url_raises_validation(webhook_service):
         await webhook_service.register_webhook(
             tenant_id=1,
             url="not-a-valid-url",
-            event_type="ticket.created",
+            events=["ticket.created"],
         )
 ```
 
@@ -289,13 +291,13 @@ async def test_deliver_queries_matching_webhooks(delivery_service, mock_db_sessi
     state.webhooks.clear()
     state.webhooks.append(WebhookModel(
         id=5, tenant_id=1, url="https://hook.example.com",
-        event_type="ticket.created", is_active=True,
+        events=["ticket.created"], is_active=True,
     ))
 
     await delivery_service.deliver(
-        tenant_id=1,
         event_type="ticket.created",
         payload={"ticket_id": 42},
+        tenant_id=1,
     )
     # Verify the handler was invoked with matching criteria
     calls = state.webhook_handler_calls
@@ -307,13 +309,13 @@ async def test_deliver_inserts_failure_record(delivery_service, mock_db_session)
     state.webhooks.clear()
     state.webhooks.append(WebhookModel(
         id=5, tenant_id=1, url="http://unreachable.invalid",
-        event_type="ticket.created", is_active=True,
+        events=["ticket.created"], is_active=True,
     ))
 
     await delivery_service.deliver(
-        tenant_id=1,
         event_type="ticket.created",
         payload={"ticket_id": 42},
+        tenant_id=1,
     )
     # Delivery attempt should be recorded regardless of HTTP outcome
     assert any(

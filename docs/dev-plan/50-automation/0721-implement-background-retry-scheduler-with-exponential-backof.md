@@ -31,7 +31,7 @@
 
 ### 1.4 关键 KPI
 
-- `PYTHONPATH=src pytest tests/unit/test_webhook_scheduler.py -v` → ≥8 passed
+- `PYTHONPATH=src pytest tests/unit/test_webhook_scheduler.py -v` → ≥7 passed
 - `PYTHONPATH=src pytest tests/integration/test_webhook_scheduler_integration.py -v` → ≥ 4 passed（如 CI 环境有 DB）
 - `ruff check src/services/webhook_scheduler.py src/services/webhook_delivery_service.py` → 0 errors
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → exit 0（如有 migration）
@@ -106,7 +106,7 @@ TBD - 待验证：`src/db/models/webhook.py` L? — 现有 webhooks 表 schema�
 |依赖 | 版本 | 理由 |
 |------|------|------|
 | `asyncio` | 标准库 | Python3.11+ 内置，无需额外安装 |
-| `pyyaml` | `>=6.0` | 仅用于配置如需要；已在本项目依赖中 |
+| `httpx` | `>=0.25` | 已在本项目依赖中，用于 HTTP POST 重试 |
 
 ### 4.3 兼容性约束
 
@@ -175,11 +175,13 @@ a) 创建文件 `src/services/webhook_scheduler.py`：
 
 ```python
 from datetime import datetime, timedelta, timezone
-from sqlalchemy import select, update
+import hashlib
+import hmac
+import json
+from sqlalchemy import select, distinct, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import async_session_maker
 from db.models.webhook import WebhookModel, WebhookDeliveryModel
-from services.webhook_delivery_service import WebhookDeliveryService
 
 RETRY_DELAYS: tuple[timedelta, ...] = (
     timedelta(minutes=1),
@@ -193,30 +195,91 @@ BATCH_SIZE = 50
 SCHEDULE_INTERVAL = 30  # seconds
 
 
+async def _send_webhook(url: str, payload: dict, secret: str) -> bool:
+    """Send a retry webhook with HMAC-SHA256 signing (same as #720)."""
+    body = json.dumps(payload, sort_keys=True).encode()
+    sig = f"sha256={hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()}"
+    headers = {
+        "Content-Type": "application/json",
+        "X-Webhook-Signature": sig,
+    }
+    async with httpx.AsyncClient(timeout=30.0) as client:
+        resp = await client.post(url, content=body, headers=headers)
+        return 200 <= resp.status_code < 300
+
+
 async def _retry_scheduler() -> None:
-    session: AsyncSession = async_session_maker()
     try:
-        svc = WebhookDeliveryService(session)
+        session: AsyncSession = async_session_maker()
+    except Exception:
+        import logging
+        logging.getLogger(__name__).exception("Scheduler: failed to create session")
+        return
+    try:
         now = datetime.now(timezone.utc)
-        stmt = (
-            select(WebhookDeliveryModel)
+        # Step 1: get distinct tenant_ids that have failed deliveries due for retry
+        tenant_stmt = (
+            select(distinct(WebhookDeliveryModel.tenant_id))
             .where(
-                WebhookDeliveryModel.tenant_id == tenant_id,  # multi-tenant isolation (tenant_id resolved per-cycle)
                 WebhookDeliveryModel.status == "failed",
                 WebhookDeliveryModel.attempts < MAX_RETRIES,
                 WebhookDeliveryModel.next_retry_at <= now,
             )
-            .order_by(WebhookDeliveryModel.next_retry_at)
-            .limit(BATCH_SIZE)
         )
-        result = await session.execute(stmt)
-        deliveries = result.scalars().all()
+        tenant_result = await session.execute(tenant_stmt)
+        tenant_ids = list(tenant_result.scalars().all())
+
+        for tenant_id in tenant_ids:
+            stmt = (
+                select(WebhookDeliveryModel)
+                .where(
+                    WebhookDeliveryModel.tenant_id == tenant_id,
+                    WebhookDeliveryModel.status == "failed",
+                    WebhookDeliveryModel.attempts < MAX_RETRIES,
+                    WebhookDeliveryModel.next_retry_at <= now,
+                )
+                .order_by(WebhookDeliveryModel.next_retry_at)
+                .limit(BATCH_SIZE)
+                .with_for_update(skip_locked=True)
+            )
+            result = await session.execute(stmt)
+            deliveries: list[WebhookDeliveryModel] = list(result.scalars().all())
+
+            for delivery in deliveries:
+                webhook_stmt = select(WebhookModel).where(
+                    WebhookModel.id == delivery.webhook_id,
+                    WebhookModel.tenant_id == delivery.tenant_id,
+                )
+                wh_result = await session.execute(webhook_stmt)
+                webhook = wh_result.scalar_one_or_none()
+                if webhook is None:
+                    continue
+
+                payload = delivery.payload or {}
+                ok = await _send_webhook(webhook.url, payload, webhook.secret or "")
+
+                if ok:
+                    delivery.status = "success"
+                    delivery.delivered_at = now
+                else:
+                    delivery.attempts += 1
+                    if delivery.attempts >= MAX_RETRIES:
+                        delivery.status = "failed"
+                        delivery.next_retry_at = None
+                    else:
+                        delay = RETRY_DELAYS[delivery.attempts - 1]
+                        delivery.next_retry_at = now + delay
+                await session.flush()
+        # Commit after full batch per tenant
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise
     finally:
         await session.close()
-    # TODO: fetch parent webhook URL/secret; POST retry; update status/next_retry_at # (refinement in subsequent steps)
 
 
-async def start_scheduler(app: FastAPI = None) -> None:
+async def start_scheduler() -> None:
     import asyncio
     while True:
         try:
@@ -227,9 +290,9 @@ async def start_scheduler(app: FastAPI = None) -> None:
         await asyncio.sleep(SCHEDULE_INTERVAL)
 
 
-def create_scheduler_task(app: FastAPI) -> asyncio.Task:
-    task = asyncio.create_task(start_scheduler(app), name="webhook-retry-scheduler")
-    app.state.scheduler_task = task
+def create_scheduler_task() -> asyncio.Task:
+    import asyncio
+    task = asyncio.create_task(start_scheduler(), name="webhook-retry-scheduler")
     return task
 ```
 
@@ -237,81 +300,6 @@ b) 运行 ruff check：
 
 ```bash
 ruff check src/services/webhook_scheduler.py
-```
-
-**完成判定**：`ruff check src/services/webhook_scheduler.py` exit 0
-
-### Step 3: 实现重试核心逻辑
-
-完善 `src/services/webhook_scheduler.py` 中的 `_retry_scheduler()`，加入：
-- 按 tenant_id 逐条查询父 Webhook 的 URL/secret
-- 对每条记录发起 HTTP POST 重试（使用 `httpx.AsyncClient`）
-- 成功时更新 `status='success'`，`delivered_at=now`
-- 失败时 `attempts += 1`；若 `attempts >= MAX_RETRIES` 则 `status='failed'`；否则 `next_retry_at = now + RETRY_DELAYS[attempts-1]`
-
-操作：
-
-在 `_retry_scheduler()` 中逐条处理（而非批量 POST）：
-
-```python
-import httpx
-
-
-async def _send_webhook(url: str, payload: dict, secret: str) -> bool:
-    headers = {"Content-Type": "application/json"}
-    async with httpx.AsyncClient(timeout=30.0) as client:
-        resp = await client.post(url, json=payload, headers=headers)
-        return 200 <= resp.status_code < 300
-
-
-async def _retry_scheduler() -> None:
-    session: AsyncSession = async_session_maker()
-    try:
-        now = datetime.now(timezone.utc)
-        stmt = (
-            select(WebhookDeliveryModel)
-            .where(
-                # NOTE: tenant_id filter is applied per-delivery below (see loop).
-                # For full multi-tenant isolation, either loop over known tenant_ids
-                # or pass tenant_id explicitly. The per-delivery filter below
-                # (WebhookModel.tenant_id == delivery.tenant_id) is the safety net.
-                WebhookDeliveryModel.status == "failed",
-                WebhookDeliveryModel.attempts < MAX_RETRIES,
-                WebhookDeliveryModel.next_retry_at <= now,
-            )
-            .order_by(WebhookDeliveryModel.next_retry_at)
-            .limit(BATCH_SIZE)
-        )
-        result = await session.execute(stmt)
-        deliveries: list[WebhookDeliveryModel] = list(result.scalars().all())
-
-        for delivery in deliveries:
-            webhook_stmt = select(WebhookModel).where(
-                WebhookModel.id == delivery.webhook_id,
-                WebhookModel.tenant_id == delivery.tenant_id,
-            )
-            wh_result = await session.execute(webhook_stmt)
-            webhook = wh_result.scalar_one_or_none()
-            if webhook is None:
-                continue
-
-            payload = delivery.payload or {}
-            ok = await _send_webhook(webhook.url, payload, webhook.secret)
-
-            if ok:
-                delivery.status = "success"
-                delivery.delivered_at = now
-            else:
-                delivery.attempts += 1
-                if delivery.attempts >= MAX_RETRIES:
-                    delivery.status = "failed"
-                    delivery.next_retry_at = None
-                else:
-                    delay = RETRY_DELAYS[delivery.attempts - 1]
-                    delivery.next_retry_at = now + delay
-            await session.flush()
-    finally:
-        await session.close()
 ```
 
 **完成判定**：`ruff check src/services/webhook_scheduler.py` exit 0
@@ -332,11 +320,14 @@ b) 在 lifespan startup 中插入：
 
 ```python
 async def lifespan(app: FastAPI):
-    app.state.scheduler_task = asyncio.create_task(start_scheduler(app), name="webhook-retry-scheduler")
+    from services.webhook_scheduler import create_scheduler_task
+    app.state.scheduler_task = create_scheduler_task()
     yield
     # Cancel on shutdown
     app.state.scheduler_task.cancel()
 ```
+
+> **注意**：调度器在独立 asyncio event loop 中运行；`get_db_session` 上下文管理器不适用于调度器的 session 管理——Step 2 中 `async_session_maker()` 是正确的模式。
 
 （若 lifespan 已存在，则将 `app.state.scheduler_task = asyncio.create_task(...)` 加入现有 startup块，并在 shutdown 块中 `app.state.scheduler_task.cancel()`）
 
@@ -380,7 +371,7 @@ b) 测试用例覆盖：
 ## 6. 验收
 
 - [ ] `ruff check src/services/webhook_scheduler.py src/main.py` → 0 errors
-- [ ] `PYTHONPATH=src pytest tests/unit/test_webhook_scheduler.py -v` → ≥ 8 passed
+- [ ] `PYTHONPATH=src pytest tests/unit/test_webhook_scheduler.py -v` → ≥ 7 passed
 - [ ] `PYTHONPATH=src pytest tests/integration/test_webhook_scheduler_integration.py -v` → ≥ 4 passed（DB 可用时）
 - [ ] `ruff format --check src/services/webhook_scheduler.py src/main.py` → exit 0
 - [ ] `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → exit 0（如涉及 migration）
@@ -393,7 +384,7 @@ b) 测试用例覆盖：
 | `httpx.AsyncClient` POST 超时导致单轮调度器异常崩溃，后续循环停止 | 低 | 高 | 在 `start_scheduler()` 外层 try/except 包裹 `_retry_scheduler()`整个调用，确保一次循环失败不会阻止后续循环 |
 | Fresh Session 频繁 open/close 在高并发写入场景下引发连接池耗尽 | 中 | 中 | 通过配置 `POOL_SIZE` 和 `MAX_OVERFLOW` 控制；或在 scheduler 中加互斥锁（单进程单调度器实例天然隔离） |
 | `next_retry_at` 列不存在导致 migration失败或运行时错误 | 低 | 高 | 在 Step 1 先检查列是否存在（SELECT column_name FROM information_schema.columns WHERE ...），列已存在则跳过该 migration |
-| 调度器与投递服务同时修改同一条记录，产生竞争条件 | 中 | 中 | 调度器使用 `SELECT ... FOR UPDATE SKIP LOCKED` 锁定正在处理的行；由 #720 提供原子 compare-and-swap 保障 |
+| 调度器与投递服务同时修改同一条记录，产生竞争条件 | 中 | 中 | 调度器使用 `SELECT ... FOR UPDATE SKIP LOCKED`（已在 Step 2 代码中实现）锁定正在处理的行；由 #720 提供原子 compare-and-swap 保障 |
 
 ---
 

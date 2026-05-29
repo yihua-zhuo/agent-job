@@ -30,7 +30,7 @@ Without a dedicated delivery service, each caller that needs to fire webhooks mu
 
 ### 1.4 关键 KPI
 
-- `PYTHONPATH=src pytest tests/unit/test_webhook_delivery_service.py -v` → `≥ 3 passed`
+- `PYTHONPATH=src pytest tests/unit/test_webhook_delivery_service.py -v` → `≥ 4 passed`
 - `PYTHONPATH=src pytest tests/integration/test_webhook_delivery_service_integration.py -v` → `≥ 3 passed` (uses real DB, real HTTP via `respx` or similar)
 - `ruff check src/services/webhook_delivery_service.py src/models/webhook_delivery.py` → `0 errors`
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → all exit 0
@@ -75,7 +75,7 @@ TBD - 待验证：`src/db/models/webhook_delivery.py` L? — #719 may have creat
 | 路径 | 用途 |
 |------|------|
 | `src/services/webhook_delivery_service.py` | `WebhookDeliveryService(session)` with `deliver(event_type, payload, tenant_id)` |
-| `src/db/models/webhook_delivery.py` | `WebhookDeliveryModel` ORM (id, webhook_id, tenant_id, event_type, status, delivered_at, error_message, request_payload, response_status_code) |
+| `src/db/models/webhook_delivery.py` | `WebhookDeliveryModel` ORM (id, webhook_id, tenant_id, event_type, status, delivered_at, response JSON, payload) — place alongside `WebhookModel` in `webhook.py` OR in this separate file; if separate, also add import to `alembic/env.py` |
 | `alembic/versions/<id>_create_webhook_delivery_table.py` | Creates `webhook_delivery` table with tenant_id index |
 | `tests/unit/test_webhook_delivery_service.py` | Unit tests: mock session + mock HTTP, verify signing + POST + ORM insert |
 | `tests/integration/test_webhook_delivery_service_integration.py` | Integration tests: real DB + `respx` mock endpoint, verify row persists |
@@ -153,9 +153,9 @@ Read the output of #719 (or check the working tree) to confirm:
 ```python
 from datetime import datetime
 from typing import Optional
-from sqlalchemy import String, Text, Integer, ForeignKey, DateTime, Enum as SAEnum
-from sqlalchemy import JSON
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy import String, Text, Integer, ForeignKey, DateTime
+from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.orm import Mapped, mapped_column
 from db.base import Base
 
 class WebhookDeliveryModel(Base):
@@ -167,9 +167,8 @@ class WebhookDeliveryModel(Base):
     event_type: Mapped[str] = mapped_column(String(128), nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)  # 'pending' | 'success' | 'failed'
     delivered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
-    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    payload: Mapped[dict] = mapped_column(JSON, nullable=False)   # matches WebhookDeliveryModel.payload column
-    response_status_code: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    response: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True)  # {'status_code': int, 'body': str} or {'error': str}
+    payload: Mapped[dict] = mapped_column(JSON, nullable=False)
 ```
 
 注意：不使用 `metadata` 作为列名（与 `Base.metadata` 冲突）。
@@ -201,7 +200,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import httpx
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.webhook import WebhookModel, WebhookDeliveryModel
@@ -216,19 +215,20 @@ class WebhookDeliveryService:
         payload: dict[str, Any],
         tenant_id: int,
     ) -> None:
-        # 1. Query active webhooks subscribed to event_type for this tenant
+        # 1. Query active webhooks subscribed to event_type for this tenant.
+        # Use SQL-level JSONB containment as primary filter; Python filter
+        # is the safety net.
+        # NOTE: WebhookModel.is_active and WebhookModel.events (list[str])
+        # must be confirmed from #719 model before running.
         stmt = select(WebhookModel).where(
             WebhookModel.tenant_id == tenant_id,
-            WebhookModel.is_active == True,          # confirm column name from #719
+            WebhookModel.is_active == True,  # noqa: E712 — confirm from #719
         )
-        # Filter by subscribed_events — depends on column type (JSONB or text[])
         result = await self.session.execute(stmt)
         webhooks = result.scalars().all()
 
-        # Filter in Python if subscribed_events is JSONB (contains check)
-        # Note: WebhookModel.events is a JSONB array column; use the correct
-        # attribute name. Apply SQL-level containment as primary filter where
-        # possible; Python filter is the safety net.
+        # Safety-net filter in Python (primary filter should be SQL-level
+        # via func.jsonb_exists if the query engine supports it)
         subscribed = [
             w for w in webhooks
             if event_type in (getattr(w, "events", []) or [])
@@ -256,25 +256,31 @@ class WebhookDeliveryService:
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(webhook.url, content=body, headers=headers)
-                status = response.status_code
-                error_msg = None if 200 <= status < 300 else response.text[:500]
+                status_code = response.status_code
+                if 200 <= status_code < 300:
+                    response_body = {"status_code": status_code, "body": response.text[:500]}
+                    error_msg = None
+                else:
+                    response_body = {"status_code": status_code, "error": response.text[:500]}
+                    error_msg = response.text[:500]
         except httpx.TimeoutException as exc:
-            status = None
-            error_msg = f"timeout: {exc}"
+            status_code = None
+            error_msg = str(exc)
+            response_body = {"error": str(exc)}
         except Exception as exc:
-            status = None
-            error_msg = str(exc)[:500]
+            status_code = None
+            error_msg = str(exc)
+            response_body = {"error": str(exc)}
 
         # Persist delivery record
         delivery = WebhookDeliveryModel(
             webhook_id=webhook.id,
             tenant_id=tenant_id,
             event_type=event_type,
-            status="success" if status and 200 <= status < 300 else "failed",
-            delivered_at=datetime.now(timezone.utc) if status and 200 <= status < 300 else None,
-            error_message=error_msg,
-            request_payload=payload,
-            response_status_code=status,
+            status="success" if status_code and 200 <= status_code < 300 else "failed",
+            delivered_at=datetime.now(timezone.utc) if status_code and 200 <= status_code < 300 else None,
+            response=response_body,
+            payload=payload,
         )
         self.session.add(delivery)
         await self.session.flush()  # router-layer get_db dependency commits on normal exit
