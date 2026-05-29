@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
@@ -100,6 +99,9 @@ class TestListNotifications:
             client = _app()
             response = client.get("/api/v1/notifications")
             assert response.status_code == 200
+            svc.get_user_notifications.assert_called_once_with(
+                user_id=99, tenant_id=1, unread_only=False, page=1, page_size=20
+            )
 
     def test_list_unread_only(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
@@ -108,6 +110,9 @@ class TestListNotifications:
             client = _app()
             response = client.get("/api/v1/notifications?unread_only=true")
             assert response.status_code == 200
+            svc.get_user_notifications.assert_called_once_with(
+                user_id=99, tenant_id=1, unread_only=True, page=1, page_size=20
+            )
 
     def test_list_pagination_params(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
@@ -116,6 +121,9 @@ class TestListNotifications:
             client = _app()
             response = client.get("/api/v1/notifications?page=2&page_size=10")
             assert response.status_code == 200
+            svc.get_user_notifications.assert_called_once_with(
+                user_id=99, tenant_id=1, unread_only=False, page=2, page_size=10
+            )
 
 
 # ---------------------------------------------------------------------------
@@ -228,12 +236,13 @@ class TestPreferences:
         response = client.get("/api/v1/notifications/preferences")
         assert response.status_code == 200
         data = response.json()["data"]
-        assert "email" in data
+        assert data == {"email": True, "sms": False, "in_app": True, "push": False}
 
     def test_update_preferences_ok(self):
         client = _app()
         response = client.put("/api/v1/notifications/preferences", json={"email": False})
         assert response.status_code == 200
+        assert response.json()["data"] == {"email": False, "sms": False, "in_app": True, "push": False}
 
 
 # ---------------------------------------------------------------------------
@@ -308,6 +317,30 @@ class TestListReminders:
 
 # ---------------------------------------------------------------------------
 # DELETE /reminders/{id}
+# ---------------------------------------------------------------------------
+
+
+class TestDeleteNotification:
+    def test_delete_notification_ok(self):
+        with patch("api.routers.notifications.NotificationService") as svc_cls:
+            svc = svc_cls.return_value
+            svc.delete_notification = AsyncMock(return_value={"id": 1})
+            client = _app()
+            response = client.delete("/api/v1/notifications/1")
+            assert response.status_code == 200
+            assert response.json()["data"]["id"] == 1
+
+    def test_delete_notification_not_found(self):
+        with patch("api.routers.notifications.NotificationService") as svc_cls:
+            svc = svc_cls.return_value
+            svc.delete_notification = AsyncMock(side_effect=NotFoundException("通知"))
+            client = _app()
+            response = client.delete("/api/v1/notifications/999")
+            assert response.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# DELETE /notifications/{id}
 # ---------------------------------------------------------------------------
 
 

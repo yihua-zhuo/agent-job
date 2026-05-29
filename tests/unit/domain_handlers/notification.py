@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-
 from typing import Any
 
 from tests.unit.conftest import MockResult, MockRow
@@ -20,10 +19,10 @@ def _notification_to_row(n: dict):
             "user_id": n.get("user_id"),
             "channel": n.get("channel"),
             "template": n.get("template"),
-            "params": n.get("params_"),
+            _NOTIFICATION_PARAMS_KEY: n.get("params_"),
             "status": n.get("status"),
             "priority": n.get("priority"),
-            "created_at": n.get("created_at"),
+            "created_at": n.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC),
             "delivered_at": n.get("delivered_at"),
             "read_at": n.get("read_at"),
         }

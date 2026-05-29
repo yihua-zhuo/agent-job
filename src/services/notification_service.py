@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
-from pkg.constants.notification_constants import VALID_PRIORITIES
+from pkg.constants.notification_constants import VALID_NOTIFICATION_TYPES, VALID_PRIORITIES
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
@@ -34,6 +34,10 @@ class NotificationService:
         priority = kwargs.get("priority", "normal")
         if priority not in VALID_PRIORITIES:
             raise ValidationException(f"priority must be one of {sorted(VALID_PRIORITIES)}, got {priority!r}")
+        if notification_type not in VALID_NOTIFICATION_TYPES:
+            raise ValidationException(
+                f"notification_type must be one of {sorted(VALID_NOTIFICATION_TYPES)}, got {notification_type!r}"
+            )
         params = {"content": content}
         if kwargs.get("related_type") is not None:
             params["related_type"] = kwargs["related_type"]

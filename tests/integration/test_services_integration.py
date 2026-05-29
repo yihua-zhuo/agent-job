@@ -528,7 +528,8 @@ class TestNotificationIntegration:
 
         # Tenant 1 should still see its own notification
         items1, total1 = await svc.get_user_notifications(user_id=uid1, tenant_id=tenant_id)
-        assert total1 == 1 and len(items1) == 1
+        assert total1 == 1
+        assert len(items1) == 1
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

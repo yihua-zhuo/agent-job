@@ -11,7 +11,7 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
-from sqlalchemy import Column, JSON, Boolean, DateTime, Integer, String, Text, and_, column, text
+from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, and_, column, text
 from sqlalchemy.dialects.postgresql import JSON as PgJSON
 
 from alembic import op
@@ -72,7 +72,7 @@ def upgrade() -> None:
         "notifications",
         ["user_id", "tenant_id"],
         postgresql_where=and_(
-            column("channel") == "in_app",
+            column("channel").in_(["in_app"]),
             column("read_at").is_(None),
         ),
     )
