@@ -4,26 +4,21 @@ from __future__ import annotations
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
-ORDER = 41
-
-
-def param(params, name, default=None):
-    if name in params:
-        return params[name]
-    prefix = f"{name}_"
-    for key, value in params.items():
-        if key.startswith(prefix):
-            return value
-    return default
+ORDER = 41  # Placed after sales (ORDER=40) to avoid accidental handler overlap
 
 
 def make_opportunity_activity_handler(state: MockState):
     """Handle INSERT, SELECT, UPDATE, and DELETE on opportunity_activities."""
 
+    if not hasattr(state, "opportunity_activities"):
+        state.opportunity_activities = {}
+    if not hasattr(state, "opportunity_activities_next_id"):
+        state.opportunity_activities_next_id = 1
+
     def handler(sql_text, params):
         if "insert into opportunity_activities" in sql_text:
-            aid = state.activities_next_id
-            state.activities_next_id += 1
+            aid = state.opportunity_activities_next_id
+            state.opportunity_activities_next_id += 1
             record = {
                 "id": aid,
                 "tenant_id": params.get("tenant_id", 0),
@@ -32,18 +27,18 @@ def make_opportunity_activity_handler(state: MockState):
                 "event_timestamp": params.get("event_timestamp"),
                 "event_metadata": params.get("event_metadata", {}),
             }
-            state.activities[aid] = record
+            state.opportunity_activities[aid] = record
             return MockResult([MockRow(record.copy())])
 
         if "from opportunity_activities" not in sql_text:
             return None
 
         # SELECT — find by id or list all for tenant
-        activity_id = param(params, "id")
+        activity_id = params.get("id")
         if "where" in sql_text and "opportunity_activities.id" in sql_text and activity_id is not None:
-            tenant_id = param(params, "tenant_id")
-            if activity_id in state.activities:
-                rec = state.activities[activity_id].copy()
+            tenant_id = params.get("tenant_id")
+            if activity_id in state.opportunity_activities:
+                rec = state.opportunity_activities[activity_id].copy()
                 if tenant_id is not None and rec.get("tenant_id") != tenant_id:
                     return MockResult([])
                 return MockResult([MockRow(rec)])
@@ -51,9 +46,9 @@ def make_opportunity_activity_handler(state: MockState):
 
         # UPDATE
         if "update opportunity_activities" in sql_text:
-            aid = param(params, "id")
-            if aid in state.activities:
-                rec = state.activities[aid]
+            aid = params.get("id")
+            if aid in state.opportunity_activities:
+                rec = state.opportunity_activities[aid]
                 for key in ("event_type", "event_metadata", "event_timestamp"):
                     if key in params:
                         rec[key] = params[key]
@@ -62,17 +57,21 @@ def make_opportunity_activity_handler(state: MockState):
 
         # DELETE
         if "delete from opportunity_activities" in sql_text:
-            aid = param(params, "id")
-            if aid in state.activities:
-                del state.activities[aid]
+            aid = params.get("id")
+            if aid in state.opportunity_activities:
+                del state.opportunity_activities[aid]
                 return MockResult([])
             return MockResult([])
 
         # List all for tenant
-        tenant_id = param(params, "tenant_id", 0)
+        tenant_id = params.get("tenant_id", 0)
         limit = params.get("limit") or params.get("param_1")
         offset = params.get("offset") or params.get("param_2", 0)
-        filtered = [MockRow(r.copy()) for r in state.activities.values() if r.get("tenant_id") == tenant_id]
+        filtered = [
+            MockRow(r.copy())
+            for r in state.opportunity_activities.values()
+            if r.get("tenant_id") == tenant_id
+        ]
         rows = filtered[int(offset) : int(offset) + int(limit)] if limit else filtered[int(offset) :]
         return MockResult(rows)
 

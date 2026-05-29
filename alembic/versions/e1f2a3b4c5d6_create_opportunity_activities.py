@@ -9,6 +9,7 @@ Create Date: 2026-05-23 12:00:00.000000
 from collections.abc import Sequence
 
 import sqlalchemy as sa
+from sqlalchemy.dialects.postgresql import JSONB
 
 from alembic import op
 
@@ -27,7 +28,7 @@ def upgrade() -> None:
         sa.Column("opportunity_id", sa.Integer(), nullable=False),
         sa.Column("event_type", sa.String(length=50), nullable=False),
         sa.Column("event_timestamp", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("metadata", sa.JSONB(), server_default=sa.text("'{}'"), nullable=False),
+        sa.Column("metadata", JSONB(), server_default=sa.text("'{}'"), nullable=False),
         sa.ForeignKeyConstraint(["opportunity_id"], ["opportunities.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )

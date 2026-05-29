@@ -1,8 +1,39 @@
 """Unit tests for OpportunityActivityModel ORM model."""
 
+from __future__ import annotations
+
 from datetime import UTC, datetime
+from unittest.mock import MagicMock
+
+import pytest
 
 from db.models.opportunity_activity import OpportunityActivityModel
+
+
+@pytest.fixture
+def mock_db_session():
+    """Lightweight mock AsyncSession for model-only tests."""
+    session = MagicMock(
+        spec=[
+            "execute",
+            "add",
+            "delete",
+            "commit",
+            "rollback",
+            "close",
+            "flush",
+            "refresh",
+        ]
+    )
+    session.execute = MagicMock()
+    session.add = MagicMock()
+    session.delete = MagicMock()
+    session.commit = MagicMock()
+    session.rollback = MagicMock()
+    session.close = MagicMock()
+    session.flush = MagicMock()
+    session.refresh = MagicMock()
+    return session
 
 
 class TestOpportunityActivityModel:

@@ -23,16 +23,16 @@ from db.models.opportunity_activity import OpportunityActivityModel
 class TestOpportunityActivityIntegration:
     """Full lifecycle tests for OpportunityActivityModel via the real DB."""
 
-    async def test_insert_and_select(self, db_schema, tenant_id, async_session):
+    async def test_insert_and_select(self, db_schema, tenant_id, async_session, _seed_customer):
         """Round-trip: insert an OpportunityActivity directly and fetch it back.
 
         OpportunityModel is created directly within this test to satisfy the FK
         dependency — no external fixture or test file is required.
         """
-        # Seed an opportunity (FK dependency)
+        # Seed an opportunity (FK dependency); customer_id satisfied by _seed_customer
         opp = OpportunityModel(
             tenant_id=tenant_id,
-            customer_id=1,
+            customer_id=(await _seed_customer),
             name="Test Deal",
             stage="lead",
         )
@@ -50,7 +50,6 @@ class TestOpportunityActivityIntegration:
         )
         async_session.add(activity)
         await async_session.flush()
-        await async_session.commit()
 
         # Fetch by id
         result = await async_session.execute(
@@ -65,11 +64,11 @@ class TestOpportunityActivityIntegration:
         assert fetched.event_timestamp == now
         assert fetched.event_metadata == {"source": "web", "campaign": "spring_sale"}
 
-    async def test_metadata_json_arbitrary_values(self, db_schema, tenant_id, async_session):
-        """event_metadata column stores arbitrary JSON without type errors."""
+    async def test_metadata_json_arbitrary_values(self, db_schema, tenant_id, async_session, _seed_customer):
+        """metadata column stores arbitrary JSON without type errors."""
         opp = OpportunityModel(
             tenant_id=tenant_id,
-            customer_id=1,
+            customer_id=(await _seed_customer),
             name="Metadata Test",
             stage="qualified",
         )
@@ -91,7 +90,6 @@ class TestOpportunityActivityIntegration:
         )
         async_session.add(activity)
         await async_session.flush()
-        await async_session.commit()
 
         result = await async_session.execute(
             select(OpportunityActivityModel).where(OpportunityActivityModel.id == activity.id)
@@ -100,11 +98,11 @@ class TestOpportunityActivityIntegration:
         assert fetched is not None
         assert fetched.event_metadata == complex_metadata
 
-    async def test_fk_cascade_deletes_activity(self, db_schema, tenant_id, async_session):
+    async def test_fk_cascade_deletes_activity(self, db_schema, tenant_id, async_session, _seed_customer):
         """Deleting the parent opportunity removes the activity row (FK cascade)."""
         opp = OpportunityModel(
             tenant_id=tenant_id,
-            customer_id=1,
+            customer_id=(await _seed_customer),
             name="Cascade Test",
             stage="lead",
         )
@@ -120,7 +118,6 @@ class TestOpportunityActivityIntegration:
         )
         async_session.add(activity)
         await async_session.flush()
-        await async_session.commit()
 
         # Verify activity exists
         result = await async_session.execute(
@@ -130,18 +127,18 @@ class TestOpportunityActivityIntegration:
 
         # Delete the parent opportunity — cascade should remove the activity
         await async_session.delete(opp)
-        await async_session.commit()
+        await async_session.flush()
 
         result = await async_session.execute(
             select(OpportunityActivityModel).where(OpportunityActivityModel.id == activity.id)
         )
         assert result.scalar_one_or_none() is None
 
-    async def test_indexes_present_on_tenant_id_and_opportunity_id(self, db_schema, tenant_id, async_session):
+    async def test_indexes_present_on_tenant_id_and_opportunity_id(self, db_schema, tenant_id, async_session, _seed_customer):
         """Both tenant_id and opportunity_id columns have indexes in the DB."""
         opp = OpportunityModel(
             tenant_id=tenant_id,
-            customer_id=1,
+            customer_id=(await _seed_customer),
             name="Index Test",
             stage="lead",
         )
@@ -157,7 +154,6 @@ class TestOpportunityActivityIntegration:
         )
         async_session.add(activity)
         await async_session.flush()
-        await async_session.commit()
 
         # Check indexes via pg_indexes
         result = await async_session.execute(

@@ -7,7 +7,7 @@ Create a new `opportunity_activity` ORM model and corresponding Alembic migratio
 - `src/db/models/opportunity_activity.py` — new file: ORM model class
 - `alembic/versions/<revision>_create_opportunity_activities.py` — new file: Alembic migration
 
-Note: `src/db/models/__init__.py` and `alembic/env.py` require **no changes** — `__init__.py` auto-discovers modules via `pkgutil.iter_modules`, and `alembic/env.py` imports `db.models` purely for side-effect registration with `Base.metadata`.
+Note: `src/db/models/__init__.py` auto-discovers model modules via `pkgutil.iter_modules` (which registers each new model with `Base.metadata`), and `alembic/env.py` imports `db.models` purely for side-effect registration with `Base.metadata`. As a result, `alembic/env.py` requires **no changes** when a new model is added — the `import db.models` import already covers all `src/db/models/` modules for migration autogenerate purposes. If explicit per-model imports are ever needed (e.g., for tooling that doesn't load `db.models` side-effects), they would be added to `alembic/env.py` alongside the existing `import db.models` line.
 
 ## Implementation Steps
 1. Read `src/db/models/opportunity.py` and `src/db/models/workflow.py` as templates for field patterns and imports.
