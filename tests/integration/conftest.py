@@ -187,6 +187,7 @@ def fresh_schema() -> Generator[None, None, None]:
     # 2. Ensure ORM models are registered with Base.metadata.
     import db.base as db_base_module  # noqa: F401
     import db.models  # noqa: F401
+    import tests.integration.domain_fixtures.notification  # noqa: F401
 
     # 3. Drop and recreate all tables via the sync engine.
     sync_engine = _get_test_sync_engine()
@@ -249,45 +250,7 @@ def tenant_id_2() -> int:
     return random.randint(10_000_000, 99_999_999)
 
 
-@pytest_asyncio.fixture
-async def _seed_tenant(async_session, tenant_id: int) -> int:
-    """Seed a tenant record so FK constraints on notifications are satisfied.
-
-    Returns the tenant_id (same as input, for caller convenience).
-    """
-    from db.models.tenant import TenantModel
-
-    tenant = TenantModel(
-        id=tenant_id,
-        name="Integration Test Tenant",
-        plan="free",
-        status="active",
-    )
-    async_session.add(tenant)
-    await async_session.flush()
-    return tenant_id
-
-
-@pytest_asyncio.fixture
-async def _seed_customer(async_session, tenant_id, _seed_tenant):
-    """Seed a customer record for the given tenant so FK constraints are satisfied.
-
-    Returns the customer_id of the inserted row.
-    """
-    from db.models.customer import CustomerModel
-
-    customer = CustomerModel(
-        tenant_id=tenant_id,
-        name="Integration Test Customer",
-        email="test-customer@example.com",
-        status="active",
-    )
-    async_session.add(customer)
-    await async_session.flush()
-    return customer.id
-
-
-# ── Per-file cleanup rule (mandatory) ───────────────────────────────────────────
+# ── Per-file cleanup rule (mandatory) ────────────────────────────────────────────
 # Every integration test file must clean up all created data after its tests
 # complete. This fixture runs once per module (i.e. per test file) as the
 # FINAL cleanup step, on top of the per-test db_schema truncation above.

@@ -32,7 +32,7 @@ class _MockNotificationModel:
         self.user_id = overrides.get("user_id", 99)
         self.channel = overrides.get("channel", "in_app")
         self.template = overrides.get("template", "Test")
-        self._params_raw = overrides.get("params_") or overrides.get("params")
+        self._params_raw = overrides.get("params_")
         self.status = overrides.get("status", "pending")
         self.priority = overrides.get("priority", "normal")
         self.created_at = overrides.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC)

@@ -21,10 +21,10 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 
 2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
 
-3. **Update `src/services/notification_service.py`**: replace all `NotificationModel` field references (`type`, `title`, `content`, `is_read`, `related_type`, `related_id`) with the new fields (`channel`, `template`, `params_`, `read_at`). The service logic (WHERE clauses, count queries) remains structurally the same.
-   - Also ensure the router's request schema (`NotificationCreate`) maps `notification_type→channel`, `title→template`, and bundles `content`/`related_type`/`related_id` into `params_` before calling the service — or document that the service performs this bundling as a design decision.
+3. **Update `src/services/notification_service.py`**: replace all `NotificationModel` field references (`type`, `title`, `content`, `is_read`, `related_type`, `related_id`) with the new fields (`channel`, `template`, `params_`, `read_at`). The service logic (WHERE clauses, count queries) remains structurally same.
+   - The service bundles `related_type`/`related_id` into `params_` (it reads `kwargs.get("related_type")` and `kwargs.get("related_id")` and includes them in the `params` dict). The router passes these as keyword arguments via the `**kwargs` parameter to `send_notification`.
 
-4. **Update `tests/unit/test_notifications_router.py`** — Tests already reflect the new schema (`channel`, `template`, `params`, `status`, `read_at`); no updates required.
+4. **Update `tests/unit/test_notifications_router.py`** — The router tests' `_MockNotificationModel.params_` property was updated to use only `params_` (no fallback to `params`) to catch mismatched field keys in tests.
 
 5. **Generate the migration** (follow CLAUDE.md exactly):
    - `docker compose -f configs/docker-compose.test.yml up -d test-db`

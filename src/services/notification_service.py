@@ -30,7 +30,14 @@ class NotificationService:
         tenant_id: int = 0,
         **kwargs,
     ) -> NotificationModel:
-        """发送通知"""
+        """发送通知。
+
+        Args:
+            tenant_id: Must be passed explicitly for multi-tenant soundness.
+            The default of 0 is preserved for backwards compatibility with
+            existing callers that pass it explicitly; automation rules always
+            supply it from their execution context.
+        """
         priority = kwargs.get("priority", "normal")
         if priority not in VALID_PRIORITIES:
             raise ValidationException(f"priority must be one of {sorted(VALID_PRIORITIES)}, got {priority!r}")
@@ -82,7 +89,7 @@ class NotificationService:
         )
         return result.scalars().all(), total
 
-    async def mark_as_read(self, notification_id: int, tenant_id: int = 0) -> NotificationModel:
+    async def mark_as_read(self, notification_id: int, tenant_id: int) -> NotificationModel:
         """标记通知已读"""
         now = datetime.now(UTC)
         result = await self.session.execute(

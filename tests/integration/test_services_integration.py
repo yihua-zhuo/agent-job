@@ -466,6 +466,12 @@ class TestNotificationIntegration:
     async def test_mark_notification_as_read(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
+
+        # Verify truncation guarantees a clean baseline before making assertions
+        # that depend on zero pre-existing unread notifications.
+        baseline = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
+        assert baseline == 0
+
         sent = await svc.send_notification(
             user_id=uid, notification_type="info", title="Test", content="Body", tenant_id=tenant_id
         )
@@ -522,12 +528,6 @@ class TestNotificationIntegration:
         # Create user under tenant 2
         suffix = uuid.uuid4().hex[:8]
         user_svc = UserService(async_session)
-        uid2 = await user_svc.create_user(
-            username=f"notif2_{suffix}",
-            email=f"notif2_{suffix}@example.com",
-            password="Test@Pass1234",
-            tenant_id=tenant_id_2,
-        )
         uid2 = uid2.id
 
         # Both directions verified: tenant B sees nothing from tenant A, and tenant A
