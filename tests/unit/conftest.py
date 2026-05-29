@@ -57,7 +57,7 @@ class MockRow:
                 if json_key in self._mapping and isinstance(self._mapping[json_key], str):
                     try:
                         self._mapping[json_key] = _json.loads(self._mapping[json_key])
-                    except Exception:  # noqa: S110 - invalid JSON should leave the original value intact.
+                    except ValueError:  # json.loads raises ValueError on invalid JSON
                         pass
 
     def __getitem__(self, key):

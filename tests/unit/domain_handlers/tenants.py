@@ -91,7 +91,7 @@ def make_tenant_handler(state: MockState):
                 return MockResult([])
 
             if "where id" not in sql_text:
-                # Enforce tenant isolation: only return rows matching the requested tenant_id.
+                # Filter to rows matching tenant_id if present in params; return empty result if tenant_id is absent or None.
                 tenant_id = params.get("tenant_id")
                 if tenant_id is not None:
                     matching = [r for rid, r in state.tenants.items() if rid == tenant_id]
