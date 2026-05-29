@@ -269,7 +269,7 @@ async def _seed_tenant(async_session, tenant_id: int) -> int:
 
 
 @pytest_asyncio.fixture
-async def _seed_customer(async_session, tenant_id):
+async def _seed_customer(async_session, tenant_id, _seed_tenant):
     """Seed a customer record for the given tenant so FK constraints are satisfied.
 
     Returns the customer_id of the inserted row.
@@ -333,11 +333,22 @@ def fastapi_app():
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client(fastapi_app) -> AsyncGenerator[AsyncClient, None]:
-    """Async HTTP client that hits the FastAPI app directly via ASGI."""
+async def client(fresh_schema, fastapi_app, async_session) -> AsyncGenerator[AsyncClient, None]:
+    """Async HTTP client that hits the FastAPI app directly via ASGI.
+
+    Overrides get_db to share the same session/connection as the test's async_session
+    fixture, ensuring data seeded by auth fixtures is visible to request handlers.
+    """
+    from db.connection import get_db
+
+    async def _override_get_db():
+        yield async_session
+
+    fastapi_app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+    fastapi_app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture
@@ -411,8 +422,14 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
 async def api_client(
     client: AsyncClient,
     auth_headers_web: dict[str, str],
+    async_session: AsyncSession,
 ) -> AsyncClient:
-    """HTTP client pre-populated with valid auth headers."""
+    """HTTP client pre-populated with valid auth headers.
+
+    Depends on async_session so the router's get_db dependency shares the same
+    session/connection as the test, ensuring any data seeded by auth_headers_web
+    is visible to request handlers.
+    """
     client.headers.update(auth_headers_web)
     return client
 

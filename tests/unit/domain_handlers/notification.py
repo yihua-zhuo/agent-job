@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 from tests.unit.conftest import MockResult, MockRow
 
 
@@ -51,7 +53,7 @@ def make_notification_handler(state):
             state._notifications_next_id = 1
 
         if "insert into notifications" in sql_text_lower:
-            assert "params_" in params or "params" in params, (
+            assert "params_" in params, (
                 f"send_notification must bind params_ (got keys: {list(params.keys())})"
             )
             nid = state._notifications_next_id
@@ -146,6 +148,7 @@ def make_reminder_handler(state):
                 "remind_at": params.get("remind_at"),
                 "related_type": params.get("related_type"),
                 "related_id": params.get("related_id"),
+                # NOTE: must stay in sync with ReminderModel.is_completed default=False
                 "is_completed": params.get("is_completed", False),
                 "created_at": params.get("created_at"),
             }
@@ -173,6 +176,10 @@ def make_reminder_handler(state):
         if "from reminders" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
+            # Detect upcoming_only=True by checking for the is_completed filter in SQL.
+            # When upcoming_only=True, get_reminders adds ReminderModel.is_completed == False
+            # to the WHERE clause, which SQLAlchemy renders as "is_completed = :param".
+            upcoming_only = "is_completed" in sql_text_lower
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = [
@@ -180,6 +187,13 @@ def make_reminder_handler(state):
                 for r in state._reminders.values()
                 if r.get("tenant_id") == tenant_id and r.get("user_id") == user_id
             ]
+            if upcoming_only:
+                now = datetime.now(UTC)
+                rows = [
+                    r
+                    for r in rows
+                    if not r.get("is_completed") and r.get("remind_at") is not None and r.get("remind_at") > now
+                ]
             return MockResult([_reminder_to_row(r) for r in rows[offset : offset + page_size]])
 
         return None

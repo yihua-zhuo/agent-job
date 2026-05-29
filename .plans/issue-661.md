@@ -31,7 +31,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
    - `docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;" && docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"`
    - `alembic upgrade head`
    - `alembic revision --autogenerate -m "add_notification_indexes"`
-   - Review `alembic/versions/<new>.py`: autogen will add a bare `op.create_index(...)` for the composite index but will NOT produce the partial index (autogenerate never handles partial/WHERE clauses). Manually add `op.create_index("ix_notifications_in_app_unread", "notifications", ["user_id", "tenant_id"], unique=False, postgresql_where=and_(column("channel") == "in_app", column("read_at").is_(None)))` — note the required `unique=False` parameter on the partial index.
+   - Review `alembic/versions/<new>.py`: autogen will add a bare `op.create_index(...)` for the composite index but will NOT produce the partial index (autogenerate never handles partial/WHERE clauses). Manually add `op.create_index("ix_notifications_in_app_unread", "notifications", ["user_id", "tenant_id"], postgresql_where=and_(column("channel") == "in_app", column("read_at").is_(None)))`.
    - Run `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` to verify.
    - Run a second `alembic revision --autogenerate -m "drift_check"` to confirm an empty diff; delete the empty migration if both up/down are `pass`.
 
@@ -67,7 +67,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - `__table_args__` defines `Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status")`.
 - The Alembic migration in `alembic/versions/` contains `op.create_index` for the composite index and a manually written partial index `ix_notifications_in_app_unread` with `WHERE channel='in_app' AND read_at IS NULL`.
 - Migration upgrades and downgrades cleanly against a real PostgreSQL instance with `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`.
-- `src/services/notification_service.py` uses the new model fields (`channel`, `template`, `params_`, `status`, `read_at`) throughout, with `mark_as_read` and `mark_all_as_read` calling `session.refresh()` after `flush()`.
+- `src/services/notification_service.py` uses the new model fields (`channel`, `template`, `params_`, `status`, `read_at`) throughout. `mark_as_read` calls `flush()` then `refresh()`; `mark_all_as_read` returns a plain `{"marked_count": <int>}` dict without calling `refresh()`.
 - Ruff linting clean: `PYTHONPATH=src ruff check src/`.
 
 ## Risks / Open Questions

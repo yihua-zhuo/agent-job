@@ -641,28 +641,16 @@ class TestTenantEndpoints:
         assert data["success"] is True
 
     async def test_get_tenant_stats(
-        self, api_client: AsyncClient, tenant_id_web: int, async_session
+        self, api_client: AsyncClient, tenant_id_web: int,
     ):
-        # Service's get_tenant_stats calls _fetch(tenant_id), which 404s unless a
-        # tenant row matches the JWT's tenant_id. Seed one with the exact id.
-        from db.models import TenantModel
-        async_session.add(TenantModel(
-            id=tenant_id_web, name=f"T{tenant_id_web}",
-            plan="pro", status="active", settings={},
-        ))
-        await async_session.commit()
+        # tenant is seeded by auth_headers_web; no explicit seed needed
         resp = await api_client.get("/api/v1/tenants/stats")
         assert resp.status_code == 200, f"Body: {resp.text}"
 
     async def test_get_tenant_usage(
-        self, api_client: AsyncClient, tenant_id_web: int, async_session
+        self, api_client: AsyncClient, tenant_id_web: int,
     ):
-        from db.models import TenantModel
-        async_session.add(TenantModel(
-            id=tenant_id_web, name=f"T{tenant_id_web}",
-            plan="pro", status="active", settings={},
-        ))
-        await async_session.commit()
+        # tenant is seeded by auth_headers_web; no explicit seed needed
         resp = await api_client.get("/api/v1/tenants/usage")
         assert resp.status_code == 200, f"Body: {resp.text}"
 
