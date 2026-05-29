@@ -41,7 +41,7 @@ def log(msg: str) -> None:
 
 
 def run_gh(args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["gh", *args], capture_output=True, text=True, check=False)
+    return subprocess.run(["gh", *args], capture_output=True, text=True, check=False, timeout=30)
 
 
 def infer_repo() -> str | None:
