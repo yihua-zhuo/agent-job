@@ -40,7 +40,7 @@ class TestRBACServiceStatic:
         assert RBACService.has_permission("sales", "customer:delete") is False
         assert RBACService.has_permission("sales", "opportunity:delete") is False
 
-    def test_has_permission_support_read_only(self):
+    def test_has_permission_support_ticket_ops(self):
         assert RBACService.has_permission("support", "customer:read") is True
         assert RBACService.has_permission("support", "opportunity:read") is True
         assert RBACService.has_permission("support", "customer:create") is False
@@ -65,6 +65,7 @@ class TestRBACServiceStatic:
         perms = RBACService.get_role_permissions("admin")
         assert "admin:all" in perms
         assert "user:manage" in perms
+        assert "user:read" in perms
         assert "customer:create" in perms
         assert "customer:read" in perms
         assert "customer:update" in perms
@@ -73,13 +74,22 @@ class TestRBACServiceStatic:
         assert "opportunity:read" in perms
         assert "opportunity:update" in perms
         assert "opportunity:delete" in perms
+        assert "ticket:read" in perms
+        assert "ticket:create" in perms
+        assert "ticket:update" in perms
+        assert "ticket:delete" in perms
 
     def test_get_role_permissions_manager(self):
         perms = RBACService.get_role_permissions("manager")
         assert "customer:read" in perms
+        assert "customer:update" in perms
         assert "opportunity:read" in perms
         assert "opportunity:create" in perms
         assert "opportunity:update" in perms
+        assert "ticket:read" in perms
+        assert "ticket:create" in perms
+        assert "ticket:update" in perms
+        assert "user:read" in perms
         assert "customer:delete" not in perms
         assert "opportunity:delete" not in perms
 
@@ -171,3 +181,11 @@ class TestPermissionValueObject:
 
         p = Permission("customer:create")
         assert repr(p) == "Permission('customer:create')"
+
+    def test_permission_duplicate_instantiation_safe(self):
+        from src.services.rbac_service import Permission
+
+        p1 = Permission("customer:create")
+        p2 = Permission("customer:create")
+        assert p2.value == "customer:create"
+        assert p1 == p2

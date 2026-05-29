@@ -177,6 +177,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Note: user_roles must be dropped before roles due to FK CASCADE from
+    # role_id -> roles.id; role_permissions must be dropped before both since
+    # it holds FK references to both permissions and roles.
     op.drop_index("ix_user_roles_user_tenant_role", table_name="user_roles")
     op.drop_index("ix_user_roles_tenant_id", table_name="user_roles")
     op.drop_index("ix_user_roles_role_id", table_name="user_roles")

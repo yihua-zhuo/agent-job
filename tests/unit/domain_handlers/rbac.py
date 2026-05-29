@@ -83,22 +83,13 @@ def _parse_int_param(sql_text: str, params: dict, name: str) -> int | None:
     `name_N` keys first, then fall back to bare `name`.
     """
     import re
-    # Check params dict for name_N style
+    # Check params dict for name_N style (SQLAlchemy uses _N suffix for bind params)
     for key, val in params.items():
-        if key == name or key.startswith(f"{name}_") or key.endswith(f"_{name}"):
+        if key == name or re.match(rf"^{re.escape(name)}_(\d+)$", key):
             try:
                 return int(val)
             except (TypeError, ValueError):
                 pass
-    # Fallback: parse literal LIMIT n / OFFSET n from the SQL text
-    if name == "limit":
-        m = re.search(r"\blimit\s+(\d+)", sql_text, re.IGNORECASE)
-        if m:
-            return int(m.group(1))
-    elif name == "offset":
-        m = re.search(r"\boffset\s+(\d+)", sql_text, re.IGNORECASE)
-        if m:
-            return int(m.group(1))
     return None
 
 
@@ -143,15 +134,16 @@ def make_role_permission_handler(state: RBACMockState):
         # Select from role_permissions (join with permissions for list_role_permissions)
         if "select" in sql_text and "from role_permissions" in sql_text:
             role_id = _parse_int_param(sql_text, params, "role_id")
-            if role_id is not None:
-                perm_ids = {
-                    rp["permission_id"]
-                    for rp in state.role_permissions
-                    if rp["role_id"] == role_id
-                }
-                rows = [_build_permission_model(state.permissions[pid]) for pid in perm_ids if pid in state.permissions]
-                rows.sort(key=lambda r: (r.category, r.id))
-                return MockResult(rows)
+            if role_id is None:
+                raise ValueError("role_id could not be determined from query parameters")
+            perm_ids = {
+                rp["permission_id"]
+                for rp in state.role_permissions
+                if rp["role_id"] == role_id
+            }
+            rows = [_build_permission_model(state.permissions[pid]) for pid in perm_ids if pid in state.permissions]
+            rows.sort(key=lambda r: (r.category, r.id))
+            return MockResult(rows)
 
         return None
 
@@ -161,7 +153,7 @@ def make_role_permission_handler(state: RBACMockState):
 def make_role_handler(state: RBACMockState):
 
     def handler(sql_text, params):
-        tenant_id = _parse_int_param(sql_text, params, "tenant_id") or 0
+        tenant_id = _parse_int_param(sql_text, params, "tenant_id")
 
         # Insert into roles
         if "insert into roles" in sql_text:
@@ -182,7 +174,7 @@ def make_role_handler(state: RBACMockState):
 
         # Count from roles
         if "select" in sql_text and "count" in sql_text and "from roles" in sql_text:
-            rows = [r for r in state.roles.values() if r["tenant_id"] == tenant_id or r["tenant_id"] == 0]
+            rows = [r for r in state.roles.values() if r["tenant_id"] == tenant_id]
             return MockResult([[len(rows)]])
 
         # Select from roles
@@ -197,11 +189,9 @@ def make_role_handler(state: RBACMockState):
             if has_id_param:
                 rid = _parse_int_param(sql_text, params, "id")
                 rows = [r for r in rows if r["id"] == rid]
-                if "tenant_id" in sql_text and rows:
-                    rows = [r for r in rows if r["tenant_id"] == tenant_id or r["tenant_id"] == 0]
             # Just tenant_id filter (list_roles)
             elif "tenant_id" in sql_text and "offset" in sql_text:
-                rows = [r for r in rows if r["tenant_id"] == tenant_id or r["tenant_id"] == 0]
+                rows = [r for r in rows if r["tenant_id"] == tenant_id]
 
             if rows:
                 rows.sort(key=lambda r: (-r["priority"], r["id"]))

@@ -1,6 +1,6 @@
 Now I have all the information I need. Let me write the implementation plan.
 
-The existing `rbac.py` already defines `RoleModel`, `PermissionModel`, `RolePermissionModel`, `UserRoleModel`. The current alembic head is `c94d682d4b03` (add_ai_conversations), which revises `3ea69d66514e`. The migration `3ea69d66514e` created `roles`, `permissions`, `role_permissions`, `user_roles` tables, but issue #640 asks for a fresh migration with the schema described (3 simpler tables: `roles`, `permissions`, `user_roles`) and full seeding.
+The existing `rbac.py` already defines `RoleModel`, `PermissionModel`, `RolePermissionModel`, `UserRoleModel`. The current alembic head is `c94d682d4b03` (add_ai_conversations), which revises `3ea69d66514e`. The migration `3ea69d66514e` created `roles`, `permissions`, `role_permissions`, `user_roles` tables, but issue #640 asks for a fresh migration with the schema described (4 tables: `roles`, `permissions`, `user_roles`, `role_permissions`) and full seeding.
 
 # Implementation Plan — Issue #640
 

@@ -34,7 +34,7 @@ async def _seed_rbac_data():
             "DATABASE_URL must be set to run integration tests. "
             "Example: DATABASE_URL='postgresql+asyncpg://user:pass@host:5432/db' pytest tests/integration/ -m integration -v"
         )
-    sync_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1)
+    sync_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1).replace("postgresql+psycopg2://", "postgresql://", 1)
 
     conn = await asyncpg.connect(sync_url)
     try:
@@ -238,6 +238,21 @@ class TestRBACIntegration:
         assert result["role_id"] == admin_role.id
         assert result.get("already_assigned") is not True
 
+        # Verify tenant_id on the user_roles row (not just the role object)
+        from sqlalchemy import select, and_
+        from db.models.rbac import UserRoleModel
+        result = await async_session.execute(
+            select(UserRoleModel).where(
+                and_(
+                    UserRoleModel.user_id == user.id,
+                    UserRoleModel.role_id == admin_role.id,
+                )
+            )
+        )
+        ur_rows = result.scalars().all()
+        assert len(ur_rows) == 1
+        assert ur_rows[0].tenant_id == tenant_id
+
     async def test_assign_duplicate_role_returns_already_assigned(self, db_schema, tenant_id, async_session):
         from services.user_service import UserService
 
@@ -257,6 +272,20 @@ class TestRBACIntegration:
         await svc.assign_role_to_user(user_id=user.id, role_id=admin_role.id, tenant_id=tenant_id)
         result = await svc.assign_role_to_user(user_id=user.id, role_id=admin_role.id, tenant_id=tenant_id)
         assert result.get("already_assigned") is True
+        # Verify tenant_id on the user_roles row
+        from sqlalchemy import select, and_
+        from db.models.rbac import UserRoleModel
+        result = await async_session.execute(
+            select(UserRoleModel).where(
+                and_(
+                    UserRoleModel.user_id == user.id,
+                    UserRoleModel.role_id == admin_role.id,
+                )
+            )
+        )
+        ur_rows = result.scalars().all()
+        assert len(ur_rows) == 1
+        assert ur_rows[0].tenant_id == tenant_id
 
     async def test_revoke_role_from_user(self, db_schema, tenant_id, async_session):
         from services.user_service import UserService
@@ -323,6 +352,11 @@ class TestRBACIntegration:
             tenant_id=tenant_id,
         )
         assert len(perms) == 2
+        # Verify full replacement (not append) by checking that only these 2 exist
+        perms_check = await svc.list_role_permissions(role_id=role.id, tenant_id=tenant_id)
+        assert len(perms_check) == 2
+        names = {p.name for p in perms_check}
+        assert names == {"customer:read", "customer:create"}
 
     async def test_set_role_permissions_invalid_permission_raises(self, db_schema, tenant_id, async_session):
         svc = RBACService(async_session)
@@ -339,3 +373,33 @@ class TestRBACIntegration:
                 permission_names=["customer:read", "nonexistent:permission"],
                 tenant_id=tenant_id,
             )
+
+    async def test_custom_role_invisible_to_other_tenant(self, db_schema, tenant_id, async_session):
+        """Tenant 1's custom role must not be visible when querying from tenant 2."""
+        import services.user_service as us
+        import random
+
+        svc = RBACService(async_session)
+
+        # Create a custom role for tenant_id
+        role = await svc.create_role(
+            tenant_id=tenant_id,
+            name="tenant_specific_role",
+            display_name="Tenant Specific Role",
+            is_system=False,
+            priority=30,
+        )
+        assert role.tenant_id == tenant_id
+
+        # Create another tenant with a different ID
+        other_tenant = tenant_id + random.randint(100, 1000)
+
+        # Query roles from the other tenant — tenant_specific_role must not appear
+        roles_other, total_other = await svc.list_roles(tenant_id=other_tenant)
+        other_names = {r.name for r in roles_other}
+        assert "tenant_specific_role" not in other_names
+
+        # Verify system roles (tenant_id=0) are still visible to the other tenant
+        roles_same, total_same = await svc.list_roles(tenant_id=other_tenant)
+        assert any(r.name == "admin" for r in roles_same)
+        assert any(r.name == "viewer" for r in roles_same)
