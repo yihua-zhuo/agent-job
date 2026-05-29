@@ -4,7 +4,7 @@ Run against a real PostgreSQL database (DATABASE_URL env var):
     DATABASE_URL="postgresql+asyncpg://..." pytest tests/integration/test_code_review_integration.py -v
 
 Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
-Each test owns the transaction boundary via conftest's rollback-on-exit async_session fixture.
+Router-layer transaction boundaries are owned by `_test_get_db_session`.
 """
 from __future__ import annotations
 
@@ -30,6 +30,7 @@ class TestCodeReviewModelIntegration:
         )
         async_session.add(review)
         await async_session.flush()
+        await async_session.refresh(review)
 
         result = await async_session.get(CodeReviewModel, review.id)
         assert result is not None
@@ -52,6 +53,7 @@ class TestCodeReviewModelIntegration:
         result = await async_session.get(CodeReviewModel, review.id)
         assert result is not None
         assert result.id == review.id
+        assert result.id is not None
         assert result.tenant_id == tenant_id
         assert result.user_id == 1
         assert result.language is None
@@ -64,7 +66,7 @@ class TestCodeReviewModelIntegration:
         """to_dict() produces a complete, serialisable dict."""
         from datetime import datetime, timezone
 
-        now = datetime(2026, 5, 22, 14, 0, 0, tzinfo=timezone.utc)  # noqa: UP017
+        now = datetime(2026, 5, 22, 14, 0, 0, tzinfo=timezone.utc)
         review = CodeReviewModel(
             tenant_id=tenant_id,
             user_id=77,

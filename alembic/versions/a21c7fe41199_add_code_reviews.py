@@ -28,13 +28,12 @@ def upgrade() -> None:
     sa.Column('score', sa.Integer(), nullable=True),
     sa.Column('summary', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_code_reviews_tenant_id', 'code_reviews', ['tenant_id'], unique=False)
     op.create_index('ix_code_reviews_tenant_user', 'code_reviews', ['tenant_id', 'user_id'], unique=False)
 
 
 def downgrade() -> None:
     op.drop_index('ix_code_reviews_tenant_user', table_name='code_reviews')
-    op.drop_index('ix_code_reviews_tenant_id', table_name='code_reviews')
     op.drop_table('code_reviews')

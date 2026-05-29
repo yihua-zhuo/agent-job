@@ -12,7 +12,7 @@ class TestCodeReviewModelToDict:
 
     def test_to_dict_full_record(self):
         """to_dict() returns all fields including optional ones when set."""
-        now = datetime(2026, 5, 22, 14, 0, 0, tzinfo=timezone.utc)  # noqa: UP017
+        now = datetime(2026, 5, 22, 14, 0, 0, tzinfo=timezone.utc)
         review = CodeReviewModel(
             tenant_id=1,
             user_id=10,
@@ -53,7 +53,7 @@ class TestCodeReviewModelToDict:
 
     def test_to_dict_iso_format_for_created_at(self):
         """created_at is serialized as an ISO 8601 string."""
-        now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)  # noqa: UP017
+        now = datetime(2026, 1, 1, 12, 0, 0, tzinfo=timezone.utc)
         review = CodeReviewModel(
             tenant_id=1,
             user_id=1,
@@ -76,6 +76,7 @@ class TestCodeReviewModelToDict:
             "score",
             "summary",
             "created_at",
+            "updated_at",
         }
         assert set(d.keys()) == expected_keys
 
@@ -113,6 +114,6 @@ class TestCodeReviewModelToDict:
         assert d["tenant_id"] == 1
         assert d["user_id"] == 1
         # All optional fields should be None
-        for key in ("id", "language", "review_type", "code_snippet", "score", "summary", "created_at"):
+        for key in ("id", "language", "review_type", "code_snippet", "score", "summary", "created_at", "updated_at"):
             assert d[key] is None, f"expected {key} to be None, got {d[key]}"
 
