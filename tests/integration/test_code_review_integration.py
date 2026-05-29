@@ -4,7 +4,7 @@ Run against a real PostgreSQL database (DATABASE_URL env var):
     DATABASE_URL="postgresql+asyncpg://..." pytest tests/integration/test_code_review_integration.py -v
 
 Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
-Each test owns the transaction boundary via conftest's commit-on-exit session lifecycle.
+Each test owns the transaction boundary via conftest's rollback-on-exit async_session fixture.
 """
 from __future__ import annotations
 

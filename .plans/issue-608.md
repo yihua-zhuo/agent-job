@@ -24,7 +24,7 @@ Add a `CodeReview` ORM model to `src/db/models/code_review.py` for persisting co
    ```bash
    docker compose -f configs/docker-compose.test.yml up -d test-db
    docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;"
-   docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alemembic_dev;"
+   docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"
    export PYTHONPATH=src
    export DATABASE_URL="postgresql+asyncpg://test_user:test_pass@localhost:5432/alembic_dev"
    alembic upgrade head
@@ -54,7 +54,7 @@ Add a `CodeReview` ORM model to `src/db/models/code_review.py` for persisting co
 ## Acceptance Criteria
 
 - `src/db/models/code_review.py` exists and exports a `CodeReviewModel` class that is a subclass of `Base`
-- Running `alembic revision --autogenerate -m "add_code_reviews"` produces a migration file in `alembic/versions/` that includes a `create_table('code_reviews', ...)` call with all 9 columns and a composite index on `(tenant_id, user_id)`
+- Running `alembic revision --autogenerate -m "add_code_reviews"` produces a migration file in `alembic/versions/` that includes a `create_table('code_reviews', ...)` call with all 9 columns and a composite index named `ix_code_reviews_tenant_user` on `(tenant_id, user_id)`
 - `alembic upgrade head` succeeds with no errors
 - `alembic downgrade -1` succeeds with no errors
 - Second autogenerate (drift check) produces a migration with `pass` in both up and down — confirming the DB state matches the model state
