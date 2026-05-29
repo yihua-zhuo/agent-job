@@ -48,8 +48,8 @@ def make_tenant_handler(state: MockState):
                 "slug": params.get("slug", ""),
                 "plan": params.get("plan", "free"),
                 "status": params.get("status", "active"),
-                "settings": params.get("settings", "{}"),
-                "usage_limits": params.get("usage_limits", "{}"),
+                "settings": params.get("settings", {}),
+                "usage_limits": params.get("usage_limits", {}),
                 "created_at": params.get("created_at"),
                 "updated_at": params.get("updated_at"),
             }
@@ -62,7 +62,7 @@ def make_tenant_handler(state: MockState):
                 return MockResult([])
             if tenant_id in state.tenants:
                 del state.tenants[tenant_id]
-            return MockResult([[1, "Deleted Tenant", "", "pro", "deleted", "{}", "{}", None, None]])
+            return MockResult([[1, "Deleted Tenant", "", "pro", "deleted", {}, {}, None, None]])
 
         if "update" in sql_text and "tenants" in sql_text:
             tenant_id = params.get("id", params.get("tenant_id"))
@@ -72,7 +72,7 @@ def make_tenant_handler(state: MockState):
                         state.tenants[tenant_id][k] = v
                 return MockResult([MockRow(state.tenants[tenant_id].copy())])
             return MockResult(
-                [[1, "Updated Name", "updated-slug", "pro", "active", "{}", "{}", None, None]]
+                [[1, "Updated Name", "updated-slug", "pro", "active", {}, {}, None, None]]
             )
 
         if "select" in sql_text and "count" in sql_text and "from tenants" in sql_text:

@@ -19,7 +19,7 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     op.add_column('tenants', sa.Column('slug', sa.String(length=100), server_default='', nullable=False))
-    op.add_column('tenants', sa.Column('usage_limits', sa.JSON(), nullable=False, server_default='{}'))
+    op.add_column('tenants', sa.Column('usage_limits', sa.JSON(), nullable=False, server_default=sa.text("'{}'::json")))
 
 
 def downgrade() -> None:
