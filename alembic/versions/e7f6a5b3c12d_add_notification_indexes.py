@@ -72,7 +72,7 @@ def upgrade() -> None:
         "notifications",
         ["user_id", "tenant_id"],
         postgresql_where=and_(
-            column("channel").in_(["in_app"]),
+            column("channel") == "in_app",
             column("read_at").is_(None),
         ),
     )
@@ -111,8 +111,11 @@ def downgrade() -> None:
     op.execute(text("UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL"))
     op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL"))
 
-    # Apply NOT NULL constraint after backfill — rows with NULL status become False
-    op.alter_column("notifications", "is_read", nullable=False)
+    # Phase 4 (reversed): apply NOT NULL constraint — use DROP IF EXISTS + SET NOT NULL
+    # to make this block idempotent on replay (plain op.alter_column would raise an
+    # error if the constraint already exists).
+    op.execute(text("ALTER TABLE notifications ALTER COLUMN is_read DROP NOT NULL"))
+    op.execute(text("ALTER TABLE notifications ALTER COLUMN is_read SET NOT NULL"))
 
     # Phase 2 (reversed): drop new columns — done last so the downgrade remains
     # individually reversible without relying on ordering of other migrations

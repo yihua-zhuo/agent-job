@@ -52,7 +52,7 @@ class TenantService:
     async def _fetch(self, tenant_id: int, _tenant_id: int = 0) -> TenantModel:
         conditions = [TenantModel.id == tenant_id]
         if _tenant_id:
-            conditions.append(TenantModel.tenant_id == _tenant_id)
+            conditions.append(TenantModel.id == _tenant_id)
         result = await self.session.execute(select(TenantModel).where(and_(*conditions)))
         tenant = result.scalar_one_or_none()
         if tenant is None or tenant.status == "deleted":
@@ -87,7 +87,7 @@ class TenantService:
 
         conditions = [TenantModel.id == tenant_id]
         if _tenant_id:
-            conditions.append(TenantModel.tenant_id == _tenant_id)
+            conditions.append(TenantModel.id == _tenant_id)
         await self.session.execute(update(TenantModel).where(and_(*conditions)).values(**update_values))
         await self.session.flush()
 

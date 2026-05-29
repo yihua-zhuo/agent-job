@@ -792,7 +792,7 @@ class TestNotificationEndpoints:
             "/api/v1/notifications/send",
             json={
                 "user_id": 1,
-                "notification_type": "info",
+                "notification_type": "in_app",
                 "title": "Test Notification",
                 "content": "This is a test notification",
             },

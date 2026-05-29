@@ -18,7 +18,7 @@ class NotificationModel(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     channel: Mapped[str | None] = mapped_column(String(50), nullable=True)
     template: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -33,16 +33,13 @@ class NotificationModel(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
-        if self.params_ is not None and not isinstance(self.params_, dict):
-            raise ValueError(f"params_ must be a dict or None, got {type(self.params_).__name__}")
-        serialized_params = self.params_ if isinstance(self.params_, dict) else None
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params": serialized_params,
+            "params": self.params_,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,

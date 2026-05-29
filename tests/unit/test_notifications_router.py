@@ -97,7 +97,7 @@ class TestListNotifications:
             svc = svc_cls.return_value
             svc.get_user_notifications = AsyncMock(return_value=([], 0))
             client = _app()
-            response = client.get("/api/v1/notifications")
+            response = client.get("/api/v1/notifications?page=1&page_size=20")
             assert response.status_code == 200
             svc.get_user_notifications.assert_called_once_with(
                 user_id=99, tenant_id=1, unread_only=False, page=1, page_size=20
@@ -151,7 +151,7 @@ class TestSendNotification:
                 "/api/v1/notifications/send",
                 json={
                     "user_id": 2,
-                    "notification_type": "info",
+                    "notification_type": "in_app",
                     "title": "New deal",
                     "content": "Deal closed!",
                 },

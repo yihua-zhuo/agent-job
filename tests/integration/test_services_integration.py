@@ -451,7 +451,7 @@ class TestNotificationIntegration:
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.send_notification(
             user_id=uid,
-            notification_type="info",
+            notification_type="in_app",
             title="Pipeline Updated",
             content="Your deal moved to closed_won!",
             tenant_id=tenant_id,
@@ -473,7 +473,7 @@ class TestNotificationIntegration:
         assert baseline == 0
 
         sent = await svc.send_notification(
-            user_id=uid, notification_type="info", title="Test", content="Body", tenant_id=tenant_id
+            user_id=uid, notification_type="in_app", title="Test", content="Body", tenant_id=tenant_id
         )
 
         marked = await svc.mark_as_read(sent.id, tenant_id=tenant_id)
@@ -485,8 +485,8 @@ class TestNotificationIntegration:
     async def test_unread_count(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
-        await svc.send_notification(user_id=uid, notification_type="info", title="N1", content="m", tenant_id=tenant_id)
-        await svc.send_notification(user_id=uid, notification_type="info", title="N2", content="m", tenant_id=tenant_id)
+        await svc.send_notification(user_id=uid, notification_type="in_app", title="N1", content="m", tenant_id=tenant_id)
+        await svc.send_notification(user_id=uid, notification_type="in_app", title="N2", content="m", tenant_id=tenant_id)
 
         count = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert count >= 2
@@ -514,7 +514,7 @@ class TestNotificationIntegration:
         # Create user and notification under tenant 1
         uid1 = await self._seed_user(tenant_id, async_session)
         await svc.send_notification(
-            user_id=uid1, notification_type="info", title="T1", content="m", tenant_id=tenant_id
+            user_id=uid1, notification_type="in_app", title="T1", content="m", tenant_id=tenant_id
         )
 
         # Create user under tenant 2
