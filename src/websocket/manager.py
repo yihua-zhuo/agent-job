@@ -28,23 +28,24 @@ class ConnectionManager:
     async def broadcast(self, room: str, message: str) -> None:
         async with self._lock:
             websockets = list(self._rooms.get(room, []))
+            await asyncio.sleep(0)
 
-        if not websockets:
-            _logger.debug("Broadcast to room %s: no clients connected", room)
-            return
-
-        await asyncio.sleep(0)
-
+        delivered = 0
         for ws in websockets:
             try:
                 await ws.send_text(message)
-            except Exception:
+                delivered += 1
+            except Exception as e:
+                if isinstance(e, asyncio.CancelledError):
+                    raise
                 _logger.warning("Failed to send to WebSocket in room %s, removing", room)
                 async with self._lock:
                     if room in self._rooms:
                         self._rooms[room].discard(ws)
+                        if not self._rooms[room]:
+                            del self._rooms[room]
                 continue
-        _logger.debug("Broadcast to room %s delivered to %d clients", room, len(websockets))
+        _logger.debug("Broadcast to room %s delivered to %d clients", room, delivered)
 
     async def subscribe(self, channel: str, websocket: Any) -> None:
         async with self._lock:
