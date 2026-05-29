@@ -61,6 +61,8 @@ class TenantService:
         return self._to_dict(tenant)
 
     async def update_tenant(self, tenant_id: int, _tenant_id: int = 0, **kwargs) -> dict:
+        if _tenant_id and tenant_id != _tenant_id:
+            raise NotFoundException(f"Tenant {tenant_id}")
         tenant = await self._fetch(tenant_id)
 
         allowed = {"name", "plan", "status"}

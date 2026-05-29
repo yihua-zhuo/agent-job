@@ -83,9 +83,12 @@ async def _execute_action(
     if action_type == "notification.send":
         from services.notification_service import NotificationService
 
+        recipient_user_id = params.get("user_id") or context.get("user_id")
+        if not recipient_user_id:
+            return {"type": action_type, "status": "skipped", "reason": "no user_id in context or params"}
         svc = NotificationService(session)
         result = await svc.send_notification(
-            user_id=params.get("user_id", context.get("user_id", 0)),
+            user_id=recipient_user_id,
             notification_type="automation",
             title=params.get("title", "Automation triggered"),
             content=params.get("message", f"Automation rule triggered: {context.get('rule_name')}"),

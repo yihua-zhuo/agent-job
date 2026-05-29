@@ -11,7 +11,7 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
-from sqlalchemy import JSON, Boolean, Column, DateTime, Integer, String, Text, and_, column, text
+from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, and_, column, text
 from sqlalchemy.dialects.postgresql import JSON as PgJSON
 
 from alembic import op
@@ -36,20 +36,21 @@ def upgrade() -> None:
     # will produce {"content": "..."} with no 'related_type'/'related_id' keys (rather than
     # {"content": "...", "related_type": null, "related_id": null}). This is a minor
     # data-shape precision trade-off for the one-way migration.
-    op.execute(text("UPDATE notifications SET channel = type WHERE type IS NOT NULL"))
-    op.execute(text("UPDATE notifications SET template = title WHERE title IS NOT NULL"))
+    op.execute(text("UPDATE notifications SET channel = type WHERE type IS NOT NULL AND channel IS NULL"))
+    op.execute(text("UPDATE notifications SET template = title WHERE title IS NOT NULL AND template IS NULL"))
     op.execute(
         text(
             "UPDATE notifications SET params_ = jsonb_build_object("
             "'content', content,"
             "'related_type', related_type,"
             "'related_id', related_id"
-            ") WHERE content IS NOT NULL OR related_type IS NOT NULL OR related_id IS NOT NULL"
+            ") WHERE (content IS NOT NULL OR related_type IS NOT NULL OR related_id IS NOT NULL) AND params_ IS NULL"
         )
     )
-    op.execute(text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END"))
-    op.execute(text("UPDATE notifications SET read_at = created_at WHERE is_read = true"))
+    op.execute(text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END WHERE status IS NULL"))
+    op.execute(text("UPDATE notifications SET read_at = created_at WHERE is_read = true AND read_at IS NULL"))
     op.execute(text("UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL"))
+    op.execute(text("UPDATE notifications SET priority = 'normal' WHERE priority IS NULL"))
 
     # Phase 3: drop old columns
     op.drop_column("notifications", "related_id")

@@ -122,5 +122,5 @@ async def update_tenant(
 ):
     service = TenantService(session)
     update_data = body.model_dump(exclude_none=True)
-    data = await service.update_tenant(tenant_id, **update_data)
+    data = await service.update_tenant(tenant_id, ctx.tenant_id, **update_data)
     return {"success": True, "data": data, "message": "租户更新成功"}

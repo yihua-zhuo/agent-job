@@ -47,7 +47,6 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
      - `UPDATE notifications SET read_at = created_at WHERE is_read = true`
      - `UPDATE notifications SET priority = 'normal' WHERE priority IS NULL` (new field — defaults to 'normal')
      - `UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL` (new field — set to creation time)
-     - `UPDATE notifications SET priority = 'normal' WHERE priority IS NULL` (new field — defaults to 'normal')
    - Example backfill in `downgrade()` (recreates legacy columns, restores legacy data, drops new columns):
      - Add old columns (type, title, content, is_read, related_type, related_id)
      - `UPDATE notifications SET type = channel WHERE channel IS NOT NULL`

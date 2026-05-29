@@ -461,6 +461,7 @@ class TestNotificationIntegration:
         items, total = await svc.get_user_notifications(user_id=uid, tenant_id=tenant_id)
         ids = [n.id for n in items]
         assert nid in ids
+        assert total == 1
 
     async def test_mark_notification_as_read(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
@@ -529,7 +530,8 @@ class TestNotificationIntegration:
         )
         uid2 = uid2.id
 
-        # Tenant 2 should see zero notifications
+        # Both directions verified: tenant B sees nothing from tenant A, and tenant A
+        # still sees exactly its own notification after the cross-tenant check.
         items2, total2 = await svc.get_user_notifications(user_id=uid2, tenant_id=tenant_id_2)
         assert total2 == 0
         assert len(items2) == 0

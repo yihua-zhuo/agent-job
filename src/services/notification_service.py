@@ -47,8 +47,6 @@ class NotificationService:
         self.session.add(notification)
         await self.session.flush()
         await self.session.refresh(notification)
-        if notification.id is None:
-            raise RuntimeError("Failed to persist notification")
         return notification
 
     async def get_user_notifications(
