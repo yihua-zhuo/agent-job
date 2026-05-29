@@ -1,4 +1,6 @@
 """Tests for the test infrastructure helpers added in tests/unit/conftest.py."""
+import asyncio
+
 import pytest
 from sqlalchemy.exc import MultipleResultsFound
 
@@ -155,22 +157,20 @@ class TestMakeMockSession:
         sql = text("INSERT INTO customers (...) RETURNING *")
         result = session.execute(sql, {"tenant_id": 5, "name": "Test"})
         # execute is AsyncMock, get the return value synchronously
-        import asyncio
         if asyncio.iscoroutine(result):
-            result = asyncio.get_event_loop().run_until_complete(result)
+            result = asyncio.run(result)
         assert result is not None
 
     def test_select_from_customers_where_id_returns_single_row_for_id_1(self):
         """New SQL-matching logic: 'from customers where id' returns row only for id=1."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
-        import asyncio
 
         session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE id = :id")
 
         coro = session.execute(sql, {"id": 1})
-        result = asyncio.get_event_loop().run_until_complete(coro)
+        result = asyncio.run(coro)
         row = result.mappings().one_or_none()
         assert row is not None
         assert row["id"] == 1
@@ -179,13 +179,12 @@ class TestMakeMockSession:
         """New SQL-matching logic: non-fixture IDs return empty result."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
-        import asyncio
 
         session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE id = :id")
 
         coro = session.execute(sql, {"id": 9999})
-        result = asyncio.get_event_loop().run_until_complete(coro)
+        result = asyncio.run(coro)
         row = result.mappings().one_or_none()
         assert row is None
 
@@ -193,13 +192,12 @@ class TestMakeMockSession:
         """New logic: SELECT without WHERE id returns list of 2 fixture rows."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
-        import asyncio
 
         session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE tenant_id = :tenant_id LIMIT 20 OFFSET 0")
 
         coro = session.execute(sql, {"tenant_id": 1})
-        result = asyncio.get_event_loop().run_until_complete(coro)
+        result = asyncio.run(coro)
         rows = result.fetchall()
         assert len(rows) == 2
 
@@ -207,13 +205,12 @@ class TestMakeMockSession:
         """New logic: DELETE FROM customers returns a row with id."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
-        import asyncio
 
         session = make_mock_session()
         sql = text("DELETE FROM customers WHERE id = :id RETURNING id")
 
         coro = session.execute(sql, {"id": 1})
-        result = asyncio.get_event_loop().run_until_complete(coro)
+        result = asyncio.run(coro)
         row = result.mappings().one_or_none()
         assert row is not None
         assert row["id"] == 1
@@ -221,24 +218,22 @@ class TestMakeMockSession:
     def test_count_query_returns_scalar(self):
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
-        import asyncio
 
         session = make_mock_session()
         sql = text("SELECT count(*) FROM customers WHERE tenant_id = :tenant_id")
 
         coro = session.execute(sql, {"tenant_id": 1})
-        result = asyncio.get_event_loop().run_until_complete(coro)
+        result = asyncio.run(coro)
         assert result.scalar() == 3
 
     def test_unknown_sql_returns_empty(self):
         """Default case: unrecognised SQL returns empty MockResult."""
         from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
-        import asyncio
 
         session = make_mock_session()
         sql = text("SELECT * FROM unknown_table WHERE x = :x")
 
         coro = session.execute(sql, {"x": 1})
-        result = asyncio.get_event_loop().run_until_complete(coro)
+        result = asyncio.run(coro)
         assert result.fetchall() == []
