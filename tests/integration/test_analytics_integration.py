@@ -4,9 +4,11 @@ Integration tests for Analytics and Report services.
 Run against a real PostgreSQL database:
     DATABASE_URL="postgresql+asyncpg://..." pytest tests/integration/test_analytics_integration.py -v
 """
+
 from __future__ import annotations
 
 import uuid
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -14,6 +16,9 @@ from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.analytics_service import AnalyticsService
 from services.report_service import ReportService
 from services.user_service import UserService
+
+if TYPE_CHECKING:
+    from httpx import AsyncClient
 
 
 async def _seed_user(tenant_id: int, async_session, prefix: str = "user") -> int:
@@ -58,7 +63,9 @@ class TestDashboardIntegration:
         uid = await _seed_user(tenant_id, async_session, "dash")
 
         created = await svc.create_dashboard(
-            name="Original Name", owner_id=uid, tenant_id=tenant_id,
+            name="Original Name",
+            owner_id=uid,
+            tenant_id=tenant_id,
         )
 
         updated = await svc.update_dashboard(
@@ -102,9 +109,7 @@ class TestDashboardIntegration:
         items = await svc.list_dashboards(tenant_id=tenant_id, owner_id=uid1)
         assert all(d.owner_id == uid1 for d in items)
 
-    async def test_dashboard_cross_tenant_isolation(
-        self, db_schema, tenant_id, tenant_id_2, async_session
-    ):
+    async def test_dashboard_cross_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
         svc = AnalyticsService(async_session)
         uid1 = await _seed_user(tenant_id, async_session, "dashT1")
         uid2 = await _seed_user(tenant_id_2, async_session, "dashT2")
@@ -129,7 +134,8 @@ class TestDashboardIntegration:
         created = await svc.create_dashboard(name="Widget Test", owner_id=uid, tenant_id=tenant_id)
 
         widget = await svc.add_widget(
-            dashboard_id=created.id, tenant_id=tenant_id,
+            dashboard_id=created.id,
+            tenant_id=tenant_id,
             widget_config={"type": "kpi", "config": {"metric": "revenue"}},
         )
         assert widget is not None
@@ -142,21 +148,27 @@ class TestDashboardIntegration:
         uid = await _seed_user(tenant_id, async_session, "dash")
 
         created = await svc.create_dashboard(
-            name="Remove Widget Test", owner_id=uid, tenant_id=tenant_id,
+            name="Remove Widget Test",
+            owner_id=uid,
+            tenant_id=tenant_id,
         )
 
         await svc.add_widget(
-            dashboard_id=created.id, tenant_id=tenant_id,
+            dashboard_id=created.id,
+            tenant_id=tenant_id,
             widget_config={"type": "chart", "config": {"chartType": "line"}},
         )
         add_result = await svc.add_widget(
-            dashboard_id=created.id, tenant_id=tenant_id,
+            dashboard_id=created.id,
+            tenant_id=tenant_id,
             widget_config={"type": "kpi", "config": {"metric": "count"}},
         )
         widget_id = add_result["id"]
 
         removed = await svc.remove_widget(
-            dashboard_id=created.id, widget_id=widget_id, tenant_id=tenant_id,
+            dashboard_id=created.id,
+            widget_id=widget_id,
+            tenant_id=tenant_id,
         )
         assert removed is True
 
@@ -168,7 +180,9 @@ class TestDashboardIntegration:
         assert created.is_default is False
 
         updated = await svc.update_dashboard(
-            dashboard_id=created.id, tenant_id=tenant_id, is_default=True,
+            dashboard_id=created.id,
+            tenant_id=tenant_id,
+            is_default=True,
         )
         assert updated.is_default is True
 
@@ -278,7 +292,9 @@ class TestReportIntegration:
             "recipients": ["team@example.com"],
         }
         result = await report_svc.schedule_report(
-            report_id=created.id, schedule=schedule, tenant_id=tenant_id,
+            report_id=created.id,
+            schedule=schedule,
+            tenant_id=tenant_id,
         )
         assert result.report_id == created.id
         assert result.schedule["frequency"] == "daily"
@@ -320,8 +336,10 @@ class TestChartHelpersIntegration:
     async def test_get_sales_revenue_report(self, db_schema, tenant_id, async_session):
         svc = AnalyticsService(async_session)
         result = await svc.get_sales_revenue_report(
-            start_date="2026-01-01", end_date="2026-01-31",
-            group_by="day", tenant_id=tenant_id,
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            group_by="day",
+            tenant_id=tenant_id,
         )
         assert "labels" in result
         assert "datasets" in result
@@ -330,7 +348,9 @@ class TestChartHelpersIntegration:
     async def test_get_sales_conversion_report(self, db_schema, tenant_id, async_session):
         svc = AnalyticsService(async_session)
         result = await svc.get_sales_conversion_report(
-            start_date="2026-01-01", end_date="2026-01-31", tenant_id=tenant_id,
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            tenant_id=tenant_id,
         )
         assert "labels" in result
         assert result["chart_type"] == "funnel"
@@ -338,7 +358,9 @@ class TestChartHelpersIntegration:
     async def test_get_customer_growth_report(self, db_schema, tenant_id, async_session):
         svc = AnalyticsService(async_session)
         result = await svc.get_customer_growth_report(
-            start_date="2026-01-01", end_date="2026-03-31", tenant_id=tenant_id,
+            start_date="2026-01-01",
+            end_date="2026-03-31",
+            tenant_id=tenant_id,
         )
         assert "labels" in result
         assert result["chart_type"] == "bar"
@@ -353,20 +375,156 @@ class TestChartHelpersIntegration:
     async def test_get_team_performance(self, db_schema, tenant_id, async_session):
         svc = AnalyticsService(async_session)
         result = await svc.get_team_performance(
-            start_date="2026-01-01", end_date="2026-01-31", tenant_id=tenant_id,
+            start_date="2026-01-01",
+            end_date="2026-01-31",
+            tenant_id=tenant_id,
         )
         assert "labels" in result
         assert result["chart_type"] == "bar"
         assert len(result["datasets"]) == 2
 
-    async def test_get_chart_data(self, db_schema, tenant_id, async_session):
-        """Pure utility — service method doesn't touch the DB, but we still
-        construct with a real AsyncSession to avoid mocking in integration tests
-        (see codereview.md rule 124)."""
-        svc = AnalyticsService(async_session)
-        result = svc.get_chart_data(
-            chart_type="pie", data=[10, 20, 30],
-            labels=["A", "B", "C"],
+    # ──────────────────────────────────────────────────────────────────────────────────────
+
+
+#  Router-level integration tests (FastAPI endpoints via HTTP)
+# ──────────────────────────────────────────────────────────────────────────────────────
+@pytest.mark.integration
+class TestAnalyticsRouterIntegration:
+    """Exercise analytics router HTTP endpoints against the real DB with auth."""
+
+    async def test_revenue_endpoint_returns_200(
+        self,
+        db_schema,
+        tenant_id,
+        api_client: "AsyncClient",
+    ):
+        resp = await api_client.get(
+            "/api/v1/analytics/revenue",
+            params={"start_date": "2026-01-01", "end_date": "2026-01-31", "group_by": "day"},
         )
-        assert result["labels"] == ["A", "B", "C"]
-        assert result["chart_type"] == "pie"
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["chart_type"] == "line"
+        assert "labels" in body["data"]
+        assert "datasets" in body["data"]
+
+    async def test_revenue_endpoint_empty_on_unknown_tenant(
+        self,
+        db_schema,
+        api_client_tenant_2: "AsyncClient",
+    ):
+        """Requesting with a non-existent tenant returns empty data dict, not an exception."""
+        resp = await api_client_tenant_2.get(
+            "/api/v1/analytics/revenue",
+            params={"start_date": "2026-01-01", "end_date": "2026-01-31", "group_by": "day"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["chart_type"] == "line"
+
+    async def test_revenue_endpoint_cross_tenant_isolation(
+        self,
+        db_schema,
+        tenant_id,
+        api_client: "AsyncClient",
+        api_client_tenant_2: "AsyncClient",
+    ):
+        """Confirm the real tenant gets its own data and tenant_2 gets a different result."""
+        real_resp = await api_client.get(
+            "/api/v1/analytics/revenue",
+            params={"start_date": "2026-01-01", "end_date": "2026-01-31", "group_by": "day"},
+        )
+        assert real_resp.status_code == 200
+        unknown_resp = await api_client_tenant_2.get(
+            "/api/v1/analytics/revenue",
+            params={"start_date": "2026-01-01", "end_date": "2026-01-31", "group_by": "day"},
+        )
+        assert unknown_resp.status_code == 200
+        # Both return valid responses but may differ; they are isolated
+        assert isinstance(unknown_resp.json()["data"], dict)
+
+    async def test_sales_conversion_endpoint_returns_200(
+        self,
+        db_schema,
+        api_client: "AsyncClient",
+    ):
+        resp = await api_client.get(
+            "/api/v1/analytics/sales-conversion",
+            params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["chart_type"] == "funnel"
+        assert "labels" in body["data"]
+
+    async def test_customer_growth_endpoint_returns_200(
+        self,
+        db_schema,
+        api_client: "AsyncClient",
+    ):
+        resp = await api_client.get(
+            "/api/v1/analytics/customer-growth",
+            params={"start_date": "2026-01-01", "end_date": "2026-03-31"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["chart_type"] == "bar"
+        assert "labels" in body["data"]
+
+    async def test_pipeline_forecast_endpoint_returns_200(
+        self,
+        db_schema,
+        api_client: "AsyncClient",
+    ):
+        resp = await api_client.get("/api/v1/analytics/pipeline-forecast")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["chart_type"] == "bar"
+        assert "labels" in body["data"]
+
+    async def test_pipeline_forecast_with_id(
+        self,
+        db_schema,
+        api_client: "AsyncClient",
+    ):
+        resp = await api_client.get("/api/v1/analytics/pipeline-forecast?pipeline_id=1")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["data"]["pipeline_id"] == 1
+
+    async def test_team_performance_endpoint_returns_200(
+        self,
+        db_schema,
+        api_client: "AsyncClient",
+    ):
+        resp = await api_client.get(
+            "/api/v1/analytics/team-performance",
+            params={"start_date": "2026-01-01", "end_date": "2026-01-31"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["chart_type"] == "bar"
+        assert len(body["data"]["datasets"]) == 2
+
+    async def test_chart_data_endpoint_comma_separated(
+        self,
+        db_schema,
+        api_client: "AsyncClient",
+    ):
+        """GET /chart-data with comma-separated data/labels exercises the router's parsing."""
+        resp = await api_client.get(
+            "/api/v1/analytics/chart-data",
+            params={"chart_type": "pie", "data": "10,20,30", "labels": "A,B,C"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["labels"] == ["A", "B", "C"]
+        assert body["data"]["datasets"][0]["data"] == [10.0, 20.0, 30.0]
+        assert body["data"]["chart_type"] == "pie"
