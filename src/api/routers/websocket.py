@@ -1,6 +1,6 @@
 """WebSocket router — JWT-authenticated channel subscription."""
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 from starlette.status import WS_1008_POLICY_VIOLATION
 
 from internal.middleware.fastapi_auth import AuthContext, _decode_jwt
@@ -31,7 +31,7 @@ def verify_ws_token(websocket: WebSocket) -> AuthContext | None:
 
     try:
         return _decode_jwt(raw_token)
-    except Exception:
+    except HTTPException:
         return None
 
 
@@ -46,6 +46,14 @@ async def ws_channel(websocket: WebSocket, resource_type: str, resource_id: str)
     ctx = verify_ws_token(websocket)
     if ctx is None:
         await websocket.close(code=WS_1008_POLICY_VIOLATION, reason="Unauthorized")
+        return
+
+    if ctx.tenant_id is None:
+        await websocket.close(code=WS_1008_POLICY_VIOLATION, reason="Invalid tenant context")
+        return
+
+    if not resource_type or not resource_id:
+        await websocket.close(code=WS_1008_POLICY_VIOLATION, reason="Invalid path")
         return
 
     await websocket.accept()
