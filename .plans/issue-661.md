@@ -21,11 +21,12 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 
 2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
 
-3. **Register in module discovery**: `tests/unit/domain_handlers/notification.py` is auto-discovered by `conftest.py`'s `ORDER`-sorted import mechanism (same pattern as `sla.py` and `counts.py`). No manual conftest.py edit is required.
+3. **Register in module discovery**: `tests/unit/domain_handlers/notification.py` is auto-discovered via `ORDER`-sorted import; no conftest.py edit needed.
 
 4. **Update `src/services/notification_service.py`**: replace all `NotificationModel` field references (`type`, `title`, `content`, `is_read`, `related_type`, `related_id`) with the new fields (`channel`, `template`, `params_`, `read_at`). The service logic (WHERE clauses, count queries) remains structurally the same.
+   - Also ensure the router's request schema (`NotificationCreate`) maps `notification_type→channel`, `title→template`, and bundles `content`/`related_type`/`related_id` into `params_` before calling the service — or document that the service performs this bundling as a design decision.
 
-5. **Update `tests/unit/test_notifications_router.py`** if it has hard-coded `to_dict` field assertions — replace old field keys (`type`, `title`, `content`, `is_read`) with new ones (`channel`, `template`, `params_`, `status`, `priority`, `delivered_at`, `read_at`).
+5. **Update `tests/unit/test_notifications_router.py`** — the tests patch `NotificationService` directly, so model field names in `to_dict()` don't affect them. What DOES need updating is the mock return dicts in `test_send_ok` and `test_mark_read_ok` which use the old field layout (`type`, `title`, `content`, `is_read`) and must be updated to the new schema (`channel`, `template`, `params`, `status`, `read_at`).
 
 6. **Generate the migration** (follow CLAUDE.md exactly):
    - `docker compose -f configs/docker-compose.test.yml up -d test-db`
@@ -55,7 +56,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
      - Drop new columns (channel, template, params_, status, priority, delivered_at, read_at)
 
 ## Test Plan
-- Unit tests in `tests/unit/`: `test_notifications_router.py` updated for new field names; `tests/unit/domain_handlers/notification.py` covered implicitly by existing router tests patching `NotificationService`.
+- Unit tests in `tests/unit/`: `test_notifications_router.py` updated for new field names — specifically, update mock return dicts in `test_send_ok` and `test_mark_read_ok` to use the new field names (`channel`, `template`, `params`, `status`, `read_at`) matching `NotificationModel.to_dict()` output; `tests/unit/domain_handlers/notification.py` covered implicitly by existing router tests patching `NotificationService`.
 - Integration tests in `tests/integration/`: No new integration test files required — the existing `notifications` table is already covered by `db_schema` fixture; the new indexes are exercised by the existing notification integration flows (list, send, mark-read) with no new fixtures needed.
 
 ## Acceptance Criteria

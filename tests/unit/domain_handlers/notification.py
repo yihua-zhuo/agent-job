@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-ORDER = 2
-
 
 def _notification_to_row(n: dict):
     from tests.unit.conftest import MockRow
@@ -77,7 +75,11 @@ def make_notification_handler(state):
         if "from notifications where id" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
-            if n and n.get("tenant_id") == params.get("tenant_id"):
+            if (
+                n
+                and n.get("tenant_id") == params.get("tenant_id")
+                and n.get("user_id") == params.get("user_id")
+            ):
                 return MockResult([_notification_to_row(n)])
             return MockResult([])
 
@@ -93,6 +95,7 @@ def make_notification_handler(state):
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
+            # Fail open: if the SQL doesn't contain a recognizable unread pattern, return all rows
             unread_filter = "read_at is null" in sql_text_lower or "read_at = null" in sql_text_lower
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
@@ -105,7 +108,7 @@ def make_notification_handler(state):
                 rows.append(n)
             return MockResult([_notification_to_row(r) for r in rows[offset : offset + page_size]])
 
-        if "select" in sql_text_lower and "count" in sql_text_lower and "from notifications" in sql_text_lower:
+        if "select count" in sql_text_lower and "from notifications" in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             unread_filter = "read_at is null" in sql_text_lower or "read_at = null" in sql_text_lower

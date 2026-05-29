@@ -22,21 +22,26 @@ class NotificationModel(Base):
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     channel: Mapped[str | None] = mapped_column(String(50), nullable=True)
     template: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # serialized as 'params' in to_dict() to avoid shadowing the built-in.
     params_: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     priority: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    # Populated by the service layer when the notification is sent; intentionally
+    # nullable here so legacy rows (pre-migration) remain valid.
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
+        # Guard: params_ may be stored as a JSON string in some edge cases
+        serialized_params = self.params_ if isinstance(self.params_, dict) else self.params_
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params": self.params_,
+            "params": serialized_params,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,

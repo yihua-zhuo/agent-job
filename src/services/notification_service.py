@@ -91,6 +91,9 @@ class NotificationService:
         notification = result.scalar_one_or_none()
         if notification is None:
             raise NotFoundException("通知")
+        # Idempotent: transitioning from any status (including NULL legacy rows) to 'read'
+        # is accepted silently — no guard is needed since marking an already-read
+        # notification as read again is a no-op at the data level.
         if notification.read_at is None:
             notification.read_at = datetime.now(UTC)
         notification.status = "read"
