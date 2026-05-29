@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build
+.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review
 
 # Create a local virtualenv on demand and use it by default.
 VENV_DIR := .venv
@@ -130,5 +130,19 @@ act-implement: ## Trigger implement-ready-issues.yml locally via act (ISSUE=123 
 		-W .github/workflows/implement-ready-issues.yml \
 		-j implement \
 		$(if $(ISSUE),--input issue_number=$(ISSUE),) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock
+
+# Triggers the PR-reviewer agent. Heads up: this can enable auto-merge on
+# real open PRs and dispatch fix-pr-comments runs. Use a throwaway GH_TOKEN
+# (or expect real side effects on github.com).
+act-review: ## Trigger review-open-prs.yml locally via act (PR=123 logs intent; agent still scans all open PRs)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/review-open-prs.yml \
+		-j review \
+		$(if $(PR),--input pr_number=$(PR),) \
 		--bind \
 		--container-daemon-socket /var/run/docker.sock
