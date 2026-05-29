@@ -21,7 +21,7 @@ Add a `CodeReview` ORM model to `src/db/models/code_review.py` for persisting co
 2. No changes to `alembic/env.py` — the wildcard `import db.models` (line 14) already auto-discovers all model modules via `pkgutil.iter_modules`
 
 3. Spin up the dedicated `alembic_dev` database and run autogenerate per the CLAUDE.md instructions:
-   ```
+   ```bash
    docker compose -f configs/docker-compose.test.yml up -d test-db
    docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;"
    docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"
@@ -34,21 +34,21 @@ Add a `CodeReview` ORM model to `src/db/models/code_review.py` for persisting co
 4. Review the generated `alembic/versions/<id>_add_code_reviews.py` — adjust if autogenerate produced incorrect types (e.g. `JSON` vs `Text` for `code_snippet`), wrong server defaults, or missing indexes
 
 5. Verify the migration applies and rolls back cleanly:
-   ```
+   ```bash
    alembic upgrade head
    alembic downgrade -1
    alembic upgrade head
    ```
 
 6. Confirm no residual drift with a second empty autogenerate:
-   ```
+   ```bash
    alembic revision --autogenerate -m "drift_check"
    ```
    If the new file contains only `pass` in both up/down, delete it
 
 ## Test Plan
 
-- **Unit tests in `tests/unit/`**: Add `tests/unit/test_code_review_model.py` — mock `db.session` with `make_mock_session` using a `make_code_review_handler` handler (or extend `conftest.py` with a `code_review_sql_handler` if the generic handler covers it). Test: `to_dict()` output shape, field types, nullability of optional fields.
+- **Unit tests in `tests/unit/`**: Add `tests/unit/test_code_review_model.py` — no DB mock needed since `to_dict()` is a pure in-memory method. Test: `to_dict()` output shape, field types, nullability of optional fields, long/empty string values, minimal required fields.
 - **Integration tests in `tests/integration/`**: Add `tests/integration/test_code_review_integration.py` using the existing `db_schema`, `tenant_id`, and `async_session` fixtures. Test: CRUD round-trip (`CodeReviewModel` insert → select → compare fields), multi-tenancy isolation (record with tenant A is not visible to tenant B).
 
 ## Acceptance Criteria

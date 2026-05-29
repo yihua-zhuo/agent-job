@@ -86,6 +86,8 @@ class TestCodeReviewModelIntegration:
         assert d["code_snippet"] == "func main() {}"
         assert d["score"] == 72
         assert d["summary"] == "Minor issues found"
+        assert "created_at" in d
+        assert d["created_at"] is not None
 
     async def test_multi_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
         """Records are not visible across tenant boundaries."""
