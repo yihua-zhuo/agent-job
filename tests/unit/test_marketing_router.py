@@ -238,3 +238,28 @@ class TestDeleteCampaignEndpoint:
         svc.delete_campaign = AsyncMock(side_effect=NotFoundException("Campaign"))
         resp = client.delete("/api/v1/marketing/campaigns/9999")
         assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
+# Stats
+# ---------------------------------------------------------------------------
+
+class TestGetCampaignStatsEndpoint:
+    def test_success(self, client_with_service):
+        client, svc = client_with_service
+        svc.get_campaign_stats = AsyncMock(return_value={
+            "campaign_id": 1, "sent_count": 100, "open_count": 40,
+            "click_count": 10, "open_rate": 40.0, "click_rate": 10.0,
+        })
+        resp = client.get("/api/v1/marketing/campaigns/1/stats")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["sent_count"] == 100
+        assert body["data"]["open_rate"] == 40.0
+
+    def test_not_found_returns_404(self, client_with_service):
+        client, svc = client_with_service
+        svc.get_campaign_stats = AsyncMock(side_effect=NotFoundException("Campaign"))
+        resp = client.get("/api/v1/marketing/campaigns/9999/stats")
+        assert resp.status_code == 404
