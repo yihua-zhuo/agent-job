@@ -1,23 +1,23 @@
 """Re-export all identity ORM models."""
 
 from internal.db.models.identity import (
-    DepartmentModel,
-    OrganizationModel,
-    PermissionModel,
-    RoleModel,
-    RolePermissionModel,
-    TenantModel,
-    UserModel,
-    UserRoleModel,
+    IdentityDepartmentModel,
+    IdentityOrganizationModel,
+    IdentityPermissionModel,
+    IdentityRoleModel,
+    IdentityRolePermissionModel,
+    IdentityTenantModel,
+    IdentityUserModel,
+    IdentityUserRoleModel,
 )
 
 __all__ = [
-    "TenantModel",
-    "OrganizationModel",
-    "DepartmentModel",
-    "UserModel",
-    "RoleModel",
-    "PermissionModel",
-    "RolePermissionModel",
-    "UserRoleModel",
+    "IdentityTenantModel",
+    "IdentityOrganizationModel",
+    "IdentityDepartmentModel",
+    "IdentityUserModel",
+    "IdentityRoleModel",
+    "IdentityPermissionModel",
+    "IdentityRolePermissionModel",
+    "IdentityUserRoleModel",
 ]
