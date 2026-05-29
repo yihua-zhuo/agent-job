@@ -5,11 +5,8 @@ from datetime import datetime as dt
 import pytest
 
 from db.models.tenant import TenantModel
-from tests.unit.conftest import (
-    MockState,
-    make_mock_session,
-    make_tenant_handler,
-)
+from tests.unit.conftest import MockState, make_mock_session
+from tests.unit.domain_handlers.tenants import make_tenant_handler
 
 
 class TestTenantModel:
@@ -68,74 +65,65 @@ class TestTenantHandler:
         state = MockState()
         return make_mock_session([make_tenant_handler(state)])
 
-    def _run(self, coro):
-        import asyncio
-
-        return asyncio.get_event_loop().run_until_complete(coro)
-
-    def test_insert_tenant(self, mock_db_session):
+    @pytest.mark.asyncio
+    async def test_insert_tenant(self, mock_db_session):
         from sqlalchemy import text
 
-        result = self._run(
-            mock_db_session.execute(
+        result = await mock_db_session.execute(
+            text(
+                "INSERT INTO tenants (name, slug, plan, status, settings, usage_limits) VALUES (:name, :slug, :plan, :status, :settings, :usage_limits)"
+            ),
+            {
+                "name": "Test Tenant",
+                "slug": "test-tenant",
+                "plan": "free",
+                "status": "active",
+                "settings": {},
+                "usage_limits": {},
+            },
+        )
+        row = result.fetchone()
+        assert row is not None
+        assert row.id == 1
+        assert row.name == "Test Tenant"
+        assert row.slug == "test-tenant"
+        assert row.plan == "free"
+
+    @pytest.mark.asyncio
+    async def test_select_tenant_by_id(self, mock_db_session):
+        from sqlalchemy import text
+
+        result = await mock_db_session.execute(
+            text("SELECT id, name, slug, plan FROM tenants WHERE id = :id LIMIT 1"),
+            {"id": 1},
+        )
+        row = result.fetchone()
+        assert row is not None
+
+    @pytest.mark.asyncio
+    async def test_count_tenants(self, mock_db_session):
+        from sqlalchemy import text
+
+        # Seed two tenants via the handler so the count reflects state, not a magic number.
+        for name, slug in (("Alpha", "alpha"), ("Beta", "beta")):
+            await mock_db_session.execute(
                 text(
-                    "INSERT INTO tenants (name, slug, plan, status, settings, usage_limits) VALUES (:name, :slug, :plan, :status, :settings, :usage_limits)"
+                    "INSERT INTO tenants (name, slug, plan, status, settings, usage_limits) "
+                    "VALUES (:name, :slug, :plan, :status, :settings, :usage_limits)"
                 ),
                 {
-                    "name": "Test Tenant",
-                    "slug": "test-tenant",
+                    "name": name,
+                    "slug": slug,
                     "plan": "free",
                     "status": "active",
                     "settings": {},
                     "usage_limits": {},
                 },
             )
-        )
-        row = result.fetchone()
-        assert row is not None
-        assert row.name == "Test Tenant"
-        assert row.slug == "test-tenant"
-        assert row.plan == "free"
 
-    def test_select_tenant_by_id(self, mock_db_session):
-        from sqlalchemy import text
-
-        result = self._run(
-            mock_db_session.execute(
-                text("SELECT id, name, slug, plan FROM tenants WHERE id = :id LIMIT 1"),
-                {"id": 1},
-            )
-        )
-        row = result.fetchone()
-        assert row is not None
-
-    def test_count_tenants(self, mock_db_session):
-        from sqlalchemy import text
-
-        # Seed two tenants via the handler so the count reflects state, not a magic number.
-        for name, slug in (("Alpha", "alpha"), ("Beta", "beta")):
-            self._run(
-                mock_db_session.execute(
-                    text(
-                        "INSERT INTO tenants (name, slug, plan, status, settings, usage_limits) "
-                        "VALUES (:name, :slug, :plan, :status, :settings, :usage_limits)"
-                    ),
-                    {
-                        "name": name,
-                        "slug": slug,
-                        "plan": "free",
-                        "status": "active",
-                        "settings": {},
-                        "usage_limits": {},
-                    },
-                )
-            )
-
-        result = self._run(
-            mock_db_session.execute(
-                text("SELECT COUNT(*) FROM tenants"),
-                {},
-            )
+        result = await mock_db_session.execute(
+            text("SELECT COUNT(*) FROM tenants"),
+            {},
         )
         count = result.scalar_one()
         assert count == 2

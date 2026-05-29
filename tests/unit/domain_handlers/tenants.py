@@ -7,6 +7,8 @@ from tests.unit.conftest import MockResult, MockRow, MockState
 ORDER = 30
 
 
+# Hardcoded fixture rows used when state.tenants is empty (i.e. tests that bypass MockState
+# seeding). Intentionally static so tests relying on magic IDs like 42 still resolve.
 _FIXTURES: dict[int, dict] = {
     1: {
         "id": 1,
@@ -14,8 +16,8 @@ _FIXTURES: dict[int, dict] = {
         "slug": "tenant-a",
         "plan": "pro",
         "status": "active",
-        "settings": "{}",
-        "usage_limits": "{}",
+        "settings": {},
+        "usage_limits": {},
         "created_at": None,
         "updated_at": None,
     },
@@ -25,8 +27,8 @@ _FIXTURES: dict[int, dict] = {
         "slug": "beta-org",
         "plan": "enterprise",
         "status": "active",
-        "settings": '{"sso": true}',
-        "usage_limits": '{"users": 100}',
+        "settings": {"sso": True},
+        "usage_limits": {"users": 100},
         "created_at": None,
         "updated_at": None,
     },
@@ -77,6 +79,10 @@ def make_tenant_handler(state: MockState):
             return MockResult([[len(state.tenants) or 2]])
 
         if "select" in sql_text and "from tenants" in sql_text and "count" not in sql_text:
+            # 'id' bind → direct PK lookup; 'tenant_id' bind → tenant-scoped query.
+            # The fallback chain handles both naming conventions without conflating the two
+            # operations; a service that passes 'id' intends a PK lookup while one that passes
+            # 'tenant_id' intends a tenant-scoped list query (handled separately above).
             tenant_id = params.get("id", params.get("tenant_id"))
 
             if "limit 1" in sql_text and "where id" in sql_text:
@@ -87,6 +93,12 @@ def make_tenant_handler(state: MockState):
                 return MockResult([])
 
             if "where id" not in sql_text:
+                # Enforce tenant isolation: only return rows matching the requested tenant_id.
+                tenant_id = params.get("tenant_id")
+                if tenant_id is not None:
+                    matching = [r for rid, r in state.tenants.items() if rid == tenant_id]
+                    return MockResult([MockRow(r.copy()) for r in matching])
+                # Legacy fallback: return all in-memory state.
                 if state.tenants:
                     rows = [MockRow(r.copy()) for r in state.tenants.values()]
                 else:
@@ -99,8 +111,8 @@ def make_tenant_handler(state: MockState):
                                 "slug": "tenant-b",
                                 "plan": "enterprise",
                                 "status": "active",
-                                "settings": "{}",
-                                "usage_limits": "{}",
+                                "settings": {},
+                                "usage_limits": {},
                                 "created_at": None,
                                 "updated_at": None,
                             }

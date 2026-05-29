@@ -29,7 +29,6 @@ class TestTenantIntegration:
                 "updated_at": now,
             },
         )
-        await async_session.commit()
 
         # Select back and verify
         result = await async_session.execute(
@@ -52,25 +51,25 @@ class TestTenantIntegration:
         from sqlalchemy.exc import IntegrityError
 
         now = dt.utcnow()
-        # Attempting to insert with NULL slug should fail
+        # Attempting to insert with NULL slug should fail at commit
+        await async_session.execute(
+            text("""
+                INSERT INTO tenants (id, name, slug, plan, status, settings, usage_limits, created_at, updated_at)
+                VALUES (:id, :name, :slug, :plan, :status, :settings, :usage_limits, :created_at, :updated_at)
+            """),
+            {
+                "id": tenant_id,
+                "name": "Null Slug Tenant",
+                "slug": None,
+                "plan": "free",
+                "status": "active",
+                "settings": {},
+                "usage_limits": {},
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
         with pytest.raises(IntegrityError):
-            await async_session.execute(
-                text("""
-                    INSERT INTO tenants (id, name, slug, plan, status, settings, usage_limits, created_at, updated_at)
-                    VALUES (:id, :name, :slug, :plan, :status, :settings, :usage_limits, :created_at, :updated_at)
-                """),
-                {
-                    "id": tenant_id,
-                    "name": "Null Slug Tenant",
-                    "slug": None,
-                    "plan": "free",
-                    "status": "active",
-                    "settings": {},
-                    "usage_limits": {},
-                    "created_at": now,
-                    "updated_at": now,
-                },
-            )
             await async_session.commit()
 
     async def test_tenant_usage_limits_not_null_constraint(self, db_schema, tenant_id, async_session):
@@ -80,25 +79,25 @@ class TestTenantIntegration:
         from sqlalchemy.exc import IntegrityError
 
         now = dt.utcnow()
-        # Attempting to insert with NULL usage_limits should fail
+        # Attempting to insert with NULL usage_limits should fail at commit
+        await async_session.execute(
+            text("""
+                INSERT INTO tenants (id, name, slug, plan, status, settings, usage_limits, created_at, updated_at)
+                VALUES (:id, :name, :slug, :plan, :status, :settings, :usage_limits, :created_at, :updated_at)
+            """),
+            {
+                "id": tenant_id,
+                "name": "Null Limits Tenant",
+                "slug": "null-limits",
+                "plan": "free",
+                "status": "active",
+                "settings": {},
+                "usage_limits": None,
+                "created_at": now,
+                "updated_at": now,
+            },
+        )
         with pytest.raises(IntegrityError):
-            await async_session.execute(
-                text("""
-                    INSERT INTO tenants (id, name, slug, plan, status, settings, usage_limits, created_at, updated_at)
-                    VALUES (:id, :name, :slug, :plan, :status, :settings, :usage_limits, :created_at, :updated_at)
-                """),
-                {
-                    "id": tenant_id,
-                    "name": "Null Limits Tenant",
-                    "slug": "null-limits",
-                    "plan": "free",
-                    "status": "active",
-                    "settings": {},
-                    "usage_limits": None,
-                    "created_at": now,
-                    "updated_at": now,
-                },
-            )
             await async_session.commit()
 
     async def test_tenant_default_slug_applied_when_omitted(self, db_schema, tenant_id, async_session):
@@ -124,7 +123,6 @@ class TestTenantIntegration:
                 "updated_at": now,
             },
         )
-        await async_session.commit()
 
         result = await async_session.execute(
             text("SELECT slug FROM tenants WHERE id = :id"),
@@ -157,7 +155,6 @@ class TestTenantIntegration:
                 "updated_at": now,
             },
         )
-        await async_session.commit()
 
         result = await async_session.execute(
             text("SELECT slug FROM tenants WHERE id = :id"),
