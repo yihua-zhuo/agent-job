@@ -30,14 +30,13 @@ class NotificationModel(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
-        params_val = self.params_
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params_": params_val,
+            "params_": self.params_,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,

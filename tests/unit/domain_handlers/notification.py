@@ -25,6 +25,25 @@ def _notification_to_row(n: dict):
     )
 
 
+def _reminder_to_row(r: dict):
+    from tests.unit.conftest import MockRow
+
+    return MockRow(
+        {
+            "id": r.get("id"),
+            "tenant_id": r.get("tenant_id"),
+            "user_id": r.get("user_id"),
+            "title": r.get("title"),
+            "content": r.get("content"),
+            "remind_at": r.get("remind_at"),
+            "related_type": r.get("related_type"),
+            "related_id": r.get("related_id"),
+            "is_completed": r.get("is_completed", False),
+            "created_at": r.get("created_at"),
+        }
+    )
+
+
 def make_notification_handler(state):
     """Return a handler that manages an in-memory notification store in state."""
     from tests.unit.conftest import MockResult
@@ -103,8 +122,65 @@ def make_notification_handler(state):
     return handler
 
 
+def make_reminder_handler(state):
+    """Return a handler that manages an in-memory reminder store in state."""
+    from tests.unit.conftest import MockResult
+
+    def handler(sql_text: str, params: dict):
+        if not hasattr(state, "_reminders"):
+            state._reminders = {}
+            state._reminders_next_id = 1
+
+        if "insert into reminders" in sql_text:
+            rid = state._reminders_next_id
+            state._reminders_next_id += 1
+            r = {
+                "id": rid,
+                "tenant_id": params.get("tenant_id", 0),
+                "user_id": params.get("user_id", 0),
+                "title": params.get("title"),
+                "content": params.get("content"),
+                "remind_at": params.get("remind_at"),
+                "related_type": params.get("related_type"),
+                "related_id": params.get("related_id"),
+                "is_completed": params.get("is_completed", False),
+                "created_at": params.get("created_at"),
+            }
+            state._reminders[rid] = r
+            return MockResult([_reminder_to_row(r)])
+
+        if "from reminders where id" in sql_text and "delete" not in sql_text:
+            rid = params.get("id")
+            r = state._reminders.get(rid)
+            if r and r.get("tenant_id") == params.get("tenant_id"):
+                return MockResult([_reminder_to_row(r)])
+            return MockResult([])
+
+        if "delete from reminders" in sql_text:
+            rid = params.get("id")
+            r = state._reminders.get(rid)
+            if r and r.get("tenant_id") == params.get("tenant_id"):
+                del state._reminders[rid]
+                return MockResult([], rowcount=1)
+            return MockResult([], rowcount=0)
+
+        if "from reminders" in sql_text and "count" not in sql_text:
+            tenant_id = params.get("tenant_id")
+            user_id = params.get("user_id")
+            rows = [
+                r
+                for r in state._reminders.values()
+                if r.get("tenant_id") == tenant_id and r.get("user_id") == user_id
+            ]
+            return MockResult([_reminder_to_row(r) for r in rows])
+
+        return None
+
+    return handler
+
+
 def get_handlers(state):
-    return [make_notification_handler(state)]
+    return [make_notification_handler(state), make_reminder_handler(state)]
 
 
-__all__ = ["get_handlers", "make_notification_handler"]
+__all__ = ["get_handlers", "make_notification_handler", "make_reminder_handler"]

@@ -1,13 +1,13 @@
 """Unit tests for src/api/routers/notifications.py — /api/v1/notifications and /api/v1/reminders."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
 
 from api.routers.notifications import notifications_router
-from internal.middleware.fastapi_auth import AuthContext, require_auth
 from db.connection import get_db
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import AppException, NotFoundException
 
 
@@ -104,7 +104,12 @@ class TestMarkRead:
     def test_mark_read_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.mark_as_read = AsyncMock(return_value={"id": 1, "is_read": True})
+            svc.mark_as_read = AsyncMock(return_value={
+                "id": 1, "tenant_id": 1, "user_id": 99, "channel": "in_app",
+                "template": "Test", "params_": None, "status": "read",
+                "priority": "normal", "created_at": "2026-01-01T00:00:00",
+                "delivered_at": None, "read_at": "2026-01-01T00:00:00",
+            })
             client = _app()
             response = client.put("/api/v1/notifications/1/read")
             assert response.status_code == 200
