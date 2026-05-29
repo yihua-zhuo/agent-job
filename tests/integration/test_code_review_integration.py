@@ -90,7 +90,11 @@ class TestCodeReviewModelIntegration:
         assert d["summary"] == "Minor issues found"
         assert "created_at" in d
         assert d["created_at"] is not None
+        assert isinstance(d["created_at"], str)
         assert d["created_at"] == now.isoformat()
+        assert "updated_at" in d
+        assert d["updated_at"] is not None
+        assert isinstance(d["updated_at"], str)
 
     async def test_to_dict_on_loaded_instance(self, db_schema, tenant_id, async_session):
         """to_dict() produces a correct dict on a freshly loaded instance."""

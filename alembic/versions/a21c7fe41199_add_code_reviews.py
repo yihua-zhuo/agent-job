@@ -29,15 +29,15 @@ def upgrade() -> None:
     sa.Column('summary', sa.Text(), nullable=True),
     sa.Column('created_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
     sa.Column('updated_at', sa.DateTime(timezone=True), server_default=sa.text('now()'), nullable=False),
+    # CASCADE delete is intentional — code review records are cleaned up when their
+# tenant or user is deleted. This is a data lifecycle policy, not an oversight.
     sa.ForeignKeyConstraint(['tenant_id'], ['tenants.id'], name='fk_code_reviews_tenant', ondelete='CASCADE'),
     sa.ForeignKeyConstraint(['user_id'], ['users.id'], name='fk_code_reviews_user', ondelete='CASCADE'),
     sa.PrimaryKeyConstraint('id')
     )
-    op.create_index('ix_code_reviews_tenant_id', 'code_reviews', ['tenant_id'], unique=False)
     op.create_index('ix_code_reviews_tenant_user', 'code_reviews', ['tenant_id', 'user_id'], unique=False)
 
 
 def downgrade() -> None:
-    op.drop_index('ix_code_reviews_tenant_id', table_name='code_reviews')
     op.drop_index('ix_code_reviews_tenant_user', table_name='code_reviews')
     op.drop_table('code_reviews')

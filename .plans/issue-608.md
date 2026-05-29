@@ -43,7 +43,7 @@ Add a `CodeReview` ORM model to `src/db/models/code_review.py` for persisting co
 6. Confirm no divergent heads remain after the merge. Run `alembic history --verbose` and check for more than one head at the tip. If additional heads are reported:
    - Document each head's revision ID and what it contains.
    - Decide whether they need merging (via `alembic merge head <rev1> <rev2> -m "merge"`), re-basing, or re-baselining before proceeding.
-   Then run the drift-check autogenerate:
+   Then run the drift-check autogenerate only if there was reason to suspect divergence (e.g. step 5 showed errors):
    ```bash
    alembic revision --autogenerate -m "drift_check"
    ```
@@ -52,7 +52,7 @@ Add a `CodeReview` ORM model to `src/db/models/code_review.py` for persisting co
 ## Test Plan
 
 - **Unit tests in `tests/unit/`**: Add `tests/unit/test_code_review_model.py` — no DB mock needed since `to_dict()` is a pure in-memory method. Test: `to_dict()` output shape, field types, nullability of optional fields, long/empty string values, minimal required fields.
-- **Integration tests in `tests/integration/`**: Add `tests/integration/test_code_review_integration.py` using the existing `db_schema`, `tenant_id`, and `async_session` fixtures. Test: CRUD round-trip (`CodeReviewModel` insert → select → compare fields), multi-tenancy isolation (record with tenant A is not visible to tenant B).
+- **Integration tests in `tests/integration/`**: Add `tests/integration/test_code_review_integration.py` using the existing `db_schema`, `tenant_id`, and `async_session` fixtures. Test: CRUD round-trip (`CodeReviewModel` insert → select → compare fields), multi-tenancy isolation (record with tenant A is not visible to tenant B), `to_dict` includes `updated_at`. Validation: test that score outside 0-100 raises `ValueError` — valid_count confirms success, invalid_count confirms the error record is present and carries the right detail.
 
 ## Acceptance Criteria
 
