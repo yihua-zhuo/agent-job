@@ -17,6 +17,16 @@ from sqlalchemy import select, text
 
 from db.models.opportunity import OpportunityModel
 from db.models.opportunity_activity import OpportunityActivityModel
+from services.customer_service import CustomerService
+
+
+async def _seed_customer(async_session, tenant_id: int) -> int:
+    """Create a customer and return its id."""
+    result = await CustomerService(async_session).create_customer(
+        data={"name": "OppAct Test Customer", "email": f"oppact-{tenant_id}@example.com"},
+        tenant_id=tenant_id,
+    )
+    return result.id
 
 
 @pytest.mark.integration
@@ -32,7 +42,7 @@ class TestOpportunityActivityIntegration:
         # Seed an opportunity (FK dependency); customer_id satisfied by _seed_customer
         opp = OpportunityModel(
             tenant_id=tenant_id,
-            customer_id=(await _seed_customer),
+            customer_id=_seed_customer,
             name="Test Deal",
             stage="lead",
         )
@@ -68,7 +78,7 @@ class TestOpportunityActivityIntegration:
         """metadata column stores arbitrary JSON without type errors."""
         opp = OpportunityModel(
             tenant_id=tenant_id,
-            customer_id=(await _seed_customer),
+            customer_id=_seed_customer,
             name="Metadata Test",
             stage="qualified",
         )
@@ -102,7 +112,7 @@ class TestOpportunityActivityIntegration:
         """Deleting the parent opportunity removes the activity row (FK cascade)."""
         opp = OpportunityModel(
             tenant_id=tenant_id,
-            customer_id=(await _seed_customer),
+            customer_id=_seed_customer,
             name="Cascade Test",
             stage="lead",
         )
@@ -138,7 +148,7 @@ class TestOpportunityActivityIntegration:
         """Both tenant_id and opportunity_id columns have indexes in the DB."""
         opp = OpportunityModel(
             tenant_id=tenant_id,
-            customer_id=(await _seed_customer),
+            customer_id=_seed_customer,
             name="Index Test",
             stage="lead",
         )
@@ -162,3 +172,35 @@ class TestOpportunityActivityIntegration:
         indexes = {row[0] for row in result.fetchall()}
         assert any("tenant_id" in idx for idx in indexes), f"No tenant_id index found: {indexes}"
         assert any("opportunity_id" in idx for idx in indexes), f"No opportunity_id index found: {indexes}"
+
+    async def test_cross_tenant_isolation(
+        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_customer
+    ):
+        """Activities created under tenant A are invisible to tenant B."""
+        opp = OpportunityModel(
+            tenant_id=tenant_id,
+            customer_id=_seed_customer,
+            name="Isolation Test",
+            stage="lead",
+        )
+        async_session.add(opp)
+        await async_session.flush()
+
+        activity = OpportunityActivityModel(
+            tenant_id=tenant_id,
+            opportunity_id=opp.id,
+            event_type="created",
+            event_timestamp=datetime(2026, 6, 1, tzinfo=UTC),
+            event_metadata={},
+        )
+        async_session.add(activity)
+        await async_session.flush()
+
+        # Query with a different tenant_id — must not return the activity
+        result = await async_session.execute(
+            select(OpportunityActivityModel).where(
+                OpportunityActivityModel.id == activity.id,
+                OpportunityActivityModel.tenant_id == tenant_id_2,
+            )
+        )
+        assert result.scalar_one_or_none() is None

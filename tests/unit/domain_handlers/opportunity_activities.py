@@ -30,7 +30,7 @@ def make_opportunity_activity_handler(state: MockState):
             state.opportunity_activities[aid] = record
             return MockResult([MockRow(record.copy())])
 
-        if "from opportunity_activities" not in sql_text:
+        if "opportunity_activities" not in sql_text:
             return None
 
         # SELECT — find by id or list all for tenant
@@ -48,7 +48,10 @@ def make_opportunity_activity_handler(state: MockState):
         if "update opportunity_activities" in sql_text:
             aid = params.get("id")
             if aid in state.opportunity_activities:
+                tenant_id = params.get("tenant_id")
                 rec = state.opportunity_activities[aid]
+                if tenant_id is not None and rec.get("tenant_id") != tenant_id:
+                    return MockResult([])
                 for key in ("event_type", "event_metadata", "event_timestamp"):
                     if key in params:
                         rec[key] = params[key]
@@ -59,6 +62,9 @@ def make_opportunity_activity_handler(state: MockState):
         if "delete from opportunity_activities" in sql_text:
             aid = params.get("id")
             if aid in state.opportunity_activities:
+                tenant_id = params.get("tenant_id")
+                if tenant_id is not None and state.opportunity_activities[aid].get("tenant_id") != tenant_id:
+                    return MockResult([])
                 del state.opportunity_activities[aid]
                 return MockResult([])
             return MockResult([])
