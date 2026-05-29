@@ -5,8 +5,9 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.notification import VALID_PRIORITIES, NotificationModel
+from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
+from pkg.constants.notification_constants import VALID_PRIORITIES
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 

@@ -11,7 +11,7 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
-from sqlalchemy import JSON, Boolean, DateTime, Integer, String, Text, and_, column, text
+from sqlalchemy import Column, JSON, Boolean, DateTime, Integer, String, Text, and_, column, text
 from sqlalchemy.dialects.postgresql import JSON as PgJSON
 
 from alembic import op
@@ -64,7 +64,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_notifications_user_tenant_status",
         "notifications",
-        ["user_id", "tenant_id", "status"],
+        column_names=["user_id", "tenant_id", "status"],
     )
     # Partial index for efficient lookup of unread in-app notifications
     op.create_index(

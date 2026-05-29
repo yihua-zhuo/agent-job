@@ -380,29 +380,28 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
     async_session.add(tenant)
     await async_session.flush()
 
-    factory = _get_test_async_session_factory()
-    async with factory() as session:
-        # Create the test user in the DB so /users/me resolves correctly.
-        user_svc = UserService(session)
-        await user_svc.create_user(
-            username="webtest",
-            email="webtest@example.com",
-            password="TestPass123!",
-            role="admin",
-            tenant_id=tenant_id_web,
-        )
-        await session.commit()
-        # Retrieve the actual DB-assigned user id (not hardcoded 999).
-        created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
-        actual_user_id = created_user.id if created_user else 999
+    # Use the function-scoped session directly so user creation and test operations
+    # share the same transaction.
+    user_svc = UserService(async_session)
+    await user_svc.create_user(
+        username="webtest",
+        email="webtest@example.com",
+        password="TestPass123!",
+        role="admin",
+        tenant_id=tenant_id_web,
+    )
+    await async_session.flush()
+    # Retrieve the actual DB-assigned user id (not hardcoded 999).
+    created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
+    actual_user_id = created_user.id if created_user else 999
 
-        auth_svc = AuthService(session, secret_key=TEST_JWT_SECRET)
-        token = auth_svc.generate_token(
-            user_id=actual_user_id,
-            username="webtest",
-            role="admin",
-            tenant_id=tenant_id_web,
-        )
+    auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
+    token = auth_svc.generate_token(
+        user_id=actual_user_id,
+        username="webtest",
+        role="admin",
+        tenant_id=tenant_id_web,
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
