@@ -31,7 +31,7 @@ def make_opportunity_activity_handler(state: MockState):
             return MockResult([MockRow(record.copy())])
 
         if "opportunity_activities" not in sql_text:
-            return None
+            return MockResult([])
 
         # SELECT — find by id or list all for tenant
         activity_id = params.get("id")
@@ -78,7 +78,10 @@ def make_opportunity_activity_handler(state: MockState):
             for r in state.opportunity_activities.values()
             if r.get("tenant_id") == tenant_id
         ]
-        rows = filtered[int(offset) : int(offset) + int(limit)] if limit else filtered[int(offset) :]
+        if limit is not None:
+            rows = filtered[int(offset) : int(offset) + int(limit)]
+        else:
+            rows = filtered[int(offset) :]
         return MockResult(rows)
 
     return handler

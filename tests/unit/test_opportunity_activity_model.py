@@ -11,8 +11,13 @@ from db.models.opportunity_activity import OpportunityActivityModel
 
 
 @pytest.fixture
-def mock_db_session():
-    """Lightweight mock AsyncSession for model-only tests."""
+def _mock_db_session_smoke_test():
+    """Lightweight mock AsyncSession for model-only (zero-SQL) smoke tests.
+
+    This fixture intentionally uses an ad-hoc MagicMock rather than the shared
+    make_mock_session pattern because these tests never exercise the SQL layer —
+    they only verify model construction and to_dict() serialization.
+    """
     session = MagicMock(
         spec=[
             "execute",

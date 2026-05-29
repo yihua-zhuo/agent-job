@@ -21,6 +21,8 @@ class OpportunityActivityModel(Base):
     )
     event_type: Mapped[str] = mapped_column(String(50), nullable=False)
     event_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    # Named event_metadata rather than metadata to avoid conflict with
+    # SQLAlchemy's reserved "metadata" declarative attribute.
     event_metadata: Mapped[dict] = mapped_column("metadata", JSONB, default=dict, nullable=False)
 
     def to_dict(self) -> dict:
