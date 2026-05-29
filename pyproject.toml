@@ -48,7 +48,7 @@ exclude = [".git", "tests", "__pycache__", ".venv", "venv", ".mypy_cache"]
 
 [tool.ruff.lint]
 select = ["E", "F", "UP", "S", "I", "W"]
-ignore = ["E501"]  # line-length handled by line-length setting
+ignore = ["E501", "UP017"]  # line-length handled by line-length setting; UP017 = tzinfo-aware datetime
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["S101", "S106", "INP001"]  # assert okay in tests, hardcoded password okay in integration test seeds
