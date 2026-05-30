@@ -127,3 +127,5 @@ class TestCopilotIntegration:
         # Verify tenant 2 cannot access tenant 1's conversation.
         history_cross = await api_client_tenant_2.get(f"/copilot/{conv_tenant_1.id}/history")
         assert history_cross.status_code == 404
+        body = history_cross.json()
+        assert body["success"] is False, f"Expected success=False for cross-tenant access, got: {body}"

@@ -213,12 +213,12 @@ def make_reminder_handler(state):
             )
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            # is_completed_filter comes from params (set by the service via upcoming_only).
-            # When is_completed is in params, the caller wants completed reminders included
-            # (upcoming_only=False). absent means upcoming-only mode (upcoming_only=True).
+            # is_completed_filter comes from params (set by the service).
+            # When upcoming_only=True (default), the service binds is_completed=False.
+            # When upcoming_only=False, no is_completed bind is added.
             is_completed_filter = params.get("is_completed")
             now = params.get("_now", datetime.now(UTC))
-            upcoming_only = "is_completed" in params
+            upcoming_only = is_completed_filter is False
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = [

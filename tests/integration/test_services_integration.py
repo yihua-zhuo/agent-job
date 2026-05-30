@@ -504,7 +504,7 @@ class TestNotificationIntegration:
         )
 
         cancelled = await svc.cancel_reminder(result.id, tenant_id=tenant_id)
-        assert cancelled["id"] == result.id
+        assert cancelled.id == result.id
 
         # Verify the reminder was actually deleted from the DB.
         from sqlalchemy import select
@@ -576,12 +576,12 @@ class TestTenantIntegration:
             admin_email=f"admin_{suffix}@example.com",
         )
         assert result is not None
-        assert result["name"] == f"Acme Corp {suffix}"
-        assert result["plan"] == "pro"
+        assert result.name == f"Acme Corp {suffix}"
+        assert result.plan == "pro"
 
-        fetched = await svc.get_tenant(result["id"])
+        fetched = await svc.get_tenant(result.id)
         assert fetched is not None
-        assert fetched["name"] == f"Acme Corp {suffix}"
+        assert fetched.name == f"Acme Corp {suffix}"
 
     async def test_update_tenant(self, db_schema, async_session):
         svc = TenantService(async_session)
@@ -589,12 +589,12 @@ class TestTenantIntegration:
         created = await svc.create_tenant(
             name=f"Original {suffix}", plan="free", admin_email=f"admin_{suffix}@example.com"
         )
-        tid = created["id"]
+        tid = created.id
 
         updated = await svc.update_tenant(tid, plan="enterprise", name=f"Updated {suffix}")
         assert updated is not None
-        assert updated["plan"] == "enterprise"
-        assert updated["name"] == f"Updated {suffix}"
+        assert updated.plan == "enterprise"
+        assert updated.name == f"Updated {suffix}"
 
     async def test_list_tenants(self, db_schema, async_session):
         svc = TenantService(async_session)
@@ -603,7 +603,7 @@ class TestTenantIntegration:
         await svc.create_tenant(name=f"List Tenant B {suffix}", plan="pro", admin_email=f"b_{suffix}@x.com")
 
         items, total = await svc.list_tenants()
-        names = [t["name"] for t in items]
+        names = [t.name for t in items]
         assert any(f"List Tenant A {suffix}" in n for n in names)
         assert any(f"List Tenant B {suffix}" in n for n in names)
 
@@ -611,9 +611,10 @@ class TestTenantIntegration:
         svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await svc.create_tenant(name=f"Stats Tenant {suffix}", plan="pro", admin_email=f"s_{suffix}@x.com")
-        tid = created["id"]
+        tid = created.id
 
         stats = await svc.get_tenant_stats(tid)
         assert stats is not None
-        assert "user_count" in stats
-        assert "api_calls" in stats
+        stats_dict = stats.to_dict()
+        assert "user_count" in stats_dict
+        assert "api_calls" in stats_dict

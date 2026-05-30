@@ -139,20 +139,26 @@ class NotificationService:
         marked_count = result.rowcount or 0
         return {"marked_count": marked_count}
 
-    async def delete_notification(self, notification_id: int, tenant_id: int) -> dict:
+    async def delete_notification(self, notification_id: int, tenant_id: int) -> NotificationModel:
         """删除通知"""
         result = await self.session.execute(
-            delete(NotificationModel).where(
+            select(NotificationModel).where(
                 and_(
                     NotificationModel.id == notification_id,
                     NotificationModel.tenant_id == tenant_id,
                 )
             )
         )
-        if (result.rowcount or 0) == 0:
+        notification = result.scalar_one_or_none()
+        if notification is None:
             raise NotFoundException("Notification")
+        # Capture the domain object before deleting from session.
+        domain = notification
+        await self.session.execute(
+            delete(NotificationModel).where(NotificationModel.id == notification_id)
+        )
         await self.session.flush()
-        return {"id": notification_id}
+        return domain
 
     async def get_unread_count(self, user_id: int, tenant_id: int) -> int:
         """Get unread notification count for a user.
@@ -210,20 +216,24 @@ class NotificationService:
         await self.session.flush()
         return reminder
 
-    async def cancel_reminder(self, reminder_id: int, tenant_id: int) -> dict:
+    async def cancel_reminder(self, reminder_id: int, tenant_id: int) -> ReminderModel:
         """取消提醒"""
         result = await self.session.execute(
-            delete(ReminderModel).where(
+            select(ReminderModel).where(
                 and_(
                     ReminderModel.id == reminder_id,
                     ReminderModel.tenant_id == tenant_id,
                 )
             )
         )
-        if (result.rowcount or 0) == 0:
+        reminder = result.scalar_one_or_none()
+        if reminder is None:
             raise NotFoundException("提醒")
+        await self.session.execute(
+            delete(ReminderModel).where(ReminderModel.id == reminder_id)
+        )
         await self.session.flush()
-        return {"id": reminder_id}
+        return reminder
 
     async def get_reminders(
         self,

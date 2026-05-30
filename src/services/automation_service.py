@@ -98,7 +98,7 @@ class AutomationService:
             if user_check.scalar_one_or_none() is None:
                 return {"type": action_type, "status": "skipped", "reason": "recipient user not found in tenant"}
             svc = NotificationService(self.session)
-            result = await svc.send_notification(
+            await svc.send_notification(
                 user_id=recipient_user_id,
                 notification_type=params.get("channel", "in_app"),
                 title=params.get("title", "Automation triggered"),
@@ -107,7 +107,7 @@ class AutomationService:
                 related_type=context.get("entity_type"),
                 related_id=context.get("entity_id"),
             )
-            return {"type": action_type, "status": "sent" if result is not None else "failed"}
+            return {"type": action_type, "status": "sent"}
 
         elif action_type == "task.create":
             assignee_id = params.get("assignee_id")
@@ -119,14 +119,14 @@ class AutomationService:
                 if assignee_check.scalar_one_or_none() is None:
                     return {"type": action_type, "status": "skipped", "reason": "assignee not found in tenant"}
             svc = TaskService(self.session)
-            task_result = await svc.create_task(
+            await svc.create_task(
                 tenant_id=tenant_id,
                 title=params.get("title", "Automated task"),
                 description=params.get("description", ""),
                 assigned_to=params.get("assignee_id"),
                 created_by=executed_by,
             )
-            return {"type": action_type, "status": "created" if task_result is not None else "failed"}
+            return {"type": action_type, "status": "created"}
 
         elif action_type == "email.send":
             logger.warning("email.send action is not implemented: template=%s", params.get("template"))

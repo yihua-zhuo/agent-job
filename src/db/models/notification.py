@@ -53,10 +53,16 @@ class NotificationModel(Base):
     def to_dict(self) -> dict:
         params = self.payload_params
         if params:
-            unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
-            if unknown:
-                logger.debug("Notification %d payload_params dropped keys: %s", self.id, sorted(unknown))
-                params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
+            if not PAYLOAD_PARAMS_ALLOWED_KEYS:
+                logger.warning(
+                    "PAYLOAD_PARAMS_ALLOWED_KEYS is empty — preserving raw payload_params for notification %d",
+                    self.id,
+                )
+            else:
+                unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
+                if unknown:
+                    logger.debug("Notification %d payload_params dropped keys: %s", self.id, sorted(unknown))
+                    params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,
