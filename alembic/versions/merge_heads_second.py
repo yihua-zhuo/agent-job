@@ -8,21 +8,27 @@ Create Date: 2026-05-30 12:00:00.000000
 creating a second head. This merge unifies the two heads.
 
 """
-from typing import Sequence, Union
-
-from alembic import op
-
+from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.
 revision: str = 'merge_heads_second'
-down_revision: Union[str, None] = ('52b19ee00eaf', '4001ca3d5d6f')
-branch_labels: Union[str, Sequence[str], None] = None
-depends_on: Union[str, Sequence[str], None] = None
+down_revision: str | Sequence[str] | None = ('52b19ee00eaf', '4001ca3d5d6f')
+branch_labels: str | Sequence[str] | None = None
+depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # No schema operations required.
+    # Parent revisions:
+    #   52b19ee00eaf (merge_heads):   empty pass (both parents were stubs)
+    #   4001ca3d5d6f (customers_schema_drift): adds 3 columns to customers
+    # 4001ca3d5d6f already depends on 52b19ee00eaf, so this merge revision
+    # simply brings the two branch heads under a single revision node so that
+    # `alembic upgrade head` resolves unambiguously.
     pass
 
 
 def downgrade() -> None:
+    # Reversal is handled by downgrading to the last required parent revision.
+    # downgrade is intentionally a no-op because there is no schema change to undo.
     pass

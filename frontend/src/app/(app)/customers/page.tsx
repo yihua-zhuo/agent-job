@@ -352,7 +352,7 @@ function CustomersPageInner() {
   const [page, setPage] = useState(initPage);
   const [pageSize, setPageSize] = useState(initPageSize);
   const [keyword, setKeyword] = useState("");
-  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pageRef = useRef(initPage);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -415,22 +415,23 @@ function CustomersPageInner() {
   const { table, globalFilter, setGlobalFilter } = useTableState({
     data: items,
     columns: customerColumns,
+    searchableKeys: ["name", "email", "phone"],
   });
 
   // Debounce the globalFilter update so the table only re-filters after the user stops typing
   useEffect(() => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
-    debounceTimerRef.current = setTimeout(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
       setGlobalFilter(keyword);
       setPage(1);
     }, 300);
     return () => {
-      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (timerRef.current) clearTimeout(timerRef.current);
     };
   }, [keyword, setGlobalFilter]);
 
   const clearSearch = useCallback(() => {
-    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    if (timerRef.current) clearTimeout(timerRef.current);
     setKeyword("");
     setGlobalFilter("");
     setPage(1);
@@ -468,7 +469,7 @@ function CustomersPageInner() {
       name: newViewName.trim() || "Untitled View",
       keyword: globalFilter,
       sortKey: nameCol?.getIsSorted() ? "name" : null,
-      sortDir: (nameCol?.getIsSorted() === "asc" ? "asc" : "desc") as "asc" | "desc",
+      sortDir: nameCol?.getIsSorted() === "asc" ? "asc" : nameCol?.getIsSorted() === "desc" ? "desc" : "asc",
       hiddenCols: Array.from(hiddenCols),
     };
     const next = [...savedViews, v];
@@ -610,7 +611,7 @@ function CustomersPageInner() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             type="text"
-            value={globalFilter}
+            value={keyword}
             onChange={(e) => {
               setKeyword(e.target.value);
             }}

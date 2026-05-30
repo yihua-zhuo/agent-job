@@ -24,29 +24,43 @@ const makeRows = (names: string[]): TestRow[] =>
     created_at: "",
   }));
 
-// Minimal name column for sorting tests
-const nameColumn: ColumnDef<TestRow, unknown> = {
+// Column defs covering name + email (used to scope globalFilter to specific columns)
+const nameCol: ColumnDef<TestRow, unknown> = {
   id: "name",
   accessorKey: "name",
   sortingFn: "alphanumeric",
+};
+
+const emailCol: ColumnDef<TestRow, unknown> = {
+  id: "email",
+  accessorKey: "email",
 };
 
 describe("useTableState", () => {
   it("returns all rows when globalFilter is empty", () => {
     const rows = makeRows(["Alice", "Bob", "Charlie"]);
     const { result } = renderHook(() =>
-      useTableState({ data: rows, columns: [] })
+      useTableState({ data: rows, columns: [nameCol, emailCol], searchableKeys: ["name", "email"] })
     );
     expect(result.current.table.getRowModel().rows.length).toBe(3);
   });
 
-  it("filters rows by globalFilter across default string columns", () => {
+  it("filters rows by globalFilter across scoped columns", () => {
     const rows = makeRows(["Alice", "Bob", "Charlie"]);
     const { result } = renderHook(() =>
-      useTableState({ data: rows, columns: [] })
+      useTableState({ data: rows, columns: [nameCol, emailCol], searchableKeys: ["name", "email"] })
     );
     act(() => { result.current.setGlobalFilter("test.com"); });
     expect(result.current.table.getRowModel().rows.length).toBe(3);
+  });
+
+  it("returns empty rows when no match", () => {
+    const rows = makeRows(["Alice", "Bob"]);
+    const { result } = renderHook(() =>
+      useTableState({ data: rows, columns: [nameCol, emailCol], searchableKeys: ["name", "email"] })
+    );
+    act(() => { result.current.setGlobalFilter("xyz"); });
+    expect(result.current.table.getRowModel().rows.length).toBe(0);
   });
 
   it("updates globalFilter state when setGlobalFilter is called", async () => {
@@ -64,7 +78,7 @@ describe("useTableState", () => {
   it("adds and removes sorting state on toggleSorting", async () => {
     const rows = makeRows(["Charlie", "Alice", "Bob"]);
     const { result } = renderHook(() =>
-      useTableState({ data: rows, columns: [nameColumn] })
+      useTableState({ data: rows, columns: [nameCol] })
     );
     expect(result.current.sorting).toEqual([]);
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); });
@@ -80,7 +94,7 @@ describe("useTableState", () => {
   it("third toggleSorting clears the sort", async () => {
     const rows = makeRows(["Charlie", "Alice"]);
     const { result } = renderHook(() =>
-      useTableState({ data: rows, columns: [nameColumn] })
+      useTableState({ data: rows, columns: [nameCol] })
     );
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // asc
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // desc
@@ -93,7 +107,7 @@ describe("useTableState", () => {
   it("sorting order: first click = asc (Alice first), second click = desc (Charlie first)", async () => {
     const rows = makeRows(["Charlie", "Alice", "Bob"]);
     const { result } = renderHook(() =>
-      useTableState({ data: rows, columns: [nameColumn] })
+      useTableState({ data: rows, columns: [nameCol] })
     );
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); });
     await waitFor(() => {
@@ -108,7 +122,7 @@ describe("useTableState", () => {
   it("sorting clears when column's toggleSorting is called a third time", async () => {
     const rows = makeRows(["Charlie", "Alice"]);
     const { result } = renderHook(() =>
-      useTableState({ data: rows, columns: [nameColumn] })
+      useTableState({ data: rows, columns: [nameCol] })
     );
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // asc
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // desc

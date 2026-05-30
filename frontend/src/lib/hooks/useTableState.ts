@@ -13,11 +13,14 @@ import {
 export interface UseTableStateOptions<TData> {
   data: TData[];
   columns: ColumnDef<TData, unknown>[];
+  /** Column ids that the globalFilter applies to; all string columns if empty/undefined */
+  searchableKeys?: string[];
 }
 
 export function useTableState<TData>({
   data,
   columns,
+  searchableKeys = [],
 }: UseTableStateOptions<TData>) {
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -32,6 +35,10 @@ export function useTableState<TData>({
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getCoreRowModel: getCoreRowModel(),
+    getColumnCanGlobalFilter: (column) => {
+      if (searchableKeys.length === 0) return true;
+      return (searchableKeys as string[]).includes(column.id);
+    },
   });
 
   return { table, globalFilter, setGlobalFilter, sorting };

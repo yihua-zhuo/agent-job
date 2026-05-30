@@ -414,21 +414,24 @@ describe("useTableState", () => {
 
 ---
 
-## Test Plan- **Unit tests in `tests/unit/`**: None — this is a pure frontend change; no backend Python unit tests are affected.
+## Test Plan
+
+- **Unit tests in `tests/unit/`**: None — this is a pure frontend change; no backend Python unit tests are affected.
 - **Frontend unit tests in `frontend/src/lib/hooks/`**: `useTableState.test.ts` — covers: empty filter returns all rows, case-insensitive substring match, multi-keyword filter, sort asc/desc/clear cycle, empty result set.
 - **Integration tests in `tests/integration/`**: None — no new API endpoints or DB schema changes.
 - **Dev-plan verification** (each §6 item from the board):
   - `cd frontend && npm run build` → exit 0
   - `cd frontend && npx tsc --noEmit` → exit 0
   - `cd frontend && npm run lint` → exit 0
-  - `cd frontend && npx vitest run src/lib/hooks/useTableState.test.ts` → all passed  - Grep check: `frontend/src/app/(app)/customers/page.tsx` contains no `timerRef`, `debouncedKeyword`, `sorted`, `handleSort`, `SortIcon` → silent failure if any found (bash grep exit code ≠ 0)
+  - `cd frontend && npx vitest run src/lib/hooks/useTableState.test.ts` → all passed
+  - Grep check: `frontend/src/app/(app)/customers/page.tsx` contains no `timerRef`, `debouncedKeyword`, `sorted`, `handleSort`, `SortIcon` → silent failure if any found (bash grep exit code ≠ 0)
 
 ## Acceptance Criteria
 
 - `cd frontend && npm run build` exits 0
 - `cd frontend && npx tsc --noEmit` exits 0
 - `cd frontend && npm run lint` exits 0
-- `cd frontend && npx vitest run src/lib/hooks/useTableState.test.ts` →6 passed
+- `cd frontend && npx vitest run src/lib/hooks/useTableState.test.ts` → 6 passed
 - Typing "Acme" in the search input on `/customers` renders only rows whose `name`, `email`, or `phone` contains "acme" (case-insensitive)
 - Clicking the "Name" column header once sorts ascending (▲ icon appears), twice sorts descending (▼ icon), third click clears sort (neutral icon)
 - No new API calls are made as a result of search or sort interactions
