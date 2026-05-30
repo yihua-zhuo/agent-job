@@ -12,28 +12,36 @@ export interface LoginFormData {
 
 export interface LoginProps {
   onSubmit: (data: LoginFormData) => Promise<void>;
+  isLoading?: boolean;
 }
 
-export function Login({ onSubmit }: LoginProps) {
+export function Login({ onSubmit, isLoading: externalLoading }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [internalLoading, setIsLoading] = useState(false);
+  const isLoading = externalLoading ?? internalLoading;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    setIsLoading(true);
-    try {
+    if (externalLoading !== undefined) {
       await onSubmit({ email, password, rememberMe });
-    } finally {
-      setIsLoading(false);
+    } else {
+      setIsLoading(true);
+      try {
+        await onSubmit({ email, password, rememberMe });
+      } finally {
+        setIsLoading(false);
+      }
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-1.5">
+        <label htmlFor="email" className="sr-only">Username</label>
         <Input
+          id="email"
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
@@ -42,7 +50,9 @@ export function Login({ onSubmit }: LoginProps) {
         />
       </div>
       <div className="space-y-1.5">
+        <label htmlFor="password" className="sr-only">Password</label>
         <Input
+          id="password"
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
