@@ -67,6 +67,8 @@ describe("Login component", () => {
     );
     render(<Login onSubmit={mockSubmit} />);
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    // Safety net: release the mock if waitFor times out (default 1s)
+    const timeout = setTimeout(() => release(), 2000);
     try {
       await waitFor(() => {
         expect(
@@ -76,6 +78,7 @@ describe("Login component", () => {
         expect(screen.getByPlaceholderText("••••••••").disabled).toBe(true);
       });
     } finally {
+      clearTimeout(timeout);
       release();
     }
   });

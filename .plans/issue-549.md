@@ -25,7 +25,9 @@ Reading order followed:
 
 Confirm `Input` and `Button` UI components exist (they do — already verified at `frontend/src/components/ui/input.tsx` and `frontend/src/components/ui/button.tsx`). No new base components needed.
 
-**完成判定**: `ls frontend/src/components/ui/input.tsx frontend/src/components/ui/button.tsx` → both files exist
+**完成判定**: ```bash
+ls frontend/src/components/ui/input.tsx frontend/src/components/ui/button.tsx
+``` → both files exist
 
 ### Step 2: Create `frontend/src/components/Login.tsx`
 
@@ -109,7 +111,9 @@ export function Login({ onSubmit }: LoginProps) {
 }
 ```
 
-**完成判定**: `ls frontend/src/components/Login.tsx` → file exists
+**完成判定**: ```bash
+ls frontend/src/components/Login.tsx
+``` → file exists
 
 ### Step 3: Create `frontend/src/components/__tests__/Login.test.tsx`
 
@@ -188,7 +192,9 @@ describe("Login component", () => {
 });
 ```
 
-**完成判定**: `cd frontend && npx vitest run --testPathPattern="Login.test"` → all 3 tests pass
+**完成判定**: ```bash
+cd frontend && npx vitest run --testPathPattern="Login.test"
+``` → all 3 tests pass
 
 ### Step 4: Lint the new component
 
@@ -198,7 +204,8 @@ cd frontend && npx eslint src/components/Login.tsx src/components/__tests__/Logi
 
 **完成判定**: exit 0, no errors
 
-### Step 5: Format```bash
+### Step 5: Format
+```bash
 cd frontend && npx prettier --write src/components/Login.tsx src/components/__tests__/Login.test.tsx
 ```
 
@@ -212,7 +219,9 @@ cd frontend && npx prettier --write src/components/Login.tsx src/components/__te
   - `grep "isLoading" frontend/src/components/Login.tsx` → finds `isLoading` state
   - `grep "rememberMe" frontend/src/components/Login.tsx` → finds checkbox state and `LoginFormData` field
   - `grep "forgot-password" frontend/src/components/Login.tsx` → finds the link
-  - `cd frontend && npx vitest run --testPathPattern="Login.test"` → 3 passed
+  - ```bash
+    cd frontend && npx vitest run --testPathPattern="Login.test"
+    ``` → 3 passed
 
 ## Acceptance Criteria
 - The `<Login />` component renders a `<form>` with email input, password input, "Remember me" checkbox, "Forgot password?" link, and a submit `<Button>`
