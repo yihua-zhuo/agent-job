@@ -11,7 +11,6 @@ from db.models.conversation_message import ConversationMessageModel
 from db.models.customer import CustomerModel
 from db.models.opportunity import OpportunityModel
 from internal.ai_gateway import AIChatGateway, AIResponse
-from internal.middleware.fastapi_auth import AuthContext
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.task_service import TaskService
 
@@ -65,7 +64,6 @@ class CopilotService:
         recipients: list[str],
         subject: str,
         body: str,
-        ctx: AuthContext,
     ) -> dict:
         """Validate recipients and send an email (stub)."""
         if not recipients:

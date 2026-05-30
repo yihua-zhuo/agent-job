@@ -246,7 +246,7 @@ Expected: exit 0 on both files.
   - Add `test_send_email_tool_valid`: happy path — valid recipients, subject, body; asserts `success=True` and `message_id` present
   - Add `test_send_email_tool_invalid_recipients`: `recipients=[]` raises `ValidationException` with message matching `"recipients cannot be empty"`
   - Add `test_send_email_tool_invalid_address`: `"not-an-email"` raises `ValidationException` matching `"Invalid email address"`
-  - Add `test_create_task_tool_valid`: valid inputs raise no unexpected exception; result dict has `success=True` and `task` key
+  - Add `test_create_task_tool_valid`: valid inputs raise no unexpected exception; result dict has `success=True`, `id` is integer `1`, and `task` key
   - Add `test_create_task_tool_empty_title`: `"   "` raises `ValidationException` matching `"title cannot be empty"`
   - Add `test_create_task_tool_invalid_assignee`: `assignee_id=0` raises `ValidationException` matching `"assignee_id must be positive"`
 - **Integration tests in `tests/integration/`**: none required by the dev-plan; stub nature of email infra and ORM-level coverage of task creation make unit tests sufficient for acceptance.
