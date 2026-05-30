@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.automation_log import AutomationLogModel
 from db.models.automation_rule import AutomationRuleModel
+from db.models.opportunity import OpportunityModel
 from db.models.user import UserModel
 from pkg.errors.app_exceptions import AppException, NotFoundException
 from services.notification_service import NotificationService
@@ -141,10 +142,26 @@ class AutomationService:
             logger.warning("tag.add action is not implemented: tag=%s", params.get("tag"))
             return {"type": action_type, "status": "not_implemented", "tag": params.get("tag")}
         elif action_type == "ticket.assign":
-            return {"type": action_type, "status": "assigned", "assignee_id": params.get("assignee_id")}
+            assignee_id = params.get("assignee_id")
+            if assignee_id:
+                assignee_check = await self.session.execute(
+                    select(UserModel).where(UserModel.id == assignee_id, UserModel.tenant_id == tenant_id)
+                )
+                if assignee_check.scalar_one_or_none() is None:
+                    return {"type": action_type, "status": "skipped", "reason": "assignee not found in tenant"}
+            return {"type": action_type, "status": "assigned", "assignee_id": assignee_id}
         elif action_type == "ticket.update_priority":
             return {"type": action_type, "status": "updated", "priority": params.get("priority")}
         elif action_type == "opportunity.add_note":
+            opportunity_id = params.get("opportunity_id")
+            if opportunity_id:
+                opp_check = await self.session.execute(
+                    select(OpportunityModel).where(
+                        OpportunityModel.id == opportunity_id, OpportunityModel.tenant_id == tenant_id
+                    )
+                )
+                if opp_check.scalar_one_or_none() is None:
+                    return {"type": action_type, "status": "skipped", "reason": "opportunity not found in tenant"}
             return {"type": action_type, "status": "added", "note": params.get("note")}
         else:
             return {"type": action_type, "status": "unknown_action"}

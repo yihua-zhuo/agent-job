@@ -4,7 +4,8 @@ import json
 import logging
 from datetime import UTC, datetime
 
-from sqlalchemy import and_, delete, func, select, update
+from sqlalchemy import and_, func, select, update
+from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.notification import NotificationModel
@@ -17,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationService:
-    """通知服务 — backed by PostgreSQL via SQLAlchemy async ORM."""
+    """Notification service backed by PostgreSQL via SQLAlchemy async ORM."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -156,15 +157,9 @@ class NotificationService:
         notification = result.scalar_one_or_none()
         if notification is None:
             raise NotFoundException("Notification")
-        # Capture the domain object before deleting from session.
-        domain = notification
-        await self.session.execute(
-            delete(NotificationModel).where(
-                and_(NotificationModel.id == notification_id, NotificationModel.tenant_id == tenant_id)
-            )
-        )
+        await self.session.delete(notification)
         await self.session.flush()
-        return domain
+        return notification
 
     async def get_unread_count(self, user_id: int, tenant_id: int) -> int:
         """Get unread notification count for a user.
@@ -236,7 +231,7 @@ class NotificationService:
         if reminder is None:
             raise NotFoundException("提醒")
         await self.session.execute(
-            delete(ReminderModel).where(and_(ReminderModel.id == reminder_id, ReminderModel.tenant_id == tenant_id))
+            sql_delete(ReminderModel).where(and_(ReminderModel.id == reminder_id, ReminderModel.tenant_id == tenant_id))
         )
         await self.session.flush()
         return reminder

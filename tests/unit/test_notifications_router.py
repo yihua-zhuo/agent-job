@@ -234,7 +234,8 @@ class TestSendNotification:
                 },
             )
             assert response.status_code == 422
-            assert "telegram" in response.json().get("message", "") or "notification_type" in str(response.json())
+            detail = str(response.json())
+            assert "in_app" in detail and "email" in detail
 
 
 # ---------------------------------------------------------------------------

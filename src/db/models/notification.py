@@ -40,9 +40,7 @@ class NotificationModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
-    tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     channel: Mapped[str | None] = mapped_column(String(50), nullable=True)
     template: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Trailing underscore avoids collision with ORM/DB column names.
@@ -60,6 +58,9 @@ class NotificationModel(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
+        # Allow-list filtering is applied on top-level keys via PAYLOAD_PARAMS_ALLOWED_KEYS.
+        # Nested content (e.g. content field in payload_params) is intentionally exposed;
+        # callers are responsible for their own PII-handling obligations.
         params = self.payload_params
         if params:
             unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS

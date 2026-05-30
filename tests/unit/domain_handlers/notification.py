@@ -111,13 +111,21 @@ def make_notification_handler(state):
                 unread_filter = params["_unread_only"]
             else:
                 unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
-            count = sum(
-                1
-                for n in state._notifications.values()
-                if n.get("tenant_id") == tenant_id
-                and n.get("user_id") == user_id
-                and (not unread_filter or n.get("read_at") is None)
-            )
+            if unread_filter:
+                count = sum(
+                    1
+                    for n in state._notifications.values()
+                    if n.get("tenant_id") == tenant_id
+                    and n.get("user_id") == user_id
+                    and n.get("read_at") is None
+                )
+            else:
+                count = sum(
+                    1
+                    for n in state._notifications.values()
+                    if n.get("tenant_id") == tenant_id
+                    and n.get("user_id") == user_id
+                )
             return MockResult([[count]])
 
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:

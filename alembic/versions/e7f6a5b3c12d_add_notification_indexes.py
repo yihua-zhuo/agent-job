@@ -101,9 +101,11 @@ def downgrade() -> None:
     # the original state we can only recover rows where related_type or related_id
     # were non-NULL. Rows where both were originally NULL will remain NULL after
     # downgrade — this asymmetry is an inherent limitation of the one-way migration.
+    # The content-restoration UPDATE guards against writing 'NULL' strings by
+    # requiring params_->>'content' to be non-NULL as well.
     op.execute(text("UPDATE notifications SET type = channel WHERE channel IS NOT NULL"))
     op.execute(text("UPDATE notifications SET title = template WHERE template IS NOT NULL"))
-    op.execute(text("UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL"))
+    op.execute(text("UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL AND params_->>'content' IS NOT NULL"))
     op.execute(
         text(
             "UPDATE notifications SET related_type = params_->>'related_type' "
@@ -119,11 +121,18 @@ def downgrade() -> None:
     op.execute(text("UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL"))
     op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL AND status IS NOT NULL"))
 
-    # Phase 4 (reversed): apply NOT NULL constraint — use DROP IF EXISTS + SET NOT NULL
-    # to make this block idempotent on replay (plain op.alter_column would raise an
-    # error if the constraint already exists).
-    op.execute(text("ALTER TABLE notifications ALTER COLUMN is_read DROP NOT NULL"))
-    op.execute(text("ALTER TABLE notifications ALTER COLUMN is_read SET NOT NULL"))
+    # Phase 4 (reversed): apply NOT NULL constraint idempotently — check whether
+    # the constraint is already present before applying it, to survive replayed
+    # downgrades or prior partial downgrades.
+    op.execute(
+        text(
+            "DO $$ BEGIN "
+            "ALTER TABLE notifications ALTER COLUMN is_read SET NOT NULL; "
+            "EXCEPTION WHEN others THEN "
+            "IF SQLERRM NOT LIKE '%already%' THEN RAISE; END IF; "
+            "END $$"
+        )
+    )
 
     # Phase 2 (reversed): drop new columns added in the upgrade (channel, template, etc.)
     op.drop_column("notifications", "read_at")

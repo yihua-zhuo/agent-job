@@ -24,7 +24,7 @@ import os
 import pkgutil
 import random
 import sys
-import uuid
+import uuid as uuid_module
 from collections.abc import AsyncGenerator, Generator
 
 # Ensure src/ is on sys.path so top-level package imports resolve
@@ -279,7 +279,7 @@ async def _seed_notification_user(async_session, tenant_id: int, _seed_tenant) -
     from services.user_service import UserService
 
     user_svc = UserService(async_session)
-    suffix = uuid.uuid4().hex[:8]
+    suffix = uuid_module.uuid4().hex[:8]
     user = await user_svc.create_user(
         username=f"notif_{suffix}",
         email=f"notif_{suffix}@example.com",

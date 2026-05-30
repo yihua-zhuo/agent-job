@@ -156,7 +156,9 @@ def tenant_router_client(monkeypatch):
 class TestCreateTenantEndpoint:
     def test_success_returns_201(self, tenant_router_client):
         client, svc = tenant_router_client
-        svc.create_tenant = AsyncMock(return_value=TENANT_ROW)
+        mock_tenant = MagicMock()
+        mock_tenant.to_dict.return_value = TENANT_ROW
+        svc.create_tenant = AsyncMock(return_value=mock_tenant)
         resp = client.post(
             "/api/v1/tenants",
             json={

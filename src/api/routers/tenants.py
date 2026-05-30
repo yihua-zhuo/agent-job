@@ -66,7 +66,7 @@ async def create_tenant(
         admin_email=body.admin_email,
         **({"settings": body.settings} if body.settings else {}),
     )
-    return {"success": True, "data": data, "message": "租户创建成功"}
+    return {"success": True, "data": data.to_dict(), "message": "租户创建成功"}
 
 
 @tenants_router.get("/stats")
@@ -120,8 +120,6 @@ async def update_tenant(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    # TenantService.update_tenant enforces cross-tenant isolation at the service
-    # layer via requesting_tenant_id — providing context for the design intent.
     service = TenantService(session)
     update_data = body.model_dump()
     # Strip None values so the service's merge logic handles omitted fields.

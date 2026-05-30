@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.notification import NotificationModel
@@ -45,7 +43,7 @@ async def _seed_reminder(
     user_id: int,
     title: str,
     content: str,
-    remind_at: datetime,
+    remind_at,
     *,
     related_type: str | None = None,
     related_id: int | None = None,
