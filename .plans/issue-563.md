@@ -144,7 +144,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
         className="accent-primary h-4 w-4 cursor-pointer"
         onChange={table.getToggleAllRowsSelectedHandler()}
         checked={table.getIsAllRowsSelected()}
- aria-label="Select all"
+        aria-label="Select all"
       />
     ),
     cell: ({ row }) => (
@@ -209,7 +209,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     header: "Created",
     cell: ({ getValue }) => {
       const dateStr = getValue() as string;
-      return<span>{formatDate(dateStr)}</span>;
+      return <span>{formatDate(dateStr)}</span>;
     },
     size: 120,
   },
@@ -447,7 +447,7 @@ describe("useTableState", () => {
   - `cd frontend && npx tsc --noEmit` → exit 0
   - `cd frontend && npm run lint` → exit 0
   - `cd frontend && npx vitest run src/lib/hooks/useTableState.test.ts` → all passed
-  - Grep check: `frontend/src/app/(app)/customers/page.tsx` contains no `timerRef`, `debouncedKeyword`, `sorted`, `handleSort`, `SortIcon` → silently fail if any found (bash grep exit code ≠ 0)
+- Grep check: `frontend/src/app/(app)/customers/page.tsx` contains no `timerRef`, `debouncedKeyword`, `sorted`, `handleSort`, `SortIcon` → silently fail if any found (bash grep exit code ≠ 0)
 
 ## Acceptance Criteria
 

@@ -52,6 +52,7 @@ class WorkflowExecutionModel(Base):
     __tablename__ = "workflow_executions"
     __table_args__ = (
         Index("ix_workflow_executions_workflow_id_tenant_id", "workflow_id", "tenant_id"),
+        Index("ix_workflow_executions_tenant_status", "tenant_id", "status"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -86,6 +87,7 @@ class WorkflowNodeModel(Base):
     __tablename__ = "workflow_nodes"
     __table_args__ = (
         Index("ix_workflow_nodes_tenant_id_workflow_id", "tenant_id", "workflow_id", unique=False),
+        Index("ix_workflow_nodes_tenant_status", "tenant_id", "status"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

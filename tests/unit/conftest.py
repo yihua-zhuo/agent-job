@@ -349,10 +349,10 @@ def make_mock_session(handlers=None, state=None):
         params = {"id": obj_id}
         if tenant_id is not None:
             params["tenant_id"] = tenant_id
-            # Use ORM model's __tablename__ to make safety rationale explicit (S608).
-            sql_text = str(select(text("*")).where(text("id = :id AND tenant_id = :tenant_id")))  # noqa: S608
+            # Tablename is guarded by the regex on line 346 above, so S608 is inapplicable.
+            sql_text = str(select(text("*")).where(text("id = :id AND tenant_id = :tenant_id")))
         else:
-            sql_text = str(select(text("*")).where(text("id = :id")))  # noqa: S608
+            sql_text = str(select(text("*")).where(text("id = :id")))
         for h in handlers:
             result = h(sql_text, params)
             if result is not None:

@@ -70,6 +70,7 @@ class TestWebhookDeliveryModel:
         fields = {
             "id", "webhook_id", "tenant_id", "event_type",
             "payload", "status", "response", "attempts", "delivered_at",
+            "next_retry_at", "last_attempt_at", "error_message",
         }
         assert fields.issubset(WebhookDeliveryModel.__annotations__.keys())
 
@@ -159,3 +160,33 @@ class TestWebhookDeliveryModel:
         """__table_args__ includes the ix_webhook_deliveries_webhook_id index."""
         names = {arg.name for arg in WebhookDeliveryModel.__table_args__}
         assert "ix_webhook_deliveries_webhook_id" in names
+
+    def test_retry_columns_present(self):
+        """next_retry_at, last_attempt_at, and error_message are defined."""
+        fields = {"next_retry_at", "last_attempt_at", "error_message"}
+        assert fields.issubset(WebhookDeliveryModel.__annotations__.keys())
+
+    def test_to_dict_includes_retry_fields(self):
+        """to_dict serialises the three new fields."""
+        delivery = WebhookDeliveryModel(
+            id=8, webhook_id=1, tenant_id=1,
+            event_type="customer.created", payload={}, status="failed",
+            next_retry_at=datetime(2026, 6, 1, 12, 0, 0),
+            last_attempt_at=datetime(2026, 5, 30, 10, 0, 0),
+            error_message="Connection refused",
+        )
+        d = delivery.to_dict()
+        assert d["next_retry_at"] == "2026-06-01T12:00:00"
+        assert d["last_attempt_at"] == "2026-05-30T10:00:00"
+        assert d["error_message"] == "Connection refused"
+
+    def test_to_dict_retry_fields_null(self):
+        """Nullable retry fields None in to_dict when not set."""
+        delivery = WebhookDeliveryModel(
+            id=9, webhook_id=1, tenant_id=1,
+            event_type="customer.created", payload={}, status="pending",
+        )
+        d = delivery.to_dict()
+        assert d["next_retry_at"] is None
+        assert d["last_attempt_at"] is None
+        assert d["error_message"] is None

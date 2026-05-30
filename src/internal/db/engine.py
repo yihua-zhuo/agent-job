@@ -112,7 +112,6 @@ def _build_async_engine(url: str) -> AsyncEngine:
             raise ValueError(
                 "Invalid Supabase pooler URL: no port separator ':' found in host portion"
             )
-        host = host_port[:last_colon]
         port_and_path = host_port[last_colon + 1 :]
         if "/" in port_and_path:
             port, path = port_and_path.split("/", 1)
@@ -216,3 +215,20 @@ async def async_session_scope():
         raise
     finally:
         await session.close()
+
+
+async def dispose_async_engine():
+    """Dispose the async engine pool and reset the singleton.
+
+    Async variant — call this from within an async lifespan handler::
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            yield
+            await dispose_async_engine()
+    """
+    global _async_engine, _async_session_factory
+    if _async_engine is not None:
+        await _async_engine.dispose()
+    _async_engine = None
+    _async_session_factory = None

@@ -15,7 +15,6 @@ Reading order followed:
 
 ## Affected Files
 - `src/services/agent_task_service.py` — **new** — `AgentTaskService` class with `create_task`, `get_task`, `list_tasks`
-- `src/services/__init__.py` — **modify** — add `AgentTaskService` export (file is currently empty)
 - `tests/unit/domain_handlers/agent_tasks.py` — **new** — `make_agent_task_handler(state)` for unit test mock session
 - `tests/unit/test_agent_task_service.py` — **new** — unit tests for all three service methods
 - `tests/unit/conftest.py` — **modify** — add `make_agent_task_handler` to domain handler auto-loader (via `__init__.py` re-exports)
@@ -225,7 +224,7 @@ import pytest
 
 from tests.unit.conftest import MockState, make_mock_session
 from tests.unit.domain_handlers.agent_tasks import make_agent_task_handler
-from services.agent_task_service import AgentTaskService
+from src.services.agent_task_service import AgentTaskService
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 

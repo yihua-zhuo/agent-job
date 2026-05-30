@@ -14,6 +14,7 @@ This revision merges all three into a single head so that
 
 All schema DDL lives in the sub-revisions above; this merge revision
 carries no table/index/constraint operations.
+
 """
 
 from collections.abc import Sequence
@@ -26,8 +27,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    pass  # Merge-only marker — all DDL is in sub-revisions (185055a0d4f0, addcp001, db67d696b6ab).
+    pass
 
 
 def downgrade() -> None:
-    pass  # Merge-only marker — Alembic cascades to each parent's downgrade; see those revisions.
+    pass

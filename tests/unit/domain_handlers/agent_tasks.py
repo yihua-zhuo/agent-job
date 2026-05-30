@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Callable
+from datetime import datetime
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
 _OFFSET_RE = re.compile(r"offset\s*:?\s*(\w+)", re.IGNORECASE)
 _LIMIT_RE = re.compile(r"limit\s*:?\s*(\w+)", re.IGNORECASE)
+_ORDER_RE = re.compile(r"order\s+by\s+(.+?)(?:\s+offset|\s+limit|$)", re.IGNORECASE)
 
 
 def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResult | None]:
@@ -65,8 +67,8 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
                 "description": normalized.get("description") or params.get("description"),
                 "status": normalized.get("status") or "pending",
                 "subtasks": normalized.get("subtasks") or params.get("subtasks") or [],
-                "created_at": normalized.get("created_at") or params.get("created_at"),
-                "updated_at": normalized.get("updated_at") or params.get("updated_at"),
+                "created_at": normalized.get("created_at") or params.get("created_at") or datetime.utcnow(),
+                "updated_at": normalized.get("updated_at") or params.get("updated_at") or datetime.utcnow(),
             }
             state.agent_tasks[new_id] = record
             return MockResult([MockRow(record.copy())])
@@ -139,6 +141,13 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
                     if created < date_bounds[0] or created > date_bounds[-1]:
                         continue
                 rows.append(MockRow(rec.copy()))
+            # Apply ORDER BY created_at DESC, id ASC (id is a stable secondary key
+            # when timestamps collide) before pagination.
+            order_match = _ORDER_RE.search(sql_text)
+            if order_match is not None:
+                order_clause = order_match.group(1).lower()
+                if "desc" in order_clause and "created_at" in order_clause:
+                    rows.sort(key=lambda r: (r.get("created_at") or datetime.min, r.get("id")), reverse=True)
             offset_match = _OFFSET_RE.search(sql_text)
             limit_match = _LIMIT_RE.search(sql_text)
             if offset_match is not None:

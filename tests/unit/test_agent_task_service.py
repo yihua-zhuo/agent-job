@@ -100,6 +100,7 @@ class TestListTasks:
         # Directly update stored state to simulate completed status — bypasses
         # the handler's UPDATE path but mirrors the ORM field write so the
         # SELECT path sees the updated status.
+        # Note: the service's update/patch codepath is not exercised here.
         state.agent_tasks[task_a.id]["status"] = "completed"
         # Seed a tenant-2 task that must be excluded from all results.
         _seed_agent_task(state, tenant_id=2, description="Tenant 2 pending task", status="pending", created_at=dt.now())
@@ -167,19 +168,41 @@ class TestListTasks:
         page2, _ = await service.list_tasks(tenant_id=1, page=2, page_size=2)
         assert len(page1) == 2
         assert len(page2) == 2
-        assert page1[0].id == ids[0]
+        assert page1[0].id == ids[4]
         assert page2[0].id == ids[2]
+        # Verify ordering: created_at DESC — newer tasks appear first.
+        # page1 contains the two most-recent tasks (ids 5 and 4), page2 the next two (ids 3 and 2).
+        assert all(page1[i].created_at >= page1[i + 1].created_at for i in range(len(page1) - 1))
+        # No overlap between pages.
+        page1_ids = {t.id for t in page1}
+        page2_ids = {t.id for t in page2}
+        assert page1_ids & page2_ids == set()
 
-    async def test_returns_empty_for_unknown_tenant(self, service):
-        await service.create_task("Task 1", tenant_id=1)
-        tasks, total = await service.list_tasks(tenant_id=99, page=1, page_size=20)
-        assert total == 0
-        assert tasks == []
+    async def test_returns_empty_for_unknown_tenant(self, service, mock_db_session):
+        # Seed one task per tenant to verify clean isolation: listing tenant 2
+        # must never return the tenant-1 task, and vice versa.
+        state = mock_db_session._state
+        _seed_agent_task(state, tenant_id=1, description="Tenant 1 task", status="pending", created_at=dt.now())
+        _seed_agent_task(state, tenant_id=2, description="Tenant 2 task", status="pending", created_at=dt.now())
+        tasks_1, total_1 = await service.list_tasks(tenant_id=1, page=1, page_size=20)
+        tasks_2, total_2 = await service.list_tasks(tenant_id=2, page=1, page_size=20)
+        assert all(t.tenant_id == 1 for t in tasks_1)
+        assert all(t.tenant_id == 2 for t in tasks_2)
+        assert total_1 == 1
+        assert total_2 == 1
 
     async def test_raises_validation_for_invalid_status(self, service):
         with pytest.raises(ValidationException):
             await service.list_tasks(tenant_id=1, status="definitely_not_a_valid_status_xyz", page=1, page_size=20)
 
     async def test_accepts_valid_status_strings(self, service):
+        await service.create_task("Task 1", tenant_id=1)
         tasks, total = await service.list_tasks(tenant_id=1, status="pending", page=1, page_size=20)
-        assert total >= 0
+        assert total > 0
+        assert all(t.status == "pending" for t in tasks)
+
+    async def test_accepts_agent_task_status_enum_member(self, service):
+        await service.create_task("Enum task", tenant_id=1)
+        tasks, total = await service.list_tasks(tenant_id=1, status=AgentTaskStatus.PENDING, page=1, page_size=20)
+        assert total > 0
+        assert all(t.status == "pending" for t in tasks)
