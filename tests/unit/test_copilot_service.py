@@ -1,8 +1,18 @@
+from unittest.mock import MagicMock
+
 import pytest
 
-from pkg.errors.app_exceptions import NotFoundException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.copilot_service import CopilotService
 from tests.unit.conftest import MockState, make_mock_session
+
+
+def _mock_ctx(tenant_id: int = 1, user_id: int = 1) -> MagicMock:
+    ctx = MagicMock()
+    ctx.tenant_id = tenant_id
+    ctx.user_id = user_id
+    ctx.roles = []
+    return ctx
 
 
 @pytest.fixture
@@ -59,8 +69,8 @@ def test_tool_registry_returns_six_tools(copilot_service):
     assert len(registry) == 6
     active = [k for k, v in registry.items() if not v["deferred"]]
     deferred = [k for k, v in registry.items() if v["deferred"]]
-    assert set(active) == {"get_customer", "get_opportunities", "get_recent_activities", "get_churn_risk"}
-    assert set(deferred) == {"send_email", "create_task"}
+    assert set(active) == {"get_customer", "get_opportunities", "get_recent_activities", "get_churn_risk", "send_email", "create_task"}
+    assert set(deferred) == set()
 
 
 def test_session_attribute_is_mock_session(copilot_service, mock_db_session):
@@ -70,3 +80,61 @@ def test_session_attribute_is_mock_session(copilot_service, mock_db_session):
 def test_constructor_no_default_session():
     with pytest.raises(TypeError):
         CopilotService()
+
+
+@pytest.mark.asyncio
+async def test_send_email_tool_valid(mock_db_session):
+    svc = CopilotService(mock_db_session)
+    ctx = _mock_ctx()
+    result = await svc.send_email_tool(
+        recipients=["alice@example.com", "bob@example.com"],
+        subject="Hello",
+        body="World",
+        ctx=ctx,
+    )
+    assert result["success"] is True
+    assert result["recipients"] == ["alice@example.com", "bob@example.com"]
+    assert "message_id" in result
+
+
+@pytest.mark.asyncio
+async def test_send_email_tool_invalid_recipients(mock_db_session):
+    svc = CopilotService(mock_db_session)
+    ctx = _mock_ctx()
+    with pytest.raises(ValidationException, match="recipients cannot be empty"):
+        await svc.send_email_tool(recipients=[], subject="s", body="b", ctx=ctx)
+
+
+@pytest.mark.asyncio
+async def test_send_email_tool_invalid_address(mock_db_session):
+    svc = CopilotService(mock_db_session)
+    ctx = _mock_ctx()
+    with pytest.raises(ValidationException, match="Invalid email address"):
+        await svc.send_email_tool(recipients=["not-an-email"], subject="s", body="b", ctx=ctx)
+
+
+@pytest.mark.asyncio
+async def test_create_task_tool_valid(mock_db_session):
+    svc = CopilotService(mock_db_session)
+    result = await svc.create_task_tool(
+        title="Fix the bug",
+        description="Investigate and resolve",
+        assignee_id=5,
+        tenant_id=1,
+    )
+    assert result["success"] is True
+    assert "task" in result
+
+
+@pytest.mark.asyncio
+async def test_create_task_tool_empty_title(mock_db_session):
+    svc = CopilotService(mock_db_session)
+    with pytest.raises(ValidationException, match="title cannot be empty"):
+        await svc.create_task_tool(title="   ", description="", assignee_id=1, tenant_id=1)
+
+
+@pytest.mark.asyncio
+async def test_create_task_tool_invalid_assignee(mock_db_session):
+    svc = CopilotService(mock_db_session)
+    with pytest.raises(ValidationException, match="assignee_id must be positive"):
+        await svc.create_task_tool(title="Do it", description="", assignee_id=0, tenant_id=1)
