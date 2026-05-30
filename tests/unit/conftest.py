@@ -53,11 +53,12 @@ class MockRow:
         self._mapping = mapping
         self._is_sequence = isinstance(mapping, (list, tuple))
         if not self._is_sequence:
-            if "tags" in self._mapping and isinstance(self._mapping["tags"], str):
-                try:
-                    self._mapping["tags"] = _json.loads(self._mapping["tags"])
-                except Exception:  # noqa: S110 - invalid JSON should leave the original value intact.
-                    pass
+            for json_key in ("tags", "conditions", "actions"):
+                if json_key in self._mapping and isinstance(self._mapping[json_key], str):
+                    try:
+                        self._mapping[json_key] = _json.loads(self._mapping[json_key])
+                    except Exception:  # noqa: S110 - invalid JSON should leave the original value intact.
+                        pass
 
     def __getitem__(self, key):
         if isinstance(key, int):
@@ -302,7 +303,11 @@ def make_mock_session(handlers=None, state=None):
             if tablename is None:
                 continue
             params = {}
-            for key in ("task_id", "tenant_id", "description", "status", "subtasks", "created_at", "updated_at"):
+            # Extract every public attribute from the ORM object so handlers
+            # receive all column values regardless of which model is used.
+            for key in list(obj.__dict__.keys()):
+                if key.startswith("_") or key == "metadata":
+                    continue
                 val = getattr(obj, key, None)
                 if val is not None:
                     params[key] = val

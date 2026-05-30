@@ -34,11 +34,11 @@ class AgentTaskService:
         await self.session.refresh(task)
         return task
 
-    async def get_task(self, id: int, tenant_id: int) -> AgentTaskModel:
+    async def get_task(self, task_id: int, tenant_id: int) -> AgentTaskModel:
         result = await self.session.execute(
             select(AgentTaskModel).where(
                 and_(
-                    AgentTaskModel.id == id,
+                    AgentTaskModel.id == task_id,
                     AgentTaskModel.tenant_id == tenant_id,
                 )
             )
@@ -83,3 +83,6 @@ class AgentTaskService:
             .limit(page_size)
         )
         return list(result.scalars().all()), total
+
+
+__all__ = ["AgentTaskService"]

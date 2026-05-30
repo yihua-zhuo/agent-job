@@ -1,1 +1,3 @@
-from src.services.agent_task_service import AgentTaskService as AgentTaskService
+from src.services.agent_task_service import AgentTaskService
+
+__all__ = ["AgentTaskService"]
