@@ -1,0 +1,78 @@
+name: Repair · Doc Links
+
+on:
+  schedule:
+    # Weekly: Monday 04:07 UTC. Off-peak vs. the issue/PR cron grid.
+    - cron: '7 4 * * 1'
+  workflow_dispatch:
+    inputs:
+      max_repair:
+        description: 'How many broken-link files to repair this run (overrides MAX_REPAIR_PER_RUN). Default 5; set higher for backfill bursts.'
+        required: false
+        type: string
+        default: ''
+
+# Run one repair pass at a time. The batch-commit step reuses the dev-plan
+# generator's commit pipeline and assumes a single writer on its target branch.
+concurrency:
+  group: repair-doc-links
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  repair:
+    name: Find + fix broken doc links
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # write contents so the batch-commit step can push the auto/dev-plan-batch
+      # branch; the [skip ci] marker on the commit + PR title keeps ci.yml from
+      # firing on doc-only changes.
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Checkout agent-actions (CI scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: yihua-zhuo/agent-actions
+          ref: main
+          path: .agent-actions
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up claude
+        run: |
+          if ! command -v claude &>/dev/null; then
+            npm install -g @anthropic-ai/claude-code
+          fi
+
+      - name: Configure git
+        # Required because the batch-commit step inside the script shells out
+        # to `git commit` to assemble the PR branch.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Repair broken doc links
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          # gh CLI needs a token for the auto-merge step inside commit_pending_boards.
+          GH_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          # Workflow input wins over the default. Empty string falls back to
+          # the script's own MAX_REPAIR_PER_RUN default (5).
+          MAX_REPAIR_PER_RUN: ${{ inputs.max_repair || '5' }}
+        run: python3 .agent-actions/scripts/repair_doc_links.py

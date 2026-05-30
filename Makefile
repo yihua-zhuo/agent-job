@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review act-monitor
+.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review act-monitor act-repair
 
 # Create a local virtualenv on demand and use it by default.
 VENV_DIR := .venv
@@ -158,6 +158,22 @@ act-monitor: ## Trigger monitor-issues.yml locally via act (DRY=1 to skip commit
 	act workflow_dispatch \
 		-W .github/workflows/monitor-issues.yml \
 		-j validate \
+		$(if $(DRY),--env DEV_PLAN_DRY_RUN=1,) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock
+
+# Sweeps docs/dev-plan/ for boards with broken markdown links and asks Claude
+# to repair them. MAX=N to override the per-run cap (default 5). DRY=1 to
+# skip the final commit/push (boards are still rewritten in the working tree
+# for inspection).
+act-repair: ## Trigger repair-doc-links.yml locally via act (MAX=10 to lift cap; DRY=1 to skip commit)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/repair-doc-links.yml \
+		-j repair \
+		$(if $(MAX),--input max_repair=$(MAX),) \
 		$(if $(DRY),--env DEV_PLAN_DRY_RUN=1,) \
 		--bind \
 		--container-daemon-socket /var/run/docker.sock
