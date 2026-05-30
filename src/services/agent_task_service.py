@@ -39,6 +39,8 @@ class AgentTaskService:
             updated_at=now,
         )
         self.session.add(task)
+        # flush() persists and populates the auto-increment id.
+        # refresh() fetches any DB-side defaults so the returned object is complete.
         await self.session.flush()
         await self.session.refresh(task)
         return task

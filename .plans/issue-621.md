@@ -239,7 +239,7 @@ import pytest
 
 from tests.unit.conftest import MockState, make_mock_session
 from tests.unit.domain_handlers.agent_tasks import make_agent_task_handler
-from src.services.agent_task_service import AgentTaskService
+from services.agent_task_service import AgentTaskService
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 

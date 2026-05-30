@@ -59,7 +59,7 @@ class MockRow:
                 if json_key in self._mapping and isinstance(self._mapping[json_key], str):
                     try:
                         self._mapping[json_key] = _json.loads(self._mapping[json_key])
-                    except (AttributeError, TypeError, ValueError):
+                    except ValueError:
                         pass
 
     def __getitem__(self, key):
