@@ -447,7 +447,7 @@ describe("useTableState", () => {
   - `cd frontend && npx tsc --noEmit` → exit 0
   - `cd frontend && npm run lint` → exit 0
   - `cd frontend && npx vitest run src/lib/hooks/useTableState.test.ts` → all passed
-  - Grep check: `frontend/src/app/(app)/customers/page.tsx` contains no `timerRef`, `debouncedKeyword`, `sorted`, `handleSort`, `SortIcon` → silently fail if any found (bash grep exit code ≠ 0)
+  - Grep check: `frontend/src/app/(app)/customers/page.tsx` contains no `\btimerRef\b`, `\bdebouncedKeyword\b`, `\bsorted\b`, `\bhandleSort\b`, `\bSortIcon\b` → silently fail if any found (bash grep -E exit code ≠ 0)
 
 ## Acceptance Criteria
 
