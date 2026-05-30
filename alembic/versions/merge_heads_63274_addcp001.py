@@ -313,11 +313,11 @@ def upgrade() -> None:
     # via a path that skips that migration.
     op.execute(
         "ALTER TABLE automation_logs ADD CONSTRAINT fk_automation_logs_tenant_id "
-        "FOREIGN KEY (tenant_id) REFERENCES tenants(id) IF NOT EXISTS"
+        "FOREIGN KEY (tenant_id) REFERENCES tenants(id)"
     )
     op.execute(
         "ALTER TABLE automation_rules ADD CONSTRAINT fk_automation_rules_tenant_id "
-        "FOREIGN KEY (tenant_id) REFERENCES tenants(id) IF NOT EXISTS"
+        "FOREIGN KEY (tenant_id) REFERENCES tenants(id)"
     )
 
     # missing tenant_id indexes on auth tables
@@ -347,10 +347,10 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_user_credentials_tenant_id"), table_name="user_credentials")
     op.drop_index(op.f("ix_refresh_tokens_tenant_id"), table_name="refresh_tokens")
     op.drop_index(op.f("ix_device_trust_tenant_id"), table_name="device_trust")
-    op.execute("ALTER TABLE automation_rules DROP CONSTRAINT IF EXISTS fk_automation_rules_tenant_id")
-    op.execute("ALTER TABLE automation_logs DROP CONSTRAINT IF EXISTS fk_automation_logs_tenant_id")
+    op.execute("ALTER TABLE automation_rules DROP CONSTRAINT fk_automation_rules_tenant_id")
+    op.execute("ALTER TABLE automation_logs DROP CONSTRAINT fk_automation_logs_tenant_id")
     op.drop_constraint("uq_agent_tasks_task_id", "agent_tasks", type_="unique")
-    op.create_index(op.f("ix_agent_tasks_task_id"), "agent_tasks", ["task_id"], unique=True)
+    op.create_index(op.f("ix_agent_tasks_task_id"), "agent_tasks", ["task_id"], unique=True)  # noqa: E501
     op.drop_index(op.f("ix_identity_user_roles_user_id"), table_name="identity_user_roles")
     op.drop_index(op.f("ix_identity_user_roles_tenant_id"), table_name="identity_user_roles")
     op.drop_index(op.f("ix_identity_user_roles_role_id"), table_name="identity_user_roles")

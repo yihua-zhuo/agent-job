@@ -175,6 +175,7 @@ def upgrade() -> None:
     op.create_index("ix_conversation_messages_tenant_conv", "conversation_messages", ["tenant_id", "conversation_id"], unique=False)
 
     # ── e1f2a3b4c5d6: opportunity_activities ──────────────────────────────────
+    # Assumes `opportunities` table already exists (stamped by a prior head).
     op.create_table(
         "opportunity_activities",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -182,7 +183,7 @@ def upgrade() -> None:
         sa.Column("opportunity_id", sa.Integer(), nullable=False),
         sa.Column("event_type", sa.String(length=50), nullable=False),
         sa.Column("event_timestamp", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("metadata", postgresql.JSONB(), server_default=sa.text("'{}'"), nullable=False),
+        sa.Column("metadata", postgresql.JSONB(astext_type=sa.Text()), server_default=sa.text("'{}'"), nullable=False),
         sa.ForeignKeyConstraint(["opportunity_id"], ["opportunities.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
@@ -208,9 +209,5 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Tables created by the six branches (a52e1317da90, e646948c549a,
-    # add_agent_tasks_001, c94d682d4b04, db63fcd03ab9, e1f2a3b4c5d6,
-    # f18b406b982a) are dropped by the downgrade() of merge_heads_63274_addcp001,
-    # which is this migration's single parent.  Dropping them again here
-    # would cause a cascade error; therefore this body is intentionally empty.
+    # Tables dropped by merge_heads_63274_addcp001 downgrade
     pass

@@ -25,7 +25,7 @@ def mock_db_session():
         }
     # id=20 is the standalone record used for single-record lookup tests
     state.report_records[20] = {
-        "id": 20, "tenant_id": 1, "name": "Cross-tenant Test Report",
+        "id": 20, "tenant_id": 1, "name": "Isolated Tenant Test Report",
         "type": "custom", "config": {}, "date_range": {}, "created_by": 0,
         "last_run_at": None, "created_at": None,
     }
@@ -102,8 +102,8 @@ class TestListReports:
             compiled_str = str(compiled).lower()
             assert "limit" in compiled_str
             assert "offset" in compiled_str
-        except Exception:  # noqa: S110
-            pass
+        except (TypeError, AttributeError):
+            pytest.fail("SQL compilation failed — LIMIT/OFFSET not found in query")
 
 
 # ---------------------------------------------------------------------------
@@ -119,7 +119,7 @@ class TestGetReport:
         report = await svc.get_report(report_id=20, tenant_id=1)
 
         assert report.id == 20
-        assert report.name == "Cross-tenant Test Report"
+        assert report.name == "Isolated Tenant Test Report"
 
     async def test_raises_not_found_for_missing_id(self, mock_db_session):
         """get_report raises NotFoundException when report_id does not exist."""
@@ -211,6 +211,7 @@ class TestDeleteReport:
 
         mock_db_session_for_delete.delete.assert_called_once()
         mock_db_session_for_delete.flush.assert_called_once()
+        assert 6 not in mock_db_session_for_delete._state.report_records
 
     async def test_raises_not_found_for_missing_id(self, mock_db_session):
         """delete_report raises NotFoundException when report does not exist."""

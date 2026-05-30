@@ -38,8 +38,9 @@ Reading order followed:
    - Calls `session.add()` + `session.flush()`; returns the ORM object
 
 5. **Add `update_report` method to `ReportService`**
-   - Fetches by `(id, tenant_id)`; raises `NotFoundException` if missing   - Merges `data` dict into existing row via `setattr()` for fields `name`, `type`, `config`, `date_range`, `last_run_at`
-   - **Note**: `ReportModel` has no `updated_at` column — the dev-plan Step 5 code that assigns `report.updated_at = datetime.now(UTC)` must be removed; call `session.flush()` + `session.refresh()` without touching `updated_at`
+   - Fetches by `(id, tenant_id)`; raises `NotFoundException` if missing
+   - Merges `data` dict into existing row via `setattr()` for fields `name`, `type`, `config`, `date_range`, `last_run_at`
+   - Calls `session.flush()` (no `updated_at` assignment — `ReportModel` has no such column; no `refresh()` call either)
 
 6. **Add `delete_report` method to `ReportService`**
    - Confirms existence via `SELECT id WHERE (id, tenant_id)`; raises `NotFoundException` if missing
@@ -69,7 +70,7 @@ Reading order followed:
   - `PYTHONPATH=src python -c "from services.report_service import ReportService; assert hasattr(ReportService, 'list_reports'); assert hasattr(ReportService, 'get_report'); assert hasattr(ReportService, 'create_report'); assert hasattr(ReportService, 'update_report'); assert hasattr(ReportService, 'delete_report'); print('ok')"` → exit 0
 
 ## Acceptance Criteria
-- `ruff check src/services/report_service.py` exits0 with no errors
+- `ruff check src/services/report_service.py` exits 0 with no errors
 - `ReportService` has all five methods: `list_reports`, `get_report`, `create_report`, `update_report`, `delete_report`
 - `get_report`, `update_report`, `delete_report` each raise `NotFoundException` when the report is absent or belongs to another tenant
 - `list_reports` returns `tuple[list[ReportModel], int]` with correct total count and respects pagination (`LIMIT/OFFSET`)
