@@ -12,7 +12,12 @@ from typing import Any
 def generate_id(*parts: str) -> str:
     """生成唯一ID"""
     combined = "_".join(str(p) for p in parts)
-    return hashlib.md5(combined.encode()).hexdigest()[:12]  # noqa: S324 -- non-cryptographic ID generation
+    # Truncated to 12 hex chars for use as a short display ID.
+    # Collision risk: 12-char hex from MD5 has ~2.7k possible values per
+    # prefix (birthday paradox at 2^24 ≈ 5M IDs gives ~50% collision chance).
+    # Acceptable for internal, non-URL/non-log use. For cryptographic or
+    # high-collision-risk contexts, use hashlib.shake_256 with full output.
+    return hashlib.md5(combined.encode()).hexdigest()[:12]  # noqa: S324
 
 
 def sanitize_filename(filename: str) -> str:
