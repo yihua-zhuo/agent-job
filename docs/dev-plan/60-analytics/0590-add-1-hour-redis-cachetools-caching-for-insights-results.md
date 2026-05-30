@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 推荐 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [0598-add-analytics-models-and-service](../0598-add-analytics-models-and-service.md) |
+| 依赖 | TBD - 待验证：依赖父 issue #589 的 analytics models and service 文档路径 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 

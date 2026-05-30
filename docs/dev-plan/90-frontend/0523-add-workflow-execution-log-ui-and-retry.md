@@ -6,7 +6,7 @@
 | 分类 | [90-frontend](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [0522-retry-from-node-api](./0522-retry-from-node-api.md) |
+| 依赖 | TBD - 待验证：依赖 #522 后端完成后补充链接 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -70,7 +70,7 @@ TBD - 待验证：`frontend/src/workflow/editor/` 目录存在性及现有组件
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `frontend/src/workflow/editor/components/ExecutionLogPanel.tsx` | 执行日志面板主组件：节点列表、状态徽章、重试按钮 |
 | `frontend/src/workflow/editor/components/NodeStatusBadge.tsx` | 节点状态徽章：pending(灰)、running(蓝)、success(绿)、failed(红) |
 | `frontend/src/workflow/editor/components/NodeIODetail.tsx` | 节点输入/输出 JSON 展开区，支持折叠 |
@@ -428,7 +428,7 @@ Manual verification per §6 acceptance criteria."
 ## 9. 参考
 
 - 父 issue：#73（工作流执行引擎总览）
-- 依赖 issue：#522（retry-from-node API）
+- 依赖 issue：#522（TBD - 待验证：依赖 #522 后端完成后补充链接）
 - 前端组件参考：TBD - 待验证：`frontend/src/app/(app)/automation/rules/[id]/page.tsx` — 现有 rules 详情页面的面板布局参考
 - React TypeScript 最佳实践：TBD - 待验证（无需第三方文档）
 

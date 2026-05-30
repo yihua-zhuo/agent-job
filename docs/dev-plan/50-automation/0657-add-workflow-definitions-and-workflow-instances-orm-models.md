@@ -5,7 +5,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [rule-execution-engine](../50-automation/0687-build-rule-execution-engine-and-trigger-dispatch.md) |
+| 启用后赋能 | TBD - 待验证：rule-execution-engine 相关文档编号 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -435,7 +435,7 @@ gh pr create --base master --title "feat(#657): add workflow_definitions and wor
 ## 9. 参考
 
 - 同类参考实现：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) —现有 `WorkflowModel` / `WorkflowExecutionModel` 作为模型结构参考
-- 同类参考实现：[`src/db/models/automation.py`](../../src/db/models/automation.py) — `AutomationRuleModel` JSONB + tenant_id模式
+- 同类参考实现：TBD - 待验证：`AutomationRuleModel` JSONB + tenant_id 模式所在文件
 - 父 issue /关联：#651
 
 ---

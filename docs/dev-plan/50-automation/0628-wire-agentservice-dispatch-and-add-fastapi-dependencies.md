@@ -6,8 +6,8 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0627-build-llm-service-and-agent-registry](0627-build-llm-service-and-agent-registry.md) |
-| 启用后赋能 | [0629-add-automation-rule-execution-engine](0629-add-automation-rule-execution-engine.md) |
+| 依赖 | TBD - 待验证：#627 LLM service and agent registry 板块路径尚未确认 |
+| 启用后赋能 | TBD - 待验证：#629 automation rule execution engine 板块路径尚未确认 |
 | 状态 | 📋 待开始 |
 
 ---

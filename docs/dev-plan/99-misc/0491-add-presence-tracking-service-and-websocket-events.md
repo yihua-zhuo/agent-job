@@ -6,7 +6,7 @@
 | 分类 | 70-platform |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [0490 — WebSocket 连接管理器](../0490-add-websocket-connection-manager-and-routing.md) |
+| 依赖 | [0490 — WebSocket 连接管理器](./0490-add-redis-pub-sub-integration-for-cross-instance-event-distr.md) |
 | 启用后赋能 | 所有业务服务（CustomerService、OpportunityService、TicketService 等） |
 | 状态 | 📋 待开始 |
 

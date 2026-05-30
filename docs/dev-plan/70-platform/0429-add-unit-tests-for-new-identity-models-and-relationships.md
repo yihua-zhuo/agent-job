@@ -6,7 +6,7 @@
 | 分类 | 70-platform |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [板① 补充 Identity 系列 ORM 模型与关系定义](../40-campaigns/0428-add-orm-identity-models-and-relationships.md) |
+| 依赖 | TBD - 待验证：板① 补充 Identity 系列 ORM 模型与关系定义（Issue #428 产物路径待确认） |
 | 启用后赋能 | [板④ 补充 WorkflowService 工作流状态机与规则匹配](../50-automation/0463-build-workflowservice-with-crud-execute-methods.md) |
 | 状态 | 📋 待开始 |
 
@@ -53,7 +53,7 @@ PYTHONPATH=src python -c "from db.models.department import DepartmentModel; prin
 
 参考测试模式（已有实现）：
 
-主入口：[`tests/unit/test_tenant_model.py`](../../tests/unit/test_tenant_model.py) L{1}
+主入口：[`tests/unit/test_tenant_model.py`](../../../tests/unit/test_tenant_model.py) L{1}
 
 ```{python}:{示例结构}:
 # tests/unit/test_tenant_model.py 结构（参考）
@@ -352,9 +352,9 @@ gh pr create --base master --title "test(#429): unit tests for identity & RBAC m
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_tenant_model.py`](../../tests/unit/test_tenant_model.py)
+- 同类参考实现：[`tests/unit/test_tenant_model.py`](../../../tests/unit/test_tenant_model.py)
 - 同类参考实现：[`tests/unit/test_user_model.py`](../../../tests/unit/test_user_model.py)
-- 依赖 Issue /关联：#428（板① —补充 Identity 系列 ORM 模型与关系定义）、#270（父 issue）
+- 依赖 Issue /关联：#428（TBD - 待验证：板① 补充 Identity 系列 ORM 模型与关系定义）、#270（父 issue）
 
 ---
 

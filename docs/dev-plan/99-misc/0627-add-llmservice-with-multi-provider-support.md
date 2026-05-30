@@ -5,7 +5,7 @@
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [0626](0626-add-llms-full-prompt-pipeline.md)（需要 LLMService 作为 provider 底座） |
+| 启用后赋能 | TBD - 待验证：0626（需要 LLMService 作为 provider 底座） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -97,7 +97,7 @@ N/A — 新建模块
 
 - Service Constructor：`__init__(self, session: AsyncSession)` — session is required, no default.
 - Service错误抛 `ValidationException`（按 issue 明确要求 on provider errors），**不**返回 `ApiResponse.error()`。
-- Service **不**调用 `.to_dict()`，不返回 envelope dict — caller handles.
+- Service **不**调用 `.to_dict()`，不返回 envelope dict — caller handles。
 - Multi-tenant：cost tracking state is keyed by `tenant_id` dict in memory for this iteration (no new ORM model required).
 
 ### 4.4 已知坑

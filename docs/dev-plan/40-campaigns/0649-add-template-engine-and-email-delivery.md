@@ -6,7 +6,7 @@
 | 分类 | 40-campaigns |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [0642-notification-infrastructure](../0642-notification-infrastructure.md), #662 (NotificationTemplateModel), #664 (NotificationLogModel) |
+| 依赖 | TBD - 待验证：0642 关联文档路径待确认, #662 (NotificationTemplateModel), #664 (NotificationLogModel) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -78,7 +78,7 @@ async def send_notification(
 
 `NotificationTemplateModel`（#662 已建）：
 
-[`src/db/models/notification_template.py`](../../src/db/models/notification_template.py)
+TBD - 待验证：src/db/models/notification_template.py（路径待 #662 实施后确认）
 
 ```python
 class NotificationTemplateModel(Base):
@@ -154,7 +154,7 @@ class NotificationTemplateModel(Base):
 ### 4.2 版本约束
 
 | 依赖 | 版本 | 理由 |
-|------|------|------|
+|------|------|
 | `aiosmtplib` | `>=3.0` | 项目已使用 asyncpg；aiosmtplib 3.x 是最新稳定版，支持 Python 3.10+ async context manager |
 
 ### 4.3 兼容性约束
@@ -169,7 +169,7 @@ class NotificationTemplateModel(Base):
 1. **`aiosmtplib.SMTP` 在 `finally` 块中 `await smtp.quit()` 可能抛异常** → 症状：`quit()` 在连接已断开时（如服务器强制关闭）抛 `aiosmtplib.SMTPServerDisconnected` → 规避：使用 `await smtp.aclose()`（async context manager `async with SMTP(...) as smtp:` 自动处理优雅关闭）
 2. **`str.format` 对缺失变量默认抛 `KeyError`** → 症状：`render` 时若模板有 `{missing_var}` 会崩溃 → 规避：使用 `string.Template(template_str).substitute(variables)`（缺失 key 抛 `KeyError`），或捕获并以原占位符字符串保留未填充变量
 3. **`aiosmtplib` 连接超时默认值过长（120s）** → 症状：SMTP 服务器无响应时线程卡住 → 规避：`SMTP(..., timeout=30)` 显式传 30s 超时
-4. **SMTP_PASSWORD 在 .env 明文存储** → 症状：密码泄露风险 → 规避：仅在本板块做技术实现；密码管理（vault/secrets manager）属于 future work
+4. **`SMTP_PASSWORD` 在 .env 明文存储** → 症状：密码泄露风险 → 规避：仅在本板块做技术实现；密码管理（vault/secrets manager）属于 future work
 
 ---
 

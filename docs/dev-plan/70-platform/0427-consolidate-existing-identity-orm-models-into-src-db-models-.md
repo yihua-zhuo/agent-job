@@ -6,8 +6,8 @@
 | 分类 | 70-platform |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0426-add-organization-and-department-models-to-identity-migration-batch-1](0426-add-organization-and-department-models-to-identity-migration-batch-1.md) |
-| 启用后赋能 | [0428-update-all-imports-referencing-old-identity-model-paths](0428-update-all-imports-referencing-old-identity-model-paths.md) |
+| 依赖 | TBD - 待验证：依赖前置 issue #426（add organization/department models migration batch 1） |
+| 启用后赋能 | TBD - 待验证：后续 issue 完成 import 改写（#428 或类似） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -284,3 +284,4 @@ Subtask of #270"
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+

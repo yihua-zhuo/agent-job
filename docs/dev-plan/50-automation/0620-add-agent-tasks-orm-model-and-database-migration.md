@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [Agent Tasks service layer](../50-automation/README.md), [Agent Tasks router](../50-automation/README.md) |
+| 启用后赋能 | TBD - 待验证：后续服务层和路由所在的文档路径 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -285,7 +285,7 @@ gh pr create --base master --title "feat(automation): add AgentTask ORM model an
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/customers.py`](../../src/db/models/customers.py) — 参照 ORM model 结构 + enum 列写法
+- 同类参考实现：[`src/db/models/customers.py`](../../../src/db/models/customers.py) — 参照 ORM model 结构 + enum 列写法
 - 父 issue / 关联：#42
 
 ---

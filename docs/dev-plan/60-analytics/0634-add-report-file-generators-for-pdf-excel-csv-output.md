@@ -6,7 +6,7 @@
 | 分类 | [60-analytics](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [#633](0633-报表配置与调度服务.md) |
+| 依赖 | TBD - 待验证：关联 issue #633 的文件名是否仍为 `0633-报表配置与调度服务.md`，或在 60-analytics 目录下另有其他编号 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -388,7 +388,7 @@ class CsvGenerator(BaseGenerator):
         return output.getvalue().encode("utf-8")
 ```
 
-**完成判定**：`PYTHONPATH=src python -c "from services.report_generation.generators.csv_generator import CsvGenerator; g = CsvGenerator(); b = g.generate({'headers':['a','b'],'rows':[['1','2']]},''); print(b)` → 输出 `b'a,b\r\n1,2\r\n'`
+**完成判定**：`PYTHONPATH=src python -c "from services.report_generation.generators.csv_generator import CsvGenerator; g = CsvGenerator(); b = g.generate({'headers':['a','b'],'rows':[['1','2']]},''); print(b)"` → 输出 `b'a,b\r\n1,2\r\n'`
 
 ### Step 6: 将生成器接入 ReportService
 
@@ -459,21 +459,21 @@ from services.report_generation.generators.base import GeneratorTimeoutError
 class TestPdfGenerator:
     def test_generate_returns_pdf_bytes(self):
         g = get_generator("pdf")
-        b = g.generate({"title": "Test", "sections": [{"heading": "H", "rows": [["a", "b"]]}]}, "pdf")
+        b = g.generate({"title": "Test", "sections": [{"heading": "H", "rows": [["a", "bاقشة]}, "pdf")
         assert b[:4] == b"%PDF"
         assert len(b) > 0
 
 class TestExcelGenerator:
     def test_generate_returns_xlsx_bytes(self):
         g = get_generator("excel")
-        b = g.generate({"sheets": [{"name": "S", "headers": ["x", "y"], "rows": [["1", "2"]]}]}, "excel")
+        b = g.generate({"sheets": [{"name": "S", "headers": ["x", "y"], "rows": [["1", "2}, "excel")
         assert b[:4] == b"PK\x03\x04"
         assert len(b) > 0
 
 class TestCsvGenerator:
     def test_generate_csv_with_headers_and_rows(self):
         g = get_generator("csv")
-        b = g.generate({"headers": ["a", "b"], "rows": [["1", "2"], ["3", "4"]]}, "csv")
+        b = g.generate({"headers": ["a", "b"], "rows": [["1", "2"], ["3", "4"]}}, "csv")
         assert b"a,b" in b
         assert b"1,2" in b
 

@@ -6,8 +6,8 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [0620-implement-agenttaskmodel-and-orm](../0620-implement-agenttaskmodel-and-orm.md) |
-| 启用后赋能 | [板块名](../板块名.md), ... |
+| 依赖 | [0620-implement-agenttaskmodel-and-orm](./0620-add-agent-tasks-orm-model-and-database-migration.md) |
+| 启用后赋能 | TBD - 待验证：后续 router 板将依赖此 service |
 | 状态 | 📋 待开始 |
 
 ---

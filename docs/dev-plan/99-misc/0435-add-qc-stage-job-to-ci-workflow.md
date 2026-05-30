@@ -6,8 +6,8 @@
 | 分类 | [99-misc](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0434-add-lint-and-mypy-to-ci-workflow](0434-add-lint-and-mypy-to-ci-workflow.md) |
-| 启用后赋能 | [198-crm-qc-pipeline](TBD - 待补充：父 issue #198 的其他子任务) |
+| 依赖 | [0434-add-lint-and-mypy-to-ci-workflow](0434-add-ci-workflow-stub-with-test-and-code-review-stages.md) |
+| 启用后赋能 | TBD - 待验证：关联父 issue #198 的其他子任务 |
 | 状态 | 📋 待开始 |
 
 ---

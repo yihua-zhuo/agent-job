@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [0631-build-reporting-service-with-generate-download](../50-automation/0631-build-reporting-service-with-generate-download.md) |
+| 依赖 | TBD - 待验证：确认 0631 报告服务文件名，依赖文件路径目前为 `../50-automation/0631-build-reporting-service-with-generate-download.md` |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -66,7 +66,7 @@ TBD - 待验证：确认 `src/services/reports_service.py` exists from issue #63
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/api/routers/reports.py` | Reports API router with 7 endpoints |
 | `tests/unit/test_reports_router.py` | Unit tests for all reports router endpoints |
 
@@ -304,7 +304,7 @@ gh pr create --base master --title "feat(reports): add API router with all 7 end
 ## 9. 参考
 
 - 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py)
-- 同类参考实现：[`src/api/routers/campaigns.py`](../../src/api/routers/campaigns.py)
+- 同类参考实现：TBD - 待验证：`campaigns.py` 路由文件是否存在（当前路径 `src/api/routers/campaigns.py` 无对应文件）
 - 父 issue / 关联：#40
 - 前置依赖：#631
 

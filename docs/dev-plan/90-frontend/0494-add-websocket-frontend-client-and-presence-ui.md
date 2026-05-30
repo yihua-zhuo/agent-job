@@ -6,8 +6,8 @@
 | 分类 | 90-frontend |
 | 优先级 | 推荐 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [0493-add-websocket-backend-manager-and-event-bus](../50-automation/0493-add-websocket-backend-manager-and-event-bus.md) |
-| 启用后赋能 | [客户详情实时协作](../10-customers/板块名), [商机详情实时协作](../20-sales/板块名), [工单详情实时协作](../30-tickets/板块名) |
+| 依赖 | TBD - 待验证：确认 #493 文档路径，可能为 `../50-automation/0493-add-websocket-backend-manager-and-event-bus.md` |
+| 启用后赋能 | TBD - 待验证：确认客户/商机/工单详情协作板块路径（预期位于 `../10-customers/`、`../20-sales/`、`../30-tickets/` 下） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -194,7 +194,7 @@ export function usePresence(opts: { type: string; id: string | number }) {
 
 `PresenceIndicator.tsx`：接收 `count: number`，count == 1 显示"1 人在浏览"，count > 1 显示"N 人在浏览"，count == 0 不渲染。
 
-`MutationToast.tsx`：维护队列 `notifications: Array<{id, message, type}>`，每次新增时设置 5s auto-dismiss timeout；支持 `dismiss(id)` 手动关闭；最多同时显示 3 条。
+`MutationToast.tsx`：维护队列 `notifications: Array<{id, message, type}>`,每次新增时设置 5s auto-dismiss timeout；支持 `dismiss(id)` 手动关闭；最多同时显示 3 条。
 
 ```typescript
 // frontend/src/components/presence/MutationToast.tsx（≤30 行核心逻辑）

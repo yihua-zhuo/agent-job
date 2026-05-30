@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [043-workflow-job-queue-and-scheduled-execution](../040-cross-functional/043-workflow-job-queue-and-scheduled-execution.md) |
+| 依赖 | TBD - 待验证：关联 issue #463 |
 | 启用后赋能 | TBD — 待补充：哪些下游功能依赖本板块完成后才能开始 |
 | 状态 | 📋 待开始 |
 

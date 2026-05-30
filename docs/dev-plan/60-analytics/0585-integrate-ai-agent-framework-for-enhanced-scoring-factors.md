@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 推荐 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [#584](../50-automation/0584-define-ai-agent-framework-interface-and-integration-points.md) |
+| 依赖 | TBD - 待验证：#584 AI Agent Framework interface doc（路径待确认） |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -32,8 +32,8 @@ ScoreService currently computes scoring factors from static CRM data (pipeline s
 
 ### 1.4 关键 KPI
 
-- [`PYTHONPATH=src pytest tests/unit/test_score_service.py -v` → ≥ existing + N new passed](#6)
-- [`ruff check src/services/score_service.py` → 0 errors](#6)
+- `PYTHONPATH=src pytest tests/unit/test_score_service.py -v` → ≥ existing + N new passed — TBD - 待验证：确认测试文件存在
+- `ruff check src/services/score_service.py` → 0 errors — TBD - 待验证：确认服务文件存在
 - AI branch exercised: mock agent called with expected kwargs; `similar_leads` present in returned dict.
 - API contract intact: existing `GET /scores/{id}` and `POST /scores/calculate` responses unchanged for non-AI tenants.
 
@@ -43,15 +43,15 @@ ScoreService currently computes scoring factors from static CRM data (pipeline s
 
 ### 2.1 现有实现
 
-主入口：TBD - 待验证：`src/services/score_service.py` — ScoreService class with `calculate_score` / `get_score` methods; current implementation does not call any external AI service.
+主入口：TBD - 待验证：`src/services/score_service.py` — 确认文件路径；当前实现不调用外部 AI 服务。
 
 涉及文件清单中列出的所有路径 are verified as existing in the project skeleton per CLAUDE.md conventions.
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/score_service.py`](../../src/services/score_service.py) — extend with AI agent call path; add `similar_leads` to output dict
-  - [`tests/unit/test_score_service.py`](../../tests/unit/test_score_service.py) — add test cases for AI branch; mock AI agent response
+  - TBD - 待验证：`src/services/score_service.py` — 确认路径；若不存在请在实现步骤中创建
+  - TBD - 待验证：`tests/unit/test_score_service.py` — 确认路径；若不存在请在实现步骤中创建
 - 要建：
   - `tests/unit/conftest.py` — extend mock helpers if new SQL patterns needed (likely no new table access; verify before adding)
   - `alembic/versions/<id>_add_similar_leads_field.py` — only if #584 schema requires it (coordinate; may be empty)
@@ -72,15 +72,15 @@ ScoreService currently computes scoring factors from static CRM data (pipeline s
 
 | 路径 | 用途 |
 |------|------|
-| `tests/unit/test_score_service.py` (modify; see §3.2) | Add AI-branch test cases |
+| TBD - 待验证：`tests/unit/test_score_service.py`（modify; see §3.2） | Add AI-branch test cases |
 | `alembic/versions/<id>_ai_similar_leads.py` | Migration only if #584 schema requires it; coordinate before creating |
 
 ### 3.2 修改文件
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/score_service.py`](../../src/services/score_service.py) | Add `ai_annotate_score(entity_id, tenant_id)` method; call AI agent from `calculate_score` when entity qualifies; inject `similar_leads` into result dict |
-| [`tests/unit/test_score_service.py`](../../tests/unit/test_score_service.py) | Add `test_calculate_score_ai_branch` and `test_calculate_score_no_ai_fallback`; mock AI agent response |
+| TBD - 待验证：`src/services/score_service.py` | Add `ai_annotate_score(entity_id, tenant_id)` method; call AI agent from `calculate_score` when entity qualifies; inject `similar_leads` into result dict |
+| TBD - 待验证：`tests/unit/test_score_service.py` | Add `test_calculate_score_ai_branch` and `test_calculate_score_no_ai_fallback`; mock AI agent response |
 
 ### 3.3 新增能力
 
@@ -127,13 +127,13 @@ Review the board document for #584 to understand:
 - Request payload shape (what fields are sent, including `tenant_id`)
 - Response payload shape (`recommendations`, `similar_leads` fields expected)
 
-If #584 is not yet merged, read the latest draft at `docs/dev-plan/50-automation/0584-define-ai-agent-framework-interface-and-integration-points.md`.
+TBD - 待验证：确认 `docs/dev-plan/50-automation/0584-define-ai-agent-framework-interface-and-integration-points.md` 文件存在并读取
 
 **完成判定**：`ls docs/dev-plan/50-automation/0584-*.md` → file exists; its §3.3 lists `AIAgentClient` method signature
 
 ### Step 2: Add `ai_annotate_score` method stub to ScoreService
 
-In [`src/services/score_service.py`](../../src/services/score_service.py), add:
+TBD - 待验证：确认 `src/services/score_service.py` 路径，若文件不存在请先创建
 
 ```python
 async def ai_annotate_score(
@@ -177,7 +177,7 @@ The `include_ai` flag defaults to `True` but is settable per-call.
 
 ### Step 4: Add unit tests for AI branch and fallback
 
-In [`tests/unit/test_score_service.py`](../../tests/unit/test_score_service.py):
+TBD - 待验证：确认 `tests/unit/test_score_service.py` 路径，若文件不存在请先创建
 
 ```python
 async def test_calculate_score_ai_branch(mock_db_session):
@@ -217,8 +217,8 @@ Run `ruff check src/services/score_service.py tests/unit/test_score_service.py` 
 
 ## 6. 验收
 
-- [ ] `ruff check src/services/score_service.py tests/unit/test_score_service.py` → 0 errors
-- [ ] `PYTHONPATH=src pytest tests/unit/test_score_service.py -v` → all passed (including ≥ 2 new AI-branch tests)
+- [ ] `ruff check src/services/score_service.py tests/unit/test_score_service.py` → 0 errors — TBD - 待验证：确认文件存在
+- [ ] `PYTHONPATH=src pytest tests/unit/test_score_service.py -v` → all passed (including ≥ 2 new AI-branch tests) — TBD - 待验证：确认测试文件存在
 - [ ] `PYTHONPATH=src pytest tests/unit/ -m "not integration" -v` → no regressions in other unit tests
 - [ ] `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → exit 0 (only if a migration was created; skip otherwise)
 - [ ] API contract preserved: existing score endpoints return identical shape for calls without AI annotation; `similar_leads` is absent from responses when AI is unavailable
@@ -260,8 +260,8 @@ gh pr create --base master --title "feat(#585): integrate AI agent framework for
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service pattern with graceful degradation on external call
-- 第三方文档：[AI Agent Framework — issue #41](../00-foundations/0041-ai-agent-framework.md)
+- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — service pattern with graceful degradation on external call
+- 第三方文档：TBD - 待验证：AI Agent Framework — issue #41（文件路径待确认）
 - 父 issue / 关联：#49, #41, #584
 
 ---

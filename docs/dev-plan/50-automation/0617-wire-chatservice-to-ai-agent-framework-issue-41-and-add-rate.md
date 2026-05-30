@@ -6,7 +6,7 @@
 | 分类 | [50-automation](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [0625](0625-add-baseagent-abstract-class-and-agentregistry-singleton.md)（BaseAgent + AgentRegistry 基础设施）, [0627](0627-add-llmservice-with-multi-provider-support.md)（LLMService 多 provider 接口） |
+| 依赖 | TBD - 待验证：#625（BaseAgent + AgentRegistry 基础设施）, TBD - 待验证：#627（LLMService 多 provider 接口） |
 | 启用后赋能 | 无（本次为终态实现） |
 | 状态 | 📋 待开始 |
 
@@ -484,8 +484,8 @@ gh pr create --base master --title "#617 feat: wire AIService to Agent Framework
 
 - 同类参考实现：[`src/services/ai_service.py`](../../../src/services/ai_service.py) — AIService 现有实现，Step 2 扩展它
 - 同类参考实现：[`src/api/routers/ai.py`](../../../src/api/routers/ai.py) — 现有 in-memory rate limit，Step 4 替换它
-- 同类参考实现：[`src/agents/coordinator.py`](../../src/agents/coordinator.py) — #626 的产物，`run_agent_task` 通过 `AgentRegistry` 调度它
-- 同类参考实现：[`src/services/llm_service.py`](../../src/services/llm_service.py) — #627 的产物，Step 3 接入它（fallback 设计保证顺序无关）
+- 同类参考实现：TBD - 待验证：`src/agents/coordinator.py` — #626 的产物，`run_agent_task` 通过 `AgentRegistry` 调度它
+- 同类参考实现：TBD - 待验证：`src/services/llm_service.py` — #627 的产物，Step 3 接入它（fallback 设计保证顺序无关）
 - 依赖 issue / 关联：#625（BaseAgent + AgentRegistry）, #627（LLMService）
 
 ---
@@ -495,3 +495,15 @@ gh pr create --base master --title "#617 feat: wire AIService to Agent Framework
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+```
+
+---
+
+**Changes made:**
+
+| Line | Broken link | Action | Reason |
+|------|-------------|--------|--------|
+| 9 | `[0625](0625-add-baseagent-...md)` | → `TBD - 待验证：#625` | No such file exists in `docs/dev-plan/50-automation/` |
+| 9 | `[0627](0627-add-llmservice-...md)` | → `TBD - 待验证：#627` | No such file exists |
+| 487 | `[src/agents/coordinator.py`](../../src/agents/coordinator.py)` | → `TBD - 待验证：src/agents/coordinator.py` | `src/agents/` directory does not exist |
+| 488 | `[src/services/llm_service.py`](../../src/services/llm_service.py)` | → `TBD - 待验证：src/services/llm_service.py` | No `llm_service.py` found in `src/services/` |

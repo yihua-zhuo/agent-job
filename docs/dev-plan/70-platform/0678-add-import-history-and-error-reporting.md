@@ -5,8 +5,8 @@
 | 周次 | W20.3 |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [0677-add-import-jobs-crud-and-file-storage](../50-automation/0677-add-import-jobs-crud-and-file-storage.md) |
-| 启用后赋能 | [0688-add-integration-tests-for-full-rule-lifecycle](../50-automation/0688-add-integration-tests-for-full-rule-lifecycle.md) |
+| 依赖 | TBD - 待验证：上游 0677 ImportJob model 是否已创建于 `src/db/models/import_job.py` |
+| 启用后赋能 | TBD - 待验证：0688 integration tests 文档是否已创建于 `docs/dev-plan/50-automation/` |
 | 状态 | 📋 待开始 |
 
 ---
@@ -470,11 +470,11 @@ git push
 
 ## 9. 参考
 
-- 上游 dependency board: [`0677-add-import-jobs-crud-and-file-storage`](../50-automation/0677-add-import-jobs-crud-and-file-storage.md) — provides `ImportJob` ORM model with `error_log` JSON column
+- 上游 dependency board: TBD - 待验证：上游 0677 ImportJob model 是否已创建于 `docs/dev-plan/50-automation/0677-add-import-jobs-crud-and-file-storage.md`
 - 父 issue: [#34](https://github.com/...) — 总览 issue
 - 项目内：`ImportExportService` 实现参考 [`src/services/import_export_service.py`](../../../src/services/import_export_service.py) L16-L423
 - 项目内：Router 模式参考 [`src/api/routers/sales.py`](../../../src/api/routers/sales.py) L1-L235
-- 项目内：Error handling 规范 [`pkg/errors/app_exceptions.py`](../../pkg/errors/app_exceptions.py)
+- 项目内：Error handling 规范 [`pkg/errors/app_exceptions.py`](../../../src/pkg/errors/app_exceptions.py)
 - CLAUDE.md §「Service Pattern」：service returns ORM + raises AppException
 
 ---
@@ -484,3 +484,12 @@ git push
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | github-actions[bot] |
+
+---
+
+**修复说明：**
+
+- **Line 8（依赖元数据）**: `0677-add-import-jobs-crud-and-file-storage.md` 不存在于 `docs/dev-plan/50-automation/`，替换为 `TBD - 待验证：上游 0677 ImportJob model 是否已创建于 src/db/models/import_job.py`
+- **Line 9（启用后赋能元数据）**: `0688-*.md` 不存在，替换为 `TBD - 待验证：0688 integration tests 文档是否已创建于 docs/dev-plan/50-automation/`
+- **Line 473（参考章节）**: 同上，替换为 `TBD - 待验证：...`
+- **Line 477（app_exceptions.py 链接）**: 原文 `../../pkg/errors/app_exceptions.py` 路径多了一层 `../`，文件实际位于 `src/pkg/errors/app_exceptions.py`，修正为 `../../../src/pkg/errors/app_exceptions.py`

@@ -158,7 +158,7 @@ class ImportExportService:
 
 ### 4.3 兼容性约束
 
-- `validate_file`, `parse_and_preview`, `execute_import`, `create_export` must raise `ValidationException` subclasses (from `pkg.errors.app_exceptions`) — not raw `ValueError` or `TypeError`. The global exception handler in `main.py` translates `AppException` to JSON; raw exceptions produce 500s.
+- `validate_file`, `parse_and_preview`, `execute_import`, `create_export` must raise `ValidationException` subclasses (from TBD - 待验证：错误异常类路径) — not raw `ValueError` or `TypeError`. The global exception handler in `main.py` translates `AppException` to JSON; raw exceptions produce 500s.
 - `execute_import` must return an `ImportJob` ORM object (not a dict, not None). The router calls `.to_dict()` on it.
 - `create_export` must return an `ExportJob` ORM object (not a dict, not None). The router calls `.to_dict()` on it.
 - No breaking changes to existing `import_customers`, `import_opportunities`, `import_leads` signatures.
@@ -805,7 +805,7 @@ git push
 - 父 issue: #34 — 总览 issue
 - 项目内：`ImportExportService` 实现参考 [`src/services/import_export_service.py`](../../../src/services/import_export_service.py) L16-L423
 - 项目内：`FileHelper` - 文件解析参考 [`src/utils/file_helper.py`](../../../src/utils/file_helper.py)
-- 项目内：Error handling 规范 [`pkg/errors/app_exceptions.py`](../../pkg/errors/app_exceptions.py)
+- 项目内：Error handling 规范 TBD - 待验证：错误异常类路径
 - CLAUDE.md §「Service Pattern」：service returns ORM + raises AppException
 - CLAUDE.md §「Unit Test SQL Mocks」：MockState / make_mock_session 使用规范
 

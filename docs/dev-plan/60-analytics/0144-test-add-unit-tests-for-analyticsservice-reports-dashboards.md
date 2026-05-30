@@ -216,7 +216,7 @@ gh pr create --base master --title "test(analytics): add unit tests for Analytic
 ## 9. 参考
 
 - 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — same unit test pattern: `MockState`, `make_mock_session`, `MockRow`, async test functions, `pytest.raises` for not-found cases
-- 同类参考实现：[`tests/unit/test_opportunity_service.py`](../../tests/unit/test_opportunity_service.py) — pagination + list test pattern for `test_list_dashboards_pagination`
+- 同类参考实现：TBD - 待验证：pagination + list test pattern for test_list_dashboards_pagination
 - 父 issue / 关联：TBD (no parent issue referenced in #144)
 
 ---

@@ -6,7 +6,7 @@
 | 分类 | 90-frontend |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [密码重置后端 API 支持](../50-automation/0536-build-password-reset-backend-api.md) |
+| 依赖 | TBD - 待验证：后端 API 文档路径 |
 | 启用后赋能 | 登录页 (#537 前端流程) |
 | 状态 | 📋 待开始 |
 

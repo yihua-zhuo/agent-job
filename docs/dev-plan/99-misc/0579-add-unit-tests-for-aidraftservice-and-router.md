@@ -6,7 +6,7 @@
 | 分类 | 99-misc |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [0578-add-ai-draft-service](../50-campaigns/0578-add-ai-draft-service-and-router.md) |
+| 依赖 | TBD - 待验证：依赖 issue #578 的文档路径 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 

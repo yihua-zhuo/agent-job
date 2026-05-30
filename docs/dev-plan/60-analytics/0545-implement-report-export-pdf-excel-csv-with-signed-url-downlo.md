@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [0544-report-data-pipeline-signed-url](../50-automation/0544-report-data-pipeline-signed-url.md) |
+| 依赖 | TBD - 待验证：0544-report-data-pipeline-signed-url 文件路径待确认 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -89,7 +89,7 @@ No existing `report_export.py` service — this is a greenfield module.
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/analytics_reports.py`](../../src/api/routers/analytics_reports.py) | 新增 `POST /analytics/reports/generate` 和 `GET /analytics/reports/files/{token}` 两个 endpoint |
+| TBD - 待验证：`src/api/routers/analytics_reports.py` 文件路径 | 新增 `POST /analytics/reports/generate` 和 `GET /analytics/reports/files/{token}` 两个 endpoint |
 | `alembic/env.py` | 将 `ReportFile` model 导入，确保 autogen 可见 |
 
 ### 3.3 新增能力

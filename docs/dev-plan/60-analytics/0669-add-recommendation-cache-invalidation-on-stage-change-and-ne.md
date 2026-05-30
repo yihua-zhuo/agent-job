@@ -32,8 +32,8 @@
 ### 1.4 关键 KPI
 
 - `ruff check src/services/sales_recommendation.py src/services/sales_service.py src/services/activity_service.py` → 0 errors
-- `PYTHONPATH=src pytest tests/unit/test_sales_recommendation.py -v` → ≥ 3 passed（含缓存失效验证）
-- `PYTHONPATH=src pytest tests/unit/test_sales.py -v` → 全 passed（stage-change 相关用例）
+- `PYTHONPATH=src pytest tests/unit/test_sales_recommendation.py -v` → ≥ 3 passed（含缓存失效验证）— **TBD - 待验证：对应测试文件尚不存在，需新建**
+- `PYTHONPATH=src pytest tests/unit/test_sales.py -v` → 全 passed（stage-change 相关用例）— **TBD - 待验证：对应测试文件尚不存在，需新建或使用 test_sales_router.py**
 - `PYTHONPATH=src pytest tests/unit/test_activity_service.py -v` → 全 passed（activity 创建触发失效验证）
 
 ---
@@ -107,8 +107,8 @@
   - [`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) — 实现 `invalidate_cache` 方法和 TTL 缓存逻辑
   - [`src/services/sales_service.py`](../../../src/services/sales_service.py) — `change_stage` 方法末尾调用 `SalesRecommendationService.invalidate_cache`
   - [`src/services/activity_service.py`](../../../src/services/activity_service.py) — `create_activity` 方法末尾调用 `SalesRecommendationService.invalidate_cache`（当 `opportunity_id` 存在时）
-  - [`tests/unit/test_sales_recommendation.py`](../../tests/unit/test_sales_recommendation.py) — 新增缓存失效单元测试
-  - [`tests/unit/test_sales.py`](../../tests/unit/test_sales.py) — `change_stage` 单元测试覆盖缓存失效调用
+  - **TBD - 待验证：tests/unit/test_sales_recommendation.py** — 新增缓存失效单元测试（文件尚不存在，需新建）
+  - **TBD - 待验证：tests/unit/test_sales.py** — `change_stage` 单元测试覆盖缓存失效调用（文件尚不存在，可参考 test_sales_router.py）
   - [`tests/unit/test_activity_service.py`](../../../tests/unit/test_activity_service.py) — activity 创建触发失效的单元测试
 - 要建：
   - `tests/unit/test_sales_recommendation.py`（若文件不存在）— 缓存失效 + TTL 验证
@@ -137,8 +137,8 @@
 | [`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) | 新增 `_recommendation_cache: dict[str, tuple[float, Any]]`（key = `f"{tenant_id}:{opportunity_id}"`，value = `(expires_at, result)`）；新增 `invalidate_cache(opportunity_id, tenant_id)` 方法；各推荐方法优先从缓存读取 |
 | [`src/services/sales_service.py`](../../../src/services/sales_service.py) | `change_stage` 方法末尾注入 `SalesRecommendationService(session).invalidate_cache(opp_id, tenant_id)` |
 | [`src/services/activity_service.py`](../../../src/services/activity_service.py) | `create_activity` 方法末尾当 `opportunity_id is not None` 时调用 `SalesRecommendationService().invalidate_cache(opportunity_id, tenant_id)` |
-| [`tests/unit/test_sales_recommendation.py`](../../tests/unit/test_sales_recommendation.py) | 新增 `test_invalidate_cache_clears_entry`、`test_invalidate_cache_tenant_isolation`、`test_cache_ttl_1_hour` 测试用例 |
-| [`tests/unit/test_sales.py`](../../tests/unit/test_sales.py) | `change_stage` 测试断言 mock session 中 `invalidate_cache` 被调用一次 |
+| **TBD - 待验证：tests/unit/test_sales_recommendation.py** | 新增 `test_invalidate_cache_clears_entry`、`test_invalidate_cache_tenant_isolation`、`test_cache_ttl_1_hour` 测试用例 |
+| **TBD - 待验证：tests/unit/test_sales.py** | `change_stage` 测试断言 mock session 中 `invalidate_cache` 被调用一次 |
 | [`tests/unit/test_activity_service.py`](../../../tests/unit/test_activity_service.py) | activity 测试断言创建含 `opportunity_id` 的 activity 时 `invalidate_cache` 被调用一次 |
 
 ### 3.3 新增能力
@@ -286,7 +286,7 @@ from services.sales_recommendation import SalesRecommendationService
 
 ### Step 5: 编写 `test_sales_recommendation.py` 缓存测试
 
-在 `tests/unit/test_sales_recommendation.py` 中新增三个测试用例（文件若不存在则创建，参考其他 unit test 的 fixture 写法）：
+**TBD - 待验证：tests/unit/test_sales_recommendation.py**（文件尚不存在，需新建；参考其他 unit test 的 fixture 写法）新增三个测试用例：
 
 ```python
 import pytest
@@ -328,7 +328,7 @@ class TestCacheInvalidation:
 
 ### Step 6: 更新 `test_sales.py` 中 stage-change 测试断言
 
-在 `tests/unit/test_sales.py` 的 `test_change_stage` 测试中，用 `patch("services.sales_recommendation.SalesRecommendationService.invalidate_cache")` 验证调用：
+**TBD - 待验证：tests/unit/test_sales.py**（文件尚不存在，stage-change 相关用例需新建或合并至 test_sales_router.py）在 `test_change_stage` 测试中，用 `patch("services.sales_recommendation.SalesRecommendationService.invalidate_cache")` 验证调用：
 
 ```python
 from unittest.mock import patch
@@ -371,8 +371,8 @@ async def test_create_activity_triggers_cache_invalidation(
 ## 6. 验收
 
 - [ ] `ruff check src/services/sales_recommendation.py src/services/sales_service.py src/services/activity_service.py` → 0 errors
-- [ ] `PYTHONPATH=src pytest tests/unit/test_sales_recommendation.py -v` → `3 passed`
-- [ ] `PYTHONPATH=src pytest tests/unit/test_sales.py -v` → 全 passed
+- [ ] `PYTHONPATH=src pytest tests/unit/test_sales_recommendation.py -v` → `3 passed` — **TBD - 待验证：测试文件需新建**
+- [ ] `PYTHONPATH=src pytest tests/unit/test_sales.py -v` → 全 passed — **TBD - 待验证：测试文件需新建或合并至 test_sales_router.py**
 - [ ] `PYTHONPATH=src pytest tests/unit/test_activity_service.py -v` → 全 passed
 - [ ] `PYTHONPATH=src python -c "from services.sales_recommendation import SalesRecommendationService; s = SalesRecommendationService(); s.invalidate_cache(1, 1); s._set_cached('1:1', 0.5); print(s._get_cached('1:1'))"` → `0.5`
 - [ ] `PYTHONPATH=src python -c "from services.sales_recommendation import SalesRecommendationService; s = SalesRecommendationService(); s._set_cached('1:1', 0.5); s.invalidate_cache(1, 1); print(s._get_cached('1:1'))"` → `None`

@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [工作流实例 ORM 模型](0657-add-workflow-instances-orm-model.md) |
+| 依赖 | [工作流实例 ORM 模型](0657-add-workflow-definitions-and-workflow-instances-orm-models.md) |
 | 启用后赋能 | 规则执行引擎与触发调度 (待定) |
 | 状态 | 📋 待开始 |
 
@@ -248,5 +248,6 @@ gh pr create --base master --title "feat(#658): add workflow_steps ORM model" --
 ## 9. 参考
 
 - 同类参考实现：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py)
-- 同类参考实现：[`src/db/models/automation.py`](../../src/db/models/automation.py)
-- 父 issue / 关联：#651- 依赖：#657
+- 同类参考实现：TBD - 待验证：需确认 automation.py 实际路径
+- 父 issue / 关联：#651
+- 依赖：#657

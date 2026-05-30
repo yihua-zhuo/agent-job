@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0583-build-score-service-with-calculate-score-and-get-score-methods](../50-automation/0583-build-score-service-with-calculate-score-and-get-score-methods.md) |
+| 依赖 | TBD - 待验证：ScoreService 实现文档（#583） |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -281,7 +281,7 @@ gh pr create --base master --title "feat(#584): wire ScoreService into POST and 
 ## 9. 参考
 
 - 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — 本文件，在其中添加 score 端点
-- 同类参考实现：[`src/api/routers/churn.py`](../../src/api/routers/churn.py) — 已有类似路由模式（两个端点暴露一个 Service）
+- 同类参考实现：TBD - 待验证：churn router 参考实现
 - 父 issue / 关联：#49（父 epic）、#583（依赖：ScoreService 实现先完成）
 - 第三方文档：[FastAPI Router](https://fastapi.tiangolo.com/tutorial/bigger-applications/)
 

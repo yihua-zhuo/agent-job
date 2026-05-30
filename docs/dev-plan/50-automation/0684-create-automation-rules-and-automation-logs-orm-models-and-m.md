@@ -6,7 +6,7 @@
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [0685-implement-automationrule-service](./0685-implement-automationrule-service.md) |
+| 启用后赋能 | TBD - 待验证：0685 待实现 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -15,7 +15,7 @@
 
 ### 1.1 为什么做
 
-`AutomationRuleModel` and `AutomationLogModel` are already defined in [`src/db/models/automation.py`](../../src/db/models/automation.py) L12-L77. However, no Alembic migration exists to create the `automation_rules` and `automation_logs` tables in PostgreSQL. Without the migration, downstream boards (#685 service, #686 router, #687 execution engine) have no persistent storage to build against. This board creates the migration, registers the models in `alembic/env.py`, and adds unit tests to protect the model contract.
+`AutomationRuleModel` and `AutomationLogModel` are already defined in [`src/db/models/automation.py`](../../../src/db/models/automation.py) L12-L77. However, no Alembic migration exists to create the `automation_rules` and `automation_logs` tables in PostgreSQL. Without the migration, downstream boards (#685 service, #686 router, #687 execution engine) have no persistent storage to build against. This board creates the migration, registers the models in `alembic/env.py`, and adds unit tests to protect the model contract.
 
 ### 1.2 做完后
 
@@ -44,7 +44,7 @@
 
 ORM models exist but no migration. `alembic/env.py` already imports the models via `import db.models` (line 14), so autogenerate will pick them up.
 
-主入口：[`src/db/models/automation.py`](../../src/db/models/automation.py) L12-L77
+主入口：[`src/db/models/automation.py`](../../../src/db/models/automation.py) L12-L77
 
 ```startLine:12:src/db/models/automation.py
 class AutomationRuleModel(Base):
@@ -419,11 +419,11 @@ git push
 
 ## 9. 参考
 
-- ORM models：[`src/db/models/automation.py`](../../src/db/models/automation.py) L1-L77
+- ORM models：[`src/db/models/automation.py`](../../../src/db/models/automation.py) L1-L77
 - Test handlers：[`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py) L1-L101
 - Alembic env（already imports models）：[`alembic/env.py`](../../../alembic/env.py) L14
 - Example migration：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L1-L59
-- Downstream board (service)：[`0685-implement-automationrule-service.md`](./0685-implement-automationrule-service.md)
+- Downstream board (service)：TBD - 待验证：0685 待实现
 
 ---
 

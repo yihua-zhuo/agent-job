@@ -59,7 +59,7 @@ class Customer(Base):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - TBD - 待验证：`src/db/models/customer.py` — 添加 `updated_at: Mapped[datetime]` 列（ nullable=False, server_default=func.now()）
+  - TBD - 待验证：`src/db/models/customer.py` — 添加 `updated_at: Mapped[datetime]` 列（ nullable=False, server_default=func.now())
   - TBD - 待验证：`src/db/models/opportunity.py` — 同上
   - TBD - 待验证：`src/db/models/ticket.py` — 同上
   - TBD - 待验证：`src/schemas/` 下的相应 Pydantic schema — 添加 `lock_holder: Optional[str]`, `lock_expires_at: Optional[datetime]`
@@ -448,7 +448,7 @@ gh pr create --base master --title "feat(platform): #492 add updated_at + Resour
 
 - Resource lock pattern: [Redis SETNX pattern — Redis official docs](https://redis.io/commands/set/)
 - SQLAlchemy `onupdate`: [SQLAlchemyMappedColumn docs — relationship attribute events](https://docs.sqlalchemy.org/en/20/orm/mapped_attributes.html#simple-attribute-reflection)
-- ConflictException: [`pkg/errors/app_exceptions.py`](../../pkg/errors/app_exceptions.py) — existing in this repo
+- ConflictException: [`pkg/errors/app_exceptions.py`](../../../src/pkg/errors/app_exceptions.py) — existing in this repo
 - Subtask parent: #80
 - Dependency: #491 (板块491)
 

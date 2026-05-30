@@ -5,9 +5,9 @@
 | Issue | #577 |
 | 分类 | [50-automation](../README.md#12-分类总览) |
 | 优先级 | 推荐 |
-| 工作量 | 2-3 工作日 |
-| 依赖 | [板块名](../40-ai-agent-framework/0410-add-ai-agent-framework-and-agents.md) |
-| 启用后赋能 | [板块名](../50-automation/0578-add-ai-draft-router-endpoints.md) |
+| 工作t请 |2-3 工作日 |
+| 依赖 | TBD - 待验证：AI Agent 框架文档路径，待确认 #41 板块的真实文件名 |
+| 启用后赋能 | TBD - 待验证：AI Draft路由端点文档路径，待确认后续 #578板块的真实文件名 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -51,8 +51,7 @@ TBD - 待验证：`src/models/` 目录下尚无 `ai_draft.py`；`src/services/` 
   - `src/services/` — 新增 `ai_draft_service.py`（尚不存在）
   - `tests/unit/` — 新增 `test_ai_draft_service.py`
 - 要建：
-  - `src/models/ai_draft.py` — DraftRequest / DraftContext / DraftResponse Pydantic 模型
-  - `src/services/ai_draft_service.py` — AiDraftService，调用 AI Agent 框架
+  - `src/models/ai_draft.py` — DraftRequest / DraftContext / DraftResponse Pydantic 模型 - `src/services/ai_draft_service.py` — AiDraftService，调用 AI Agent 框架
   - `tests/unit/test_ai_draft_service.py` — 单元测试
 
 ### 2.3 缺什么
@@ -71,7 +70,7 @@ TBD - 待验证：`src/models/` 目录下尚无 `ai_draft.py`；`src/services/` 
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/models/ai_draft.py` | DraftRequest / DraftContext / DraftResponse Pydantic 模型 |
 | `src/services/ai_draft_service.py` | AiDraftService，调用 AI Agent 框架生成草稿 |
 | `tests/unit/test_ai_draft_service.py` | AiDraftService 单元测试，mock AI Agent 框架 |

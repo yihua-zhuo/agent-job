@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review act-monitor act-repair seed-user dev-up
+.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review act-monitor act-repair seed-user dev-up app-up
 
 # Create a local virtualenv on demand and use it by default.
 VENV_DIR := .venv
@@ -21,7 +21,7 @@ COMPOSE := docker compose -f configs/docker-compose.test.yml
 # it. The POSIX `VAR=value command` inline form does NOT work in Windows
 # cmd.exe (Make's default shell on Windows), so use Make's per-target export
 # directive — works on Linux, macOS, and Windows without forcing a shell.
-test-integration test-web migrate migrate-new seed-user dev-up: export DATABASE_URL = $(TEST_DB_URL)
+test-integration test-web migrate migrate-new seed-user dev-up app-up: export DATABASE_URL = $(TEST_DB_URL)
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -100,7 +100,7 @@ migrate-new: venv
 
 # ── Dev seeds + one-shot bring-up ──────────────────────────────────────────
 # Idempotent: re-running is safe (the script no-ops when the user exists).
-# Defaults: admin / admin@example.com / admin12345 / role=admin / tenant_id=0.
+# Defaults: admin / admin@example.com / Admin12345 / role=admin / tenant_id=1.
 # Override via env: SEED_USERNAME=... SEED_PASSWORD=... make seed-user
 seed-user: ## Seed a login-capable admin user (idempotent)
 seed-user: venv
@@ -128,7 +128,15 @@ dev-up: db-up
 	@echo
 	@echo "── dev stack ready ──"
 	@echo "DATABASE_URL=$(TEST_DB_URL)"
-	@echo "next: PYTHONPATH=src $(PYTHON) -m uvicorn main:app --reload"
+	@echo "next: make app-up   (or: PYTHONPATH=src $(PYTHON) -m uvicorn main:app --reload)"
+
+APP_LOG := logs/app.log
+
+app-up: ## Run the FastAPI backend with --reload, tee logs to logs/app.log
+app-up: venv
+	@mkdir -p logs
+	@echo "── streaming logs to $(APP_LOG) ──"
+	$(PYTHON) -u -m uvicorn main:app --reload 2>&1 | tee $(APP_LOG)
 
 trigger-fix: venv
 	@if [ -z "$(ISSUE)" ]; then echo "Usage: make trigger-fix ISSUE=123"; exit 1; fi

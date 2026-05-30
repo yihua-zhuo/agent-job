@@ -8,8 +8,8 @@
 | 分类 | 70-platform |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [wire-auth-models-and-services](0538-wire-auth-models-and-services.md) |
-| 启用后赋能 | [rbac](0502-implement-rbac-permission-system.md), [automation](0505-automation-rules-engine.md), 所有受保护 API 路由 |
+| 依赖 | TBD - 待验证：关联 0538-wire-auth-models-and-services.md |
+| 启用后赋能 | TBD - 待验证：关联 0502-implement-rbac-permission-system.md, TBD - 待验证：关联 0505-automation-rules-engine.md, 所有受保护 API 路由 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -341,7 +341,7 @@ gh pr create --base master --title "feat(#539): wire auth middleware for protect
 
 ## 9. 参考
 
-- 同类参考实现：[`src/internal/middleware/fastapi_auth.py`](../../src/internal/middleware/fastapi_auth.php) L{1}-L{95} — `AuthContext` + `require_auth`现有实现
+- 同类参考实现：[`src/internal/middleware/fastapi_auth.py`](../../src/internal/middleware/fastapi_auth.md) L{1}-L{95} — `AuthContext` + `require_auth`现有实现
 - 同类参考实现：[`src/dependencies/auth.py`](../../../src/dependencies/auth.py) L{1}-L{102} — `get_current_user` + `RequireRole` 依赖注入模式
 - 同类参考实现：[`src/api/routers/auth.py`](../../../src/api/routers/auth.py) L{1}-L{30} — `/api/v1/auth/refresh`端点（已有刷新逻辑）
 - 第三方文档：[PyJWT — Validating Claims](https://pyjwt.readthedocs.io/en/stable/api.html#jwt.decode)

@@ -6,8 +6,8 @@
 | 分类 | [50-automation](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.25-0.5 工作日 |
-| 依赖 | [058-服务层抽象基础](../058-add-service-layer-abstractions/README.md)（#658，workflow_log 依赖 WorkflowExecutionModel 存在） |
-| 启用后赋能 | [板块名](../058-add-service-layer-abstractions/README.md)（rule execution log 写入、workflow step 调试） |
+| 依赖 | TBD - 待验证：关联服务层抽象基础板块（#658，workflow_log 依赖 WorkflowExecutionModel 存在） |
+| 启用后赋能 | TBD - 待验证：关联板块名待补充（rule execution log 写入、workflow step 调试） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -69,7 +69,7 @@
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/db/models/workflow_log.py` | WorkflowLogModel + WorkflowLogLevel enum，单表日志模型 |
 | `tests/unit/test_workflow_log.py` | 单元测试：MockRow/MockResult 模拟 CRUD + to_dict 验证 |
 | `alembic/versions/<id>_add_workflow_logs.py` | autogenerate 生成，修订 JSONB/TIMESTAMPTZ 后手动执行 |

@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 2-2.5 工作日 |
-| 依赖 | [0720 - 实现 HMAC 签名与投递](../0720-implement-webhookdeliveryservice-hmac-signing-post-delivery.md) |
+| 依赖 | [0720 - 实现 HMAC 签名与投递](50-automation/0720-implement-webhookdeliveryservice-hmac-signing-post-delivery.md) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -419,3 +419,6 @@ gh pr create --base master --title "feat(#721): background retry scheduler with 
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+```
+
+**修复说明**：将 `../0720-implement-webhookdeliveryservice-hmac-signing-post-delivery.md` 改为 `50-automation/0720-implement-webhookdeliveryservice-hmac-signing-post-delivery.md`。原链接的 `../` 指向 `docs/dev-plan/` 的上一级目录（不存在），而目标文件实际在 `docs/dev-plan/50-automation/` 下，与本板块文档同属一个父目录，直接使用子目录路径即可正确解析。

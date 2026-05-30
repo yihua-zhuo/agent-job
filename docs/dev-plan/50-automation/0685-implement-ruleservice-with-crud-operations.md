@@ -5,8 +5,8 @@
 | 周次 | W13.2 |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [0686-add-post-get-put-delete-automation-rules-router-endpoints](../issues/0686-add-post-get-put-delete-automation-rules-router-endpoints.md) |
-| 启用后赋能 | [0687-build-rule-execution-engine-and-trigger-dispatch](../issues/0687-build-rule-execution-engine-and-trigger-dispatch.md), [0688-add-integration-tests-for-full-rule-lifecycle](../issues/0688-add-integration-tests-for-full-rule-lifecycle.md) |
+| 依赖 | [0686-add-post-get-put-delete-automation-rules-router-endpoints](../50-automation/0108-backend-automation-rules-api-missing-router-and-endpoints.md) |
+| 启用后赋能 | [0687-build-rule-execution-engine-and-trigger-dispatch](../50-automation/0464-build-automation-rules-engine-and-4-preset-rules.md), [0688-add-integration-tests-for-full-rule-lifecycle](../50-automation/0464-build-automation-rules-engine-and-4-preset-rules.md) |
 | 状态 | 📋 待开始 |
 
 ---
@@ -26,7 +26,7 @@ Issue #685 is the service-layer companion to #686 (REST API for automation rules
 
 - [ ] No rule execution logic — that is handled by #687 (`RuleEngine` + trigger dispatch).
 - [ ] No API router — that is handled by #686 (`automation_rules.py` router).
-- [ ] No new ORM models — `AutomationRuleModel` / `AutomationLogModel` are already defined in `src/db/models/automation.py`.
+- [ ] No new ORM models — `AutomationRuleModel` / `AutomationLogModel` are already defined in `src/db/models/automation_rule.py` and `src/db/models/automation_log.py`.
 - [ ] No `.to_dict()` in the service — serialization is router responsibility.
 
 ### 1.4 关键 KPI
@@ -45,7 +45,7 @@ Issue #685 is the service-layer companion to #686 (REST API for automation rules
 
 The ORM layer `AutomationRuleModel` is defined but no dedicated CRUD service exists. The existing `AutomationService` in `src/services/automation_service.py` mixes execution logic with CRUD, and its method signatures differ from what the router (#686) requires. A test handler `make_automation_handler` already exists in `tests/unit/domain_handlers/automation.py` covering INSERT / SELECT / UPDATE / DELETE / COUNT for `automation_rules`.
 
-主入口：[`src/db/models/automation.py`](../../src/db/models/automation.py) L1-L45
+主入口：[`src/db/models/automation_rule.py`](../../../src/db/models/automation_rule.py) L1-L45
 
 ```startLine:1:src/db/models/automation.py
 class AutomationRuleModel(Base):
@@ -342,7 +342,7 @@ async def deactivate_rule(self, rule_id: int, tenant_id: int) -> AutomationRuleM
 操作：
 - a) 新建 `tests/unit/test_automation_rule_service.py`
 - b) `@pytest.fixture mock_db_session`：使用 `make_mock_session([make_automation_handler(state)])`
-- c) `@pytest.fixture automation_rule_service`：返回 `AutomationRuleService(mock_db_session)`
+- c) `@pytest.fixture `：`返回 `AutomationRuleService(mock_db_session)`
 - d) 每个方法写 3 个测试用例（共 21 个）：
   - **成功路径**：正常参数 CRUD 操作，断言返回 ORM 对象，检查字段值
   - **边界**：空 name 输入 → `ValidationException`；无效 trigger_event → `ValidationException`；不存在 ID → `NotFoundException`；分页 `page=2, page_size=5` 边界；`enabled=None` list 无过滤
@@ -433,12 +433,12 @@ git push
 
 ## 9. 参考
 
-- 上游 ORM 模型：[`src/db/models/automation.py`](../../src/db/models/automation.py) L12-L44
+- 上游 ORM 模型：[`src/db/models/automation_rule.py`](../../../src/db/models/automation_rule.py) L12-L44
 - 上游测试 handler：[`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py) L1-L101
 - 姊妹服务参考：[`src/services/customer_service.py`](../../../src/services/customer_service.py) L1-L162（完整 CRUD模式，含 paginated list + tenant_id过滤）
 - 异常定义：[`src/pkg/errors/app_exceptions.py`](../../../src/pkg/errors/app_exceptions.py)
-- Issue #686 router：[`docs/dev-plan/issues/0686-add-post-get-put-delete-automation-rules-router-endpoints.md`](../issues/0686-add-post-get-put-delete-automation-rules-router-endpoints.md)
-- Issue #687 执行引擎：[`docs/dev-plan/issues/0687-build-rule-execution-engine-and-trigger-dispatch.md`](../issues/0687-build-rule-execution-engine-and-trigger-dispatch.md)
+- Issue #686 router：[`docs/dev-plan/50-automation/0108-backend-automation-rules-api-missing-router-and-endpoints.md`](../50-automation/0108-backend-automation-rules-api-missing-router-and-endpoints.md)
+- Issue #687 执行引擎：[`docs/dev-plan/50-automation/0464-build-automation-rules-engine-and-4-preset-rules.md`](../50-automation/0464-build-automation-rules-engine-and-4-preset-rules.md)
 
 ---
 

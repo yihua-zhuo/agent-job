@@ -6,8 +6,8 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [#582](0582-add-score-result-model.md) |
-| 启用后赋能 | [#584](0584-build-score-api-router-with-list-scores-endpoint.md), [#585](0585-add-score-auto-recalculation-trigger-on-customer-data-change.md) |
+| 依赖 | TBD - 待验证：#582 |
+| 启用后赋能 | TBD - 待验证：#584, TBD - 待验证：#585 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -53,9 +53,9 @@ TBD - 待验证：`src/db/models/customer.py` — 现有 CustomerModel 的字段
   - `TBD - 待验证：`src/services/customer_service.py` — 如需添加 cache helpers
   - `TBD - 待验证：`src/api/routers/customers.py` — 如需暴露 score endpoint（实际由 #584 处理）
 - 要建：
-  - [`src/services/score_service.py`](../../src/services/score_service.py) — ScoreService with calculate_score + get_score
-  - [`src/models/score.py`](../../src/models/score.py) — Pydantic schemas: ScoreResult, ScoreTier enum
-  - [`tests/unit/test_score_service.py`](../../tests/unit/test_score_service.py) — Unit tests (MockRow / MockResult / MockState)
+  - [`src/services/score_service.py`](../../../src/services/score_service.py) — ScoreService with calculate_score + get_score
+  - [`src/models/score.py`](../../../src/models/score.py) — Pydantic schemas: ScoreResult, ScoreTier enum
+  - [`tests/unit/test_score_service.py`](../../../tests/unit/test_score_service.py) — Unit tests (MockRow / MockResult / MockState)
   - `TBD - 待验证：`tests/integration/test_score_service_integration.py` — Integration tests
 
 ### 2.3 缺什么
@@ -76,9 +76,9 @@ TBD - 待验证：`src/db/models/customer.py` — 现有 CustomerModel 的字段
 
 | 路径 | 用途 |
 |------|------|
-| [`src/services/score_service.py`](../../src/services/score_service.py) | ScoreService: calculate_score + get_score; static rule engine |
-| [`src/models/score.py`](../../src/models/score.py) | Pydantic schemas: ScoreResult, ScoreTier enum |
-| [`tests/unit/test_score_service.py`](../../tests/unit/test_score_service.py) | Unit tests with MockState / MockRow / MockResult |
+| [`src/services/score_service.py`](../../../src/services/score_service.py) | ScoreService: calculate_score + get_score; static rule engine |
+| [`src/models/score.py`](../../../src/models/score.py) | Pydantic schemas: ScoreResult, ScoreTier enum |
+| [`tests/unit/test_score_service.py`](../../../tests/unit/test_score_service.py) | Unit tests with MockState / MockRow / MockResult |
 | `TBD - 待验证：`tests/integration/test_score_service_integration.py` | Integration tests against real Postgres |
 
 ### 3.2 修改文件
@@ -404,7 +404,7 @@ gh pr create --base master --title "feat(#583): implement ScoreService with stat
 
 - 同类参考实现：TBD - 待验证：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — existing service pattern to follow
 - 第三方文档：[Pydantic docs](https://docs.pydantic.dev/) — ScoreResult schema
-- 父 issue / 关联：#49 (parent epic), #582 (ScoreResult model — dependency), #584 (score API router), #585 (auto-recalculation trigger)
+- 父 issue / 关联：#49 (parent epic), TBD - 待验证：#582 (ScoreResult model — dependency), TBD - 待验证：#584 (score API router), TBD - 待验证：#585 (auto-recalculation trigger)
 
 ---
 
@@ -413,3 +413,9 @@ gh pr create --base master --title "feat(#583): implement ScoreService with stat
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+---
+
+Changes made:
+- **Lines 9–10** (依赖/启用后赋能): `0582-*.md`, `0584-*.md`, `0585-*.md` don't exist — replaced with `TBD - 待验证：#582` etc.
+- **Lines 56, 57, 58, 79, 80, 81**: `../../src/...` → `../../../src/...` (board lives 3 levels deep under `docs/dev-plan/60-analytics/`, not 2). This matches the pattern already used on line 30 (`../../../src/services/customer_service.py`).

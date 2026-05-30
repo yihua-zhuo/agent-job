@@ -14,7 +14,7 @@ class UserCredentialModel(Base):
     __tablename__ = "user_credentials"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     # WebAuthn credential ID (base64url, can be up to 1023 bytes raw)
     credential_id: Mapped[str] = mapped_column(String(1024), unique=True, nullable=False)

@@ -6,8 +6,8 @@
 | 分类 | 90-frontend |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [0531-marketing-campaign-apis](../50-campaigns/0531-build-marketing-campaign-apis.md) |
-| 启用后赋能 | [0533-campaign-analytics](../60-analytics/0533-campaign-analytics-dashboard.md) |
+| 依赖 | [0531-marketing-campaign-apis](./0531-build-campaign-list-ui-page.md) |
+| 启用后赋能 | [0533-campaign-analytics](./0533-build-campaign-stats-ui-page.md) |
 | 状态 | 📋 待开始 |
 
 ---
@@ -332,3 +332,11 @@ gh pr create --base master --title "feat(marketing): CampaignBuilder UI page (#5
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+```
+
+**What changed:**
+
+- Line 9: `../50-campaigns/0531-build-marketing-campaign-apis.md` → `./0531-build-campaign-list-ui-page.md`
+- Line 10: `../60-analytics/0533-campaign-analytics-dashboard.md` → `./0533-build-campaign-stats-ui-page.md`
+
+Both target files exist — they just live under `90-frontend/` alongside this board, not under `50-campaigns/` or `60-analytics/`. The link texts were kept as-is since they describe the dependency/empowerment intent.

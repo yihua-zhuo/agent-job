@@ -6,7 +6,7 @@
 | 分类 | 90-frontend |
 | 优先级 | 推荐 |
 | 工作量 | 3-4 工作日 |
-| 依赖 | [#579 AI Draft API 接口](docs/dev-plan/50-automation/0579-build-ai-draft-api-endpoint.md) |
+| 依赖 | [#579 AI Draft API 接口](docs/dev-plan/50-automation/0577-add-aidraft-pydantic-schemas-and-aidraftservice.md) |
 | 启用后赋能 | 无 — 本组件为最终用户入口，完成后其他模块可直接调用 |
 | 状态 | 📋 待开始 |
 

@@ -10,9 +10,9 @@ Env vars (all optional, defaults are for LOCAL DEV ONLY):
     DATABASE_URL    Required. e.g. ``postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db``
     SEED_USERNAME   default ``admin``
     SEED_EMAIL      default ``admin@example.com``
-    SEED_PASSWORD   default ``admin12345``  (must meet UserService validator)
+    SEED_PASSWORD   default ``Admin12345``  (must meet UserService validator)
     SEED_ROLE       default ``admin``
-    SEED_TENANT_ID  default ``0``
+    SEED_TENANT_ID  default ``1``
 
 Designed to be invoked from the Makefile after ``db-up`` + ``migrate``.
 """
@@ -44,9 +44,9 @@ async def main() -> int:
 
     username = env("SEED_USERNAME", "admin")
     email = env("SEED_EMAIL", "admin@example.com")
-    password = env("SEED_PASSWORD", "admin12345")
+    password = env("SEED_PASSWORD", "Admin12345")
     role = env("SEED_ROLE", "admin")
-    tenant_id = int(env("SEED_TENANT_ID", "0"))
+    tenant_id = int(env("SEED_TENANT_ID", "1"))
 
     # AuthService requires a non-empty secret. The seed script doesn't issue
     # any tokens — it only needs the constructor to succeed — so pass a

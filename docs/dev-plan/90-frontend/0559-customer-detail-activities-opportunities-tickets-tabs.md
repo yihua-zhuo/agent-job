@@ -6,7 +6,7 @@
 | 分类 | 90-frontend |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [Customer Detail — Overview Tab #558](../50-automation/0558-customer-detail-overview-tab.md) |
+| 依赖 | [Customer Detail — Overview Tab #558](../90-frontend/0558-customer-detail-page-header-and-overview-tab-customers-id.md) |
 | 启用后赋能 | [Customer Detail — Full Page #53](../README.md#53) |
 | 状态 | 📋 待开始 |
 
@@ -519,3 +519,6 @@ gh pr create --base master --title "feat(frontend): Customer Detail — Activiti
 
 - 同类参考实现：TBD - 待验证：`src/pages/` 下已有 list page（如 opportunities list）的实现，作为 tab 内表格/列表渲染的参考
 - 父 issue / 关联：#53 (Customer Detail — Full Page), #558 (Customer Detail — Overview Tab)
+```
+
+**One fix applied:** Line 9 changed from `../50-automation/0558-customer-detail-overview-tab.md` → `../90-frontend/0558-customer-detail-page-header-and-overview-tab-customers-id.md` — the file lives in `90-frontend/`, not `50-automation/`.

@@ -6,7 +6,7 @@
 | 分类 | 99-misc |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [Add ChatService abstraction #614](../99-misc/0614-add-chatservice-abstraction.md) |
+| 依赖 | [Add ChatService abstraction #614](./0614-add-chatservice-with-intent-classification-and-db-query-help.md) |
 | 启用后赋能 | 父 issue #43 AI Chat Assistant 功能 |
 | 状态 | 📋 待开始 |
 
@@ -157,7 +157,7 @@ Issue #43 的父 issue 要求提供 AI 对话功能。当前的 `src/api/routers
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/api/routers/ai_chat.py` | 新路由：POST /ai/chat（一步完成聊天）和 GET /ai/sessions（分页会话列表） |
 | `tests/unit/test_ai_chat_router.py` | 单元测试：验证端点响应格式、错误处理、auth 校验 |
 | `tests/integration/test_ai_chat_integration.py` | 集成测试：真实 DB 场景，验证 router 与 service 联动 |

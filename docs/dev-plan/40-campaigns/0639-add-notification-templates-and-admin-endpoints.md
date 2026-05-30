@@ -82,7 +82,7 @@ async def send_notification(
 
 - 要改：
   - [`src/services/notification_service.py`](../../../src/services/notification_service.py) — 添加 `send_from_template()` 方法（含占位符替换逻辑）
-  - [`src/db/models/notification_template.py`](../../src/db/models/notification_template.py) — 新增 `vars: Mapped[dict | None]` JSONB 列
+  - [`src/db/models/notification_template.py`](../../../src/db/models/notification_template.py) — 新增 `vars: Mapped[dict | None]` JSONB 列
   - [`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) — 如需在 notifications_router 中注册 admin 子路由（按项目路由结构决定）
 - 要建：
   - `src/api/routers/admin_notifications.py` — admin 通知管理路由（logs 列表 + templates CRUD）
@@ -106,7 +106,7 @@ async def send_notification(
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/api/routers/admin_notifications.py` | Admin 通知管理路由，含 logs 列表和 templates CRUD |
 | `alembic/versions/<id>_add_vars_to_notification_templates.py` | 迁移：在 `notification_templates` 表添加 `vars` JSONB 列 |
 | `tests/unit/test_admin_notifications.py` | Admin 路由单元测试（mock service，验证端点行为） |
@@ -117,7 +117,7 @@ async def send_notification(
 | 路径 | 改动要点 |
 |------|---------|
 | [`src/services/notification_service.py`](../../../src/services/notification_service.py) | 新增 `send_from_template()` 方法；新增 `get_templates()`、`create_template()`、`delete_template()` |
-| [`src/db/models/notification_template.py`](../../src/db/models/notification_template.py) | 新增 `vars: Mapped[dict | None]` JSONB 列，升级 `to_dict()` 输出 vars 字段 |
+| [`src/db/models/notification_template.py`](../../../src/db/models/notification_template.py) | 新增 `vars: Mapped[dict | None]` JSONB 列，升级 `to_dict()` 输出 vars 字段 |
 | [`src/main.py`](../../../src/main.py) | 注册 `admin_notifications_router`（挂载至 `/admin` 路径） |
 
 ### 3.3 新增能力
@@ -664,7 +664,7 @@ gh pr create --base master --title "feat(40-campaigns): add notification templat
 ## 9. 参考
 
 - 同类参考实现：[`src/services/notification_service.py`](../../../src/services/notification_service.py) — 本板块修改的基线文件
-- 同类参考实现：[`src/db/models/notification_template.py`](../../src/db/models/notification_template.py) — #662 的 NotificationTemplateModel，本板块在其上扩展 `vars` 字段
+- 同类参考实现：[`src/db/models/notification_template.py`](../../../src/db/models/notification_template.py) — #662 的 NotificationTemplateModel，本板块在其上扩展 `vars` 字段
 - 同类参考实现：[`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) — 现有 notifications 路由，本板块 admin 路由参照其 `_paginated_dicts` 工具函数风格
 - 同类参考实现：[`src/api/routers/rbac.py`](../../../src/api/routers/rbac.py) — admin 路由注册方式参考
 - 第三方文档：[SQLAlchemy JSONB column type](https://docs.sqlalchemy.org/en/20/core/type_basics.html#sqlalchemy.types.JSON) — JSONB 与 JSON 的区别
@@ -677,3 +677,7 @@ gh pr create --base master --title "feat(40-campaigns): add notification templat
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+
+---
+
+**What changed:** All three occurrences of `../../src/db/models/notification_template.py` were corrected to `../../../src/db/models/notification_template.py`. The document lives in `docs/dev-plan/<category>/`, so three `../` are needed to reach the project root (not two). All other links in the file already use the correct `../../../src/` pattern, confirming this was the right fix.

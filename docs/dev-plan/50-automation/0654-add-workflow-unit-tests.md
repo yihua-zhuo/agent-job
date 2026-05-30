@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 推荐 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0653-add-workflow-service](../0653-add-workflow-service.md) |
+| 依赖 | [0653-add-workflow-api-router-endpoints](../0653-add-workflow-api-router-endpoints.md) |
 | 启用后赋能 | 0657-add-workflow-router, 0658-add-workflow-integration-tests |
 | 状态 | 📋 待开始 |
 
@@ -83,7 +83,7 @@ class WorkflowService:
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|-------|
 | `tests/unit/domain_handlers/workflow.py` | workflow 表的 mock SQL handler：INSERT/SELECT/UPDATE/DELETE/COUNT |
 | `tests/unit/test_workflow.py` | `WorkflowService` 全方法单元测试（mock session） |
 

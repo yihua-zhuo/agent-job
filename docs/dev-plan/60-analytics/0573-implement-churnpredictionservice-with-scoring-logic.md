@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
 | 依赖 | [0671-build-rule-based-churn-scoring-service-as-fallback](0671-build-rule-based-churn-scoring-service-as-fallback.md), [0670-add-churnprediction-orm-model-and-migration](0670-add-churnprediction-orm-model-and-migration.md) |
-| 启用后赋能 | [0672-add-churn-prediction-api-endpoints](0672-add-churn-prediction-api-endpoints.md), [0673-add-churn-risk-to-customer-response-schema](0673-add-churn-risk-to-customer-response-schema.md), [0674-wire-early-warning-alert-on-score-threshold](0674-wire-early-warning-alert-on-score-threshold.md) |
+| 启用后赋能 | [0672-add-churn-prediction-api-endpoints](0672-add-churn-prediction-api-endpoints.md), [0673-add-churn-risk-to-customer-response-schema](../10-customers/0673-add-churn-risk-to-customer-response-schema.md), [0674-wire-early-warning-alert-on-score-threshold](0674-wire-early-warning-alert-on-score-threshold.md) |
 | 状态 | 📋 待开始 |
 
 ---
@@ -514,7 +514,7 @@ gh pr create --base master --title "feat(#573): implement ChurnPredictionService
 - 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service类的 `__init__(session: AsyncSession)`签名规范
 - 父 issue / 关联：#51（CRM Analytics 功能集）
 - 依赖板块：[0671](0671-build-rule-based-churn-scoring-service-as-fallback.md)（rule-based scoring service 结构参考）、[0670](0670-add-churnprediction-orm-model-and-migration.md)（ORM model 参考）
-- 启用后赋能：[0672](0672-add-churn-prediction-api-endpoints.md)（API router 依赖本板块 service）、[0673](0673-add-churn-risk-to-customer-response-schema.md)、[0674](0674-wire-early-warning-alert-on-score-threshold.md)
+- 启用后赋能：[0672](0672-add-churn-prediction-api-endpoints.md)（API router 依赖本板块 service）、[0673](../10-customers/0673-add-churn-risk-to-customer-response-schema.md)、[0674](0674-wire-early-warning-alert-on-score-threshold.md)
 
 ---
 

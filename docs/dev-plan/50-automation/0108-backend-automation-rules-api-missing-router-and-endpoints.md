@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [前端 Automation 页面](../40-campaigns/0065-automation-feature-plan.md) |
+| 启用后赋能 | TBD - 待验证：前端 Automation 页面（关联 issue #65） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -76,7 +76,7 @@ N/A — 新建模块。当前代码库中不存在 `AutomationService`、`Automa
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/db/models/automation_rule.py` | `AutomationRule` ORM model（tenant_id、name、rule_type、status、conditions、actions 等列） |
 | `src/services/automation_service.py` | `AutomationService` 含 list/create/get/update/delete/toggle 六个 async 方法 |
 | `src/api/routers/automation_router.py` | `AutomationRouter` 含六个 `/api/v1/automation/rules` endpoint |
@@ -559,8 +559,8 @@ gh pr create --base master --title "feat(automation): add AutomationRules API ro
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service 模式参考（constructor + raise 风格）
-- 同类参考实现：[`src/api/routers/customer_router.py`](../../src/api/routers/customer_router.py) — router 模式参考（router 注册 + 响应封装）
+- 同类参考实现：`src/services/customer_service.py` — service 模式参考（constructor + raise 风格）
+- 同类参考实现：TBD - 待验证：`src/api/routers/customer_router.py` — router 模式参考（router 注册 + 响应封装）
 - 父 issue / 关联：#65（前端 Automation 页面依赖本后端 API）
 
 ---

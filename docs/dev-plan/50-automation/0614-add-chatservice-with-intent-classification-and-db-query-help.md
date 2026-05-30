@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [Issue #613](613-add-chat-router-and-session-history-endpoint.md) |
+| 启用后赋能 | TBD - 待验证：Issue #613 的文件路径（chat-router + session-history 端点） |
 | 状态 | 📋 待开始 |
 
 ---

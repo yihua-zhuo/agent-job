@@ -6,8 +6,8 @@
 | 分类 | [99-misc](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [0485-add-missing-activityservice-methods](0485-add-missing-activityservice-methods.md), [0486-add-activityservice-unit-tests](0486-add-missing-activityservice-unit-tests.md), [0487-add-missing-activityservice-integration-tests](0487-add-missing-activityservice-integration-tests.md) |
-| 启用后赋能 | [0474-implement-customer-model-and-customer-service](0474-implement-customer-model-and-customer-service.md), [0475-implement-dataisolationservice-and-isolation-integration-tests](0475-implement-dataisolationservice-and-isolation-integration-tests.md) |
+| 依赖 | TBD - 待验证：0485-add-missing-activityservice-methods（关联文档路径待确认）, TBD - 待验证：0486-add-activityservice-unit-tests（关联文档路径待确认）, TBD - 待验证：0487-add-missing-activityservice-integration-tests（关联文档路径待确认） |
+| 启用后赋能 | TBD - 待验证：0474-implement-customer-model-and-customer-service（关联文档路径待确认）, TBD - 待验证：0475-implement-dataisolationservice-and-isolation-integration-tests（自链接，当前文档） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -427,3 +427,9 @@ gh pr create --base master --title "feat(#475): implement DataIsolationService a
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+```
+
+**修复说明**：所有 5 个断链均无法从文档内容或项目结构中推导出正确路径，因此全部替换为 `TBD - 待验证：<原链接名>（关联文档路径待确认）`：
+- 0485/0486/0487 → `activityservice` 相关（路径未知）
+- 0474 → `customer-model-and-customer-service`（路径未知）
+- 0475（自链接）→ `当前文档`

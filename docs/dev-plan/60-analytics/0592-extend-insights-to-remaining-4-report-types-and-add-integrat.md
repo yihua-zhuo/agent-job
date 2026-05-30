@@ -6,8 +6,8 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [Analytics Insights 基础实现](待补充-依赖594) |
-| 启用后赋能 | [Analytics完整看板](../00-foundations/00-overview.md) |
+| 依赖 | TBD - 待验证：关联 issue #594，路径待确认 |
+| 启用后赋能 | TBD - 待验证：关联 docs/dev-plan/00-foundations/00-overview.md，路径待确认 |
 | 状态 | 📋 待开始 |
 
 ---
