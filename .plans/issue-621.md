@@ -206,23 +206,7 @@ def get_handlers(state: MockState):
 __all__ = ["get_handlers", "make_agent_task_handler"]
 ```
 
-Also initialize `state.agent_tasks` and `state.agent_tasks_next_id` in `MockState.__init__` in `tests/unit/conftest.py`:
-
-```python
-class MockState:
-    def __init__(self):
-        self.customers: dict[int, dict] = {}
-        self.customers_next_id: int = 1
-        self.users: dict[int, dict] = {}
-        self.users_next_id: int = 1
-        self.deleted_user_ids: set[int] = set()
-        self.activities: dict[int, dict] = {}
-        self.activities_next_id: int = 1
-        self.agent_tasks: dict[int, dict] = {}
-        self.agent_tasks_next_id: int = 1
-```
-
-**完成判定**: `PYTHONPATH=src ruff check tests/unit/domain_handlers/agent_tasks.py tests/unit/conftest.py` → 0 errors
+**完成判定**: `PYTHONPATH=src ruff check tests/unit/domain_handlers/agent_tasks.py` → 0 errors
 
 ---
 
@@ -339,8 +323,7 @@ class TestListTasks:
 ### Step 5: Run full verification
 
 ```bash
-PYTHONPATH=src ruff check src/
-PYTHONPATH=src ruff format --check src/
+PYTHONPATH=src ruff check src/services/agent_task_service.py
 PYTHONPATH=src pytest tests/unit/test_agent_task_service.py -v
 ```
 

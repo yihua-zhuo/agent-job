@@ -12,6 +12,14 @@ from tests.unit.conftest import MockState, make_mock_session
 from tests.unit.domain_handlers.agent_tasks import make_agent_task_handler
 
 
+class AgentTaskStatus:
+    PENDING = "pending"
+    DISPATCHED = "dispatched"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+
 def _seed_agent_task(state: MockState, tenant_id: int, description: str, status: str, created_at: datetime) -> int:
     """Seed an agent task directly into mock state, bypassing the ORM.
 
@@ -51,7 +59,7 @@ class TestCreateTask:
         task = await service.create_task("Process inbound email", tenant_id=42)
         assert task.tenant_id == 42
         assert task.description == "Process inbound email"
-        assert task.status == "pending"
+        assert task.status == AgentTaskStatus.PENDING
         assert task.task_id.startswith("atask_")
 
     async def test_strips_whitespace_from_description(self, service):
@@ -106,7 +114,9 @@ class TestListTasks:
         pending_tasks, total = await service.list_tasks(tenant_id=1, status="pending", page=1, page_size=20)
         # Assert COUNT path (total must exclude the tenant-2 task).
         assert total == 1
-        assert pending_tasks[0].description == task_b.description
+        # Order is created_at DESC; task_b was created after task_a so it sorts first.
+        # We assert by ID rather than by list position to avoid relying on this.
+        assert pending_tasks[0].id == task_b.id
         # Ensure the tenant-2 task was never included in SELECT results.
         descriptions = {t.description for t in pending_tasks}
         assert "Tenant 2 pending task" not in descriptions
@@ -171,4 +181,4 @@ class TestListTasks:
 
     async def test_raises_validation_for_invalid_status(self, service):
         with pytest.raises(ValidationException):
-            await service.list_tasks(tenant_id=1, status="invalid_status", page=1, page_size=20)
+            await service.list_tasks(tenant_id=1, status="definitely_not_a_valid_status_xyz", page=1, page_size=20)

@@ -36,8 +36,16 @@ def upgrade() -> None:
         ["tenant_id"],
         unique=False,
     )
+    op.create_foreign_key(
+        "fk_workflow_executions_tenant_id",
+        "workflow_executions",
+        "tenants",
+        ["tenant_id"],
+        ["id"],
+    )
 
 
 def downgrade() -> None:
+    op.drop_constraint("fk_workflow_executions_tenant_id", "workflow_executions", type_="foreignkey")
     op.drop_index(op.f("ix_workflow_executions_tenant_id"), table_name="workflow_executions")
     op.drop_column("workflow_executions", "tenant_id")

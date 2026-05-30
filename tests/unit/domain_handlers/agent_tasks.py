@@ -1,4 +1,12 @@
-"""Agent task SQL handlers for unit tests."""
+"""Agent task SQL handlers for unit tests.
+
+.. note::
+    Stateful handlers (those that mutate ``MockState``) are not safe for
+    parallel test execution.  All tests using this handler share a single
+    ``MockState`` instance per test session, so tests must run serially
+    (the project's pytest configuration already disables parallel execution
+    by default).
+"""
 
 from __future__ import annotations
 
