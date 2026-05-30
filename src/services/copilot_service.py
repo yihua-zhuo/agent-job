@@ -12,7 +12,6 @@ from db.models.customer import CustomerModel
 from db.models.opportunity import OpportunityModel
 from internal.ai_gateway import AIChatGateway, AIResponse
 from pkg.errors.app_exceptions import NotFoundException
-from services.churn_prediction import ChurnPredictionService
 
 
 class CopilotService:
@@ -185,6 +184,7 @@ class CopilotService:
             return await self._get_recent_activities(tenant_id, customer_id)
 
         async def get_churn_risk_handler(tenant_id: int, customer_id: int):
+            from services.churn_prediction import ChurnPredictionService
             return await ChurnPredictionService(self.session).get_churn_prediction(customer_id, tenant_id)
 
         return {
@@ -269,4 +269,7 @@ class CopilotService:
             AIResponse with reply, optional suggestions, and optional actions.
         """
         gateway = AIChatGateway()
-        return await asyncio.wait_for(gateway.chat(messages), timeout=30)
+        try:
+            return await asyncio.wait_for(gateway.chat(messages), timeout=30)
+        except TimeoutError as e:
+            raise type(e)("AI gateway did not respond within 30 seconds") from None

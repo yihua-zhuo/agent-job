@@ -4,66 +4,9 @@ from __future__ import annotations
 
 import pytest
 
+from tests.integration.domain_fixtures.copilot import seed_conversation, seed_message, seed_user
+
 pytestmark = pytest.mark.integration
-
-
-async def _seed_conversation(async_session, tenant_id: int, user_id: int):
-    """Seed a conversation record and return the ORM object."""
-    from db.models.conversation import ConversationModel
-
-    conv = ConversationModel(
-        tenant_id=tenant_id,
-        user_id=user_id,
-        channel="copilot",
-    )
-    async_session.add(conv)
-    await async_session.flush()
-    return conv
-
-
-async def _seed_message(
-    async_session,
-    conversation_id: int,
-    tenant_id: int,
-    role: str,
-    content: str,
-):
-    """Seed a single conversation message and return the ORM object."""
-    from db.models.conversation_message import ConversationMessageModel
-
-    msg = ConversationMessageModel(
-        conversation_id=conversation_id,
-        tenant_id=tenant_id,
-        role=role,
-        content=content,
-    )
-    async_session.add(msg)
-    await async_session.flush()
-    return msg
-
-
-async def _seed_user(async_session, tenant_id: int, user_id: int):
-    """Seed a user record so chat endpoint does not violate FK constraints.
-
-    Uses INSERT ... ON CONFLICT DO NOTHING so that users created by earlier
-    fixtures (e.g. auth_headers_tenant_2, which runs in the same test function
-    before _seed_user) do not cause a unique-violation error on flush().
-    """
-    from sqlalchemy.dialects.postgresql import insert
-
-    from db.models.user import UserModel
-
-    stmt = insert(UserModel).values(
-        id=user_id,
-        tenant_id=tenant_id,
-        username=f"testuser_{user_id}",
-        email=f"testuser_{user_id}@example.com",
-        password_hash="dummy_hash",
-        role="admin",
-        status="active",
-    ).on_conflict_do_nothing(index_elements=["id"])
-    await async_session.execute(stmt)
-    await async_session.flush()
 
 
 # Stable user IDs used for copilot integration tests.
@@ -87,7 +30,7 @@ class TestCopilotIntegration:
         user = result.scalar_one_or_none()
         if user is None:
             user_id = 999
-            await _seed_user(async_session, tenant_id_web, user_id)
+            await seed_user(async_session, tenant_id_web, user_id)
         else:
             user_id = user.id
             # Expire so subsequent ops hit fresh state.
@@ -104,9 +47,9 @@ class TestCopilotIntegration:
     async def test_history_integration(self, db_schema, async_session, api_client, tenant_id_web: int):
         """GET /copilot/{conv_id}/history returns {"success": True, "messages": [...], "total": N}}."""
         # Use tenant_id_web so seeded data matches the JWT-authenticated tenant.
-        conv = await _seed_conversation(async_session, tenant_id_web, user_id=1)
-        await _seed_message(async_session, conv.id, tenant_id_web, "user", "Hello!")
-        await _seed_message(async_session, conv.id, tenant_id_web, "assistant", "Hi there!")
+        conv = await seed_conversation(async_session, tenant_id_web, user_id=1)
+        await seed_message(async_session, conv.id, tenant_id_web, "user", "Hello!")
+        await seed_message(async_session, conv.id, tenant_id_web, "assistant", "Hi there!")
         await async_session.commit()
 
         response = await api_client.get(f"/copilot/{conv.id}/history")
@@ -125,9 +68,9 @@ class TestCopilotIntegration:
 
     async def test_history_caps_at_20(self, db_schema, async_session, api_client, tenant_id_web: int):
         """History endpoint returns at most 20 messages even when more are seeded."""
-        conv = await _seed_conversation(async_session, tenant_id_web, user_id=1)
+        conv = await seed_conversation(async_session, tenant_id_web, user_id=1)
         for i in range(25):
-            await _seed_message(async_session, conv.id, tenant_id_web, "user", f"Message {i}")
+            await seed_message(async_session, conv.id, tenant_id_web, "user", f"Message {i}")
         await async_session.commit()
 
         response = await api_client.get(f"/copilot/{conv.id}/history")
@@ -148,13 +91,14 @@ class TestCopilotIntegration:
     ):
         """A second tenant gets its own conversation, not the first tenant's."""
         # Seed distinct user IDs per tenant to avoid primary-key collision.
-        await _seed_user(async_session, tenant_id_web, _TENANT_1_USER_ID)
-        await _seed_user(async_session, tenant_id_2_web, 999)  # matches JWT user_id in auth_headers_tenant_2
+        await seed_user(async_session, tenant_id_web, _TENANT_1_USER_ID)
+        # tenant_id_2_web matches JWT user_id=_TENANT_1_USER_ID (999) in auth_headers_tenant_2.
+        await seed_user(async_session, tenant_id_2_web, _TENANT_1_USER_ID)
         await async_session.commit()
 
         # Create a conversation in tenant 1 so there IS something to find.
-        conv_tenant_1 = await _seed_conversation(async_session, tenant_id_web, _TENANT_1_USER_ID)
-        await _seed_message(async_session, conv_tenant_1.id, tenant_id_web, "user", "Tenant 1 message")
+        conv_tenant_1 = await seed_conversation(async_session, tenant_id_web, _TENANT_1_USER_ID)
+        await seed_message(async_session, conv_tenant_1.id, tenant_id_web, "user", "Tenant 1 message")
         await async_session.commit()
 
         # Chat as tenant 2 — should get its own new conversation, not tenant 1's.
@@ -178,7 +122,7 @@ class TestCopilotIntegration:
             select(ConversationModel.id).where(
                 and_(
                     ConversationModel.tenant_id == tenant_id_2_web,
-                    ConversationModel.user_id == 999,
+                    ConversationModel.user_id == _TENANT_1_USER_ID,
                 )
             )
         )

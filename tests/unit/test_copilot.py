@@ -13,7 +13,6 @@ from internal.middleware.fastapi_auth import AuthContext, require_auth
 from main import app
 from pkg.errors.app_exceptions import NotFoundException
 
-
 # ------------------------------------------------------------------
 # Module-scoped auth/DB override fixture
 # ------------------------------------------------------------------
@@ -102,16 +101,21 @@ class TestCopilotRouter:
 
     @pytest.mark.asyncio
     async def test_chat_invoke_ai_error_propagates(self):
-        """CopilotService.chat raising an exception is not caught by the router."""
+        """CopilotService.chat raising a RuntimeError results in a 500 response."""
         from services.copilot_service import CopilotService
 
         with patch.object(CopilotService, "chat", new_callable=AsyncMock) as mock_chat:
             mock_chat.side_effect = RuntimeError("AI gateway unavailable")
 
-            transport = ASGITransport(app=app)
+            # raise_app_exceptions=False lets the generic 500 handler in main.py
+            # convert the RuntimeError into a JSON response instead of re-raising.
+            transport = ASGITransport(app=app, raise_app_exceptions=False)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                with pytest.raises(RuntimeError, match="AI gateway unavailable"):
-                    await ac.post("/copilot/chat?message=hello")
+                response = await ac.post("/copilot/chat?message=hello")
+
+        assert response.status_code == 500
+        body = response.json()
+        assert "Internal server error" in body.get("message", "")
 
     @pytest.mark.asyncio
     async def test_chat_missing_auth_returns_401(self):
@@ -224,7 +228,6 @@ class TestCopilotRouter:
     @pytest.mark.asyncio
     async def test_history_unknown_conversation_returns_404(self):
         """GET /copilot/999/history returns 404 when the conversation does not exist."""
-        from pkg.errors.app_exceptions import NotFoundException
         from services.copilot_service import CopilotService
 
         with patch.object(CopilotService, "get_conversation", new_callable=AsyncMock) as mock_get_conv:
