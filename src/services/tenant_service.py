@@ -128,7 +128,7 @@ class TenantService:
         items = [self._to_dict(t) for t in result.scalars().all()]
         return items, total
 
-    async def get_tenant_stats(self, tenant_id: int = 0) -> dict:
+    async def get_tenant_stats(self, tenant_id: int) -> dict:
         await self._fetch_tenant(tenant_id, 0)
         user_count_result = await self.session.execute(
             select(func.count(UserModel.id)).where(UserModel.tenant_id == tenant_id)

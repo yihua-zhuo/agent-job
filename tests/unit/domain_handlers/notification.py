@@ -7,10 +7,9 @@ from typing import Any
 
 from tests.unit.conftest import MockResult, MockRow
 
-# SQLAlchemy bind parameter name for the notification params JSON column.
-# Matches SQLAlchemy's bind-name generation for the `payload_params` mapped attribute
-# (maps Python attr "payload_params" → DB column "params_" → bind name "payload_params_").
-_NOTIFICATION_PARAMS_KEY = "payload_params_"
+# SQLAlchemy uses the Python attribute name as the bind parameter name for the
+# mapped `payload_params` attribute (which maps to DB column `params_`).
+_NOTIFICATION_PARAMS_KEY = "payload_params"
 
 
 def _notification_to_row(n: dict):
@@ -91,9 +90,9 @@ def make_notification_handler(state):
         sql_text_lower = sql_text.lower()
 
         if "insert into notifications" in sql_text_lower:
-            # No enforcement needed — the service sets payload_params as an ORM
-            # attribute, not as a raw SQL bind parameter; params_ is populated by
-            # SQLAlchemy's ORM machinery, not directly from the SQL bind dict.
+            # The service sets payload_params as an ORM attribute; SQLAlchemy uses
+            # the Python attribute name "payload_params" as the bind key.
+            # params_ is the DB column name; the ORM populates it internally.
             nid = state._notifications_next_id
             state._notifications_next_id += 1
             n = {
@@ -225,15 +224,16 @@ def make_reminder_handler(state):
             return MockResult([], rowcount=0)
 
         if "from reminders" in sql_text_lower and "count" not in sql_text_lower:
-            if "tenant_id" not in params or "user_id" not in params:
-                return None
+            assert "user_id" in params and "tenant_id" in params, (
+                f"list-reminders must bind user_id and tenant_id (got keys: {list(params.keys())})"
+            )
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             # is_completed_filter comes from params (set by the service via upcoming_only).
             # When is_completed is in params, the caller wants completed reminders included
             # (upcoming_only=False). absent means upcoming-only mode (upcoming_only=True).
             is_completed_filter = params.get("is_completed")
-            now = datetime.now(UTC)
+            now = params.get("_now", datetime.now(UTC))
             upcoming_only = "is_completed" in params
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)

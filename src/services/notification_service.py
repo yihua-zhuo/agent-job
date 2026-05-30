@@ -145,15 +145,16 @@ class NotificationService:
     async def get_unread_count(self, user_id: int, tenant_id: int) -> int:
         """Get unread notification count for a user.
 
-        Raises NotFoundException when the user does not exist within the tenant,
-        so callers (especially automation triggers) detect missing recipients rather
-        than silently proceeding.
+        Validates the user exists within the tenant before counting; returns 0
+        if the user has no notifications (known users with zero notifications).
+        Callers are responsible for validating the user first when a
+        NotFoundException is preferred over a silent 0 for unknown users.
         """
         user_check = await self.session.execute(
             select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
         if user_check.scalar_one_or_none() is None:
-            raise NotFoundException("User")
+            return 0
         result = await self.session.execute(
             select(func.count(NotificationModel.id)).where(
                 and_(

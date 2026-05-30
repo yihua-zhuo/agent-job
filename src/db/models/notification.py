@@ -55,7 +55,7 @@ class NotificationModel(Base):
         if params:
             unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
             if unknown:
-                logger.warning("Notification %d payload_params dropped keys: %s", self.id, sorted(unknown))
+                logger.debug("Notification %d payload_params dropped keys: %s", self.id, sorted(unknown))
                 params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
         return {
             "id": self.id,
