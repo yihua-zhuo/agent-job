@@ -63,8 +63,6 @@ def clear() -> None:
     _tenant_id_var.set(None)
 ```
 
-**完成判定**: `ruff check src/internal/middleware/tenant_context.py` → 0 errors
-
 ### Step 2: Update `src/internal/middleware/__init__.py`
 
 The file already exists as a package marker (`"""空文件，用于 Python 包标识"""`). Overwrite it to add the three re-exports:
@@ -74,8 +72,6 @@ from .tenant_context import clear, get_tenant_id, set_tenant_id
 
 __all__ = ["clear", "get_tenant_id", "set_tenant_id"]
 ```
-
-**完成判定**: `ruff check src/internal/middleware/__init__.py` → 0 errors
 
 ### Step 3: Create `tests/unit/test_tenant_context.py`
 
@@ -116,8 +112,6 @@ class TestTenantContext:
         clear()
 ```
 
-**完成判定**: `PYTHONPATH=src pytest tests/unit/test_tenant_context.py -v` → `3 passed`
-
 ### Step 4: Lint + format verification
 
 Run both ruff check and format check on the two new files, then on the whole `src/` tree to confirm nothing regressed:
@@ -129,8 +123,6 @@ ruff check src/
 ```
 
 Fix any reported issues.
-
-**完成判定**: all three commands exit 0
 
 ## Test Plan
 
