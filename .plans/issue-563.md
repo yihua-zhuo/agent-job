@@ -39,23 +39,18 @@ import {
   getCoreRowModel,
   getFilteredRowModel,
   getSortedRowModel,
-  flexRender,
   ColumnDef,
-  FilterFn,
   SortingState,
 } from "@tanstack/react-table";
-
-// Case-insensitive substring filter (TanStack Table v8 built-in filter)
-const includesString: FilterFn<unknown> = (row, columnId, filterValue: string) => {
-  const value = row.getValue<string>(columnId);
-  return value?.toString().toLowerCase().includes(filterValue.toLowerCase()) ?? false;
-};
-includesString.autoRemove = (val: string) => !val;
 
 export interface UseTableStateOptions<TData> {
   data: TData[];
   columns: ColumnDef<TData, unknown>[];
-  /** Column ids that the globalFilter applies to; empty = filter all string columns */
+  /**
+   * Restricts global filtering to the given column ids.
+   * When empty/undefined, global filtering applies to all columns
+   * (TanStack Table v8 uses `'includesString'` by default).
+   */
   searchableKeys?: string[];
 }
 
@@ -67,17 +62,20 @@ export function useTableState<TData>({
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  const table = useReactTable({
+  const table = useReactTable<TData>({
     data,
     columns,
     state: { globalFilter, sorting },
     onGlobalFilterChange: setGlobalFilter,
     onSortingChange: setSorting,
-    globalFilterFn: includesString,
+    globalFilterFn: "includesString",
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getCoreRowModel: getCoreRowModel(),
-    enableGlobalFilter: searchableKeys.length > 0,
+    getColumnCanGlobalFilter: (column) => {
+      if (searchableKeys.length === 0) return true;
+      return column.id !== null && (searchableKeys as string[]).includes(column.id);
+    },
   });
 
   return { table, globalFilter, setGlobalFilter, sorting };
