@@ -9,7 +9,7 @@ from tests.unit.conftest import MockResult, MockRow
 
 # SQLAlchemy uses the Python attribute name as the bind parameter name for the
 # mapped `payload_params` attribute (which maps to DB column `params_`).
-_NOTIFICATION_PARAMS_KEY = "payload_params"
+_NOTIFICATION_PARAMS_KEY = "params_"
 
 
 def _notification_to_row(n: dict):
@@ -26,23 +26,6 @@ def _notification_to_row(n: dict):
             "created_at": n.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC),
             "delivered_at": n.get("delivered_at"),
             "read_at": n.get("read_at"),
-        }
-    )
-
-
-def _reminder_to_row(r: dict):
-    return MockRow(
-        {
-            "id": r.get("id"),
-            "tenant_id": r.get("tenant_id"),
-            "user_id": r.get("user_id"),
-            "title": r.get("title"),
-            "content": r.get("content"),
-            "remind_at": r.get("remind_at"),
-            "related_type": r.get("related_type"),
-            "related_id": r.get("related_id"),
-            "is_completed": r.get("is_completed", False),
-            "created_at": r.get("created_at"),
         }
     )
 

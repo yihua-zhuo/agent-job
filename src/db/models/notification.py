@@ -3,7 +3,7 @@
 import logging
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, and_, func, text
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, and_, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,8 +26,8 @@ class NotificationModel(Base):
             "user_id",
             "tenant_id",
             postgresql_where=and_(
-                text("channel = 'in_app'"),
-                text("read_at IS NULL"),
+                Column("channel") == "in_app",
+                Column("read_at").is_(None),
             ),
         ),
     )

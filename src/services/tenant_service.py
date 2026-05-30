@@ -117,6 +117,9 @@ class TenantService:
         conditions = [TenantModel.status != "deleted"]
         if status:
             conditions = [TenantModel.status == status]
+        # Rule126: non-zero requesting_tenant_id may only see its own tenant record
+        if requesting_tenant_id > 0:
+            conditions.append(TenantModel.id == requesting_tenant_id)
 
         count_result = await self.session.execute(select(func.count(TenantModel.id)).where(and_(*conditions)))
         total = count_result.scalar() or 0
@@ -128,8 +131,10 @@ class TenantService:
         items = [self._to_dict(t) for t in result.scalars().all()]
         return items, total
 
-    async def get_tenant_stats(self, tenant_id: int) -> dict:
-        await self._fetch_tenant(tenant_id, 0)
+    async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int = 0) -> dict:
+        if requesting_tenant_id and tenant_id != requesting_tenant_id:
+            raise ForbiddenException(f"Cannot view stats for tenant {tenant_id}")
+        await self._fetch_tenant(tenant_id, requesting_tenant_id)
         user_count_result = await self.session.execute(
             select(func.count(UserModel.id)).where(UserModel.tenant_id == tenant_id)
         )
@@ -142,4 +147,6 @@ class TenantService:
         }
 
     async def get_tenant_usage(self, tenant_id: int, requesting_tenant_id: int = 0) -> dict:
-        return await self.get_tenant_stats(tenant_id)
+        if requesting_tenant_id and tenant_id != requesting_tenant_id:
+            raise ForbiddenException(f"Cannot view usage for tenant {tenant_id}")
+        return await self.get_tenant_stats(tenant_id, requesting_tenant_id)

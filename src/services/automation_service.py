@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.automation_log import AutomationLogModel
 from db.models.automation_rule import AutomationRuleModel
+from db.models.user import UserModel
 from pkg.errors.app_exceptions import AppException, NotFoundException
 from services.notification_service import NotificationService
 from services.task_service import TaskService
@@ -90,6 +91,12 @@ class AutomationService:
             recipient_user_id = params["user_id"] if "user_id" in params else context.get("user_id")
             if not recipient_user_id:
                 return {"type": action_type, "status": "skipped", "reason": "no user_id in context or params"}
+            # Rule126: verify the recipient belongs to the current tenant
+            user_check = await self.session.execute(
+                select(UserModel).where(UserModel.id == recipient_user_id, UserModel.tenant_id == tenant_id)
+            )
+            if user_check.scalar_one_or_none() is None:
+                return {"type": action_type, "status": "skipped", "reason": "recipient user not found in tenant"}
             svc = NotificationService(self.session)
             result = await svc.send_notification(
                 user_id=recipient_user_id,
@@ -103,6 +110,14 @@ class AutomationService:
             return {"type": action_type, "status": "sent" if result is not None else "failed"}
 
         elif action_type == "task.create":
+            assignee_id = params.get("assignee_id")
+            if assignee_id:
+                # Rule126: verify the assignee belongs to the current tenant
+                assignee_check = await self.session.execute(
+                    select(UserModel).where(UserModel.id == assignee_id, UserModel.tenant_id == tenant_id)
+                )
+                if assignee_check.scalar_one_or_none() is None:
+                    return {"type": action_type, "status": "skipped", "reason": "assignee not found in tenant"}
             svc = TaskService(self.session)
             task_result = await svc.create_task(
                 tenant_id=tenant_id,

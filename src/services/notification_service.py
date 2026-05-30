@@ -1,5 +1,6 @@
 """Notification service — DB-backed via SQLAlchemy async ORM."""
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, delete, func, select, update
@@ -10,6 +11,8 @@ from db.models.reminder import ReminderModel
 from db.models.user import UserModel
 from pkg.constants.notification_constants import VALID_NOTIFICATION_TYPES, VALID_PRIORITIES
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationService:
@@ -154,6 +157,7 @@ class NotificationService:
             select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
         if user_check.scalar_one_or_none() is None:
+            logger.info("User %d not found in tenant %d, returning 0 unread", user_id, tenant_id)
             return 0
         result = await self.session.execute(
             select(func.count(NotificationModel.id)).where(

@@ -45,7 +45,7 @@ async def _seed_reminder(
     user_id: int,
     title: str,
     content: str,
-    remind_at,
+    remind_at: datetime,
     *,
     related_type: str | None = None,
     related_id: int | None = None,
@@ -56,7 +56,9 @@ async def _seed_reminder(
         remind_at: Must be a timezone-aware datetime (UTC). Passing a naive datetime
             will raise an error in the DB layer on PostgreSQL due to mixed tz awareness.
     """
-    from datetime import UTC, datetime
+    if remind_at.tzinfo is None:
+        raise ValueError("remind_at must be timezone-aware")
+    from datetime import UTC
 
     reminder = ReminderModel(
         tenant_id=tenant_id,
@@ -74,4 +76,4 @@ async def _seed_reminder(
     return reminder
 
 
-__all__ = ["_seed_notification", "_seed_reminder"]
+__all__ = ["_seed_notification"]
