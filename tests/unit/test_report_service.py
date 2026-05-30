@@ -60,6 +60,11 @@ class TestListReports:
         assert len(reports) == 2
         # 2 calls: COUNT query + SELECT with LIMIT/OFFSET
         assert mock_db_session.execute.call_count == 2
+        # Validate the COUNT query targets the right table and tenant
+        calls = mock_db_session.execute.call_args_list
+        count_call = calls[0]
+        count_sql = str(count_call.args[0]).lower()
+        assert "count" in count_sql and "reports" in count_sql, f"COUNT query missing 'reports': {count_sql}"
 
     async def test_empty_list_returns_zero_total(self, mock_db_session):
         """Empty tenant returns empty list and zero total."""
