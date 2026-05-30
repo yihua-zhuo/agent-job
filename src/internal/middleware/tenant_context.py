@@ -6,6 +6,8 @@ asyncio tasks within the same request context.
 
 from contextvars import ContextVar
 
+from pkg.errors.app_exceptions import UnauthorizedException
+
 _tenant_id_var: ContextVar[int | None] = ContextVar("tenant_id", default=None)
 
 
@@ -20,6 +22,18 @@ def get_tenant_id() -> int | None:
     Returns None if no tenant context has been set.
     """
     return _tenant_id_var.get()
+
+
+def require_tenant_id() -> int:
+    """Retrieve the current tenant_id, raising if unset.
+
+    Raises:
+        UnauthorizedException: If no tenant context has been set.
+    """
+    tid = _tenant_id_var.get()
+    if tid is None:
+        raise UnauthorizedException("Tenant context is not set")
+    return tid
 
 
 def clear() -> None:

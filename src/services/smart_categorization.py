@@ -3,7 +3,6 @@
 使用决策树规则进行线索分类和客户分群
 """
 
-import hashlib
 import random
 from dataclasses import dataclass
 
@@ -133,7 +132,7 @@ class SmartCategorizationService:
         自动标签客户
         基于：行为数据、交易数据
         """
-        seed = int(hashlib.md5(str(customer_id).encode()).hexdigest()[:8], 16)  # noqa: S324 -- non-cryptographic deterministic tagging
+        seed = hash(customer_id)
 
         tags = []
 
