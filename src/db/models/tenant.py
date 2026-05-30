@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Integer, String, func
+from sqlalchemy import DateTime, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,9 +16,11 @@ class TenantModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
-    plan: Mapped[str] = mapped_column(String(50), default="free", nullable=False)
-    status: Mapped[str] = mapped_column(String(50), default="active", nullable=False)
-    settings: Mapped[dict] = mapped_column(JSON, default=dict, nullable=False)
+    slug: Mapped[str] = mapped_column(String(100), server_default="", nullable=False)
+    plan: Mapped[str] = mapped_column(String(50), server_default="free", nullable=False)
+    status: Mapped[str] = mapped_column(String(50), server_default="active", nullable=False)
+    settings: Mapped[dict] = mapped_column(JSON, server_default=text("'{}'::json"), nullable=False)
+    usage_limits: Mapped[dict] = mapped_column(JSON, server_default=text("'{}'::json"), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -28,9 +30,11 @@ class TenantModel(Base):
         return {
             "id": self.id,
             "name": self.name,
+            "slug": self.slug,
             "plan": self.plan,
             "status": self.status,
-            "settings": self.settings or {},
+            "settings": self.settings,
+            "usage_limits": self.usage_limits,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
