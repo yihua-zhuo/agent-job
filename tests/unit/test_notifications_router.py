@@ -483,7 +483,12 @@ class TestInvalidTenant:
 
 
 class TestCrossTenantIsolation:
-    """Rule 126: notifications are invisible across tenant boundaries."""
+    """Verifies the router passes the correct tenant context to the service.
+
+    Rule 126 (cross-tenant isolation) is enforced at the service and DB layer.
+    This test confirms the router forwards the auth context (tenant_id) correctly.
+    Actual cross-tenant enforcement is verified in integration tests.
+    """
 
     def test_cross_tenant_read_returns_empty_list(self):
         """Tenant A's auth context cannot read tenant B's notifications; returns empty list."""

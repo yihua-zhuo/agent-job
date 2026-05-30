@@ -75,7 +75,7 @@ async def get_tenant_stats(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    data = await service.get_tenant_stats(ctx.tenant_id)
+    data = await service.get_tenant_stats(tenant_id=ctx.tenant_id)
     return {"success": True, "data": data}
 
 
@@ -96,7 +96,7 @@ async def get_tenant(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    data = await service.get_tenant(tenant_id)
+    data = await service.get_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id)
     return {"success": True, "data": data}
 
 
@@ -128,5 +128,5 @@ async def update_tenant(
     update_data = body.model_dump()
     # Strip None values so the service's merge logic handles omitted fields.
     update_data = {k: v for k, v in update_data.items() if v is not None}
-    data = await service.update_tenant(tenant_id, _tenant_id=ctx.tenant_id, **update_data)
+    data = await service.update_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id, **update_data)
     return {"success": True, "data": data, "message": "Tenant updated"}

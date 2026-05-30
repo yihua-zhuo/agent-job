@@ -198,7 +198,7 @@ class TestUpdateTenantEndpoint:
 # DELETE /api/v1/tenants/{tenant_id} — delete tenant (not exposed)
 # ---------------------------------------------------------------------------
 
-class TestDeleteTenantEndpoint:
+class TestDeleteTenantNotExposed:
     def test_returns_405_when_method_not_allowed(self, client_with_service):
         """DELETE is not defined on /api/v1/tenants/{id} — FastAPI returns 405.
 
@@ -230,6 +230,7 @@ class TestTenantStatsEndpoint:
         body = resp.json()
         assert body["data"]["tenant_id"] == 1
         assert body["data"]["user_count"] == 10
+        svc.get_tenant_stats.assert_called()
 
 
 # ---------------------------------------------------------------------------

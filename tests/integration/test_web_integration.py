@@ -225,6 +225,7 @@ class TestCustomerEndpoints:
         tenant_id_web: int,
         tenant_id_2_web: int,
     ):
+        """Tenant A's customers are invisible to tenant B, and vice versa (Rule 126)."""
         suffix = uuid.uuid4().hex[:6]
         resp1 = await api_client.post(
             "/api/v1/customers",
@@ -238,6 +239,15 @@ class TestCustomerEndpoints:
 
         detail_resp = await api_client_tenant_2.get(f"/api/v1/customers/{t1_id}")
         assert detail_resp.status_code == 404
+
+        # Tenant 2 can see its own resources (positive isolation assertion).
+        resp2 = await api_client_tenant_2.post(
+            "/api/v1/customers",
+            json={"name": f"Tenant 2 Customer {suffix}", "email": f"t2-{suffix}@example.com"},
+        )
+        t2_id = resp2.json()["data"]["id"]
+        self_t2 = await api_client_tenant_2.get(f"/api/v1/customers/{t2_id}")
+        assert self_t2.status_code == 200
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

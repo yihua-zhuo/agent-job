@@ -31,10 +31,11 @@ class NotificationService:
         tenant_id: int,
         **kwargs,
     ) -> NotificationModel:
-        """Send a notification.
+        """Queue a notification for delivery.
 
-        Flushes and refreshes the model; actual commit is owned by the router
-        transaction boundary.
+        Creates a notification record with status='pending'. Actual delivery is
+        handled asynchronously by a background worker. Flushes and refreshes
+        the model; actual commit is owned by the router transaction boundary.
         """
         priority = kwargs.get("priority", "normal")
         if priority not in VALID_PRIORITIES:
@@ -144,15 +145,15 @@ class NotificationService:
     async def get_unread_count(self, user_id: int, tenant_id: int) -> int:
         """Get unread notification count for a user.
 
-        Silently returns 0 when the user does not exist (no-op). This is acceptable
-        for a count endpoint but could hide upstream bugs if callers assume the user
-        was validated before calling this method.
+        Raises NotFoundException when the user does not exist within the tenant,
+        so callers (especially automation triggers) detect missing recipients rather
+        than silently proceeding.
         """
         user_check = await self.session.execute(
             select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
         if user_check.scalar_one_or_none() is None:
-            return 0
+            raise NotFoundException("User")
         result = await self.session.execute(
             select(func.count(NotificationModel.id)).where(
                 and_(

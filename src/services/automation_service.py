@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.automation_log import AutomationLogModel
 from db.models.automation_rule import AutomationRuleModel
-from pkg.errors.app_exceptions import NotFoundException
+from pkg.errors.app_exceptions import AppException, NotFoundException
 from services.notification_service import NotificationService
 from services.task_service import TaskService
 
@@ -281,7 +281,7 @@ class AutomationService:
                         executed_by,
                     )
                     executed_actions.append(action_result)
-                except Exception as e:
+                except AppException as e:
                     executed_actions.append(
                         {
                             "type": action.get("type"),

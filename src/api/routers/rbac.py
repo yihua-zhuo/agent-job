@@ -48,7 +48,7 @@ class PermissionAssign(BaseModel):
 
 
 class RoleAssign(BaseModel):
-    role_id: int
+    role_id: int = Field(..., description="Role to assign to the user")
 
 
 class UserRolesSet(BaseModel):

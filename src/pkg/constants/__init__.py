@@ -1,4 +1,4 @@
-"""pkg constants — re-exported for convenient access."""
+"""Notification domain constants re-exported for import convenience at pkg.constants level."""
 
 from pkg.constants.notification_constants import VALID_NOTIFICATION_TYPES, VALID_PRIORITIES
 

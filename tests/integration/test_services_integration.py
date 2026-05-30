@@ -505,6 +505,15 @@ class TestNotificationIntegration:
         cancelled = await svc.cancel_reminder(result.id, tenant_id=tenant_id)
         assert cancelled["id"] == result.id
 
+        # Verify the reminder was actually deleted from the DB.
+        from sqlalchemy import select
+        from db.models.reminder import ReminderModel
+
+        result_check = await async_session.execute(
+            select(ReminderModel).where(ReminderModel.id == result.id)
+        )
+        assert result_check.scalar_one_or_none() is None
+
     async def test_notification_cross_tenant_isolation(
         self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant, _seed_tenant_2
     ):
