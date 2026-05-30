@@ -3,22 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import datetime
 
 from sqlalchemy import Result, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.agent_tasks import AgentTaskModel
+from db.models.agent_tasks import AgentTaskModel, AgentTaskStatus
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
-
-
-class AgentTaskStatus(StrEnum):
-    PENDING = "pending"
-    DISPATCHED = "dispatched"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
 
 
 class AgentTaskService:
@@ -28,15 +19,12 @@ class AgentTaskService:
     async def create_task(self, description: str, tenant_id: int) -> AgentTaskModel:
         if not description or not description.strip():
             raise ValidationException("description cannot be empty")
-        now = datetime.now(UTC)
         task = AgentTaskModel(
             task_id=f"atask_{uuid.uuid4().hex[:16]}",
             tenant_id=tenant_id,
             description=description.strip(),
             status=AgentTaskStatus.PENDING,
             subtasks=[],
-            created_at=now,
-            updated_at=now,
         )
         self.session.add(task)
         # flush() persists and populates the auto-increment id.
@@ -70,7 +58,7 @@ class AgentTaskService:
     ) -> tuple[list[AgentTaskModel], int]:
         conditions = [AgentTaskModel.tenant_id == tenant_id]
         if status is not None:
-            if status not in tuple(AgentTaskStatus):
+            if status not in (AgentTaskStatus.PENDING, AgentTaskStatus.DISPATCHED, AgentTaskStatus.RUNNING, AgentTaskStatus.COMPLETED, AgentTaskStatus.FAILED):
                 raise ValidationException(f"invalid status: {status!r}")
             conditions.append(AgentTaskModel.status == status)
         if date_from is not None:

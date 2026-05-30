@@ -76,7 +76,7 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
         if "select" in sql_text and "count" in sql_text and "from agent_tasks" in sql_text:
             tenant_id = normalized.get("tenant_id")
             if tenant_id is None:
-                return MockResult([[0]])
+                raise ValueError("agent_tasks COUNT requires tenant_id in params")
             status_filter = normalized.get("status")
             date_bounds = normalized.get("created_at")
             if date_bounds is not None and isinstance(date_bounds, list) and len(date_bounds) == 2:
@@ -102,10 +102,8 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
         if "from agent_tasks where id" in sql_text and "tenant_id" in sql_text:
             tid = normalized.get("id")
             tenant_id = normalized.get("tenant_id")
-            # Guard: both id and tenant_id must be present in params, otherwise
-            # the handler silently returns an empty result — add explicit fallback.
             if tid is None or tenant_id is None:
-                return MockResult([])
+                raise ValueError("agent_tasks SELECT by id requires both id and tenant_id in params")
             rec = state.agent_tasks.get(tid)
             if rec is not None and rec.get("tenant_id") == tenant_id:
                 return MockResult([MockRow(rec.copy())])
@@ -115,7 +113,7 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
         if "select" in sql_text and "from agent_tasks" in sql_text and "where id" not in sql_text:
             tenant_id = normalized.get("tenant_id")
             if tenant_id is None:
-                return MockResult([])
+                raise ValueError("agent_tasks SELECT list requires tenant_id in params")
             rows = []
             for rec in state.agent_tasks.values():
                 if rec.get("tenant_id") != tenant_id:
@@ -146,15 +144,17 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
             limit_match = _LIMIT_RE.search(sql_text)
             if offset_match is not None:
                 offset_key = offset_match.group(1)
-                # Fail fast if the extracted bind param key is missing from params —
-                # a mismatch between the regex-extracted key and SQLAlchemy's numbered
-                # suffix means pagination would silently be skipped.
+                # NOTE: params must preserve SQLAlchemy's raw numbered keys (e.g.
+                # "offset_1") so the regex-extracted key matches exactly. Do not
+                # pre-normalize params to strip the _<digit> suffix — the assertion
+                # below guards against that.
                 assert offset_key in params, f"offset bind param '{offset_key}' not found in params"
                 offset_val = params.get(offset_key) or normalized.get("offset")
                 if offset_val is not None:
                     rows = rows[int(offset_val):]
             if limit_match is not None:
                 limit_key = limit_match.group(1)
+                # NOTE: same raw-key requirement as offset above.
                 assert limit_key in params, f"limit bind param '{limit_key}' not found in params"
                 limit_val = params.get(limit_key) or normalized.get("limit")
                 if limit_val is not None:

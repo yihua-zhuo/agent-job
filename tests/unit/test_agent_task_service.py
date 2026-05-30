@@ -76,8 +76,9 @@ class TestListTasks:
         # Directly update stored state to simulate completed status.
         state = mock_db_session._state
         state.agent_tasks[task_a.id]["status"] = "completed"
-        # Seed a task under tenant 2 with the same status that the query targets.
-        # The cross-tenant task must not appear in tenant 1's results.
+        # NOTE: direct state write below mirrors what AgentTaskModel fields
+        # (id, task_id, tenant_id, description, status, subtasks, created_at,
+        # updated_at) the service would write so it stays in sync with the ORM.
         other_id = state.agent_tasks_next_id
         state.agent_tasks[other_id] = {
             "id": other_id, "task_id": f"atask_{other_id}", "tenant_id": 2,
@@ -95,6 +96,7 @@ class TestListTasks:
 
     async def test_filters_by_date_range(self, service, mock_db_session):
         # Directly seed two tasks with distant dates into the mock state.
+        # NOTE: this mirrors AgentTaskModel fields (see test_filters_by_status).
         state = mock_db_session._state
         now = datetime.now(UTC)
         past_date = datetime(2020, 1, 1, tzinfo=UTC)
@@ -134,6 +136,7 @@ class TestListTasks:
 
     async def test_filters_by_date_range_returns_matching_tasks(self, service, mock_db_session):
         # Seed two tasks with known creation times inside a precise window.
+        # NOTE: this mirrors AgentTaskModel fields (see test_filters_by_status).
         state = mock_db_session._state
         mid_date = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
         id1 = state.agent_tasks_next_id
