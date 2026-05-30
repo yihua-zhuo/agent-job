@@ -40,7 +40,7 @@ export function useTableState<TData>({
     getCoreRowModel: getCoreRowModel(),
     getColumnCanGlobalFilter: (column) => {
       if (searchableKeys.length === 0) return true;
-      return searchableKeys.includes(column.id);
+return searchableKeys.includes(column.id);
     },
   });
 
