@@ -11,6 +11,9 @@ Three migration heads are present:
 
 This revision merges all three into a single head so that
 'alembic upgrade head' succeeds without ambiguity.
+
+NOTE: This is a merge-only revision — no schema changes are made by this file
+itself; all tables/indexes/FKs are created in the sub-revisions it depends on.
 """
 
 from collections.abc import Sequence

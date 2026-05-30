@@ -6,7 +6,6 @@ import re
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
-_TRAILING_DIGITS = re.compile(r"_\d+$")
 _OFFSET_RE = re.compile(r"offset\s*:?\s*(\w+)", re.IGNORECASE)
 _LIMIT_RE = re.compile(r"limit\s*:?\s*(\w+)", re.IGNORECASE)
 
@@ -79,9 +78,11 @@ def make_agent_task_handler(state: MockState):
                 return MockResult([[0]])
             status_filter = normalized.get("status")
             date_bounds = normalized.get("created_at")
-            if date_bounds is not None:
-                lo = date_bounds[0] if isinstance(date_bounds, list) else date_bounds
-                hi = date_bounds[-1] if isinstance(date_bounds, list) else date_bounds
+            if date_bounds is not None and isinstance(date_bounds, list) and len(date_bounds) == 2:
+                lo, hi = date_bounds[0], date_bounds[-1]
+                if lo > hi:
+                    lo, hi = hi, lo  # normalize regardless of SQLAlchemy's emission order
+                date_bounds = (lo, hi)
             count_val = sum(
                 1 for r in state.agent_tasks.values()
                 if r.get("tenant_id") == tenant_id
@@ -90,7 +91,7 @@ def make_agent_task_handler(state: MockState):
                     date_bounds is None
                     or (
                         r.get("created_at") is not None
-                        and not (r.get("created_at") < lo or r.get("created_at") > hi)
+                        and not (r.get("created_at") < date_bounds[0] or r.get("created_at") > date_bounds[-1])
                     )
                 )
             )
@@ -100,6 +101,10 @@ def make_agent_task_handler(state: MockState):
         if "from agent_tasks where id" in sql_text and "tenant_id" in sql_text:
             tid = normalized.get("id")
             tenant_id = normalized.get("tenant_id")
+            # Guard: both id and tenant_id must be present in params, otherwise
+            # the handler silently returns an empty result — add explicit fallback.
+            if tid is None or tenant_id is None:
+                return MockResult([])
             rec = state.agent_tasks.get(tid)
             if rec is not None and rec.get("tenant_id") == tenant_id:
                 return MockResult([MockRow(rec.copy())])
@@ -121,30 +126,36 @@ def make_agent_task_handler(state: MockState):
                 # Apply date_from / date_to filters.
                 # The service emits `created_at >= :created_at_1` and
                 # `created_at <= :created_at_2`; after normalization both land in
-                # normalized["created_at"] as [date_from, date_to]. Use the list
-                # positions directly rather than key-based lookup.
+                # normalized["created_at"] as [date_from, date_to]. Normalize
+                # ordering so <= can appear before >= in the SQL.
                 date_bounds = normalized.get("created_at")
+                if date_bounds is not None and isinstance(date_bounds, list) and len(date_bounds) == 2:
+                    lo, hi = date_bounds[0], date_bounds[-1]
+                    if lo > hi:
+                        lo, hi = hi, lo
+                    date_bounds = (lo, hi)
                 if date_bounds is not None:
                     created = rec.get("created_at")
                     if created is None:
                         continue
-                    date_from_bound = date_bounds[0] if isinstance(date_bounds, list) else date_bounds
-                    date_to_bound = date_bounds[-1] if isinstance(date_bounds, list) else date_bounds
-                    if created < date_from_bound or created > date_to_bound:
+                    if created < date_bounds[0] or created > date_bounds[-1]:
                         continue
                 rows.append(MockRow(rec.copy()))
             offset_match = _OFFSET_RE.search(sql_text)
             limit_match = _LIMIT_RE.search(sql_text)
             if offset_match is not None:
                 offset_key = offset_match.group(1)
-                offset_val = params.get(offset_key)
+                # Check both original params (with numbered suffixes) and
+                # the normalized dict so SQLAlchemy's positional suffix
+                # numbering cannot silently skip the offset.
+                offset_val = params.get(offset_key) or normalized.get("offset")
                 if offset_val is not None:
-                    rows = rows[offset_val:]
+                    rows = rows[int(offset_val):]
             if limit_match is not None:
                 limit_key = limit_match.group(1)
-                limit_val = params.get(limit_key)
+                limit_val = params.get(limit_key) or normalized.get("limit")
                 if limit_val is not None:
-                    rows = rows[:limit_val]
+                    rows = rows[: int(limit_val)]
             return MockResult(rows)
 
         return None

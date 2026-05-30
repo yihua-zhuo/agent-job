@@ -4,12 +4,21 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from enum import StrEnum
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.agent_tasks import AgentTaskModel, AgentTaskStatus
+from db.models.agent_tasks import AgentTaskModel
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
+
+
+class AgentTaskStatus(StrEnum):
+    PENDING = "pending"
+    DISPATCHED = "dispatched"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class AgentTaskService:
@@ -59,7 +68,7 @@ class AgentTaskService:
     ) -> tuple[list[AgentTaskModel], int]:
         conditions = [AgentTaskModel.tenant_id == tenant_id]
         if status is not None:
-            if status not in (AgentTaskStatus.PENDING, AgentTaskStatus.DISPATCHED, AgentTaskStatus.RUNNING, AgentTaskStatus.COMPLETED, AgentTaskStatus.FAILED):
+            if status not in tuple(AgentTaskStatus):
                 raise ValidationException(f"invalid status: {status!r}")
             conditions.append(AgentTaskModel.status == status)
         if date_from is not None:

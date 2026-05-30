@@ -86,9 +86,10 @@ class TestListTasks:
         }
         state.agent_tasks_next_id += 1
         pending_tasks, total = await service.list_tasks(tenant_id=1, status="pending", page=1, page_size=20)
+        # Assert COUNT path (total must exclude the tenant-2 task).
         assert total == 1
         assert pending_tasks[0].description == task_b.description
-        # Ensure the tenant-2 task was never included.
+        # Ensure the tenant-2 task was never included in SELECT results.
         descriptions = {t.description for t in pending_tasks}
         assert "Tenant 2 pending task" not in descriptions
 
@@ -112,6 +113,14 @@ class TestListTasks:
             "subtasks": [], "created_at": future_date, "updated_at": future_date,
         }
         state.agent_tasks_next_id += 1
+        # Seed a third task under tenant 2 so cross-tenant COUNT exclusion can be verified.
+        id3 = state.agent_tasks_next_id
+        state.agent_tasks[id3] = {
+            "id": id3, "task_id": f"atask_{id3}", "tenant_id": 2,
+            "description": "Tenant 2 past task", "status": "pending",
+            "subtasks": [], "created_at": past_date, "updated_at": past_date,
+        }
+        state.agent_tasks_next_id += 1
         # Query with a narrow window around now — neither seed task falls inside it.
         tasks, total = await service.list_tasks(
             tenant_id=1,
@@ -120,7 +129,39 @@ class TestListTasks:
             page=1,
             page_size=20,
         )
-        assert total == 0
+        assert total == 0  # COUNT path also respects tenant isolation
+        assert tasks == []
+
+    async def test_filters_by_date_range_returns_matching_tasks(self, service, mock_db_session):
+        # Seed two tasks with known creation times inside a precise window.
+        state = mock_db_session._state
+        mid_date = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
+        id1 = state.agent_tasks_next_id
+        state.agent_tasks[id1] = {
+            "id": id1, "task_id": f"atask_{id1}", "tenant_id": 1,
+            "description": "June task", "status": "pending",
+            "subtasks": [], "created_at": mid_date, "updated_at": mid_date,
+        }
+        state.agent_tasks_next_id += 1
+        id2 = state.agent_tasks_next_id
+        state.agent_tasks[id2] = {
+            "id": id2, "task_id": f"atask_{id2}", "tenant_id": 1,
+            "description": "Another June task", "status": "pending",
+            "subtasks": [], "created_at": mid_date, "updated_at": mid_date,
+        }
+        state.agent_tasks_next_id += 1
+        tasks, total = await service.list_tasks(
+            tenant_id=1,
+            date_from=datetime(2024, 6, 1, tzinfo=UTC),
+            date_to=datetime(2024, 6, 30, tzinfo=UTC),
+            page=1,
+            page_size=20,
+        )
+        # Both seeded tasks fall inside the window.
+        assert total == 2
+        assert len(tasks) == 2
+        descriptions = {t.description for t in tasks}
+        assert descriptions == {"June task", "Another June task"}
 
     async def test_respects_pagination(self, service):
         ids = []

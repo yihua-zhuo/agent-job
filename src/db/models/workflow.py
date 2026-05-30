@@ -89,7 +89,7 @@ class WorkflowNodeModel(Base):
     workflow_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), default=0, nullable=False, index=True)
     node_type: Mapped[str] = mapped_column(String(50), default="action", nullable=False)
     definition_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     input: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)

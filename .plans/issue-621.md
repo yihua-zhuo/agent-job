@@ -178,7 +178,8 @@ def make_agent_task_handler(state: MockState):
                 return MockResult([MockRow(state.agent_tasks[tid].copy())])
             return MockResult([])
 
-        # COUNT        if "select" in sql_text and "count" in sql_text and "from agent_tasks" in sql_text:
+        # COUNT
+        if "select" in sql_text and "count" in sql_text and "from agent_tasks" in sql_text:
             tenant_id = params.get("tenant_id", 0)
             count_val = sum(1 for r in state.agent_tasks.values() if r.get("tenant_id") == tenant_id)
             return MockResult([[count_val]])
