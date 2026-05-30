@@ -14,16 +14,15 @@ from main import app
 class TestCopilotRouter:
     """Tests for copilot router endpoints."""
 
-    @pytest.fixture(autouse=True)
-    def _setup_all_overrides(self):
-        """Override both require_auth and get_db for every test."""
+    @pytest.fixture
+    def _setup_all_overrides(self, request):
+        """Override both require_auth and get_db for every test, cleaned up via finalizer."""
         from db.connection import get_db
         from internal.middleware.fastapi_auth import require_auth
 
         async def _mock_auth():
             return AuthContext(user_id=999, tenant_id=100, roles=["admin"])
 
-        # Mock session returned by get_db.
         _session = MagicMock()
         _session.execute = AsyncMock()
         _session.flush = AsyncMock()
@@ -34,9 +33,13 @@ class TestCopilotRouter:
 
         app.dependency_overrides[require_auth] = _mock_auth
         app.dependency_overrides[get_db] = _mock_get_db
-        yield _session
-        app.dependency_overrides.pop(require_auth, None)
-        app.dependency_overrides.pop(get_db, None)
+
+        def _cleanup():
+            app.dependency_overrides.pop(require_auth, None)
+            app.dependency_overrides.pop(get_db, None)
+
+        request.addfinalizer(_cleanup)
+        return _session
 
     @pytest.mark.asyncio
     async def test_chat_returns_envelope(self, _setup_all_overrides):
@@ -158,7 +161,7 @@ class TestCopilotRouter:
         assert data["data"]["messages"][0]["role"] == "user"
 
     @pytest.mark.asyncio
-    async def test_history_limit_passed_to_service(self, _setup_all_overrides):
+    async def test_history_passes_required_args(self, _setup_all_overrides):
         """The router passes conversation_id and tenant_id to service.get_history."""
         from services.copilot_service import CopilotService
 

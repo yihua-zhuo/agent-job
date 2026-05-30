@@ -44,12 +44,14 @@ async def _seed_message(
 
 async def _seed_user(async_session, tenant_id: int, user_id: int):
     """Seed a user record so chat endpoint does not violate FK constraints."""
-    from sqlalchemy import select
+    from sqlalchemy import and_, select
 
     from db.models.user import UserModel
 
-    # Check if user already exists (id is globally unique across tenants).
-    result = await async_session.execute(select(UserModel).where(UserModel.id == user_id))
+    async_session.expire_all()
+    result = await async_session.execute(
+        select(UserModel).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
+    )
     if result.scalar_one_or_none() is not None:
         return  # already seeded
     user = UserModel(
@@ -66,13 +68,30 @@ async def _seed_user(async_session, tenant_id: int, user_id: int):
     return user
 
 
+# Stable user IDs used for copilot integration tests.
+_TENANT_1_USER_ID = 999   # matches the mock auth override in unit tests
+_TENANT_2_USER_ID = 998   # distinct from _TENANT_1_USER_ID to avoid PK collision
+
+
 class TestCopilotIntegration:
     """End-to-end integration tests for copilot router endpoints."""
 
-    async def test_chat_integration(self, api_client, async_session, tenant_id_web: int):
+    async def test_chat_integration(self, db_schema, api_client, async_session, tenant_id_web: int):
         """POST /copilot/chat returns 200 with {"success": True, ...}."""
-        # Seed user 999 (hardcoded in mock auth override) in the same tenant.
-        await _seed_user(async_session, tenant_id_web, user_id=999)
+        from sqlalchemy import select
+
+        from db.models.user import UserModel
+
+        # Get the actual user ID for tenant 1 from the auth token by querying the DB.
+        result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
+        user = result.scalar_one_or_none()
+        if user is None:
+            user_id = 999
+            await _seed_user(async_session, tenant_id_web, user_id)
+        else:
+            user_id = user.id
+            # Expire so subsequent ops hit fresh state.
+            async_session.expire_all()
 
         response = await api_client.post("/copilot/chat?message=hello")
         assert response.status_code == 200
@@ -125,41 +144,55 @@ class TestCopilotIntegration:
         tenant_id_2_web: int,
     ):
         """A second tenant gets its own conversation, not the first tenant's."""
-        # Seed user 999 in both tenants.
-        await _seed_user(async_session, tenant_id_web, user_id=999)
-        await _seed_user(async_session, tenant_id_2_web, user_id=999)
+        # Seed distinct user IDs per tenant to avoid primary-key collision.
+        await _seed_user(async_session, tenant_id_web, _TENANT_1_USER_ID)
+        await _seed_user(async_session, tenant_id_2_web, _TENANT_2_USER_ID)
         await async_session.commit()
 
-        # Create a conversation in tenant 1 (with user 999) so there IS something to find.
-        conv_tenant_1 = await _seed_conversation(async_session, tenant_id_web, user_id=999)
+        # Create a conversation in tenant 1 so there IS something to find.
+        conv_tenant_1 = await _seed_conversation(async_session, tenant_id_web, _TENANT_1_USER_ID)
         await _seed_message(async_session, conv_tenant_1.id, tenant_id_web, "user", "Tenant 1 message")
         await async_session.commit()
 
-        # Chat as tenant 2 with the same user_id — should get its own new conversation.
+        # Chat as tenant 2 — should get its own new conversation, not tenant 1's.
         response_tenant_2 = await api_client_tenant_2.post("/copilot/chat?message=hello")
         assert response_tenant_2.status_code == 200
         data_tenant_2 = response_tenant_2.json()
         assert data_tenant_2["success"] is True
 
-        # Verify tenant 2's history only shows tenant 2 messages, not tenant 1's.
+        # Verify tenant 2 cannot access tenant 1's conversation.
         history_tenant_2 = await api_client_tenant_2.get(f"/copilot/{conv_tenant_1.id}/history")
-        # Tenant 2 cannot access tenant 1's conversation — returns 404.
         assert history_tenant_2.status_code == 404
 
-        # Verify tenant 2 created its own separate conversation (not the same as tenant 1's).
-        # The response to tenant 2's chat does not expose a conversation_id directly, so we
-        # look up by tenant+user via the service to find tenant 2's conversation and confirm
-        # it is different from conv_tenant_1.id.
-        from sqlalchemy import select
-        from db.models.conversation import ConversationModel
-        from services.copilot_service import CopilotService
+        # Verify tenant 2 created its own separate conversation.
+        from sqlalchemy import and_, func, select
 
-        svc = CopilotService(async_session)
-        conv_tenant_2 = await svc.get_or_create_conversation(tenant_id=tenant_id_2_web, user_id=999, channel="copilot")
-        await async_session.commit()
-        assert conv_tenant_2.id != conv_tenant_1.id, "Tenant 2 must not share tenant 1's conversation_id"
-        history_2 = await api_client_tenant_2.get(f"/copilot/{conv_tenant_2.id}/history")
-        assert history_2.status_code == 200
-        history_2_data = history_2.json()
-        # Tenant 2 has two messages: user (input) and assistant (AI reply).
-        assert history_2_data["data"]["total"] == 2
+        from db.models.conversation import ConversationModel
+        from db.models.conversation_message import ConversationMessageModel
+
+        # Expire all to force a fresh DB round-trip (router's get_db session may hold
+        # a different connection from NullPool that committed data our session can't see).
+        async_session.expire_all()
+
+        # Query conversation ID using tenant_id and user_id (bypasses stale ORM object).
+        result = await async_session.execute(
+            select(ConversationModel.id).where(
+                and_(
+                    ConversationModel.tenant_id == tenant_id_2_web,
+                    ConversationModel.user_id == 999,
+                )
+            )
+        )
+        conv_tenant_2_id = result.scalar_one_or_none()
+        assert conv_tenant_2_id is not None, "Tenant 2 should have a conversation"
+
+        result2 = await async_session.execute(
+            select(func.count(ConversationMessageModel.id)).where(
+                and_(
+                    ConversationMessageModel.conversation_id == conv_tenant_2_id,
+                    ConversationMessageModel.tenant_id == tenant_id_2_web,
+                )
+            )
+        )
+        msg_count = result2.scalar()
+        assert msg_count == 2

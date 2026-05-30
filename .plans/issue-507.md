@@ -26,11 +26,11 @@ Reading order followed:
 
 2. **Wire `CopilotService` into the chat endpoint.**  
    - Add `from services.copilot_service import CopilotService` inside the handler or at module top (safe — no circular import risk).  
-   - Replace stub with `svc = CopilotService(session)` and call `svc.send_message(message, tenant_id=ctx.tenant_id)` (or `svc.persist_message` as a fallback if `send_message` is not yet on the service — see Risks).  
+   - Replace stub with `svc = CopilotService(session)` and call `svc.persist_message(...)` to persist the user's message, then invoke AI and persist the assistant's reply.  
    - Return `{"success": True, "data": result}` where `result` is the service's return value.
 
 3. **Wire `CopilotService` into the history endpoint.**  
-   - Call `svc.get_history(conversation_id, tenant_id=ctx.tenant_id)` (or `svc.persist_message` chain if `get_history` is not yet present).  
+   - Call `svc.get_history(conversation_id, tenant_id=ctx.tenant_id)` directly.  
    - Apply `[:20]` slice (most-recent-first cap).  
    - Return `{"success": True, "data": {"messages": [...], "total": N}}`.
 
@@ -41,7 +41,7 @@ Reading order followed:
 5. **Write unit tests in `tests/unit/test_copilot.py`.**  
    - Use `make_mock_session([])` for an empty mock session.  
    - Use `httpx.AsyncClient` with `ASGITransport` and `app.dependency_overrides` to override `get_db`.  
-   - Mock `services.copilot_service.CopilotService.send_message` (or `persist_message`) with `unittest.mock.AsyncMock`.  
+   - Mock `services.copilot_service.CopilotService.persist_message` with `unittest.mock.AsyncMock`.  
    - Test: `test_chat_returns_envelope` — POST `/copilot/chat?message=hello`, assert `200` and `data["success"] is True`.  
    - Test: `test_history_returns_envelope` — GET `/copilot/1/history`, assert `200` and `data["messages"]` is a list.  
    - Test: `test_history_caps_at_20` — mock service to return 25 items, assert `len(data["messages"]) == 20`.
@@ -68,7 +68,7 @@ Reading order followed:
 ## Acceptance Criteria
 - `ruff check src/api/routers/copilot.py src/main.py` exits 0.
 - `uvicorn src.main:app` starts without import errors.
-- `POST /copilot/chat` returns `{"success": True, "data": {"response": "...", "tool_calls": [...]}}`.
+- `POST /copilot/chat` accepts `message` as a query string parameter and returns `{"success": True, "data": {"response": "...", "tool_calls": [...]}}`.
 - `GET /copilot/{conversation_id}/history` returns `{"success": True, "data": {"messages": [...], "total": N}}` capped at 20 messages.
 - `PYTHONPATH=src pytest tests/unit/test_copilot.py -v` → all passed.
 - `PYTHONPATH=src pytest tests/integration/test_copilot_integration.py -v` → all passed (real DB).

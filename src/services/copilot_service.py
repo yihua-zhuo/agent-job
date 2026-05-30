@@ -202,7 +202,7 @@ class CopilotService:
                 "deferred": False,
             },
             "get_churn_risk": {
-                "prediction": "Get churn risk prediction for a customer",
+                "description": "Get churn risk prediction for a customer",
                 "handler": get_churn_risk_handler,
                 "deferred": False,
             },
@@ -218,12 +218,11 @@ class CopilotService:
             },
         }
 
-    async def invoke_ai(self, messages: list[dict[str, str]], tenant_id: int = 0) -> AIResponse:
+    async def invoke_ai(self, messages: list[dict[str, str]]) -> AIResponse:
         """Invoke the AI chat gateway with the given message history.
 
         Args:
             messages: List of ``{"role": "user"|"assistant", "content": "..."}`` entries.
-            tenant_id: Tenant ID for context injection (passed to the AI gateway).
 
         Returns:
             AIResponse with reply, optional suggestions, and optional actions.
