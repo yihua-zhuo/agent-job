@@ -67,7 +67,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`相对路径`](../../相对路径) L{x}-L{y}
+主入口：[`相对路径`](../../../相对路径) L{x}-L{y}
 
 ```{x}:{y}:相对路径
 [5-15 行关键代码片段]
@@ -78,8 +78,8 @@
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/customer_service.py`](../../src/services/customer_service.py) — [改动要点]
-  - [`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — [改动要点]
+  - [`src/services/customer_service.py`](../../../src/services/customer_service.py) — [改动要点]
+  - [`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — [改动要点]
 - 要建：
   - `src/db/models/<new_model>.py` — [用途]
   - `alembic/versions/<id>_<slug>.py` — [用途]
@@ -113,8 +113,8 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/<svc>.py`](../../src/services/<svc>.py) | [bullet 简述] |
-| [`src/api/routers/<rt>.py`](../../src/api/routers/<rt>.py) | [bullet 简述] |
+| [`src/services/<svc>.py`](../../../src/services/<svc>.py) | [bullet 简述] |
+| [`src/api/routers/<rt>.py`](../../../src/api/routers/<rt>.py) | [bullet 简述] |
 
 ### 3.3 新增能力
 
@@ -264,7 +264,7 @@ gh pr create --base master --title "..." --body "Closes #{n}"
   Do NOT 编造 https://github.com/.../issues/N 这种占位 URL。
 -->
 
-- 同类参考实现：[`相对路径`](../../相对路径)
+- 同类参考实现：[`相对路径`](../../../相对路径)
 - 第三方文档：[名称](https://...)
 - 父 issue / 关联：#{n}
 

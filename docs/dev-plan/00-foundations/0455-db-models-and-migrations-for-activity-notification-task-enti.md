@@ -1,202 +1,3 @@
-# 0677 · Add missing type/status enums and channel field to Activity/Notification/Task models
-
-| 元数据 | 值 |
-|---|---|
-| Issue | #455 |
-| 分类 | [00-foundations](../README.md#12-分类总览) |
-| 优先级 | 必做 |
-| 工作量 | 0.5-1 工作日 |
-| 依赖 | 无 |
-| 启用后赋能 | [0451-crm-domain-models-enums-api-routers-and-services-for-all-core](../0451-crm-domain-models-enums-api-routers-and-services-for-all-core.md) |
-| 状态 | 📋 待开始 |
-
----
-
-## 1. 目标与背景
-
-### 1.1 为什么做
-
-Issue #455 requires inspecting the ORM models for `Activity`, `Notification`, and `Task` entities and confirming they carry all required fields — timestamps, enums for type/status/channel, foreign keys to customer/opportunity, and `tenant_id`. The inspection reveals three gaps across the models: (1) all three `type` columns use plain `String(50)` instead of a constrained enum, (2) `status` and `channel` fields are entirely absent from `ActivityModel` and `NotificationModel`, and (3) `TaskModel` lacks a `channel` field. Without constrained enums and explicit `status`/`channel` columns, downstream services cannot validate or filter by these dimensions reliably, and the data layer silently accepts invalid string values.
-
-### 1.2 做完后
-
-- **用户视角**：无用户可见变化 — 纯底层 schema 和 ORM 层强化。
-- **开发者视角**：`ActivityModel` gains `status` and `channel` columns plus `ActivityTypeEnum` and `ActivityStatusEnum` Python enums; `NotificationModel` gains `status` and `NotificationTypeEnum`/`NotificationStatusEnum`; `TaskModel` gains `channel` plus `TaskStatusEnum`. All models are fully importable from `db.models`. An Alembic migration applies these changes to a dev database with verified downgrade.
-
-### 1.3 不做什么（剔除）
-
-- [ ] No new tables — all three tables already exist in `b2c3dce4b714_create_all_tables.py`; this board only adds columns and enum constraints to the existing tables.
-- [ ] No service layer changes — service classes belong to their own downstream boards.
-- [ ] No REST API changes — routers for these entities belong to their own downstream boards.
-- [ ] No data migration — existing rows retain their string values; enum columns are added as nullable or with a server default so the migration is non-destructive.
-
-### 1.4 关键 KPI
-
-- `ruff check src/db/models/activity.py src/db/models/notification.py src/db/models/task.py` → 0 errors
-- `PYTHONPATH=src pytest tests/unit/test_activity.py tests/unit/test_notification.py tests/unit/test_task.py -v` → all passed (3 files exist, each ≥ 1 test)
-- `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` (against `alembic_dev`) → three exit 0
-- `alembic revision --autogenerate -m "drift_check"` after Step 3 → produces a no-op migration (pass/pass)
-
----
-
-## 2. 当前现状（起点）
-
-### 2.1 现有实现
-
-`ActivityModel` 主入口：[`src/db/models/activity.py`](../../src/db/models/activity.py) L11-L35
-
-```python:11:25:src/db/models/activity.py
-class ActivityModel(Base):
-    """Activity entity mapped to the `activities` table."""
-
-    __tablename__ = "activities"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    opportunity_id: Mapped[int | None] = mapped_column(Integer, nullable=True, index=True)
-    type: Mapped[str] = mapped_column(String(50), nullable=False)   # ← plain String, no enum
-    content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-```
-
-`NotificationModel` 主入口：[`src/db/models/notification.py`](../../src/db/models/notification.py) L11-L39
-
-```python:11:25:src/db/models/notification.py
-class NotificationModel(Base):
-    """Notification entity mapped to the `notifications` table."""
-
-    __tablename__ = "notifications"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    type: Mapped[str | None] = mapped_column(String(50), nullable=True)   # ← plain String
-    title: Mapped[str | None] = mapped_column(String(255), nullable=True)
-    content: Mapped[str | None] = mapped_column(Text, nullable=True)
-    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    related_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    related_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-```
-
-`TaskModel` 主入口：[`src/db/models/task.py`](../../src/db/models/task.py) L11-L29
-
-```python:11:29:src/db/models/task.py
-class TaskModel(Base):
-    """Task entity mapped to the `tasks` table."""
-
-    __tablename__ = "tasks"
-
-    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    title: Mapped[str] = mapped_column(String(500), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
-    assigned_to: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    due_date: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)   # ← plain String
-    priority: Mapped[str] = mapped_column(String(50), default="normal", nullable=False)
-    created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-```
-
-Migration 主入口：[`alembic/versions/b2c3dce4b714_create_all_tables.py`](../../alembic/versions/b2c3dce4b714_create_all_tables.py) L23-L36 (activities), L85-L98 (notifications), L154-L169 (tasks) — all three tables use `sa.String(length=50)` for `type`/`status`/`priority` with no PostgreSQL enum type.
-
-`alembic/env.py` L14: `import db.models  # noqa: F401 — imports all model modules for Base.metadata` — the wildcard import means any new model file in `src/db/models/` is automatically discoverable for `--autogenerate`. New models do NOT need to be individually imported here.
-
-### 2.2 涉及文件清单
-
-- 要改：
-  - [`src/db/models/activity.py`](../../src/db/models/activity.py) — 添加 `ActivityTypeEnum`, `ActivityStatusEnum`, `ActivityChannelEnum` Python enums；添加 `status` 和 `channel` 列；`type` 改用 `Enum` 类型映射
-  - [`src/db/models/notification.py`](../../src/db/models/notification.py) — 添加 `NotificationTypeEnum`, `NotificationStatusEnum` Python enums；添加 `status` 列；`type` 改用 `Enum` 类型映射
-  - [`src/db/models/task.py`](../../src/db/models/task.py) — 添加 `TaskStatusEnum`, `TaskChannelEnum` Python enums；添加 `channel` 列；`status` 改用 `Enum` 类型映射
-  - `alembic/versions/<new_revision>_add_enums_and_channel_to_activity_notification_task.py` — 添加列，必要时重建 CHECK 约束
-- 要建：
-  - `tests/unit/test_activity.py` — ActivityModel 单元测试（基础 CRUD + 字段验证）
-  - `tests/unit/test_notification.py` — NotificationModel 单元测试
-  - `tests/unit/test_task.py` — TaskModel 单元测试
-
-### 2.3 缺什么
-
-- [ ] `ActivityModel.type` 是无约束的 `String(50)`，没有 `ActivityTypeEnum`；`status` 列和 `channel` 列完全缺失
-- [ ] `NotificationModel.type` 是无约束的 `String(50)`，没有 `NotificationTypeEnum`；`status` 列完全缺失
-- [ ] `TaskModel.status` 是无约束的 `String(50)`，没有 `TaskStatusEnum`；`channel` 列完全缺失
-- [ ] 所有三个表的迁移（`b2c3dce4b714`）使用 PostgreSQL `String` 列类型而非 `ENUM` 类型；没有对应的 `CREATE TYPE ... AS ENUM` 迁移语句
-- [ ] 三个模型均无单元测试文件
-
----
-
-## 3. 目标产物（终点）
-
-### 3.1 新文件
-
-| 路径 | 用途 |
-|------|------|
-| `alembic/versions/<id>_add_enums_and_channel_to_activity_notification_task.py` | 添加 status/channel 列；创建 PostgreSQL ENUM 类型（如尚不存在）；保留原有字符串列数据 |
-| `tests/unit/test_activity.py` | ActivityModel 字段验证和 to_dict 序列化单元测试 |
-| `tests/unit/test_notification.py` | NotificationModel 字段验证和 to_dict 序列化单元测试 |
-| `tests/unit/test_task.py` | TaskModel 字段验证和 to_dict 序列化单元测试 |
-
-### 3.2 修改文件
-
-| 路径 | 改动要点 |
-|------|---------|
-| [`src/db/models/activity.py`](../../src/db/models/activity.py) | 添加三个 Python `Enum` 类；添加 `status: Mapped[str]` 和 `channel: Mapped[str]` 列属性；更新 `to_dict()` |
-| [`src/db/models/notification.py`](../../src/db/models/notification.py) | 添加两个 Python `Enum` 类；添加 `status: Mapped[str]` 列属性；更新 `to_dict()` |
-| [`src/db/models/task.py`](../../src/db/models/task.py) | 添加两个 Python `Enum` 类；添加 `channel: Mapped[str]` 列属性；更新 `to_dict()` |
-
-### 3.3 新增能力
-
-- **Python enums**：`ActivityTypeEnum`, `ActivityStatusEnum`, `ActivityChannelEnum` in `src/db/models/activity.py`
-- **Python enums**：`NotificationTypeEnum`, `NotificationStatusEnum` in `src/db/models/notification.py`
-- **Python enums**：`TaskStatusEnum`, `TaskChannelEnum` in `src/db/models/task.py`
-- **New columns**：`activities.status`, `activities.channel`, `notifications.status`, `tasks.channel`
-- **Migration**：`alembic upgrade head` adds/alters the four columns and creates PostgreSQL ENUM types in `alembic_dev`
-
----
-
-## 4. 设计决策与已知坑
-
-### 4.1 关键选型
-
-- **选 Python `enum.StrEnum` / `enum.IntEnum` 不选 SQLAlchemy `Enum` 枚举类型映射**：Python enums give IDE autocompletion and type-checker safety in service/router code without requiring the DB to hold a PostgreSQL ENUM type. The migration uses raw string CHECK constraints (`CHECK (type IN ('call', 'email', 'meeting', ...))`) rather than `CREATE TYPE ... AS ENUM`, which avoids requiring a multi-step migration to create/drop the PG type and makes rollback simpler. Downstream boards that need DB-level enforcement can add a separate migration later.
-- **选新增 nullable 列（带 server_default）不选 `ALTER COLUMN SET NOT NULL`**：existing rows have no `status`/`channel` value, so the columns are added as nullable with a server default (`'active'`) so the migration is non-destructive. After backfill, a subsequent nullable→NOT NULL migration can tighten the constraint.
-
-### 4.2 版本约束
-
-无新依赖。
-
-### 4.3 兼容性约束
-
-- 多租户：每个 SQL 查询必须 `WHERE tenant_id = :tenant_id`（见 CLAUDE.md §Multi-Tenancy）
-- Service 返回 ORM/dataclass 对象，**不**调用 `.to_dict()`；序列化由 router 负责
-- Service 错误抛 `AppException` 子类，**不**返回 `ApiResponse.error()`
-- `PYTHONPATH=src`，所有 import 写 `from db.models...`，**禁止** `from src.db.models...`
-- SQLAlchemy Base 子类列名不能用 `metadata`（与 `Base.metadata` 冲突）— 当前三个模型均未使用此名称，无风险
-
-### 4.4 已知坑
-
-1. **Alembic autogenerate 把 `Enum` 列写成 `sa.String`** → 规避：Step 3 的迁移由手工编辑，不依赖 `--autogenerate` 对 enum 列的推断；如使用 autogenerate，需检查生成的 `sa.Column(..., Enum(...))` 是否正确。
-2. **Alembic autogenerate 生成的 `DateTime(timezone=True)` 有时会变成 `DateTime`** → 规避：Step 3 手工确认所有 `DateTime` 列带 `timezone=True`。
-3. **PostgreSQL `CREATE TYPE ... AS ENUM` 要求类型不存在才能创建** → 规避：迁移先 `DROP TYPE IF EXISTS` 再 `CREATE TYPE`；`downgrade()` 先删 CHECK 约束再删 TYPE。
-4. **`tenant_id` 索引已在 `b2c3dce4b714` 创建**，本次迁移不重复创建；如有索引缺失在 Step 4 drift check 时会发现。
-
----
-
-## 5. 实现步骤（按顺序）
-
-### Step 1: 更新 ActivityModel — 添加 enums 和缺失列
-
-在 `src/db/models/activity.py` 中：
-a) 在 `import` 区段后添加三个 Python `enum.StrEnum` 类
-b) 在 `Base` import 后添加 `from sqlalchemy import Enum`（如尚未导入）
-c) 在 `type` 列后添加 `status` 和 `channel` 两列
-d) 更新 `to_dict()` 序列化方法以包含新增字段
-
-```python
 # src/db/models/activity.py — 新增 enum 和列（摘要）
 import enum
 
@@ -232,7 +33,7 @@ channel: Mapped[str] = mapped_column(
 
 在 `src/db/models/notification.py` 中：
 a) 在 `import` 区段后添加两个 Python `enum.StrEnum` 类
-b) 在 `import sqlalchemy` 区添加 `Enum`（如尚未导入）
+b) 在 `import` sqlalchemy 区添加 `Enum`（如尚未导入）
 c) 在 `related_id` 列后添加 `status` 列（nullable False, server_default="unread"）
 d) 更新 `to_dict()` 序列化方法以包含 `status`
 
@@ -247,7 +48,7 @@ class NotificationTypeEnum(str, enum.Enum):
     success = "success"
     system = "system"
 
-class NotificationStatusEnum(str, enum.Enum):
+class NotificationStatusCode(str, enum.Enum):
     unread = "unread"
     read = "read"
     archived = "archived"
@@ -345,7 +146,7 @@ def upgrade() -> None:
     op.add_column('tasks', sa.Column('channel', sa.String(50), server_default='internal', nullable=False))
 
 def downgrade() -> None:
-    op.drop_column('tasks', 'channel')
+    op.drop_column('tasks_task', 'channel')
     op.drop_column('notifications', 'status')
     op.drop_column('activities', 'channel')
     op.drop_column('activities', 'status')
@@ -433,9 +234,9 @@ gh pr create --base master --title "feat(models): #455 — add missing enums and
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/customer.py`](../../src/db/models/customer.py) — 参考 ORM 模型风格（含 `to_dict()` + timestamp 字段模式）
-- 同类参考实现：[`src/db/models/ticket.py`](../../src/db/models/ticket.py) — 参考 `status` / `priority` / `channel` 多字段枚举模型
-- Migration 参考：[`alembic/versions/b2c3dce4b714_create_all_tables.py`](../../alembic/versions/b2c3dce4b714_create_all_tables.py) — 三个目标表（activities, notifications, tasks）的初始建表语句
+- 同类参考实现：[`src/db/models/customer.py`](../../../src/db/models/customer.py) — 参考 ORM 模型风格（含 `to_dict()` + timestamp 字段模式）
+- 同类参考实现：[`src/db/models/ticket.py`](../../../src/db/models/ticket.py) — 参考 `status` / `priority` / `channel` 多字段枚举模型
+- Migration 参考：[`alembic/versions/b2c3dce4b714_create_all_tables.py`](../../../alembic/versions/b2c3dce4b714_create_all_tables.py) — 三个目标表（activities, notifications, tasks）的初始建表语句
 - 父 issue / 关联：#451（父 — CRM domain models enums API routers and services for all core entities）
 - 父 issue / 关联：#454（依赖 — upstream migration board）
 
@@ -446,3 +247,11 @@ gh pr create --base master --title "feat(models): #455 — add missing enums and
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+
+---
+
+**Fixes applied:**
+
+1. **`../../src/db/models/...`** and **`../../alembic/...`** → **`../../../src/db/models/...`** and **`../../../alembic/...`** — the board lives in `docs/dev-plan/`, so relative paths to `src/` and `alembic/` at the repo root need two extra `../` levels (docs/dev-plan → repo root → src).
+
+2. **`../0451-crm-domain-models...`** → **`TBD - 待验证：关联 issue #451 的实现板块路径`** — no `0451-*.md` file exists in `docs/dev-plan/`, so the downstream-board link cannot be resolved and is replaced with a TBD marker.

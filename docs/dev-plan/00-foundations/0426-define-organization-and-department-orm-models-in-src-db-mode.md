@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [实现 Identity Service（用户与部门绑定）](../10-customers/0430-create-src-db-repositories-customer-py-with-customerrepository.md) |
+| 启用后赋能 | TBD - 待验证：实现 Identity Service（用户与部门绑定）的文档路径 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -52,7 +52,7 @@ TBD - 待验证：现有 TenantModel / UserModel 的定义位置（可能在 `sr
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/db/models/__init__.py`](../../src/db/models/__init__.py) — 新增 `OrganizationModel`、`DepartmentModel` 的 re-export
+  - [`src/db/models/__init__.py`](../../../src/db/models/__init__.py) — 新增 `OrganizationModel`、`DepartmentModel` 的 re-export
 - 要建：
   - `src/db/models/identity.py` — 定义 `OrganizationModel` 和 `DepartmentModel` 两个 ORM 类
   - `tests/unit/test_identity.py` — 单元测试，覆盖两模型的字段和可导入性
@@ -70,7 +70,7 @@ TBD - 待验证：现有 TenantModel / UserModel 的定义位置（可能在 `sr
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/db/models/identity.py` | 定义 `OrganizationModel`（组织）和 `DepartmentModel`（部门）两个 ORM 模型，含 tenant_id 索引、软删除和时间戳 |
 | `tests/unit/test_identity.py` | 单元测试：验证两模型字段定义正确、可被 import、to_dict() 正常 |
 
@@ -78,7 +78,7 @@ TBD - 待验证：现有 TenantModel / UserModel 的定义位置（可能在 `sr
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/db/models/__init__.py`](../../src/db/models/__init__.py) | 新增 `OrganizationModel`、`DepartmentModel` 的 re-export |
+| [`src/db/models/__init__.py`](../../../src/db/models/__init__.py) | 新增 `OrganizationModel`、`DepartmentModel` 的 re-export |
 
 ### 3.3 新增能力
 
