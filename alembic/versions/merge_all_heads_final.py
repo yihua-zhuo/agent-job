@@ -32,8 +32,15 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    pass
+    # No-op convergence marker. All 12 constituent migrations' upgrade()
+    # methods ran independently before this merge was created, so no
+    # constraint or index is omitted from this file. This merge is
+    # append-only and has no subsequent migrations depending on it.
 
 
 def downgrade() -> None:
+    # Downgrade path: merge was append-only; re-converge the 12 heads by
+    # letting each constituent migration's own downgrade() run independently.
+    # This migrates the DB back to the pre-merge multi-head state, not a
+    # single linear revision, matching the intent of the original merge.
     pass

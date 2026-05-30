@@ -41,7 +41,7 @@ export function useTableState<TData>({
   const getColumnCanGlobalFilter = useMemo(
     () => (column: { id: string | null }) => {
       if (searchableKeys.length === 0) return true;
-      return column.id !== null && (searchableKeys as string[]).includes(column.id);
+      return column.id !== null && searchableKeys.includes(column.id);
     },
     [searchableKeys]
   );

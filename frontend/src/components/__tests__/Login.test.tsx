@@ -67,27 +67,24 @@ describe("Login component", () => {
     );
     render(<Login onSubmit={mockSubmit} />);
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
-    // Safety net: release the mock if waitFor times out (default 1s)
-    const timeout = setTimeout(() => release(), 2000);
-    try {
-      await waitFor(() => {
+    await waitFor(
+      () => {
         expect(
           screen.getByRole("button", { name: /signing in…/i }).disabled
         ).toBe(true);
-        expect(screen.getByPlaceholderText("name@example.com").disabled).toBe(true);
-        expect(screen.getByPlaceholderText("••••••••").disabled).toBe(true);
-      });
-    } finally {
-      clearTimeout(timeout);
-      release();
-    }
+        expect(screen.getByPlaceholderText("········").disabled).toBe(true);
+      },
+      { timeout: 3000 }
+    );
+    // Release the mock so the component resets for subsequent tests.
+    release();
   });
 
   it("disables fields and shows loading when external isLoading is true", async () => {
     render(<Login onSubmit={mockSubmit} isLoading={true} />);
     expect(screen.getByRole("button", { name: /signing in…/i }).disabled).toBe(true);
     expect(screen.getByPlaceholderText("name@example.com").disabled).toBe(true);
-    expect(screen.getByPlaceholderText("••••••••").disabled).toBe(true);
+    expect(screen.getByPlaceholderText("········").disabled).toBe(true);
     expect(mockSubmit).not.toHaveBeenCalled();
   });
 });

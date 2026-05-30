@@ -56,7 +56,7 @@ export function Login({ onSubmit, isLoading: externalLoading }: LoginProps) {
           type="password"
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
+          placeholder="········"
           disabled={isLoading}
         />
       </div>
