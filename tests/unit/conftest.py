@@ -168,6 +168,8 @@ class MockState:
         self.deleted_user_ids: set[int] = set()
         self.activities: dict[int, dict] = {}
         self.activities_next_id: int = 1
+        self.agent_tasks: dict[int, dict] = {}
+        self.agent_tasks_next_id: int = 1
 
 
 def _load_domain_handler_modules():
@@ -277,18 +279,57 @@ def make_mock_session(handlers=None, state=None):
         return MockResult([])
 
     session.execute = AsyncMock(side_effect=_execute_side_effect)
-    session.add = MagicMock()
     session.delete = MagicMock()
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
     session.close = AsyncMock()
-    session.flush = AsyncMock()
-    session.refresh = AsyncMock()
     session.get = AsyncMock(return_value=None)
     session.scalars = MagicMock()
     session.scalar_one_or_none = MagicMock()
     session.scalar_one = MagicMock()
     session.result = MagicMock()
+
+    # Capture ORM objects added via session.add() so flush() can persist them.
+    _pending: list = []
+
+    def _mock_add(obj):
+        _pending.append(obj)
+
+    session.add = MagicMock(side_effect=_mock_add)
+
+    async def _mock_flush():
+        # Persist each pending ORM object by calling the INSERT handler directly.
+        for obj in _pending:
+            params = {}
+            for key in ("task_id", "tenant_id", "description", "status", "subtasks", "created_at", "updated_at"):
+                val = getattr(obj, key, None)
+                if val is not None:
+                    params[key] = val
+            for h in handlers:
+                result = h("insert into agent_tasks", params)
+                if result is not None:
+                    row = result.fetchone()
+                    if row is not None:
+                        for k in row.keys():
+                            setattr(obj, k, getattr(row, k))
+                    break
+        _pending.clear()
+
+    async def _mock_refresh(obj):
+        obj_id = getattr(obj, "id", None)
+        if obj_id is None:
+            return
+        for h in handlers:
+            result = h("select * from agent_tasks where id = :id", {"id": obj_id})
+            if result is not None:
+                row = result.fetchone()
+                if row is not None:
+                    for key in row.keys():
+                        setattr(obj, key, getattr(row, key))
+                break
+
+    session.flush = AsyncMock(side_effect=_mock_flush)
+    session.refresh = AsyncMock(side_effect=_mock_refresh)
 
     @asynccontextmanager
     async def _mock_aenter():
