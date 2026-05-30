@@ -2,21 +2,47 @@
 
 from __future__ import annotations
 
+import re
+
 from tests.unit.conftest import MockResult, MockRow, MockState
+
+_TRAILING_DIGITS = re.compile(r"_\d+$")
+_OFFSET_RE = re.compile(r"offset\s*:?\s*(\w+)", re.IGNORECASE)
+_LIMIT_RE = re.compile(r"limit\s*:?\s*(\w+)", re.IGNORECASE)
 
 ORDER = 10
 
 
 def make_agent_task_handler(state: MockState):
+    if not hasattr(state, "agent_tasks"):
+        state.agent_tasks = {}
+    if not hasattr(state, "agent_tasks_next_id"):
+        state.agent_tasks_next_id = 1
+
     def handler(sql_text, params):
-        # Normalize compiled SQLAlchemy params: strip trailing _<digit> from keys
-        # (e.g. "id_1" -> "id", "tenant_id_1" -> "tenant_id").
+        # Normalize compiled SQLAlchemy params: when SQLAlchemy emits multiple
+        # params with the same base name (e.g. created_at_1, created_at_2 for two
+        # >= and <= comparisons), keep ALL of them so filters receive both bounds.
+        # For params that appear once, strip the trailing _<digit> suffix.
         normalized = {}
         for k, v in params.items():
-            import re
             base = re.sub(r"_\d+$", "", k)
             if base not in normalized:
                 normalized[base] = v
+            elif isinstance(normalized[base], list):
+                normalized[base].append(v)
+            else:
+                normalized[base] = [normalized[base], v]
+
+        # UPDATE (set status after creation)
+        if "update agent_tasks" in sql_text:
+            tid = normalized.get("id")
+            if tid in state.agent_tasks:
+                for k, v in params.items():
+                    if k in state.agent_tasks[tid]:
+                        state.agent_tasks[tid][k] = v
+                return MockResult([MockRow(state.agent_tasks[tid].copy())])
+            return MockResult([])
 
         # INSERT
         if "insert into agent_tasks" in sql_text:
@@ -39,18 +65,36 @@ def make_agent_task_handler(state: MockState):
             state.agent_tasks[new_id] = record
             return MockResult([MockRow(record.copy())])
 
-        # SELECT by id + tenant
-        if "from agent_tasks where id" in sql_text and "tenant_id" in sql_text:
-            tid = normalized.get("id")
-            if tid in state.agent_tasks:
-                return MockResult([MockRow(state.agent_tasks[tid].copy())])
-            return MockResult([])
-
         # COUNT
         if "select" in sql_text and "count" in sql_text and "from agent_tasks" in sql_text:
             tenant_id = normalized.get("tenant_id", 0)
-            count_val = sum(1 for r in state.agent_tasks.values() if r.get("tenant_id") == tenant_id)
+            status_filter = normalized.get("status")
+            date_bounds = normalized.get("created_at")
+            count_val = sum(
+                1 for r in state.agent_tasks.values()
+                if r.get("tenant_id") == tenant_id
+                and (status_filter is None or r.get("status") == status_filter)
+                and (
+                    date_bounds is None
+                    or (
+                        r.get("created_at") is not None
+                        and not (
+                            r.get("created_at") < date_bounds[0]
+                            or r.get("created_at") > date_bounds[-1]
+                        )
+                    )
+                )
+            )
             return MockResult([[count_val]])
+
+        # SELECT by id + tenant
+        if "from agent_tasks where id" in sql_text and "tenant_id" in sql_text:
+            tid = normalized.get("id")
+            tenant_id = normalized.get("tenant_id")
+            rec = state.agent_tasks.get(tid)
+            if rec is not None and rec.get("tenant_id") == tenant_id:
+                return MockResult([MockRow(rec.copy())])
+            return MockResult([])
 
         # SELECT list (no id filter)
         if "select" in sql_text and "from agent_tasks" in sql_text and "where id" not in sql_text:
@@ -59,23 +103,37 @@ def make_agent_task_handler(state: MockState):
             for rec in state.agent_tasks.values():
                 if rec.get("tenant_id") != tenant_id:
                     continue
+                # Apply status filter
+                status_filter = normalized.get("status")
+                if status_filter is not None and rec.get("status") != status_filter:
+                    continue
+                # Apply date_from / date_to filters.
+                # The service emits `created_at >= :created_at_1` and
+                # `created_at <= :created_at_2`; after normalization both land in
+                # normalized["created_at"] as [date_from, date_to]. Use the list
+                # positions directly rather than key-based lookup.
+                date_bounds = normalized.get("created_at")
+                if date_bounds is not None:
+                    created = rec.get("created_at")
+                    if created is None:
+                        continue
+                    date_from_bound = date_bounds[0] if isinstance(date_bounds, list) else date_bounds
+                    date_to_bound = date_bounds[-1] if isinstance(date_bounds, list) else date_bounds
+                    if created < date_from_bound or created > date_to_bound:
+                        continue
                 rows.append(MockRow(rec.copy()))
-            # Parse offset/limit from named params (e.g. param_1=limit, param_2=offset).
-            import re
-            offset_val = None
-            limit_val = None
-            offset_match = re.search(r"offset\s*:?\s*(\w+)", sql_text)
-            limit_match = re.search(r"limit\s*:?\s*(\w+)", sql_text)
+            offset_match = _OFFSET_RE.search(sql_text)
+            limit_match = _LIMIT_RE.search(sql_text)
             if offset_match is not None:
                 offset_key = offset_match.group(1)
                 offset_val = params.get(offset_key)
+                if offset_val is not None:
+                    rows = rows[offset_val:]
             if limit_match is not None:
                 limit_key = limit_match.group(1)
                 limit_val = params.get(limit_key)
-            if offset_val is not None:
-                rows = rows[offset_val:]
-            if limit_val is not None:
-                rows = rows[:limit_val]
+                if limit_val is not None:
+                    rows = rows[:limit_val]
             return MockResult(rows)
 
         return None

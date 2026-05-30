@@ -34,11 +34,11 @@ class AgentTaskService:
         await self.session.refresh(task)
         return task
 
-    async def get_task(self, task_id: int, tenant_id: int) -> AgentTaskModel:
+    async def get_task(self, id: int, tenant_id: int) -> AgentTaskModel:
         result = await self.session.execute(
             select(AgentTaskModel).where(
                 and_(
-                    AgentTaskModel.id == task_id,
+                    AgentTaskModel.id == id,
                     AgentTaskModel.tenant_id == tenant_id,
                 )
             )
@@ -59,6 +59,8 @@ class AgentTaskService:
     ) -> tuple[list[AgentTaskModel], int]:
         conditions = [AgentTaskModel.tenant_id == tenant_id]
         if status is not None:
+            if status not in (AgentTaskStatus.PENDING, AgentTaskStatus.DISPATCHED, AgentTaskStatus.RUNNING, AgentTaskStatus.COMPLETED, AgentTaskStatus.FAILED):
+                raise ValidationException(f"invalid status: {status!r}")
             conditions.append(AgentTaskModel.status == status)
         if date_from is not None:
             conditions.append(AgentTaskModel.created_at >= date_from)
@@ -70,6 +72,8 @@ class AgentTaskService:
         )
         total = count_result.scalar_one()
 
+        page = max(page, 1)
+        page_size = max(page_size, 1)
         offset = (page - 1) * page_size
         result = await self.session.execute(
             select(AgentTaskModel)

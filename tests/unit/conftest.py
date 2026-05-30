@@ -168,8 +168,6 @@ class MockState:
         self.deleted_user_ids: set[int] = set()
         self.activities: dict[int, dict] = {}
         self.activities_next_id: int = 1
-        self.agent_tasks: dict[int, dict] = {}
-        self.agent_tasks_next_id: int = 1
 
 
 def _load_domain_handler_modules():
@@ -298,15 +296,19 @@ def make_mock_session(handlers=None, state=None):
     session.add = MagicMock(side_effect=_mock_add)
 
     async def _mock_flush():
-        # Persist each pending ORM object by calling the INSERT handler directly.
+        # Persist each pending ORM object by calling the appropriate INSERT handler.
         for obj in _pending:
+            tablename = getattr(obj, "__tablename__", None)
+            if tablename is None:
+                continue
             params = {}
             for key in ("task_id", "tenant_id", "description", "status", "subtasks", "created_at", "updated_at"):
                 val = getattr(obj, key, None)
                 if val is not None:
                     params[key] = val
+            sql_text = "insert into " + tablename  # noqa: S608
             for h in handlers:
-                result = h("insert into agent_tasks", params)
+                result = h(sql_text, params)
                 if result is not None:
                     row = result.fetchone()
                     if row is not None:
@@ -316,11 +318,19 @@ def make_mock_session(handlers=None, state=None):
         _pending.clear()
 
     async def _mock_refresh(obj):
+        tablename = getattr(obj, "__tablename__", None)
         obj_id = getattr(obj, "id", None)
-        if obj_id is None:
+        if tablename is None or obj_id is None:
             return
+        tenant_id = getattr(obj, "tenant_id", None)
+        params = {"id": obj_id}
+        if tenant_id is not None:
+            params["tenant_id"] = tenant_id
+            sql_text = "select * from " + tablename + " where id = :id and tenant_id = :tenant_id"  # noqa: S608
+        else:
+            sql_text = "select * from " + tablename + " where id = :id"  # noqa: S608
         for h in handlers:
-            result = h("select * from agent_tasks where id = :id", {"id": obj_id})
+            result = h(sql_text, params)
             if result is not None:
                 row = result.fetchone()
                 if row is not None:
@@ -330,6 +340,7 @@ def make_mock_session(handlers=None, state=None):
 
     session.flush = AsyncMock(side_effect=_mock_flush)
     session.refresh = AsyncMock(side_effect=_mock_refresh)
+    session._state = state  # allow tests to seed state directly
 
     @asynccontextmanager
     async def _mock_aenter():
