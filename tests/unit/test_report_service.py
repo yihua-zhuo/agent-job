@@ -193,6 +193,7 @@ class TestUpdateReport:
 
         assert result.name == "New Name"
         assert result.type == "monthly"
+        assert result.last_run_at is None  # must not be overwritten by partial update
 
     async def test_raises_not_found_for_missing_id(self, mock_db_session):
         """update_report raises NotFoundException when report doesn't exist."""

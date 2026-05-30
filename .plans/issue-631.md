@@ -1,4 +1,4 @@
-`ReportModel` has no `updated_at` column — the dev-plan Step 5 code that assigns it will need to be adjusted. That's a real finding to include.
+[Resolved] `ReportModel` now has `updated_at`; Step 5 omits the assignment as planned.
 
 # Implementation Plan — Issue #631
 

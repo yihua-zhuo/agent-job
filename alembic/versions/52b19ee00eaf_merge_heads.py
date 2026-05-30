@@ -44,7 +44,7 @@ def upgrade() -> None:
     op.create_table(
         "import_jobs",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
-        sa.Column("tenant_id", sa.Integer(), nullable=False, index=True),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("entity_type", sa.String(length=100), nullable=False),
         sa.Column("file_path", sa.String(length=1000), nullable=False),
         sa.Column("status", sa.String(length=50), nullable=False, server_default=sa.text("'pending'")),
@@ -54,10 +54,11 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
+    op.create_index(op.f("ix_import_jobs_tenant_id"), "import_jobs", ["tenant_id"], unique=False)
     op.create_table(
         "export_jobs",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
-        sa.Column("tenant_id", sa.Integer(), nullable=False, index=True),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("entity_type", sa.String(length=100), nullable=False),
         sa.Column("fields", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'")),
         sa.Column("filters", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'")),
@@ -67,6 +68,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
+    op.create_index(op.f("ix_export_jobs_tenant_id"), "export_jobs", ["tenant_id"], unique=False)
 
     # ── e646948c549a: automation_rules + automation_logs ─────────────────────
     op.create_table(
@@ -173,6 +175,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_conversation_messages_conversation_id"), "conversation_messages", ["conversation_id"], unique=False)
     op.create_index("ix_conversation_messages_tenant_conv", "conversation_messages", ["tenant_id", "conversation_id"], unique=False)
+    op.create_index("ix_conversation_messages_tenant_id", "conversation_messages", ["tenant_id"], unique=False)
 
     # ── e1f2a3b4c5d6: opportunity_activities ──────────────────────────────────
     # Assumes `opportunities` table already exists (stamped by a prior head).

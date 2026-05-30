@@ -117,6 +117,7 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], name="fk_churn_predictions_tenant_id"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_churn_predictions_tenant_id"), "churn_predictions", ["tenant_id"], unique=False)
@@ -346,6 +347,7 @@ def downgrade() -> None:
     op.drop_index("ix_churn_predictions_tenant_customer", table_name="churn_predictions")
     op.drop_index(op.f("ix_churn_predictions_customer_id"), table_name="churn_predictions")
     op.drop_index(op.f("ix_churn_predictions_tenant_id"), table_name="churn_predictions")
+    op.drop_constraint("fk_churn_predictions_tenant_id", "churn_predictions", type_="foreignkey")
     op.drop_table("churn_predictions")
     # webhook tables (63274a8b98b3c):
     op.drop_index("ix_webhook_deliveries_webhook_id", table_name="webhook_deliveries")
