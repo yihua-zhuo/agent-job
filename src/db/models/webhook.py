@@ -54,7 +54,14 @@ class WebhookDeliveryModel(Base):
     last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    __table_args__ = (Index("ix_webhook_deliveries_webhook_id", "webhook_id"),)
+    __table_args__ = (
+        Index(
+            "ix_delivery_next_retry",
+            "next_retry_at",
+            postgresql_where=text("(next_retry_at IS NOT NULL)"),
+        ),
+        Index("ix_webhook_deliveries_webhook_id", "webhook_id"),
+    )
 
     def to_dict(self) -> dict:
         return {
