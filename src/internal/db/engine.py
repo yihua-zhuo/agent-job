@@ -219,7 +219,12 @@ async def async_session_scope():
 
 
 def dispose_async_engine():
-    """Dispose the async engine pool and reset the singleton."""
+    """Dispose the async engine pool and reset the singleton.
+
+    Must be called from a *synchronous* shutdown context (e.g. FastAPI
+    lifespan ``on_event("shutdown")``). Uses ``run_until_complete`` internally
+    so it is not async-safe — do not call it from within an async context.
+    """
     global _async_engine, _async_session_factory
     if _async_engine is not None:
         import asyncio

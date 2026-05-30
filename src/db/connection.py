@@ -143,7 +143,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         async def list_users(session: AsyncSession = Depends(get_db)):
             ...
     """
-    _lazy_init()
+    ensure_engine()
     session: AsyncSession = async_session_maker()  # type: ignore
     try:
         yield session

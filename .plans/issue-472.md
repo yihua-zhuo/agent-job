@@ -61,7 +61,7 @@ def clear() -> None:
     into subsequent requests processed by the same worker.
     """
     _tenant_id_var.set(None)
-```
+```python
 
 ### Step 2: Update `src/internal/middleware/__init__.py`
 
@@ -71,7 +71,7 @@ The file already exists as a package marker (`"""空文件，用于 Python 包�
 from .tenant_context import clear, get_tenant_id, set_tenant_id
 
 __all__ = ["clear", "get_tenant_id", "set_tenant_id"]
-```
+```python
 
 ### Step 3: Create `tests/unit/test_tenant_context.py`
 
@@ -110,7 +110,7 @@ class TestTenantContext:
         result = await helper()
         assert result == 7
         clear()
-```
+```python
 
 > **Note on test fixtures:** Tests use plain integer literals (e.g. `42`, `99`, `7`) via explicit `set_tenant_id` calls rather than a `tenant_id` fixture. The shared `tests/unit/conftest.py` provides a `tenant_id` fixture, but CLAUDE.md Rule 125 discourages adding domain-specific fixtures there for new features. Each test manages its own setup/teardown via the `_cleanup` autouse fixture, so no shared fixture is needed.
 
@@ -118,11 +118,11 @@ class TestTenantContext:
 
 Run both ruff check and format check on the two new files, then on the whole `src/` tree to confirm nothing regressed:
 
-```
+```python
 ruff check src/internal/middleware/tenant_context.py src/internal/middleware/__init__.py
 ruff format --check src/internal/middleware/tenant_context.py src/internal/middleware/__init__.py
 ruff check src/
-```
+```python
 
 Fix any reported issues.
 
