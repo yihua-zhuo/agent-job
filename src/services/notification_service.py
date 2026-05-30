@@ -66,6 +66,7 @@ class NotificationService:
         )
         self.session.add(notification)
         await self.session.flush()
+        await self.session.refresh(notification)
         return notification
 
     async def get_user_notifications(
@@ -235,9 +236,7 @@ class NotificationService:
         if reminder is None:
             raise NotFoundException("提醒")
         await self.session.execute(
-            delete(ReminderModel).where(
-                and_(ReminderModel.id == reminder_id, ReminderModel.tenant_id == tenant_id)
-            )
+            delete(ReminderModel).where(and_(ReminderModel.id == reminder_id, ReminderModel.tenant_id == tenant_id))
         )
         await self.session.flush()
         return reminder
@@ -259,7 +258,7 @@ class NotificationService:
             ReminderModel.user_id == user_id,
         ]
         if upcoming_only:
-            conditions.append(ReminderModel.is_completed == False)  # noqa: E712
+            conditions.append(ReminderModel.is_completed.is_(False))
             conditions.append(ReminderModel.remind_at > datetime.now(UTC))
 
         count_result = await self.session.execute(select(func.count(ReminderModel.id)).where(and_(*conditions)))

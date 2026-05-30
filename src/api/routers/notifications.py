@@ -165,7 +165,7 @@ async def delete_notification(
 
     svc = NotificationService(session)
     data = await svc.delete_notification(notification_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data, "message": "通知已删除"}
+    return {"success": True, "data": data.to_dict(), "message": "通知已删除"}
 
 
 @notifications_router.get(
@@ -251,13 +251,10 @@ async def list_reminders(
 
 
 def _reminder_to_api(r):
-    # Standardize on ORM objects (ReminderModel/to_dict) — the duck-typing fallback
-    # for dict is a safety net for edge-case payloads that bypass the service layer.
     if hasattr(r, "to_dict"):
         return r.to_dict()
     if isinstance(r, dict):
         return r
-    return r
 
 
 @notifications_router.delete(
@@ -275,4 +272,4 @@ async def cancel_reminder(
 
     svc = NotificationService(session)
     data = await svc.cancel_reminder(reminder_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data, "message": "提醒已取消"}
+    return {"success": True, "data": data.to_dict(), "message": "提醒已取消"}

@@ -98,16 +98,19 @@ class AutomationService:
             if user_check.scalar_one_or_none() is None:
                 return {"type": action_type, "status": "skipped", "reason": "recipient user not found in tenant"}
             svc = NotificationService(self.session)
-            await svc.send_notification(
-                user_id=recipient_user_id,
-                notification_type=params.get("channel", "in_app"),
-                title=params.get("title", "Automation triggered"),
-                content=params.get("message", f"Automation rule triggered: {context.get('rule_name')}"),
-                tenant_id=tenant_id,
-                related_type=context.get("entity_type"),
-                related_id=context.get("entity_id"),
-            )
-            return {"type": action_type, "status": "sent"}
+            try:
+                await svc.send_notification(
+                    user_id=recipient_user_id,
+                    notification_type=params.get("channel", "in_app"),
+                    title=params.get("title", "Automation triggered"),
+                    content=params.get("message", f"Automation rule triggered: {context.get('rule_name')}"),
+                    tenant_id=tenant_id,
+                    related_type=context.get("entity_type"),
+                    related_id=context.get("entity_id"),
+                )
+                return {"type": action_type, "status": "sent"}
+            except AppException as e:
+                return {"type": action_type, "status": "error", "error": str(e)}
 
         elif action_type == "task.create":
             assignee_id = params.get("assignee_id")

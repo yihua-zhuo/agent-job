@@ -105,7 +105,12 @@ def make_notification_handler(state):
         if "count(" in sql_text_lower and "from notifications" in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
+            # Explicit unread_only param takes precedence; fall back to SQL text heuristic
+            # for tests using raw SQL text matching (backward compat).
+            if "_unread_only" in params:
+                unread_filter = params["_unread_only"]
+            else:
+                unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
             count = sum(
                 1
                 for n in state._notifications.values()
@@ -118,7 +123,10 @@ def make_notification_handler(state):
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
+            if "_unread_only" in params:
+                unread_filter = params["_unread_only"]
+            else:
+                unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = []
@@ -222,8 +230,8 @@ def make_reminder_handler(state):
             # in a non-upcoming-only query. A dedicated _upcoming_only bool param would be
             # cleaner and is worth considering if the service signature is refactored.
             is_completed_filter = params.get("is_completed")
-            now = params.get("_now", datetime.now(UTC))
-            upcoming_only = is_completed_filter is False
+            now = params.get("_now")
+            upcoming_only = params.get("_upcoming_only", is_completed_filter is False)
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = [

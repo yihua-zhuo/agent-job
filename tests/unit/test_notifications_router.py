@@ -213,6 +213,29 @@ class TestSendNotification:
         error_fields = {e.get("loc")[-1] for e in errors}
         assert error_fields == {"user_id", "notification_type", "title", "content"}
 
+    def test_send_invalid_notification_type(self):
+        """Rule 144: invalid notification_type returns 422 with specific error detail."""
+        from pkg.errors.app_exceptions import ValidationException
+        with patch("api.routers.notifications.NotificationService") as svc_cls:
+            svc = svc_cls.return_value
+            svc.send_notification = AsyncMock(
+                side_effect=ValidationException(
+                    "notification_type must be one of ['email', 'in_app', 'push', 'sms'], got 'telegram'"
+                )
+            )
+            client = _app()
+            response = client.post(
+                "/api/v1/notifications/send",
+                json={
+                    "user_id": 2,
+                    "notification_type": "telegram",
+                    "title": "Test",
+                    "content": "Test",
+                },
+            )
+            assert response.status_code == 422
+            assert "telegram" in response.json().get("message", "") or "notification_type" in str(response.json())
+
 
 # ---------------------------------------------------------------------------
 # PUT /notifications/{id}/read
@@ -362,7 +385,8 @@ class TestDeleteNotificationEndpoint:
     def test_delete_notification_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.delete_notification = AsyncMock(return_value={"id": 1})
+            mock_notif = _MockNotificationModel({"id": 1})
+            svc.delete_notification = AsyncMock(return_value=mock_notif)
             client = _app()
             response = client.delete("/api/v1/notifications/1")
             assert response.status_code == 200
@@ -386,7 +410,8 @@ class TestCancelReminderEndpoint:
     def test_cancel_reminder_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.cancel_reminder = AsyncMock(return_value={"id": 1})
+            mock_reminder = _MockReminderModel(id=1, title="Standup", remind_at="2026-12-31T09:00:00")
+            svc.cancel_reminder = AsyncMock(return_value=mock_reminder)
             client = _app()
             response = client.delete("/api/v1/reminders/1")
             assert response.status_code == 200

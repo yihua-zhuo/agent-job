@@ -48,17 +48,30 @@ TENANT_ROW = {
 # ---------------------------------------------------------------------------
 
 @pytest.fixture
-def client_with_service(monkeypatch):
+def tenant_router_client(monkeypatch):
+    """Builds a fully-mocked FastAPI test client for the tenants router.
+
+    TenantService is patched so the DB is never touched.  A smoke assertion
+    verifies the constructor receives a session-like argument, detecting
+    signature changes in the service constructor early.
+    """
     from starlette.requests import Request
     from starlette.responses import JSONResponse
 
     from internal.middleware.fastapi_auth import require_auth
 
     mock_service = MagicMock()
+    # Capture constructor args for smoke-test assertion without changing
+    # what tests receive as `svc`.
+    captured_sessions = []
+
+    def _wrapping_constructor(*args, **kwargs):
+        captured_sessions.extend(args[1:])  # all positional args after self
+        return mock_service
 
     monkeypatch.setattr(
         "api.routers.tenants.TenantService",
-        lambda session: mock_service,
+        _wrapping_constructor,
     )
 
     app = FastAPI()
@@ -89,8 +102,8 @@ def client_with_service(monkeypatch):
 # ---------------------------------------------------------------------------
 
 class TestCreateTenantEndpoint:
-    def test_success_returns_201(self, client_with_service):
-        client, svc = client_with_service
+    def test_success_returns_201(self, tenant_router_client):
+        client, svc = tenant_router_client
         svc.create_tenant = AsyncMock(return_value=TENANT_ROW)
         resp = client.post(
             "/api/v1/tenants",
@@ -105,8 +118,8 @@ class TestCreateTenantEndpoint:
         assert body["success"] is True
         assert body["data"]["name"] == "Acme Corp"
 
-    def test_service_error_returns_4xx(self, client_with_service):
-        client, svc = client_with_service
+    def test_service_error_returns_4xx(self, tenant_router_client):
+        client, svc = tenant_router_client
         svc.create_tenant = AsyncMock(
             side_effect=ValidationException("租户名称已存在")
         )
@@ -119,8 +132,8 @@ class TestCreateTenantEndpoint:
         )
         assert resp.status_code == 422
 
-    def test_empty_name_rejected(self, client_with_service):
-        client, _ = client_with_service
+    def test_empty_name_rejected(self, tenant_router_client):
+        client, _ = tenant_router_client
         resp = client.post(
             "/api/v1/tenants",
             json={"name": "", "plan": "basic"},
@@ -133,15 +146,15 @@ class TestCreateTenantEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestGetTenantEndpoint:
-    def test_success(self, client_with_service):
-        client, svc = client_with_service
+    def test_success(self, tenant_router_client):
+        client, svc = tenant_router_client
         svc.get_tenant = AsyncMock(return_value=TENANT_ROW)
         resp = client.get("/api/v1/tenants/1")
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == 1
 
-    def test_not_found_returns_404(self, client_with_service):
-        client, svc = client_with_service
+    def test_not_found_returns_404(self, tenant_router_client):
+        client, svc = tenant_router_client
         svc.get_tenant = AsyncMock(
             side_effect=NotFoundException("Tenant")
         )
@@ -154,8 +167,8 @@ class TestGetTenantEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestListTenantsEndpoint:
-    def test_success(self, client_with_service):
-        client, svc = client_with_service
+    def test_success(self, tenant_router_client):
+        client, svc = tenant_router_client
         svc.list_tenants = AsyncMock(return_value=([TENANT_ROW], 1))
         resp = client.get("/api/v1/tenants")
         assert resp.status_code == 200
@@ -163,14 +176,14 @@ class TestListTenantsEndpoint:
         assert body["success"] is True
         assert body["data"]["total"] == 1
 
-    def test_with_pagination_params(self, client_with_service):
-        client, svc = client_with_service
+    def test_with_pagination_params(self, tenant_router_client):
+        client, svc = tenant_router_client
         svc.list_tenants = AsyncMock(return_value=([TENANT_ROW], 1))
         resp = client.get("/api/v1/tenants?page=2&page_size=5")
         assert resp.status_code == 200
 
-    def test_page_size_over_100_rejected(self, client_with_service):
-        client, _ = client_with_service
+    def test_page_size_over_100_rejected(self, tenant_router_client):
+        client, _ = tenant_router_client
         resp = client.get("/api/v1/tenants?page_size=101")
         assert resp.status_code == 422
 
@@ -180,16 +193,16 @@ class TestListTenantsEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestUpdateTenantEndpoint:
-    def test_success(self, client_with_service):
-        client, svc = client_with_service
+    def test_success(self, tenant_router_client):
+        client, svc = tenant_router_client
         updated = {**TENANT_ROW, "name": "Updated Corp"}
         svc.update_tenant = AsyncMock(return_value=updated)
         resp = client.put("/api/v1/tenants/1", json={"name": "Updated Corp"})
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "Updated Corp"
 
-    def test_not_found_returns_404(self, client_with_service):
-        client, svc = client_with_service
+    def test_not_found_returns_404(self, tenant_router_client):
+        client, svc = tenant_router_client
         svc.update_tenant = AsyncMock(
             side_effect=NotFoundException("Tenant")
         )
@@ -208,14 +221,14 @@ class TestUpdateTenantEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestDeleteTenantNotExposed:
-    def test_returns_405_when_method_not_allowed(self, client_with_service):
+    def test_returns_405_when_method_not_allowed(self, tenant_router_client):
         """DELETE is not defined on /api/v1/tenants/{id} — FastAPI returns 405.
 
         Intentionally not exposed: tenant deletion is handled via status='deleted'
         (soft delete) through other endpoints. A positive DELETE endpoint test
         should be added here when a hard-delete endpoint is introduced in a future PR.
         """
-        client, _ = client_with_service
+        client, _ = tenant_router_client
         resp = client.delete("/api/v1/tenants/1")
         assert resp.status_code == 405
 
@@ -225,8 +238,8 @@ class TestDeleteTenantNotExposed:
 # ---------------------------------------------------------------------------
 
 class TestTenantStatsEndpoint:
-    def test_success(self, client_with_service):
-        client, svc = client_with_service
+    def test_success(self, tenant_router_client):
+        client, svc = tenant_router_client
         stats_data = {
             "tenant_id": 1,
             "user_count": 10,
@@ -247,8 +260,8 @@ class TestTenantStatsEndpoint:
 # ---------------------------------------------------------------------------
 
 class TestTenantUsageEndpoint:
-    def test_success(self, client_with_service):
-        client, svc = client_with_service
+    def test_success(self, tenant_router_client):
+        client, svc = tenant_router_client
         usage_data = {
             "tenant_id": 1,
             "user_count": 5,
@@ -269,46 +282,46 @@ class TestTenantUsageEndpoint:
 class TestTenantCrossTenantIsolation:
     """Rule 126: a tenant cannot read/modify another tenant's data via the API."""
 
-    def test_get_tenant_rejects_cross_tenant_id(self, client_with_service):
+    def test_get_tenant_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant A requesting tenant B's data via URL path tenant_id returns 404 or 403."""
-        client, svc = client_with_service
+        client, svc = tenant_router_client
         svc.get_tenant = AsyncMock(side_effect=NotFoundException("Tenant"))
         resp = client.get("/api/v1/tenants/9999")
         assert resp.status_code == 404
         svc.get_tenant.assert_called_once_with(9999, requesting_tenant_id=1)
 
-    def test_get_tenant_forbidden_on_existing_cross_tenant(self, client_with_service):
+    def test_get_tenant_forbidden_on_existing_cross_tenant(self, tenant_router_client):
         """Tenant A requesting tenant B's data for an existing-but-inaccessible tenant returns 403."""
-        client, svc = client_with_service
+        client, svc = tenant_router_client
         svc.get_tenant = AsyncMock(side_effect=ForbiddenException("Tenant 2"))
         resp = client.get("/api/v1/tenants/2")
         assert resp.status_code == 403
         svc.get_tenant.assert_called_once_with(2, requesting_tenant_id=1)
 
-    def test_get_tenant_not_found_for_nonexistent_tenant(self, client_with_service):
+    def test_get_tenant_not_found_for_nonexistent_tenant(self, tenant_router_client):
         """Tenant A requesting a non-existent tenant ID returns 404."""
-        client, svc = client_with_service
+        client, svc = tenant_router_client
         svc.get_tenant = AsyncMock(side_effect=NotFoundException("Tenant"))
         resp = client.get("/api/v1/tenants/9999")
         assert resp.status_code == 404
 
-    def test_get_tenant_stats_rejects_cross_tenant_id(self, client_with_service):
+    def test_get_tenant_stats_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant A cannot access tenant B's stats; service layer returns 404 for unknown tenant."""
-        client, svc = client_with_service
+        client, svc = tenant_router_client
         svc.get_tenant_stats = AsyncMock(side_effect=NotFoundException("Tenant"))
         resp = client.get("/api/v1/tenants/stats")
         assert resp.status_code == 404
 
-    def test_get_tenant_usage_rejects_cross_tenant_id(self, client_with_service):
+    def test_get_tenant_usage_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant A cannot access tenant B's usage; service layer returns 404 for unknown tenant."""
-        client, svc = client_with_service
+        client, svc = tenant_router_client
         svc.get_tenant_usage = AsyncMock(side_effect=NotFoundException("Tenant"))
         resp = client.get("/api/v1/tenants/usage")
         assert resp.status_code == 404
 
-    def test_update_tenant_rejects_cross_tenant_id(self, client_with_service):
+    def test_update_tenant_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant A updating tenant B's record via URL path tenant_id returns 403."""
-        client, svc = client_with_service
+        client, svc = tenant_router_client
         svc.update_tenant = AsyncMock(side_effect=ForbiddenException("Tenant 9999"))
         resp = client.put("/api/v1/tenants/9999", json={"name": "Stolen"})
         assert resp.status_code == 403

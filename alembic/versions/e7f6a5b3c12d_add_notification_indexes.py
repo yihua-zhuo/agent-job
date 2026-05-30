@@ -138,7 +138,6 @@ def downgrade() -> None:
     # UPDATEs complete. These were re-added and backfilled in the first half of downgrade.
     op.drop_column("notifications", "related_id")
     op.drop_column("notifications", "related_type")
-    op.drop_column("notifications", "is_read")
     op.drop_column("notifications", "content")
     op.drop_column("notifications", "title")
     op.drop_column("notifications", "type")

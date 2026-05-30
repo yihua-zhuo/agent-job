@@ -97,7 +97,6 @@ class TenantService:
             tenant.settings = new_settings
 
         await self.session.flush()
-        await self.session.refresh(tenant)
         return tenant
 
     async def suspend_tenant(self, tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
@@ -128,13 +127,13 @@ class TenantService:
     ) -> tuple[list[TenantModel], int]:
         conditions = [TenantModel.status != "deleted"]
         if status:
-            conditions = [TenantModel.status == status]
+            conditions.append(TenantModel.status == status)
         # Rule126: non-zero requesting_tenant_id may only see its own tenant record
         if requesting_tenant_id > 0:
             conditions.append(TenantModel.id == requesting_tenant_id)
 
         count_result = await self.session.execute(select(func.count(TenantModel.id)).where(and_(*conditions)))
-        total = count_result.scalar() or 0
+        total = count_result.scalar_one()
 
         offset = (page - 1) * page_size
         result = await self.session.execute(

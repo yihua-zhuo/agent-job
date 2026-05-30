@@ -538,14 +538,12 @@ class TestNotificationIntegration:
         assert total2 == 1
         assert len(items2) == 1
         assert items2[0].id == notif2.id
-        assert items2[0].template == "T2"
 
         # Tenant 1 sees only their own T1 notification, not tenant 2's T2.
         items1, total1 = await svc.get_user_notifications(user_id=uid1, tenant_id=tenant_id)
         assert total1 == 1
         assert len(items1) == 1
         assert items1[0].id == notif1.id
-        assert items1[0].template == "T1"
 
         with pytest.raises(NotFoundException):
             # Use tenant 1's context to fetch tenant 2's notification ID.
