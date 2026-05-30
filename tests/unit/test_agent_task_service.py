@@ -70,15 +70,27 @@ class TestListTasks:
         assert len(tasks) == 2
 
     async def test_filters_by_status(self, service, mock_db_session):
-        # Create two tasks with distinct statuses
+        # Create two tasks with distinct statuses under tenant 1.
         task_a = await service.create_task("Task A", tenant_id=1)
         task_b = await service.create_task("Task B", tenant_id=1)
         # Directly update stored state to simulate completed status.
         state = mock_db_session._state
         state.agent_tasks[task_a.id]["status"] = "completed"
+        # Seed a task under tenant 2 with the same status that the query targets.
+        # The cross-tenant task must not appear in tenant 1's results.
+        other_id = state.agent_tasks_next_id
+        state.agent_tasks[other_id] = {
+            "id": other_id, "task_id": f"atask_{other_id}", "tenant_id": 2,
+            "description": "Tenant 2 pending task", "status": "pending",
+            "subtasks": [], "created_at": datetime.now(UTC), "updated_at": datetime.now(UTC),
+        }
+        state.agent_tasks_next_id += 1
         pending_tasks, total = await service.list_tasks(tenant_id=1, status="pending", page=1, page_size=20)
         assert total == 1
         assert pending_tasks[0].description == task_b.description
+        # Ensure the tenant-2 task was never included.
+        descriptions = {t.description for t in pending_tasks}
+        assert "Tenant 2 pending task" not in descriptions
 
     async def test_filters_by_date_range(self, service, mock_db_session):
         # Directly seed two tasks with distant dates into the mock state.

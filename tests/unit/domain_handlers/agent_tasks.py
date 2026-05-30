@@ -37,15 +37,22 @@ def make_agent_task_handler(state: MockState):
         # UPDATE (set status after creation)
         if "update agent_tasks" in sql_text:
             tid = normalized.get("id")
-            if tid in state.agent_tasks:
-                for k, v in params.items():
-                    if k in state.agent_tasks[tid]:
-                        state.agent_tasks[tid][k] = v
-                return MockResult([MockRow(state.agent_tasks[tid].copy())])
-            return MockResult([])
+            rec = state.agent_tasks.get(tid)
+            if rec is None or rec.get("tenant_id") != normalized.get("tenant_id"):
+                return MockResult([])
+            base_keys = set(state.agent_tasks[tid].keys())
+            for k, v in params.items():
+                base = re.sub(r"_\d+$", "", k)
+                if base in base_keys:
+                    state.agent_tasks[tid][base] = v
+            return MockResult([MockRow(state.agent_tasks[tid].copy())])
 
         # INSERT
         if "insert into agent_tasks" in sql_text:
+            # tenant_id must be explicitly provided by the service.
+            tenant_id = normalized.get("tenant_id")
+            if not tenant_id:
+                raise ValueError("agent_tasks INSERT requires tenant_id in params")
             # Skip if already inserted (flush called after a prior refresh set the id).
             existing_id = normalized.get("id")
             if existing_id is not None and existing_id in state.agent_tasks:
@@ -55,7 +62,7 @@ def make_agent_task_handler(state: MockState):
             record = {
                 "id": new_id,
                 "task_id": normalized.get("task_id") or params.get("task_id") or f"atask_{new_id}",
-                "tenant_id": normalized.get("tenant_id") or 0,
+                "tenant_id": tenant_id,
                 "description": normalized.get("description") or params.get("description"),
                 "status": normalized.get("status") or "pending",
                 "subtasks": normalized.get("subtasks") or params.get("subtasks") or [],
@@ -67,7 +74,9 @@ def make_agent_task_handler(state: MockState):
 
         # COUNT
         if "select" in sql_text and "count" in sql_text and "from agent_tasks" in sql_text:
-            tenant_id = normalized.get("tenant_id", 0)
+            tenant_id = normalized.get("tenant_id")
+            if tenant_id is None:
+                return MockResult([[0]])
             status_filter = normalized.get("status")
             date_bounds = normalized.get("created_at")
             count_val = sum(
@@ -98,7 +107,9 @@ def make_agent_task_handler(state: MockState):
 
         # SELECT list (no id filter)
         if "select" in sql_text and "from agent_tasks" in sql_text and "where id" not in sql_text:
-            tenant_id = normalized.get("tenant_id", 0)
+            tenant_id = normalized.get("tenant_id")
+            if tenant_id is None:
+                return MockResult([])
             rows = []
             for rec in state.agent_tasks.values():
                 if rec.get("tenant_id") != tenant_id:

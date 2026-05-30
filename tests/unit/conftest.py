@@ -302,6 +302,10 @@ def make_mock_session(handlers=None, state=None):
             tablename = getattr(obj, "__tablename__", None)
             if tablename is None:
                 continue
+            # Guard: tablename must be a valid SQL identifier (alphanumeric + underscore).
+            # This prevents arbitrary SQL injection through a malicious __tablename__.
+            if not tablename.isidentifier():
+                continue
             params = {}
             # Extract every public attribute from the ORM object so handlers
             # receive all column values regardless of which model is used.
@@ -326,6 +330,9 @@ def make_mock_session(handlers=None, state=None):
         tablename = getattr(obj, "__tablename__", None)
         obj_id = getattr(obj, "id", None)
         if tablename is None or obj_id is None:
+            return
+        # Guard: tablename must be a valid SQL identifier.
+        if not tablename.isidentifier():
             return
         tenant_id = getattr(obj, "tenant_id", None)
         params = {"id": obj_id}

@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -81,6 +81,9 @@ class WorkflowNodeModel(Base):
     """Workflow node record mapped to the `workflow_nodes` table."""
 
     __tablename__ = "workflow_nodes"
+    __table_args__ = (
+        Index("ix_workflow_nodes_tenant_id_workflow_id", "tenant_id", "workflow_id", unique=False),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workflow_id: Mapped[int] = mapped_column(
