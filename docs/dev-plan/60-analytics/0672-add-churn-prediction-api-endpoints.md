@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-`ChurnPredictionService` 已在 [`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) 实现，但目前没有任何 HTTP端点暴露其能力。CRM 使用方无法通过 API 查询单个客户流失风险或批量预测，必须通过后台脚本手动调用，门槛高且无法集成到前端仪表盘。API 层缺失导致整个预测服务无法在实际业务流程中使用。
+`ChurnPredictionService` 已在 [`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) 实现，但目前没有任何 HTTP端点暴露其能力。CRM 使用方无法通过 API 查询单个客户流失风险或批量预测，必须通过后台脚本手动调用，门槛高且无法集成到前端仪表盘。API 层缺失导致整个预测服务无法在实际业务流程中使用。
 
 ### 1.2 做完后
 
@@ -44,7 +44,7 @@
 
 N/A — 新建模块。`ChurnPredictionService` 已存在，但 API router 尚未创建。以下是已有 Service 的关键签名，供 router 调用：
 
-[`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) L{49}-L{80}
+[`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) L{49}-L{80}
 
 ```python
 class ChurnPredictionService:
@@ -319,7 +319,7 @@ gh pr create --base master --title "feat(#672): add churn prediction API endpoin
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) —已有 customer端点的 request/response schema 和路由注册模式- 同类参考实现：[`src/api/routers/reports.py`](../../src/api/routers/reports.py) — 同类分析 router 的 schema 定义风格
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) —已有 customer端点的 request/response schema 和路由注册模式- 同类参考实现：[`src/api/routers/reports.py`](../../../src/api/routers/reports.py) — 同类分析 router 的 schema 定义风格
 - 父 issue /关联：#35（父 issue，CRM Analytics 功能集）
 - 依赖 issue /关联：#671（ChurnPredictionService 实现，本板块的 API 层依赖）
 

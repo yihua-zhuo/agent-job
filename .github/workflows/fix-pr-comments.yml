@@ -64,6 +64,10 @@ jobs:
         # matter, AND the working tree stays pristine for the upcoming
         # `git merge` step (agent-actions lives under .agent-actions/, not
         # the repo's own tree).
+        # Skip the clone when .agent-actions/ already exists — relevant for
+        # local act --bind runs where the operator has iterated on the
+        # scripts and doesn't want them overwritten by a remote checkout.
+        if: hashFiles('.agent-actions/scripts/*.py') == ''
         uses: actions/checkout@v4
         with:
           repository: yihua-zhuo/agent-actions

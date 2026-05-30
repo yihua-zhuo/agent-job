@@ -6,7 +6,7 @@
 | 分类 | 99-misc |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [实现 TenantContext 工具类](../99-misc/0472-implement-tenant-context-utilities.md) |
+| 依赖 | [实现 TenantContext 工具类](../00-foundations/0472-implement-tenantcontext-utility-module.md) |
 | 启用后赋能 | [审计 tenant_id 过滤](../99-misc/0488-audit-tenant-id-filtering-across-activityservice.md), [实现 DataIsolationService](../70-platform/0475-implement-dataisolationservice-and-isolation-integration-tes.md) |
 | 状态 | 📋 待开始 |
 
@@ -81,7 +81,7 @@ N/A — 新建模块
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | Register `TenantMiddleware` in app middleware stack; read `tenant_id` from `request.state.auth_context.tenant_id` |
+| [`src/main.py`](../../../src/main.py) | Register `TenantMiddleware` in app middleware stack; read `tenant_id` from `request.state.auth_context.tenant_id` |
 
 ### 3.3 新增能力
 
@@ -286,7 +286,7 @@ gh pr create --base master --title "feat(#473): implement TenantMiddleware and r
 
 ## 9. 参考
 
-- 同类参考实现：[`src/internal/middleware/fastapi_auth.py`](../../src/internal/middleware/fastapi_auth.py) — existing ASGI middleware pattern (AuthContext + require_auth) to mirror
+- 同类参考实现：[`src/internal/middleware/fastapi_auth.py`](../../../src/internal/middleware/fastapi_auth.py) — existing ASGI middleware pattern (AuthContext + require_auth) to mirror
 - 第三方文档：Starlette `BaseHTTPMiddleware` — https://www.starlette.io/middleware/#basehttpmiddleware
 - 父 issue / 关联：#447, #472
 
@@ -297,3 +297,5 @@ gh pr create --base master --title "feat(#473): implement TenantMiddleware and r
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+----- END CORRECTED BOARD -----

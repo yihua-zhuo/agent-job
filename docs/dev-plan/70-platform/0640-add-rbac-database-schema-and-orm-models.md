@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-当前仓库已有 [`src/db/models/rbac.py`](../../src/db/models/rbac.py) 中定义的 ORM 模型类和 `RBACService`，但数据库中尚无对应的物理表。`roles`、`permissions`、`user_roles` 三层表不存在，导致基于数据库的角色-权限赋权和查询无法工作，所有权限判断均依赖代码中硬编码的 `DEFAULT_ROLES` / `DEFAULT_PERMISSIONS` 枚举，而非持久化数据。
+当前仓库已有 [`src/db/models/rbac.py`](../../../src/db/models/rbac.py) 中定义的 ORM 模型类和 `RBACService`，但数据库中尚无对应的物理表。`roles`、`permissions`、`user_roles` 三层表不存在，导致基于数据库的角色-权限赋权和查询无法工作，所有权限判断均依赖代码中硬编码的 `DEFAULT_ROLES` / `DEFAULT_PERMISSIONS` 枚举，而非持久化数据。
 
 ### 1.2 做完后
 
@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-入口文件：[`src/db/models/rbac.py`](../../src/db/models/rbac.py) L{1}-L{30}
+入口文件：[`src/db/models/rbac.py`](../../../src/db/models/rbac.py) L{1}-L{30}
 
 ```python
 1:  """RBAC ORM models — roles, permissions, user role assignments."""
@@ -63,12 +63,12 @@
 16:     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 ```
 
-当前 `RBACService` ([`src/services/rbac_service.py`](../../src/services/rbac_service.py) L{1}-L{16}) 使用内存中的 `DEFAULT_ROLES` 列表提供权限判断，尚无数据库持久化依赖。
+当前 `RBACService` ([`src/services/rbac_service.py`](../../../src/services/rbac_service.py) L{1}-L{16}) 使用内存中的 `DEFAULT_ROLES` 列表提供权限判断，尚无数据库持久化依赖。
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`alembic/env.py`](../../alembic/env.py) — 无需改动，`import db.models` 通过 `pkgutil` 自动发现 `rbac.py` 中的模型
+  - [`alembic/env.py`](../../../alembic/env.py) — 无需改动，`import db.models` 通过 `pkgutil` 自动发现 `rbac.py` 中的模型
 - 要建：
   - `alembic/versions/<new_id>_add_rbac_tables.py` — 创建 roles / permissions / role_permissions / user_roles 四张表并 seed 数据
 
@@ -92,8 +92,8 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/db/models/rbac.py`](../../src/db/models/rbac.py) | 无需修改 — ORM 模型已存在且与迁移 schema 一致 |
-| [`alembic/env.py`](../../alembic/env.py) | 无需修改 — `import db.models` 已通过 pkgutil 自动发现所有模型 |
+| [`src/db/models/rbac.py`](../../../src/db/models/rbac.py) | 无需修改 — ORM 模型已存在且与迁移 schema 一致 |
+| [`alembic/env.py`](../../../alembic/env.py) | 无需修改 — `import db.models` 已通过 pkgutil 自动发现所有模型 |
 
 ### 3.3 新增能力
 
@@ -355,9 +355,9 @@ gh pr create --base master --title "feat(#640): add RBAC database schema and ORM
 
 ## 9. 参考
 
-- 现有 ORM 模型：[`src/db/models/rbac.py`](../../src/db/models/rbac.py)
-- 现有 RBACService：[`src/services/rbac_service.py`](../../src/services/rbac_service.py)
-- 同类迁移参考：[`alembic/versions/9d8e7f6a5b3c_add_auth_tables.py`](../../alembic/versions/9d8e7f6a5b3c_add_auth_tables.py)
+- 现有 ORM 模型：[`src/db/models/rbac.py`](../../../src/db/models/rbac.py)
+- 现有 RBACService：[`src/services/rbac_service.py`](../../../src/services/rbac_service.py)
+- 同类迁移参考：[`alembic/versions/9d8e7f6a5b3c_add_auth_tables.py`](../../../alembic/versions/9d8e7f6a5b3c_add_auth_tables.py)
 - 父 issue：#38
 
 ---

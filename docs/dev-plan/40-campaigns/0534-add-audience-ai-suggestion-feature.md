@@ -6,8 +6,8 @@
 | 分类 | 40-campaigns |
 | 优先级 | 推荐 |
 | 工作量 | 2 工作日 |
-| 依赖 | [#533](./0333-xxx.md)（AI agent endpoint）, [50-automation/0041-ai-agent-core](./50-automation/0041-ai-agent-core.md)（AI endpoint wire target） |
-| 启用后赋能 | [板块名](相对路径)，... |
+| 依赖 | [#533](../0333-xxx.md)（AI agent endpoint）, [50-automation/0041-ai-agent-core](../50-automation/0041-ai-agent-core.md)（AI endpoint wire target） |
+| 启用后赋能 | TBD - 待验证：campaigns/suggest-audience router |
 | 状态 | 📋 待开始 |
 
 ---
@@ -44,7 +44,7 @@ The Campaign Builder currently requires manual audience/segment selection with n
 
 ### 2.1 现有实现
 
-主入口：[`src/services/marketing_service.py`](../../src/services/marketing_service.py) L{1}-L{50}
+主入口：[`src/services/marketing_service.py`](../../../src/services/marketing_service.py) L{1}-L{50}
 
 ```python
 # Partial excerpt — existing service structure
@@ -101,9 +101,9 @@ TBD - 待验证：`src/ui/pages/marketing/CampaignBuilder.tsx L? — 现有 Camp
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/marketing_service.py`](../../src/services/marketing_service.py) | 新增 `suggest_audience(campaign_type, description, tenant_id)` 方法，调用 `ai_agent_client` |
-| [`src/api/routers/campaigns.py`](../../src/api/routers/campaigns.py) | 新增 `POST /campaigns/suggest-audience` 路由，读取 feature flag，透传 tenant_id |
-| [`src/config/feature_flags.py`](../../src/config/feature_flags.py) | 新增 `campaigns.ai_audience_suggestions: bool = False` |
+| [`src/services/marketing_service.py`](../../../src/services/marketing_service.py) | 新增 `suggest_audience(campaign_type, description, tenant_id)` 方法，调用 `ai_agent_client` |
+| [`src/api/routers/campaigns.py`](../../../src/api/routers/campaigns.py) | 新增 `POST /campaigns/suggest-audience` 路由，读取 feature flag，透传 tenant_id |
+| [`src/config/feature_flags.py`](../../../src/config/feature_flags.py) | 新增 `campaigns.ai_audience_suggestions: bool = False` |
 | `src/ui/pages/marketing/CampaignBuilder.tsx` | 添加 "Suggest audience" 按钮，调用 `POST /campaigns/suggest-audience` |
 
 ### 3.3 新增能力

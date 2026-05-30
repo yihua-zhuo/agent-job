@@ -6,8 +6,8 @@
 | 分类 | 20-sales |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [0451-taskservice-设计与实现](0451-taskservice设计与实现.md), [0453-task-orm-model-and-migration](0453-task-orm-model-and-migration.md) |
-| 启用后赋能 | [板块名](相对路径) |
+| 依赖 | TBD - 待验证：0451-taskservice设计与实现.md（对应实现板块尚未创建）, TBD - 待验证：0453-task-orm-model-and-migration.md（对应迁移板块尚未创建） |
+| 启用后赋能 | TBD - 待验证：关联板块路径（尚未规划） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -290,6 +290,6 @@ gh pr create --base master --title "test: verify and test TaskService #454" --bo
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — pattern for unit test fixture setup and mock session usage
-- 同类参考实现：[`tests/integration/test_customer_service_integration.py`](../../tests/integration/test_customer_service_integration.py) — pattern for integration test with `db_schema` and seeding helpers
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — pattern for unit test fixture setup and mock session usage
+- 同类参考实现：TBD - 待验证：tests/integration/test_customer_service_integration.py（对应文件尚未创建，可参考 tests/integration/ 目录下的其他集成测试文件）
 - 父 issue / 关联：#451, #453

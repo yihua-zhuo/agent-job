@@ -6,7 +6,7 @@
 | 分类 | [60-analytics](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [#633](0633-报表配置与调度服务.md) |
+| 依赖 | TBD - 待验证：关联 issue #633 的文件名是否仍为 `0633-报表配置与调度服务.md`，或在 60-analytics 目录下另有其他编号 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-`ReportService`（[`src/services/report_service.py`](../../src/services/report_service.py) L31-L61）当前 `generate_pdf_report` 只返回占位符 `%PDF-1.4\n…%%EOF\n`，`generate_excel_report` 只返回 `"PK\x03\x04" + text` 字节串。两者都不是真正的多工作簿/多sheet内容，也没有超时保护。`export_to_csv` 虽用了 Python stdlib `csv` 模块，但也没有超时保护或生成器抽象。当系统需要生成可分发的业务报表（给客户/管理层发送 PDF/Excel/CSV）时，现有 stub 无法满足需求。
+`ReportService`（[`src/services/report_service.py`](../../../src/services/report_service.py) L31-L61）当前 `generate_pdf_report` 只返回占位符 `%PDF-1.4\n…%%EOF\n`，`generate_excel_report` 只返回 `"PK\x03\x04" + text` 字节串。两者都不是真正的多工作簿/多sheet内容，也没有超时保护。`export_to_csv` 虽用了 Python stdlib `csv` 模块，但也没有超时保护或生成器抽象。当系统需要生成可分发的业务报表（给客户/管理层发送 PDF/Excel/CSV）时，现有 stub 无法满足需求。
 
 ### 1.2 做完后
 
@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/report_service.py`](../../src/services/report_service.py) L31-L61
+主入口：[`src/services/report_service.py`](../../../src/services/report_service.py) L31-L61
 
 ```{python}:31-61:src/services/report_service.py
     async def generate_pdf_report(
@@ -80,8 +80,8 @@
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/report_service.py`](../../src/services/report_service.py) — `generate_pdf_report`、`generate_excel_report`、`export_to_csv` 内部替换为生成器调用
-  - [`src/api/routers/reports.py`](../../src/api/routers/reports.py) — 端点保持不变（路由逻辑不变）
+  - [`src/services/report_service.py`](../../../src/services/report_service.py) — `generate_pdf_report`、`generate_excel_report`、`export_to_csv` 内部替换为生成器调用
+  - [`src/api/routers/reports.py`](../../../src/api/routers/reports.py) — 端点保持不变（路由逻辑不变）
 - 要建：
   - `src/services/report_generation/generators/base.py` — `BaseGenerator` 抽象基类 + `GeneratorTimeoutError`
   - `src/services/report_generation/generators/pdf_generator.py` — ReportLab PDF 生成器
@@ -119,8 +119,8 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/report_service.py`](../../src/services/report_service.py) | `generate_pdf_report`/`generate_excel_report`/`export_to_csv` 内部调用 `get_generator(format).generate(data)`；保留接口签名不变 |
-| [`src/api/routers/reports.py`](../../src/api/routers/reports.py) | 无改动（路由不变，生成器替换在 service 层） |
+| [`src/services/report_service.py`](../../../src/services/report_service.py) | `generate_pdf_report`/`generate_excel_report`/`export_to_csv` 内部调用 `get_generator(format).generate(data)`；保留接口签名不变 |
+| [`src/api/routers/reports.py`](../../../src/api/routers/reports.py) | 无改动（路由不变，生成器替换在 service 层） |
 
 ### 3.3 新增能力
 
@@ -388,7 +388,7 @@ class CsvGenerator(BaseGenerator):
         return output.getvalue().encode("utf-8")
 ```
 
-**完成判定**：`PYTHONPATH=src python -c "from services.report_generation.generators.csv_generator import CsvGenerator; g = CsvGenerator(); b = g.generate({'headers':['a','b'],'rows':[['1','2']]},''); print(b)` → 输出 `b'a,b\r\n1,2\r\n'`
+**完成判定**：`PYTHONPATH=src python -c "from services.report_generation.generators.csv_generator import CsvGenerator; g = CsvGenerator(); b = g.generate({'headers':['a','b'],'rows':[['1','2']]},''); print(b)"` → 输出 `b'a,b\r\n1,2\r\n'`
 
 ### Step 6: 将生成器接入 ReportService
 
@@ -459,21 +459,21 @@ from services.report_generation.generators.base import GeneratorTimeoutError
 class TestPdfGenerator:
     def test_generate_returns_pdf_bytes(self):
         g = get_generator("pdf")
-        b = g.generate({"title": "Test", "sections": [{"heading": "H", "rows": [["a", "b"]]}]}, "pdf")
+        b = g.generate({"title": "Test", "sections": [{"heading": "H", "rows": [["a", "bاقشة]}, "pdf")
         assert b[:4] == b"%PDF"
         assert len(b) > 0
 
 class TestExcelGenerator:
     def test_generate_returns_xlsx_bytes(self):
         g = get_generator("excel")
-        b = g.generate({"sheets": [{"name": "S", "headers": ["x", "y"], "rows": [["1", "2"]]}]}, "excel")
+        b = g.generate({"sheets": [{"name": "S", "headers": ["x", "y"], "rows": [["1", "2}, "excel")
         assert b[:4] == b"PK\x03\x04"
         assert len(b) > 0
 
 class TestCsvGenerator:
     def test_generate_csv_with_headers_and_rows(self):
         g = get_generator("csv")
-        b = g.generate({"headers": ["a", "b"], "rows": [["1", "2"], ["3", "4"]]}, "csv")
+        b = g.generate({"headers": ["a", "b"], "rows": [["1", "2"], ["3", "4"]}}, "csv")
         assert b"a,b" in b
         assert b"1,2" in b
 
@@ -531,8 +531,8 @@ gh pr create --base master --title "feat(reports): add file generators for pdf/e
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/report_service.py`](../../src/services/report_service.py) — 当前 stub 实现
-- 同类参考实现：[`src/api/routers/reports.py`](../../src/api/routers/reports.py) — router 调用 service 的模式
+- 同类参考实现：[`src/services/report_service.py`](../../../src/services/report_service.py) — 当前 stub 实现
+- 同类参考实现：[`src/api/routers/reports.py`](../../../src/api/routers/reports.py) — router 调用 service 的模式
 - 第三方文档：[ReportLab User Guide](https://docs.reportlab.com/) — PDF 生成
 - 第三方文档：[openpyxl documentation](https://openpyxl.readthedocs.io/) — Excel 生成
 - 父 issue / 关联：#40

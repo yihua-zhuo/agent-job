@@ -6,7 +6,7 @@
 | 分类 | [10-cross-cutting](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [审计基础服务层错误处理](../0487-audit-app-exceptions-hierarchy.md) |
+| 依赖 | TBD - 待验证：0487 文档所在路径（`docs/dev-plan/0487-audit-app-exceptions-hierarchy.md` 不存在） |
 | 启用后赋能 | 无 — 本板块修复内部安全漏洞，无下游依赖 |
 | 状态 | 📋 待开始 |
 
@@ -76,15 +76,15 @@ Router：`src/api/routers/activities.py`
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|-------|
 | N/A | 无新建文件 |
 
 ### 3.2 修改文件
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/activity_service.py`](../../src/services/activity_service.py) | 8 个方法中缺失 tenant_id 过滤的补上；不改签名 |
-| [`src/api/routers/activities.py`](../../src/api/routers/activities.py) | 确认每个 handler 传 `tenant_id=ctx.tenant_id` |
+| [`src/services/activity_service.py`](../../../src/services/activity_service.py) | 8 个方法中缺失 tenant_id 过滤的补上；不改签名 |
+| [`src/api/routers/activities.py`](../../../src/api/routers/activities.py) | 确认每个 handler 传 `tenant_id=ctx.tenant_id` |
 
 ### 3.3 新增能力
 
@@ -236,7 +236,7 @@ Subtask of #452"
 
 - 同类参考实现：TBD — 待验证：`src/services/customer_service.py` L?-L? — 已有正确 tenant_id 过滤的 Service 模板
 - 第三方文档：[SQLAlchemy 2.0 async documentation](https://docs.sqlalchemy.org/en/20/orm/extensions/asyncio.html)
-- 父 issue / 关联：#452（季度安全审计父任务）、#487（依赖的前置审计）
+- 父 issue / 关联：#452（季度安全审计父任务）、TBD - 待验证：#487 依赖的前置审计文档路径（`0487-audit-app-exceptions-hierarchy.md` 不存在）
 
 ---
 

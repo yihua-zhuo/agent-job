@@ -6,8 +6,8 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [#518 实现基础节点执行器骨架](../30-tickets/0518-implement-basic-node-execution-engine.md) |
-| 启用后赋能 | [#520 实现条件路由节点并联触发](../50-automation/0520-implement-conditional-routing-and-parallel-triggering.md), [#68x 系列](/) |
+| 依赖 | TBD - 待验证：#518 节点执行器骨架（30-tickets 目录无对应文件） |
+| 启用后赋能 | TBD - 待验证：#520 条件路由并联触发（文件名待确认）, [#68x 系列](/) |
 | 状态 | 📋 待开始 |
 
 ---
@@ -73,13 +73,13 @@ TBD - 待验证：`src/workflow/nodes/`目录及基础节点骨架（#518 成果
 
 |路径 | 改动要点 |
 |------|---------|
-| `src/workflow/engine.py` | 新增 `approve(execution_id, approver_id: int, tenant_id: int)` 方法 |
+| `src/workflow/engine.py` | 新增 `approve(execution_id: int, approver_id: int, tenant_id: int)` 方法 |
 | `src/api/routers/workflows.py` | 新增 `POST /workflows/executions/{id}/approve` 审批回调端点（调用 engine.approve） |
 | `tests/unit/test_nodes.py` |扩展：新增 TestActionNode（含至少 4 个用例）和 TestApprovalNode（含至少 4 个用例） |
 
 ### 3.3 新增能力
 
-- **Node class**：`ActionNode(BaseNode)` — 接收 `action_name: str`, `service_name: str`, `params: dict` 配置，执行注入的 service 方法- **Node class**：`ApprovalNode(BaseNode)` — 接收 `approvers: list[int]`，执行时将 execution标记为 pending，回调后触发后续节点
+- **Node class**：`ActionNode(BaseNode)` — 接收 `action_name: str`, `service_name: str`, `` `params` `` 配置，执行注入的 service 方法- **Node class**：`ApprovalNode(BaseNode)` — 接收 `approvers: list[int]`，执行时将 execution标记为 pending，回调后触发后续节点
 - **Engine method**：`WorkflowEngine.approve(execution_id: int, approver_id: int, tenant_id: int) -> bool` — 验证审批人权限，调用对应 approval node resume，执行后续节点链
 - **API endpoint**：`POST /workflows/executions/{execution_id}/approve` — 请求体 `{"approver_id": int}`, 返回 `{"success": true, "data": {...}}`
 - **Node execution status**：`PENDING` 状态（approval node 专用），engine 侧识别并等待---
@@ -346,7 +346,7 @@ gh pr create --base master --title "#519 Implement action and approval node type
 ## 9. 参考
 
 - 父 issue：#73（工作流引擎总体规划）
-- 前置依赖：#518（基础节点执行器骨架）
+- 前置依赖：TBD - 待验证：#518（基础节点执行器骨架，30-tickets 目录无对应文件）
 - 同类参考实现：TBD - 待验证：`src/workflow/nodes/`目录下 #518 产物（如有 `condition.py` 或 `base.py` 可参考 node 接口模式）
 
 ---

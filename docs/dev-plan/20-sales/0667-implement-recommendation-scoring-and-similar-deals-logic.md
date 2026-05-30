@@ -6,8 +6,8 @@
 | 分类 | [20-sales](../README.md#12-分类总览) |
 | 优先级 | 推荐 |
 | 工作量 | 1.5 工作日 |
-| 依赖 | [0666-add-recommendation-models-and-service-get-methods](0666-add-recommendation-models-and-service-get-methods.md) |
-| 启用后赋能 | [0668-add-get-sales-opportunities-id-recommendations-endpoint](0668-add-get-sales-opportunities-id-recommendations-endpoint.md), [0669-add-recommendation-cache-invalidation-on-stage-change-and-ne](0669-add-recommendation-cache-invalidation-on-stage-change-and-ne.md) |
+| 依赖 | TBD - 待验证：0666 文件名需确认 |
+| 启用后赋能 | [0668-add-get-sales-opportunities-id-recommendations-endpoint](0668-add-get-sales-opportunities-id-recommendations-endpoint.md), TBD - 待验证：0669 文件名待确认 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -41,7 +41,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) L{1}-L{60}
+主入口：[`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) L{1}-L{60}
 
 ```python
 43: class SalesRecommendationService:
@@ -58,7 +58,7 @@
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) — add 3 async methods; update `__init__` to accept `AsyncSession`
+  - [`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) — add 3 async methods; update `__init__` to accept `AsyncSession`
 - 要建：
   - `tests/unit/test_sales_recommendation.py` — unit tests for the 3 new methods (extend existing test file if present, else create)
 
@@ -84,7 +84,7 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) | `__init__` 新增 `session: AsyncSession` 参数；新增 `compute_confidence_score`、`find_similar_deals`、`get_recommendations` 三个 async 方法 |
+| [`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) | `__init__` 新增 `session: AsyncSession` 参数；新增 `compute_confidence_score`、`find_similar_deals`、`get_recommendations` 三个 async 方法 |
 
 ### 3.3 新增能力
 
@@ -352,9 +352,9 @@ gh pr create --base master --title "feat(#667): scoring and similar-deals logic 
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) — existing `SalesRecommendationService` with similar dataclass + mock pattern; new methods follow the same service-layer conventions
-- 同类参考实现：[`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) — `calculate_churn_score` async method pattern with multi-factor weighted scoring (useful reference for confidence score weighting)
-- 同类参考实现：[`src/db/models/opportunity.py`](../../src/db/models/opportunity.py) — `OpportunityModel` fields used in scoring (`created_at`, `updated_at`, `amount`, `probability`, `stage`)
+- 同类参考实现：[`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) — existing `SalesRecommendationService` with similar dataclass + mock pattern; new methods follow the same service-layer conventions
+- 同类参考实现：[`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) — `calculate_churn_score` async method pattern with multi-factor weighted scoring (useful reference for confidence score weighting)
+- 同类参考实现：[`src/db/models/opportunity.py`](../../../src/db/models/opportunity.py) — `OpportunityModel` fields used in scoring (`created_at`, `updated_at`, `amount`, `probability`, `stage`)
 - 父 issue / 关联：#36 (parent epic), #666 (dependency — service get-methods), #668 (downstream API endpoint), #669 (downstream cache invalidation)
 
 ---

@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
-from tests.unit.conftest import MockResult, MockRow
+from tests.unit.conftest import MockResult, MockRow, MockState
 
 # SQLAlchemy uses the Python attribute name as the bind parameter name for the
 # mapped `payload_params` attribute (which maps to DB column `params_`).
@@ -259,7 +260,7 @@ def _reminder_to_row(r: dict):
     )
 
 
-def get_handlers(state):
+def get_handlers(state: MockState) -> list[Callable[[str, dict], MockResult | None]]:
     return [make_notification_handler(state), make_reminder_handler(state)]
 
 

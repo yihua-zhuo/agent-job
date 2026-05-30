@@ -173,7 +173,7 @@ async def list_opportunities(
         stage=stage,
         owner_id=owner_id,
     )
-    # Service returns dict with 'items' and 'total' keys
+# Service returns dict with 'items' and 'total' keys
     return {
         "success": True,
         "data": {

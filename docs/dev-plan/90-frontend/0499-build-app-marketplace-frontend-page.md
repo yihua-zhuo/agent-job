@@ -6,7 +6,7 @@
 | 分类 | 90-frontend |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [#498 Build App Marketplace backend](30-tickets/0498-build-app-marketplace-backend.md) |
+| 依赖 | [#498 Build App Marketplace backend](../70-platform/0498-implement-api-key-auth-middleware-and-external-api-router.md) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -84,8 +84,8 @@ N/A — 新建模块。本 issue 为纯前端页面搭建，后端 API 由 #498 
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`frontend/src/components/layout/app-sidebar.tsx`](../../frontend/src/components/layout/app-sidebar.tsx) | 在 `systemItems` 后新增 `{ href: "/marketplace", label: "Marketplace", icon: Store }`；在 Settings 区域新增 `href: "/settings/webhooks"` 和 `href: "/settings/api"` 子项 |
-| [`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) | 新增 `qk.marketplaceApps / qk.webhooks / qk.apiKeys`；新增 `useMarketplaceApps / useInstallApp / useWebhooks / useCreateWebhook / useDeleteWebhook / useApiKeys / useCreateApiKey / useRevokeApiKey` |
+| [`frontend/src/components/layout/app-sidebar.tsx`](../../../frontend/src/components/layout/app-sidebar.tsx) | 在 `systemItems` 后新增 `{ href: "/marketplace", label: "Marketplace", icon: Store }`；在 Settings 区域新增 `href: "/settings/webhooks"` 和 `href: "/settings/api"` 子项 |
+| [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) | 新增 `qk.marketplaceApps / qk.webhooks / qk.apiKeys`；新增 `useMarketplaceApps / useInstallApp / useWebhooks / useCreateWebhook / useDeleteWebhook / useApiKeys / useCreateApiKey / useRevokeApiKey` |
 
 ### 3.3 新增能力
 

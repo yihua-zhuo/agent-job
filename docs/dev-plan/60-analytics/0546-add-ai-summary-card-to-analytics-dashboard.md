@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 推荐 |
 | 工作量 | 1 工作日 |
-| 依赖 | [0546-ai-insights-api](0546-ai-insights-api.md) (#545 的前置依赖), #41 (AI Agent Framework) |
+| 依赖 | TBD - 待验证：`0545-ai-insights-api.md`（推测应为 0545 而非 0546）, #41 (AI Agent Framework) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -140,7 +140,9 @@ TBD - 待验证：是否存在前端 TSX 文件需要读取以了解现有组件
 
 ```python
 # src/services/analytics_insights_service.py
-from sqlalchemy.ext.asyncio import AsyncSessionSTUB_SUMMARY = "AI insights are being trained — check back soon."
+from sqlalchemy.ext.asyncio import AsyncSession
+
+STUB_SUMMARY = "AI insights are being trained — check back soon."
 ENV_AI_ENDPOINT = "AI_AGENT_ENDPOINT"  # set by #41
 
 
@@ -172,7 +174,8 @@ class AnalyticsInsightsService:
 
 ```python
 # src/api/routers/analytics_insights.py
-from fastapi import APIRouter, Depends, Queryfrom sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends, Query
+from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import get_db
 from dependencies import require_auth, AuthContext
 from services.analytics_insights_service import AnalyticsInsightsService
@@ -238,7 +241,7 @@ export function AiSummaryCard() {
   const [degraded, setDegraded] = useState(false);
 
   useEffect(() => {
-    fetch("/analytics/insights?period=current", { credentials: FETCHCredentials })
+    fetch("/analytics/insights?period=current", { credentials: "include" })
       .then((r) => r.json())
       .then((j: { data: InsightsResponse }) => {
         setText(j.data.summary);

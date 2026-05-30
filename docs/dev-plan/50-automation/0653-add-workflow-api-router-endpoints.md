@@ -28,7 +28,8 @@ Issue #37 定义了自动化规则系统的完整蓝图，其中 #652 已实现 
 - [ ] 不实现 WorkflowService 业务逻辑本身（已在 #652 完成）
 - [ ] 不设计新的数据库 schema 或 migration（由 #652 的依赖板块覆盖）
 - [ ] 不添加认证/权限细粒度控制（权限粒度由 `require_auth` 统一处理，用户级权限在后续 issue 中实现）
-- [ ] 不实现 webhook /事件触发 /异步调度等运行时 trigger 逻辑- [ ] 不使用 `async with get_db() as session:` — 必须用 `Depends(get_db)`
+- [ ] 不实现 webhook /事件触发 /异步调度等运行时 trigger 逻辑
+- [ ] 不使用 `async with get_db() as session:` — 必须用 `Depends(get_db)`
 
 ### 1.4 关键 KPI
 
@@ -54,7 +55,7 @@ N/A — 新建模块：`src/api/routers/workflow.py` 不存在。
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/main.py`](../../src/main.py) — 新增 `app.include_router(workflow_router, prefix="/workflows")` 注册语句
+  - [`src/main.py`](../../../src/main.py) — 新增 `app.include_router(workflow_router, prefix="/workflows")` 注册语句
 - 要建：
   - `src/api/routers/workflow.py` —6 个 endpoint 的 router，inject session + AuthContext，call WorkflowService，序列化为 `.to_dict()`
   - `tests/unit/test_workflow_router.py` — 6 个 endpoint 的单元测试，用 MockState + mock session（mock WorkflowService 而非真实 DB）
@@ -81,7 +82,7 @@ N/A — 新建模块：`src/api/routers/workflow.py` 不存在。
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | 新增 `workflow_router` import 及 `include_router` 注册（prefix `/workflows`） |
+| [`src/main.py`](../../../src/main.py) | 新增 `workflow_router` import 及 `include_router` 注册（prefix `/workflows`） |
 
 ### 3.3 新增能力
 
@@ -91,7 +92,8 @@ N/A — 新建模块：`src/api/routers/workflow.py` 不存在。
   - `GET /workflows/{workflow_id}` → 获取单个 rule
   - `PUT /workflows/{workflow_id}` → 更新 rule
   - `DELETE /workflows/{workflow_id}` → 删除 rule
-  - `POST /workflows/{workflow_id}/trigger` → 手动触发执行- **Router 注册**：`src/main.py` 增加 `app.include_router(workflow_router, prefix="/workflows")`
+  - `POST /workflows/{workflow_id}/trigger` → 手动触发执行
+- **Router 注册**：`src/main.py` 增加 `app.include_router(workflow_router, prefix="/workflows")`
 - **测试覆盖**：`tests/unit/test_workflow_router.py` 实现各端点 mock 测试，exit 0
 
 ---
@@ -107,14 +109,18 @@ N/A — 新建模块：`src/api/routers/workflow.py` 不存在。
 ### 4.2 版本约束
 
 无新依赖引入。本板块使用的所有包均已在 `pyproject.toml`声明：
-- `fastapi` / `sqlalchemy[asyncio]` / `pydantic` 等已有- 无需新增第三方包
+- `fastapi` / `sqlalchemy[asyncio]` / `pydantic` 等已有
+- 无需新增第三方包
 
 ### 4.3 兼容性约束
 
 - 多租户：每个 SQL 查询必须 `WHERE tenant_id = :tenant_id`（由 WorkflowService 保证，本 router 通过 `ctx.tenant_id` 传入）
 - Session注入：`session: AsyncSession = Depends(get_db)` — 不使用 `async with get_db() as session:`
 - Response 格式：`{"success": True, "data":<result>.to_dict()}` — 与所有现有 router格式一致
-- Service错误：`WorkflowService`抛出的 `AppException` 子类由 `src/main.py` 全局 handler捕获，router 不捕获- Auth：`ctx: AuthContext = Depends(require_auth)` — 所有端点均需认证### 4.4 已知坑
+- Service错误：`WorkflowService`抛出的 `AppException` 子类由 `src/main.py` 全局 handler捕获，router 不捕获
+- Auth：`ctx: AuthContext = Depends(require_auth)` — 所有端点均需认证
+
+### 4.4 已知坑
 
 1. **Alembic autogenerate 常见偏差** → 本板块涉及 migration 时注意：`sa.JSON()` 应改为 `sa.JSONB()`，`DateTime` 应检查是否需要 `timezone=True`
 2. **`metadata` 列名冲突** → SQLAlchemy `Base.metadata` 与用户自定义列 `metadata`冲突。本板块 router 不涉及 ORM 定义，但需注意若 `WorkflowService` 或 model 中使用了 `metadata` 列名，改用 `event_metadata` / `payload` 等替名
@@ -124,10 +130,12 @@ N/A — 新建模块：`src/api/routers/workflow.py` 不存在。
 
 ## 5. 实现步骤（按顺序）
 
-### Step 1: 创建 `src/api/routers/workflow.py`骨架参照 `src/api/routers/` 下现有 router 文件（如 `ticket_router.py` 或 `customer_router.py`）的格式，新建 `workflow.py`：
+### Step 1: 创建 `src/api/routers/workflow.py`骨架
+参照 `src/api/routers/` 下现有 router 文件（如 `ticket_router.py` 或 `customer_router.py`）的格式，新建 `workflow.py`：
 
 ```python
-from fastapi import APIRouter, Dependsfrom sqlalchemy.ext.asyncio import AsyncSession
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
@@ -176,7 +184,8 @@ app.include_router(workflow_router, prefix="/workflows")
 操作：
 - a) 新建 `tests/unit/test_workflow_router.py`
 - b) 参考现有测试文件（如 `test_customer_router.py`）的 fixture 结构：
- - `mock_db_session` fixture：只 mock WorkflowService 相关 handler  - 每个 endpoint 一个 `pytest.mark.asyncio` 测试函数
+  - `mock_db_session` fixture：只 mock WorkflowService 相关 handler
+  - 每个 endpoint 一个 `pytest.mark.asyncio` 测试函数
   - MockState 提供 `tenant_id`
 - c) 每个 test 用 `client.<method>("url", json=...)` 或直接调用 router 函数，验证返回 `{"success": True, "data": ...}`
 
@@ -193,7 +202,8 @@ async def test_create_workflow(mock_db_session, tenant_context):
 
 ---
 
-### Step 4: 运行全量检查并修复操作：
+### Step 4: 运行全量检查并修复
+操作：
 - a) `ruff check src/api/routers/workflow.py src/main.py` → 0 errors
 - b) `ruff format --check src/api/routers/workflow.py src/main.py tests/unit/test_workflow_router.py`
 - c) 如有格式问题：`ruff format src/api/routers/workflow.py src/main.py tests/unit/test_workflow_router.py`
@@ -247,8 +257,9 @@ gh pr create --base master --title "feat(automation): add Workflow API router (#
 
 ## 9. 参考
 
-- 同类参考实现（existing router pattern）：[`src/api/routers/ticket_router.py`](../../src/api/routers/ticket_router.py) — `require_auth` + `Depends(get_db)` + `WorkflowService` 调用模式参照
-- 同类参考实现（service layer）：[`src/services/workflow_service.py`](../../src/services/workflow_service.py) — 由 #652 提供，本板块调用其方法- 父 issue / 关联：#37（Automation Rules System 顶层）、#652（WorkflowService 实现）
+- 同类参考实现（existing router pattern）：[`src/api/routers/ticket_router.py`](../../../src/api/routers/ticket_router.py) — `require_auth` + `Depends(get_db)` + `WorkflowService` 调用模式参照
+- 同类参考实现（service layer）：[`src/services/workflow_service.py`](../../../src/services/workflow_service.py) — 由 #652 提供，本板块调用其方法
+- 父 issue / 关联：#37（Automation Rules System 顶层）、#652（WorkflowService 实现）
 - 依赖 issue：#652
 
 ---

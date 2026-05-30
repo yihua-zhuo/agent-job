@@ -35,6 +35,12 @@ jobs:
           token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Checkout agent-actions (CI scripts)
+        # Skip the clone if .agent-actions/ is already populated. Real
+        # GH-hosted runs always start with an empty workspace so this is a
+        # no-op there. The point is local act `--bind` runs where the
+        # operator may have iterated on the scripts and doesn't want them
+        # clobbered by a fresh checkout of the remote main.
+        if: hashFiles('.agent-actions/scripts/*.py') == ''
         uses: actions/checkout@v4
         with:
           repository: yihua-zhuo/agent-actions

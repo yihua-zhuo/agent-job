@@ -6,7 +6,7 @@
 | 分类 | [30-tickets](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [0605-构建工单分类数据模型](../0605-构建工单分类数据模型-and-migration.md) |
+| 依赖 | [0605-构建工单分类数据模型](./0605-add-accuracy-tracking-model-and-feedback-override-endpoint.md) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -45,7 +45,7 @@ Issue #605 建立了工单分类结果的数据模型（`TicketCategorizationMod
 
 Issue #605 在本分支依赖链中先完成，生成 `TicketCategorizationModel`。若无该文件，说明 #605 尚未完成，本板块无法实施。
 
-参考同仓库相似统计方法：[`src/services/ticket_service.py`](../../src/services/ticket_service.py) L{359}-L{379}
+参考同仓库相似统计方法：[`src/services/ticket_service.py`](../../../src/services/ticket_service.py) L{359}-L{379}
 
 ```python:src/services/ticket_service.py
 async def get_sla_breaches(self, tenant_id: int = 0) -> list[TicketModel]:
@@ -62,7 +62,7 @@ async def get_sla_breaches(self, tenant_id: int = 0) -> list[TicketModel]:
     return list(result.scalars().all())
 ```
 
-参考 Router 的 metrics 聚合模式：[`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) L{434}-L{446}
+参考 Router 的 metrics 聚合模式：[`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) L{434}-L{446}
 
 ```python:src/api/routers/tickets.py
 @tickets_router.get("/sla/summary")
@@ -75,8 +75,8 @@ async def get_sla_summary(...):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) — 新增 `GET /tickets/categorization/metrics` 端点
-  - [`tests/unit/test_tickets_router.py`](../../tests/unit/test_tickets_router.py) — 新增 metrics 端点测试用例
+  - [`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) — 新增 `GET /tickets/categorization/metrics` 端点
+  - [`tests/unit/test_tickets_router.py`](../../../tests/unit/test_tickets_router.py) — 新增 metrics 端点测试用例
 - 要建：
   - `src/services/ticket_categorization_service.py` — 新建 `TicketCategorizationService`，含 `get_metrics()` 方法
   - `tests/unit/test_ticket_categorization_metrics.py` — 新建单元测试，验证 metrics 响应结构
@@ -102,8 +102,8 @@ async def get_sla_summary(...):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) | 新增 `GET /tickets/categorization/metrics` 端点，调用 `TicketCategorizationService.get_metrics()` |
-| [`tests/unit/test_tickets_router.py`](../../tests/unit/test_tickets_router.py) | 新增 `test_get_categorization_metrics` 测试用例 |
+| [`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) | 新增 `GET /tickets/categorization/metrics` 端点，调用 `TicketCategorizationService.get_metrics()` |
+| [`tests/unit/test_tickets_router.py`](../../../tests/unit/test_tickets_router.py) | 新增 `test_get_categorization_metrics` 测试用例 |
 
 ### 3.3 新增能力
 
@@ -426,8 +426,8 @@ gh pr create --base master --title "feat(tickets): add categorization accuracy m
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/ticket_service.py`](../../src/services/ticket_service.py) — `get_sla_breaches` 统计方法，SQL COUNT/AVG 聚合模式
-- 同类参考实现：[`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) — `get_sla_summary` 端点，metrics 聚合返回 SLAStatCard
+- 同类参考实现：[`src/services/ticket_service.py`](../../../src/services/ticket_service.py) — `get_sla_breaches` 统计方法，SQL COUNT/AVG 聚合模式
+- 同类参考实现：[`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) — `get_sla_summary` 端点，metrics 聚合返回 SLAStatCard
 - 父 issue / 关联：#45
 - 依赖 issue / 关联：#605（工单分类数据模型，为本板块提供 `TicketCategorizationModel`）
 

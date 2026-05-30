@@ -6,7 +6,7 @@
 | 分类 | [70-platform](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [#610 新建模块](docs/dev-plan/00-foundations/) |
+| 依赖 | TBD - 待验证：`#610 新建模块` 对应的实际文件路径 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -398,11 +398,11 @@ gh pr create --base master --title "feat(agents): routers for code-review (#611)
 
 ## 9. 参考
 
-- 同类参考实现（路由模式）：[`src/api/routers/ai.py`](../../src/api/routers/ai.py)
-- 同类参考实现（服务模式）：[`src/services/ai_service.py`](../../src/services/ai_service.py)
-- 响应包装参考：[`src/models/response.py`](../../src/models/response.py) L1-L176
-- 路由自动发现机制：[`src/api/__init__.py`](../../src/api/__init__.py) L19-L26
-- 全局异常处理：[`src/main.py`](../../src/main.py) L62-L84
+- 同类参考实现（路由模式）：[`src/api/routers/ai.py`](../../../src/api/routers/ai.py)
+- 同类参考实现（服务模式）：[`src/services/ai_service.py`](../../../src/services/ai_service.py)
+- 响应包装参考：[`src/models/response.py`](../../../src/models/response.py) L1-L176
+- 路由自动发现机制：[`src/api/__init__.py`](../../../src/api/__init__.py) L19-L26
+- 全局异常处理：[`src/main.py`](../../../src/main.py) L62-L84
 - 父 issue / 关联：#44, #610
 
 ---

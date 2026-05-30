@@ -82,7 +82,7 @@ If the file does not exist, this board will need to be split to cover the servic
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/unit/conftest.py`](../../tests/unit/conftest.py) | 新增 `make_chat_session_handler(state)` 和 `make_chat_message_handler(state)` — 参照现有 `make_customer_handler` 工厂模式实现 |
+| [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) | 新增 `make_chat_session_handler(state)` 和 `make_chat_message_handler(state)` — 参照现有 `make_customer_handler` 工厂模式实现 |
 
 ### 3.3 新增能力
 
@@ -281,8 +281,8 @@ gh pr create --base master --title "test(chat): unit tests for ChatService inten
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/conftest.py`](../../tests/unit/conftest.py) — make_customer_handler 工厂模式
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — parametrize + MockState pattern
+- 同类参考实现：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — make_customer_handler 工厂模式
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — parametrize + MockState pattern
 - 父 issue / 关联：#43, #615
 
 ---

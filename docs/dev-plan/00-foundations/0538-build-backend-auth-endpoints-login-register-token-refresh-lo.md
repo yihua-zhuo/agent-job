@@ -1,3 +1,5 @@
+# 修复后的文档
+
 # 构建后台认证接口（登录、注册、Token 刷新、登出）
 
 | 元数据 | 值 |
@@ -6,8 +8,8 @@
 | 分类 | 10-customers |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [Auth 基础层（JWT/加密工具）](../00-foundations/0537-build-backend-auth-base-jwt-encrypt-helpers.md) |
-| 启用后赋能 | [全系统接入 auth 中间件](../20-sales/...), [用户角色权限体系](../30-tickets/...) |
+| 依赖 | TBD - 待验证：`../00-foundations/` 下 #537 Auth 基础层文档的实际文件名 |
+| 启用后赋能 | TBD - 待验证：`../20-sales/` 下全系统接入 auth 中间件板块文档路径, TBD - 待验证：`../30-tickets/` 下用户角色权限体系板块文档路径 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -76,7 +78,7 @@ TBD - 待验证：`src/db/models/user.py` 或等效文件 — 需确认是否存
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/services/auth_service.py` | AuthService：login / register / refresh / logout 四个业务方法 |
 | `src/api/routers/auth_router.py` | 四个 auth 端点：POST /auth/login, POST /auth/register, POST /auth/refresh, POST /auth/logout |
 | `tests/unit/test_auth_service.py` | AuthService 单元测试（MockRow/MockResult） |
@@ -302,7 +304,7 @@ gh pr create --base master --title "feat(auth): backend auth endpoints (#538)" -
 ## 9. 参考
 
 - 同类参考实现：TBD - 待验证：`src/services/customer_service.py` — 现有 service 模式（`__init__(self, session: AsyncSession)` + 异常抛出规范）
-- 父 issue / 关联：#537（Auth 基础层：JWT/加密工具）, #58（用户认证与授权体系顶层父 issue）
+- 父 issue / 关联：TBD - 待验证：`../00-foundations/` 下 #537 Auth 基础层文档的实际文件名（Auth 基础层：JWT/加密工具）, #58（用户认证与授权体系顶层父 issue）
 
 ---
 
@@ -311,3 +313,18 @@ gh pr create --base master --title "feat(auth): backend auth endpoints (#538)" -
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+---
+
+**修改摘要**：
+
+| 位置 | 原内容 | 改为 |
+|---|---|---|
+| 元数据/依赖行 | `[Auth 基础层（JWT/加密工具）](../00-foundations/0537-build-backend-auth-base-jwt-encrypt-helpers.md)` | `TBD - 待验证：`../00-foundations/` 下 #537 Auth 基础层文档的实际文件名 |
+| 元数据/赋能行 | `[全系统接入 auth 中间件](../20-sales/...)` | `TBD - 待验证：`../20-sales/` 下全系统接入 auth 中间件板块文档路径 |
+| 元数据/赋能行 | `[用户角色权限体系](../30-tickets/...)` | `TBD - 待验证：`../30-tickets/` 下用户角色权限体系板块文档路径 |
+| §9 参考 | `#537（Auth 基础层：JWT/加密工具）` | `TBD - 待验证：`../00-foundations/` 下 #537 Auth 基础层文档的实际文件名（Auth 基础层：JWT/加密工具）` |
+
+---
+
+**修复说明**：三处 broken link 均无法从上下文推导出正确路径（文件名未知、路径片段 `...` 为占位符），故全部按选项 (b) 降级为 plain text `TBD - 待验证` 占位符，与文档其余 `TBD - 待验证` 用法保持一致。

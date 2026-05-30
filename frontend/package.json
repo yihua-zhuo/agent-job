@@ -20,7 +20,7 @@
     "@tailwindcss/postcss": "^4.2.4",
     "@tanstack/react-query": "^5.100.8",
     "@tanstack/react-query-devtools": "^5.100.8",
-    "@tanstack/react-table": "^8.21.2",
+    "@tanstack/react-table": "^8.21.3",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "crypto-js": "^4.2.0",
@@ -39,6 +39,7 @@
     "zustand": "^5.0.12"
   },
   "devDependencies": {
+    "@testing-library/react": "^16",
     "@types/crypto-js": "^4.2.2",
     "@types/node": "20.19.39",
     "@types/react": "^19",
@@ -46,11 +47,10 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.4",
     "eslint-config-prettier": "^9",
+    "jsdom": "^28",
     "prettier": "^3",
     "tailwindcss": "^4.2.4",
     "typescript": "5.9.3",
-    "vitest": "^3",
-    "@testing-library/react": "^16",
-    "jsdom": "^28"
+    "vitest": "^3"
   }
 }

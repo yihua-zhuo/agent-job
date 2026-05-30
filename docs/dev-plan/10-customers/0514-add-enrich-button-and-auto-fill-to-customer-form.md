@@ -6,8 +6,8 @@
 | 分类 | 10-customers |
 | 优先级 | 推荐 |
 | 工作量 | 2 工作日 |
-| 依赖 | [客户表单字段完善](30-tickets/0513-add-company-industry-fields-to-customer-form.md) |
-| 启用后赋能 | [客户详情页强化](50-automation/), [线索 Enrich 流程](20-sales/) |
+| 依赖 | TBD - 待验证：客户表单字段完善相关文档 |
+| 启用后赋能 | TBD - 待验证：客户详情页强化相关目录, TBD - 待验证：线索 Enrich 流程相关目录 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -90,9 +90,9 @@ TBD - 待验证：`src/services/customer_service.py` L? — 现有 `CustomerServ
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/models/customer.py`](../../src/models/customer.py) | 新增 `enrichment_status` 枚举和 `last_enriched_at` 字段 |
-| [`src/services/customer_service.py`](../../src/services/customer_service.py) | 新增 `enrich_from_domain` 方法调用 EnrichmentService |
-| [`src/api/routers/customers.py`](../../src/api/routers/customers.py) | 新增 `POST /customers/{id}/enrich` 路由（或复用 enrichment router） |
+| [`src/models/customer.py`](../../../src/models/customer.py) | 新增 `enrichment_status` 枚举和 `last_enriched_at` 字段 |
+| [`src/services/customer_service.py`](../../../src/services/customer_service.py) | 新增 `enrich_from_domain` 方法调用 EnrichmentService |
+| [`src/api/routers/customers.py`](../../../src/api/routers/customers.py) | 新增 `POST /customers/{id}/enrich` 路由（或复用 enrichment router） |
 | `frontend/src/app/(app)/customers/[id]/page.tsx` | 添加 Enrich 按钮、加载状态、状态徽章；Enrich 后自动填充字段 |
 | `frontend/src/lib/api/queries.ts` | 添加 `useEnrichCustomer` mutation hook |
 
@@ -116,7 +116,7 @@ TBD - 待验证：`src/services/customer_service.py` L? — 现有 `CustomerServ
 ### 4.2 版本约束
 
 | 依赖 | 版本 | 理由 |
-|------|------|------|
+|------|------|
 | `httpx` | `>=0.25` | 异步 HTTP 客户端，FastAPI 生态首选，替代 `aiohttp`（本 repo 已使用 httpx） |
 
 ### 4.3 兼容性约束

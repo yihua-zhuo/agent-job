@@ -6,8 +6,8 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [工作流数据层](../00-foundations/0520-add-workflow-data-layer.md) |
-| 启用后赋能 | [自动化规则执行引擎](../50-automation/0522-add-rule-execution-engine.md) |
+| 依赖 | TBD - 待验证：工作流数据层文档路径 |
+| 启用后赋能 | TBD - 待验证：自动化规则执行引擎文档路径 |
 | 状态 | 📋 待开始 |
 
 ---

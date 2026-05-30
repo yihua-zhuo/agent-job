@@ -6,7 +6,7 @@
 | 分类 | [90-frontend](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [#550 auth store/service foundation](待验证：docs/dev-plan/90-frontend/0550-auth-store-service-setup.md) |
+| 依赖 | [#550 auth store/service foundation](0550-add-form-validation-to-login-component.md) |
 | 启用后赋能 | [dashboard 路由守卫](../README.md) — 需要有效 token 才能进入受保护页面 |
 | 状态 | 📋 待开始 |
 

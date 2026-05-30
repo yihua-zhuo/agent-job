@@ -50,7 +50,7 @@ TBD - 待验证：`src/api/routers/` 目录下是否有 `analytics` 相关文件
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/main.py`](../../src/main.py) — 在 `app` 上注册新 router- 要建：
+  - [`src/main.py`](../../../src/main.py) — 在 `app` 上注册新 router- 要建：
   - `src/api/routers/analytics_insights.py` — GET /analytics/{report_type}/insights stub router
   - `tests/unit/test_analytics_insights.py` —单元测试（mock session）
 
@@ -77,7 +77,7 @@ TBD - 待验证：`src/api/routers/` 目录下是否有 `analytics` 相关文件
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | 添加 `include_router(analytics_insights_router, prefix="/analytics")` |
+| [`src/main.py`](../../../src/main.py) | 添加 `include_router(analytics_insights_router, prefix="/analytics")` |
 
 ### 3.3 新增能力
 

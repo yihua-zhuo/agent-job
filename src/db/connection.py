@@ -46,7 +46,7 @@ def _build_engine(url: str) -> AsyncEngine:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-    return create_async_engine(url, pool_pre_ping=True, pool_size=5, connect_args=connect_args or None)
+    return create_async_engine(url, pool_pre_ping=True, pool_size=5, connect_args=connect_args or {})
 
 
 def _init_engine(url: str):

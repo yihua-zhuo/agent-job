@@ -6,8 +6,8 @@
 | 分类 | [90-frontend](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0548-create-auth-layout-component](0548-create-auth-layout-component.md) |
-| 启用后赋能 | [0549-create-login-component-with-form-fields](0549-create-login-component-with-form-fields.md) 自身完成前无法进行端到端登录流测试；[0550-wire-login-to-auth-api](0550-wire-login-to-auth-api.md) 依赖本组件 |
+| 依赖 | TBD - 待验证：#548 auth layout 完成后补充 |
+| 启用后赋能 | [0549-create-login-component-with-form-fields](0549-create-login-component-with-form-fields.md) 自身完成前无法进行端到端登录流测试；TBD - 待验证：#550 登录 API 接入依赖本组件 |
 | 状态 | 📋 待开始 |
 
 ---

@@ -6,8 +6,8 @@
 | 分类 | 90-frontend |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [0530-build-campaign-api-endpoints-and-service](../50-automation/0530-build-campaign-api-endpoints-and-service.md) |
-| 启用后赋能 | [板卡 · 62 · Marketing CRM Full-Stack](TBD - 待验证：父 issue #62 的板卡路径) |
+| 依赖 | TBD - 待验证：父 issue #530 的 Campaign API 文档路径 |
+| 启用后赋能 | TBD - 待验证：父 issue #62 的板卡路径 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -97,7 +97,7 @@ export const CustomerList: React.FC = () => {
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/ui/components/shared/StatusBadge.tsx` | 通用状态徽章，接收 status 枚举输出彩色标签 |
 | `src/ui/components/shared/SortableTable.tsx` | 可复用排序表格，封装列头点击排序逻辑 |
 | `src/ui/components/campaign/CampaignTable.tsx` | Campaign 表格，列：name, type, status, sentDate, openRate, clickRate |

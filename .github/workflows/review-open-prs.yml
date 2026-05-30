@@ -37,6 +37,8 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Checkout agent-actions (CI scripts)
+        # Skip when .agent-actions/ already exists (local act --bind path).
+        if: hashFiles('.agent-actions/scripts/*.py') == ''
         uses: actions/checkout@v4
         with:
           repository: yihua-zhuo/agent-actions

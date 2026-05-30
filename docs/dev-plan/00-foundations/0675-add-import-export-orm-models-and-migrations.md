@@ -6,7 +6,7 @@
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [0676-implement-import-export-service-core-methods](./0676-implement-import-export-service-core-methods.md) |
+| 启用后赋能 | TBD - 待验证：下游服务 board 路径（0676-implement-import-export-service-core-methods.md 尚不存在） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -44,7 +44,7 @@ The Import/Export subsystem (platform category, `70-platform`) requires persiste
 
 N/A — 新建模块. No `import_job` or `export_job` model files exist yet in `src/db/models/`. The `alembic/env.py` imports all models via `import db.models` (line 14), so any new model file in `src/db/models/` will be automatically picked up by the migration system once it is importable.
 
-主入口：[`src/db/models/customer.py`](../../src/db/models/customer.py) L1-L57 — 参考 ORM 模型风格
+主入口：[`src/db/models/customer.py`](../../../src/db/models/customer.py) L1-L57 — 参考 ORM 模型风格
 
 ```startLine:11:endLine:33:src/db/models/customer.py
 class CustomerModel(Base):
@@ -73,7 +73,7 @@ class CustomerModel(Base):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`alembic/env.py`](../../alembic/env.py) - 确保 `import db.models` 能 pick up 新模型文件；已有点头14的 `import db.models` 无需修改
+  - [`alembic/env.py`](../../../alembic/env.py) - 确保 `import db.models` 能 pick up 新模型文件；已有点头14的 `import db.models` 无需修改
 - 要建：
   - `src/db/models/import_job.py` - `ImportJobModel` ORM 模型（id, tenant_id, entity_type, file_path, status, total_rows, processed_rows, error_rows, created_at）
   - `src/db/models/export_job.py` - `ExportJobModel` ORM 模型（id, tenant_id, entity_type, fields JSON, filters JSON, file_path, status, expires_at）
@@ -103,7 +103,7 @@ class CustomerModel(Base):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`alembic/env.py`](../../alembic/env.py) | 无需修改 — `import db.models` on line 14 已覆盖新模型文件 |
+| [`alembic/env.py`](../../../alembic/env.py) | 无需修改 — `import db.models` on line 14 已覆盖新模型文件 |
 
 ### 3.3 新增能力
 
@@ -441,10 +441,10 @@ git push
 
 ## 9. 参考
 
-- ORM model reference（style）：[`src/db/models/customer.py`](../../src/db/models/customer.py) L1-L57
-- Alembic env：[`alembic/env.py`](../../alembic/env.py) L14
-- Example migration：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../alembic/versions/c94d682d4b03_add_ai_conversations.py)
-- Downstream board (service)：[`0676-implement-import-export-service-core-methods.md`](./0676-implement-import-export-service-core-methods.md)
+- ORM model reference（style）：[`src/db/models/customer.py`](../../../src/db/models/customer.py) L1-L57
+- Alembic env：[`alembic/env.py`](../../../alembic/env.py) L14
+- Example migration：TBD - 待验证：migrations 目录结构（c94d682d4b03 迁移文件路径待确认）
+- Downstream board (service)：TBD - 待验证：下游服务 board 路径（0676-implement-import-export-service-core-methods.md 尚不存在）
 
 ---
 

@@ -42,7 +42,7 @@ Issue #460 要求在已有测试基础上实现完整覆盖（create+retrieve、
 
 ### 2.1 现有实现
 
-主入口：[`tests/integration/test_marketing_integration.py`](../../tests/integration/test_marketing_integration.py) L{1}-{L220}
+主入口：[`tests/integration/test_marketing_integration.py`](../../../tests/integration/test_marketing_integration.py) L{1}-{L220}
 
 ```{1}:{30}:tests/integration/test_marketing_integration.py
 import uuid
@@ -69,7 +69,7 @@ class TestMarketingServiceIntegration:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`tests/integration/test_marketing_integration.py`](../../tests/integration/test_marketing_integration.py) — 新增 test_record_event / test_get_user_events / test_setup_trigger / test_events_tenant_isolation 四个测试方法- 要建：无（新文件）
+  - [`tests/integration/test_marketing_integration.py`](../../../tests/integration/test_marketing_integration.py) — 新增 test_record_event / test_get_user_events / test_setup_trigger / test_events_tenant_isolation 四个测试方法- 要建：无（新文件）
 
 ### 2.3 缺什么
 
@@ -93,7 +93,7 @@ class TestMarketingServiceIntegration:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/integration/test_marketing_integration.py`](../../tests/integration/test_marketing_integration.py) | 新增 5 个测试方法完整覆盖 record_event / get_user_events / setup_trigger / pause_campaign / events tenant isolation |
+| [`tests/integration/test_marketing_integration.py`](../../../tests/integration/test_marketing_integration.py) | 新增 5 个测试方法完整覆盖 record_event / get_user_events / setup_trigger / pause_campaign / events tenant isolation |
 
 ### 3.3 新增能力
 
@@ -369,7 +369,7 @@ gh pr create --base master --title "feat(campaigns): add MarketingService integr
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/integration/test_tickets_integration.py`](../../tests/integration/test_tickets_integration.py) — `_seed_customer` / `_seed_user` helper模式
+- 同类参考实现：[`tests/integration/test_tickets_integration.py`](../../../tests/integration/test_tickets_integration.py) — `_seed_customer` / `_seed_user` helper模式
 - 父 issue / 关联：#450（营销服务完整实现父 issue）、#459（MarketingService CRUD integration tests 基线）
 
 ---

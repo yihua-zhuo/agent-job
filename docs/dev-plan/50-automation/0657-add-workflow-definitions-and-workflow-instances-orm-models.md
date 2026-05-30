@@ -5,7 +5,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [rule-execution-engine](../50-automation/0687-build-rule-execution-engine-and-trigger-dispatch.md) |
+| 启用后赋能 | TBD - 待验证：rule-execution-engine 相关文档编号 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -42,10 +42,10 @@ Issue #651 的父任务是搭建自动化工作流引擎。引擎的运行时状
 
 已有 `workflow.py` 包含两个模型：
 
-- [`src/db/models/workflow.py`](../../src/db/models/workflow.py) L{12}-L{47}：`WorkflowModel`（trigger/action/conditions 扁平结构，适合单版工作流）
-- [`src/db/models/workflow.py`](../../src/db/models/workflow.py) L{49}-L{75}：`WorkflowExecutionModel`（执行记录，无 tenant_id 隔离）
+- [`src/db/models/workflow.py`](../../../src/db/models/workflow.py) L{12}-L{47}：`WorkflowModel`（trigger/action/conditions 扁平结构，适合单版工作流）
+- [`src/db/models/workflow.py`](../../../src/db/models/workflow.py) L{49}-L{75}：`WorkflowExecutionModel`（执行记录，无 tenant_id 隔离）
 
-db.models 包通过 [`src/db/models/__init__.py`](../../src/db/models/__init__.py) L{18}-L{24} 自动发现所有继承 `Base` 的类并注册到 `Base.metadata`，alembic 通过 `import db.models` 拾取所有模型。
+db.models 包通过 [`src/db/models/__init__.py`](../../../src/db/models/__init__.py) L{18}-L{24} 自动发现所有继承 `Base` 的类并注册到 `Base.metadata`，alembic 通过 `import db.models` 拾取所有模型。
 
 现有模型中无版本化蓝图表，也无独立 instance 表。
 
@@ -434,8 +434,8 @@ gh pr create --base master --title "feat(#657): add workflow_definitions and wor
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/workflow.py`](../../src/db/models/workflow.py) —现有 `WorkflowModel` / `WorkflowExecutionModel` 作为模型结构参考
-- 同类参考实现：[`src/db/models/automation.py`](../../src/db/models/automation.py) — `AutomationRuleModel` JSONB + tenant_id模式
+- 同类参考实现：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) —现有 `WorkflowModel` / `WorkflowExecutionModel` 作为模型结构参考
+- 同类参考实现：TBD - 待验证：`AutomationRuleModel` JSONB + tenant_id 模式所在文件
 - 父 issue /关联：#651
 
 ---

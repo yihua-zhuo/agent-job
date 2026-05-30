@@ -6,7 +6,7 @@
 | 分类 | 10-customers |
 | 优先级 | 推荐 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [AI Agent Framework #41](../90-frontend/0041-ai-agent-framework.md), [AI Integration Board #559](0559-ai-integration-core.md) |
+| 依赖 | AI Agent Framework #41（TBD - 待验证：路径 `../90-frontend/0041-ai-agent-framework.md` 不存在，确认正确路径后更新）, AI Integration Board #559（TBD - 待验证：路径 `0559-ai-integration-core.md` 不存在，确认正确路径后更新） |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -75,7 +75,7 @@ Issue #41 (AI Agent Framework) is the dependency that will expose two REST endpo
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/services/ai_service_client.py` | HTTP 客户端，封装对 AI Agent 端点的调用（`summarize_customer` / `suggest_action`） |
 | `tests/unit/test_ai_service_client.py` | `ai_service_client` 单元测试，mock HTTP 层 |
 | `tests/integration/test_customer_detail_ai_integration.py` | 端到端集成测试，覆盖按钮 → API → 响应展示全链路 |
@@ -323,7 +323,7 @@ gh pr create --base master --title "feat(customers): Chat with AI button and qui
 
 ## 9. 参考
 
-- 同类参考实现：TBD - 待验证：[`src/services/customer_service.py`](../../src/services/customer_service.py) — 现有 service 层模式参考（session 注入、异常抛出规范）
+- 同类参考实现：TBD - 待验证：`src/services/customer_service.py` — 现有 service 层模式参考（session 注入、异常抛出规范）；路径 `../../src/services/customer_service.py` 不存在，请确认正确路径
 - 第三方文档：[httpx AsyncClient](https://www.python-httpx.org/async/) — async HTTP 客户端用法
 - 父 issue / 关联：#53 (AI Integration epic), #559 (AI Integration core board), #41 (AI Agent Framework)
 

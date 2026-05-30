@@ -6,8 +6,8 @@
 | 分类 | 90-frontend |
 | 优先级 | 推荐 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [Build WhatsApp channel backend](0526-build-whatsapp-channel-backend-api.md) |
-| 启用后赋能 | [Automate message rules (upstream consumer)](0500-automation-rules-engine.md), [Campaign WhatsApp send](0501-campaign-whatsapp-send.md) |
+| 依赖 | [Build WhatsApp channel backend](../40-campaigns/0526-create-whatsapp-conversation-service.md) |
+| 启用后赋能 | [Automate message rules (upstream consumer)](0500-add-developer-documentation-page-and-api-playground.md) — TBD — 待验证：确认自动化规则引擎文档编号 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -345,7 +345,7 @@ gh pr create --base master --title "feat(frontend): build WhatsApp channel page 
 ## 9. 参考
 
 - Subtask parent: [#71 — WhatsApp channel epic](https://github.com/search?q=repo%3A*%2F*+%2371+whatsapp)
-- Backend dependency: [#526 — Build WhatsApp channel backend API](0526-build-whatsapp-channel-backend-api.md)
+- Backend dependency: [#526 — Build WhatsApp channel backend API](../40-campaigns/0526-create-whatsapp-conversation-service.md)
 - Existing frontend patterns: TBD — `frontend/src/lib/api/queries.ts` — verify API client conventions
 - Existing frontend layout pattern: TBD — `frontend/src/app/(app)/automation/rules/page.tsx` — verify split-pane list/detail layout
 - TanStack Query docs: [TanStack Query](https://tanstack.com/query/latest)
@@ -358,3 +358,5 @@ gh pr create --base master --title "feat(frontend): build WhatsApp channel page 
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+---

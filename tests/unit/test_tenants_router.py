@@ -267,6 +267,20 @@ class TestTenantCrossTenantIsolation:
         resp = client.get("/api/v1/tenants/9999")
         assert resp.status_code == 404
 
+    def test_get_tenant_forbidden_on_existing_cross_tenant(self, client_with_service):
+        """Tenant A requesting tenant B's data for an existing-but-inaccessible tenant returns 403."""
+        client, svc = client_with_service
+        svc.get_tenant = AsyncMock(side_effect=ForbiddenException("Tenant 2"))
+        resp = client.get("/api/v1/tenants/2")
+        assert resp.status_code == 403
+
+    def test_get_tenant_not_found_for_nonexistent_tenant(self, client_with_service):
+        """Tenant A requesting a non-existent tenant ID returns 404."""
+        client, svc = client_with_service
+        svc.get_tenant = AsyncMock(side_effect=NotFoundException("Tenant"))
+        resp = client.get("/api/v1/tenants/9999")
+        assert resp.status_code == 404
+
     def test_get_tenant_stats_rejects_cross_tenant_id(self, client_with_service):
         """Tenant A cannot access tenant B's stats; service layer returns 404 for unknown tenant."""
         client, svc = client_with_service

@@ -115,12 +115,12 @@ Authorization: Bearer <jwt> → 中间件解析 → AuthContext
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/auth.py`](../../src/api/routers/auth.py) | 新增 `/auth/refresh`（POST）、`/auth/webauthn/register`（POST/GET）、`/auth/webauthn/verify`（POST）；`/auth/login` 改为设置 HttpOnly Cookie |
-| [`src/middleware/fastapi_auth.py`](../../src/middleware/fastapi_auth.py) | Access Token 从请求 state（内存）读取，移除 localStorage 相关假设 |
-| [`src/dependencies/auth.py`](../../src/dependencies/auth.py) | 新增 `require_webauthn_verified` 依赖，用于敏感操作路由守卫 |
-| [`src/main.py`](../../src/main.py) | 注册新的 auth 相关依赖和中间件 |
-| [`tests/unit/test_auth_service.py`](../../tests/unit/test_auth_service.py) | 新增 token refresh 测试用例 |
-| [`tests/integration/conftest.py`](../../tests/integration/conftest.py) | 新增 `db_schema` fixture 支持三张新表 |
+| [`src/api/routers/auth.py`](../../../src/api/routers/auth.py) | 新增 `/auth/refresh`（POST）、`/auth/webauthn/register`（POST/GET）、`/auth/webauthn/verify`（POST）；`/auth/login` 改为设置 HttpOnly Cookie |
+| TBD - 待验证：`src/middleware/fastapi_auth.py` | Access Token 从请求 state（内存）读取，移除 localStorage 相关假设 |
+| [`src/dependencies/auth.py`](../../../src/dependencies/auth.py) | 新增 `require_webauthn_verified` 依赖，用于敏感操作路由守卫 |
+| [`src/main.py`](../../../src/main.py) | 注册新的 auth 相关依赖和中间件 |
+| [`tests/unit/test_auth_service.py`](../../../tests/unit/test_auth_service.py) | 新增 token refresh 测试用例 |
+| [`tests/integration/conftest.py`](../../../tests/integration/conftest.py) | 新增 `db_schema` fixture 支持三张新表 |
 
 ### 3.3 新增能力
 
@@ -452,9 +452,7 @@ gh pr create --base master --title "feat(auth): login security enhancement — H
 - [ ] `pytest tests/integration/test_webauthn_integration.py` passed
 - [ ] `alembic upgrade head && alembic downgrade -1` clean
 
-Closes #163
-
-🤖 Generated with [Claude Code](https://claude.com/claude-code)"
+Closes #163🤖 Generated with [Claude Code](https://claude.com/claude-code)"
 ```
 
 ---

@@ -255,7 +255,7 @@ gh pr create --base master --title "feat(ci): add test and code-review GitHub Ac
 
 ## 9. 参考
 
-- 同类参考实现：[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml)（上线后本文件即为同类参考）
+- 同类参考实现：[`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml)（上线后本文件即为同类参考）
 - 第三方文档：[GitHub Actions workflow syntax](https://docs.github.com/en/actions/writing-workflows/workflow-syntax-for-github-actions)
 - 父 issue / 关联：#198---
 

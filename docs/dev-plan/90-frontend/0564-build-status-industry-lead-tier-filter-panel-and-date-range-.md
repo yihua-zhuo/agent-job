@@ -6,8 +6,8 @@
 | 分类 | [90-frontend](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [0563](./0563-add-customer-status-industry-lead-tier-columns.md) |
-| 启用后赋能 | [0557](./0557-customer-list-page-with-search-pagination.md)（客户列表完整过滤能力） |
+| 依赖 | TBD - 待验证：字段迁移相关文档（0563-add-customer-status-industry-lead-tier-columns.md 不存在于 docs/dev-plan/90-frontend/） |
+| 启用后赋能 | TBD - 待验证：客户列表页实现文档（0557-customer-list-page-with-search-pagination.md 不存在于 docs/dev-plan/90-frontend/） |
 | 状态 | 📋 待开始 |
 
 ---

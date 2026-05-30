@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 推荐 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0653-add-workflow-service](../0653-add-workflow-service.md) |
+| 依赖 | [0653-add-workflow-api-router-endpoints](0653-add-workflow-api-router-endpoints.md) |
 | 启用后赋能 | 0657-add-workflow-router, 0658-add-workflow-integration-tests |
 | 状态 | 📋 待开始 |
 
@@ -41,7 +41,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/workflow_service.py`](../../src/services/workflow_service.py) L1-L227
+主入口：[`src/services/workflow_service.py`](../../../src/services/workflow_service.py) L1-L227
 
 ```python
 # src/services/workflow_service.py
@@ -59,7 +59,7 @@ class WorkflowService:
         # INSERT workflow_executions, evaluate conditions, execute actions
 ```
 
-模型文件：[`src/db/models/workflow.py`](../../src/db/models/workflow.py) L1-L76 — `WorkflowModel` + `WorkflowExecutionModel`，各有 `to_dict()`
+模型文件：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) L1-L76 — `WorkflowModel` + `WorkflowExecutionModel`，各有 `to_dict()`
 
 ### 2.2 涉及文件清单
 
@@ -83,7 +83,7 @@ class WorkflowService:
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|-------|
 | `tests/unit/domain_handlers/workflow.py` | workflow 表的 mock SQL handler：INSERT/SELECT/UPDATE/DELETE/COUNT |
 | `tests/unit/test_workflow.py` | `WorkflowService` 全方法单元测试（mock session） |
 
@@ -417,8 +417,8 @@ gh pr create --base master --title "test(#654): add unit tests for WorkflowServi
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py)
-- 同类参考实现：[`tests/unit/domain_handlers/automation.py`](../../tests/unit/domain_handlers/automation.py)
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py)
+- 同类参考实现：[`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py)
 - 父 issue：#37
 - 依赖 issue：#653
 

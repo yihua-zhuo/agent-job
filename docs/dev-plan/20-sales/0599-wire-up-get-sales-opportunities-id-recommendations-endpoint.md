@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [板块名](docs/dev-plan/50-automation/0687-build-rule-execution-engine-and-trigger-dispatch.md), [板块名](docs/dev-plan/20-sales/0598-add-sales-opportunity-recommendation-service.md) |
+| 启用后赋能 | TBD - 待验证：关联自动化规则引擎板块, TBD - 待验证：关联推荐服务板块 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -41,7 +41,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) L{43}-L{63}
+主入口：[`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) L{43}-L{63}
 
 ```python:src/services/sales_recommendation.py
 class SalesRecommendationService:
@@ -62,9 +62,9 @@ class SalesRecommendationService:
         return round(min(max(conversion_prob, 0.0), 1.0), 2)
 ```
 
-现有路由（无 recommendations 端点）：[`src/api/routers/sales.py`](../../src/api/routers/sales.py) L{1}-L{10}
+现有路由（无 recommendations 端点）：[`src/api/routers/sales.py`](../../../src/api/routers/sales.py) L{1}-L{10}
 
-路由发现（自动注册新 router）：[`src/api/__init__.py`](../../src/api/__init__.py) L{19}-L{26}
+路由发现（自动注册新 router）：[`src/api/__init__.py`](../../../src/api/__init__.py) L{19}-L{26}
 
 ```python:src/api/__init__.py
 def iter_routers() -> Iterator[APIRouter]:
@@ -79,8 +79,8 @@ def iter_routers() -> Iterator[APIRouter]:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) — 添加 `get_recommendations` 异步方法，改造 `__init__` 接受 `AsyncSession` 参数
-  - [`tests/unit/test_sales_router.py`](../../tests/unit/test_sales_router.py) — 无改动
+  - [`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) — 添加 `get_recommendations` 异步方法，改造 `__init__` 接受 `AsyncSession` 参数
+  - [`tests/unit/test_sales_router.py`](../../../tests/unit/test_sales_router.py) — 无改动
 - 要建：
   - `src/api/routers/recommendations.py` — 新建：推荐端点 router
   - `tests/unit/test_recommendations_router.py` — 新建：单元测试
@@ -99,7 +99,7 @@ def iter_routers() -> Iterator[APIRouter]:
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/api/routers/recommendations.py` | 新建：GET /sales/opportunities/{id}/recommendations 端点 |
 | `tests/unit/test_recommendations_router.py` | 新建：recommendations router 的单元测试（200/404/500/auth） |
 
@@ -107,7 +107,7 @@ def iter_routers() -> Iterator[APIRouter]:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) | 1) `__init__` 接受 `AsyncSession` 参数；2) 新增 `async get_recommendations(opportunity_id, tenant_id)` 方法调用 `predict_conversion_probability` 等现有方法 |
+| [`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) | 1) `__init__` 接受 `AsyncSession` 参数；2) 新增 `async get_recommendations(opportunity_id, tenant_id)` 方法调用 `predict_conversion_probability` 等现有方法 |
 
 ### 3.3 新增能力
 
@@ -357,8 +357,8 @@ gh pr create --base master --title "feat(sales): wire GET /sales/opportunities/{
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/sales.py`](../../src/api/routers/sales.py) — router 结构、序列化模式、错误处理完全复用
-- 同类参考实现：[`tests/unit/test_sales_router.py`](../../tests/unit/test_sales_router.py) — fixture 模式、mock 策略直接复用
+- 同类参考实现：[`src/api/routers/sales.py`](../../../src/api/routers/sales.py) — router 结构、序列化模式、错误处理完全复用
+- 同类参考实现：[`tests/unit/test_sales_router.py`](../../../tests/unit/test_sales_router.py) — fixture 模式、mock 策略直接复用
 - 父 issue / 关联：#46
 - 依赖 issue / 关联：#598
 

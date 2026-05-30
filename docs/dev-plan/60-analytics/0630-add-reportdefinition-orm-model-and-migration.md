@@ -55,7 +55,7 @@ No existing `src/db/models/report.py`. The ORM model does not yet exist. This is
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`alembic/env.py`](../../alembic/env.py) — 添加 `from db.models.report import ReportDefinition` 导入
+  - [`alembic/env.py`](../../../alembic/env.py) — 添加 `from db.models.report import ReportDefinition` 导入
 - 要建：
   - `src/db/models/report.py` — `ReportDefinition` ORM model
   - `alembic/versions/<id>_add_report_definitions_table.py` — Alembic migration
@@ -84,7 +84,7 @@ No existing `src/db/models/report.py`. The ORM model does not yet exist. This is
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`alembic/env.py`](../../alembic/env.py) | Add `from db.models.report import ReportDefinition` to import list so autogenerate sees it |
+| [`alembic/env.py`](../../../alembic/env.py) | Add `from db.models.report import ReportDefinition` to import list so autogenerate sees it |
 
 ### 3.3 新增能力
 
@@ -334,7 +334,7 @@ gh pr create --base master --title "feat(models): add ReportDefinition ORM model
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/customer.py`](../../src/db/models/customer.py) — 相同的 ORM 模式（列定义、索引、server_default）
+- 同类参考实现：[`src/db/models/customer.py`](../../../src/db/models/customer.py) — 相同的 ORM 模式（列定义、索引、server_default）
 - 父 issue：#40
 - 相关 issue：#630（本文档）
 
