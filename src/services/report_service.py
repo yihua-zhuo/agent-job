@@ -64,7 +64,6 @@ class ReportService:
         self,
         report_data: dict | None = None,
         title: str | None = None,
-        tenant_id: int = 0,
         report_type: str | None = None,
         config: dict | None = None,
         date_range: dict | None = None,
@@ -177,7 +176,9 @@ class ReportService:
         page_size: int = 20,
     ) -> tuple[list[ReportModel], int]:
         """Return paginated reports for a tenant with total count."""
-        offset = (max(1, page) - 1) * page_size
+        if page < 1:
+            raise ValidationException("page must be >= 1")
+        offset = (page - 1) * page_size
 
         count_result = await self.session.execute(
             select(func.count(ReportModel.id)).where(ReportModel.tenant_id == tenant_id)

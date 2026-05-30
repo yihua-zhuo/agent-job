@@ -144,7 +144,14 @@ def make_report_handler(state: MockState):
 
         if sql_text.startswith("select") and "count(" in sql_text and "from reports" in sql_text:
             tenant_id = _get_tenant_id(params)
-            count_val = sum(1 for r in _reports["records"].values() if r.get("tenant_id") == tenant_id)
+            # Inspect sql_text for filter predicates so counts reflect actual query filters.
+            recs = _reports["records"].values()
+            recs = (r for r in recs if r.get("tenant_id") == tenant_id)
+            if '"type"' in sql_text or "'type'" in sql_text:
+                type_val = params.get("type") or _get_mangled(params, "type")
+                if type_val is not None:
+                    recs = (r for r in recs if r.get("type") == type_val)
+            count_val = sum(1 for r in recs)
             return MockResult([count_val])
 
         # Require both 'where reports.id' and 'tenant_id' to reduce false positives.

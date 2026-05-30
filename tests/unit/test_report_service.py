@@ -15,10 +15,10 @@ from tests.unit.domain_handlers.reports import make_report_handler
 
 @pytest.fixture
 def mock_db_session():
-    """Mock session with five seeded reports (ids 10-14) plus id=20 for lookup."""
+    """Mock session with 25 seeded reports (ids 10-34) plus id=20 for lookup."""
     state = MockState()
-    state.opaque["reports"] = {"records": {}, "next_id": 21}
-    for rid in range(10, 15):
+    state.opaque["reports"] = {"records": {}, "next_id": 35}
+    for rid in range(10, 35):
         state.opaque["reports"]["records"][rid] = {
             "id": rid, "tenant_id": 1, "name": f"Report {rid}",
             "type": "custom", "config": {}, "date_range": {}, "created_by": 0,
@@ -71,9 +71,10 @@ class TestListReports:
         svc = ReportService(mock_db_session)
         reports, total = await svc.list_reports(tenant_id=1)
 
-        # Six records are seeded: ids 10-14 (5 records) + id=20 (1 record)
-        assert total == 6
-        assert len(reports) == 6
+        # 25 records are seeded (ids 10-34); id=20 is among them, so total=25.
+        # Default page_size=20 means the SELECT is capped at 20 even though 25 exist.
+        assert total == 25
+        assert len(reports) == 20
         assert mock_db_session.execute.call_count == 2
         # Verify both calls are SELECT statements (count + data fetch).
         calls = mock_db_session.execute.call_args_list
@@ -97,7 +98,7 @@ class TestListReports:
         svc = ReportService(mock_db_session)
         reports, total = await svc.list_reports(tenant_id=1, page=2, page_size=2)
 
-        assert total == 6
+        assert total == 25
         # Verify exactly two calls (count + paginated fetch).
         assert mock_db_session.execute.call_count == 2
         calls = mock_db_session.execute.call_args_list
@@ -110,6 +111,14 @@ class TestListReports:
         assert insp.is_select
         assert insp._limit is not None
         assert insp._offset is not None
+
+    async def test_enforces_limit_clause(self, mock_db_session):
+        """list_reports(page=1, page_size=20) returns exactly 20 items when >20 exist."""
+        svc = ReportService(mock_db_session)
+        reports, total = await svc.list_reports(tenant_id=1, page=1, page_size=20)
+
+        assert total == 25
+        assert len(reports) == 20
 
 
 # ---------------------------------------------------------------------------
@@ -231,6 +240,7 @@ class TestDeleteReport:
         svc = ReportService(mock_db_session_for_delete)
         await svc.delete_report(report_id=6, tenant_id=1)
 
+        assert mock_db_session_for_delete.delete.call_count == 1
         mock_db_session_for_delete.delete.assert_called_once()
         mock_db_session_for_delete.flush.assert_called_once()
         # Verify the deleted object had id=6 for the correct tenant.

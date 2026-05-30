@@ -12,16 +12,16 @@ Reading order followed:
 3. `/home/runner/work/agent-job/agent-job/docs/dev-plan/60-analytics/0631-implement-reportservice-with-crud-and-basic-storage.md`
 
 ## Affected Files
-- `src/services/report_service.py` — add five CRUD async methods; update imports (`ReportModel`, `NotFoundException`, `ForbiddenException`, `func`, `update`, `delete`)
+- `src/services/report_service.py` — add five CRUD async methods; update imports (`ReportModel`, `NotFoundException`, `func`)
 - `tests/unit/test_report_service.py` — new file; unit tests for all five CRUD methods + tenant isolation + not-found cases
 
 ## Implementation Steps
 
 1. **Update imports in `src/services/report_service.py`**
    - Add `from datetime import UTC, datetime` (remove duplicate `from datetime import UTC, datetime` that already exists at line 9 — consolidate to one import line)
-   - Change `from sqlalchemy import and_, select` → `from sqlalchemy import and_, delete, func, select, update`
+   - Change `from sqlalchemy import and_, select` → `from sqlalchemy import func, select`
    - Add `from db.models.analytics import ReportModel`
-   - Add `ForbiddenException, NotFoundException` to the existing `pkg.errors.app_exceptions` import
+   - Add `NotFoundException, ValidationException` to the existing `pkg.errors.app_exceptions` import
 
 2. **Add `list_reports` method to `ReportService`**
    - Insert after the existing `schedule_report` method (around line 178)
@@ -29,7 +29,7 @@ Reading order followed:
    - Returns `tuple[list[ReportModel], int]`
 
 3. **Add `get_report` method to `ReportService`**
-   - `SELECT ... WHERE id=? AND tenant_id=?` via `and_()`; raises `NotFoundException` if `scalar_one_or_none()` returns `None`
+   - `SELECT ... WHERE id=? AND tenant_id=?` via chained `.where()` predicates (no `and_()` import); raises `NotFoundException` if `scalar_one_or_none()` returns `None`
 
 4. **Add `create_report` method to `ReportService`**
    - Constructs `ReportModel` from `data` dict (name, type, config, date_range, created_by); sets `tenant_id`, `last_run_at=None`, `created_at=datetime.now(UTC)`
@@ -40,14 +40,17 @@ Reading order followed:
    - Merges `data` dict into existing row via `setattr()` for fields `name`, `type`, `config`, `date_range`, `last_run_at`
    - Calls `session.flush()` (no `updated_at` assignment — `ReportModel` has no such column; no `refresh()` call either)
 
+> **⚠️ Open follow-up**: `update_report` does not set `updated_at`. `ReportModel` has no such column. A separate Alembic migration is needed to add it.
+
 6. **Add `delete_report` method to `ReportService`**
    - Confirms existence via `SELECT id WHERE (id, tenant_id)`; raises `NotFoundException` if missing
-   - Executes `delete(ReportModel).where(and_(...))`; calls `session.flush()`
+   - Calls `session.delete(obj)`; calls `session.flush()`
 
 7. **Create `tests/unit/domain_handlers/reports.py`** (new file)
    - Follow the pattern of `tests/unit/domain_handlers/customers.py` with `ORDER = 10`
    - Handler for `SELECT reports WHERE tenant_id=?` (single and paginated), `INSERT INTO reports`, `UPDATE reports`, `DELETE FROM reports`
    - Use `MockRow` / `MockResult` from `conftest.py`
+   - **Prerequisite**: this file must exist and follow the composable handler pattern (rule 134/135) before running the unit tests in `tests/unit/test_report_service.py`
 
 8. **Create `tests/unit/test_report_service.py`** (new file)
    - Follow the pattern of `tests/unit/test_customer_service.py` — define a `mock_db_session` fixture that uses `MockState` + `make_mock_session([make_report_handler(state)])` rather than inline `MagicMock` + `AsyncMock`; this follows the composable handler pattern required by rule 135
