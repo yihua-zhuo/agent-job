@@ -6,6 +6,7 @@ import hashlib
 import json
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 
@@ -20,7 +21,7 @@ def generate_id(*parts: str) -> str:
 
 def sanitize_filename(filename: str) -> str:
     """清理文件名，移除不安全字符"""
-    filename = filename.replace("..", "")
+    filename = Path(filename).name
     filename = re.sub(r"[^\w\s.-]", "", filename)
     filename = re.sub(r"[-\s]+", "-", filename)
     return filename.strip("- .")
