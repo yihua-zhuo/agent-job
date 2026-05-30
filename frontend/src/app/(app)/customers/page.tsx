@@ -352,7 +352,6 @@ function CustomersPageInner() {
   const [page, setPage] = useState(initPage);
   const [pageSize, setPageSize] = useState(initPageSize);
   const [keyword, setKeyword] = useState("");
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pageRef = useRef(initPage);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -418,20 +417,7 @@ function CustomersPageInner() {
     searchableKeys: ["name", "email", "phone"],
   });
 
-  // Debounce the globalFilter update so the table only re-filters after the user stops typing
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setGlobalFilter(keyword);
-      setPage(1);
-    }, 300);
-    return () => {
-      if (timerRef.current) clearTimeout(timerRef.current);
-    };
-  }, [keyword, setGlobalFilter]);
-
   const clearSearch = useCallback(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
     setKeyword("");
     setGlobalFilter("");
     setPage(1);
@@ -614,6 +600,8 @@ function CustomersPageInner() {
             value={keyword}
             onChange={(e) => {
               setKeyword(e.target.value);
+              setGlobalFilter(e.target.value);
+              setPage(1);
             }}
             placeholder="Search customers…"
             className="pl-8 pr-8 rounded-lg border-[1px] shadow-sm focus:ring-2 focus:ring-primary focus:ring-offset-1"

@@ -42,6 +42,7 @@ describe("useTableState", () => {
     const { result } = renderHook(() =>
       useTableState({ data: rows, columns: [nameCol, emailCol], searchableKeys: ["name", "email"] })
     );
+    expect(result.current.globalFilter).toBe("");
     expect(result.current.table.getRowModel().rows.length).toBe(3);
   });
 
@@ -50,8 +51,9 @@ describe("useTableState", () => {
     const { result } = renderHook(() =>
       useTableState({ data: rows, columns: [nameCol, emailCol], searchableKeys: ["name", "email"] })
     );
-    act(() => { result.current.setGlobalFilter("test.com"); });
-    expect(result.current.table.getRowModel().rows.length).toBe(3);
+    act(() => { result.current.setGlobalFilter("alice"); });
+    expect(result.current.table.getRowModel().rows.length).toBe(1);
+    expect(result.current.table.getRowModel().rows[0].original.name).toBe("Alice");
   });
 
   it("returns empty rows when no match", () => {
@@ -66,7 +68,7 @@ describe("useTableState", () => {
   it("updates globalFilter state when setGlobalFilter is called", async () => {
     const rows = makeRows(["Alice", "Bob", "Charlie"]);
     const { result } = renderHook(() =>
-      useTableState({ data: rows, columns: [] })
+      useTableState({ data: rows, columns: [nameCol, emailCol], searchableKeys: ["name", "email"] })
     );
     expect(result.current.globalFilter).toBe("");
     act(() => { result.current.setGlobalFilter("test"); });
@@ -128,7 +130,7 @@ describe("useTableState", () => {
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // desc
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // clear
     await waitFor(() => {
-      expect(result.current.table.getColumn("name")?.getIsSorted()).toBeFalsy();
+      expect(result.current.table.getColumn("name")?.getIsSorted()).toBe(false);
     });
   });
 });
