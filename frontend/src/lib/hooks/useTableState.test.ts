@@ -7,10 +7,11 @@ interface TestRow {
   id: number;
   name: string;
   email: string;
-  phone: string;
-  status: string;
-  company: string;
-  created_at: string;
+  phone?: string;
+  status?: string;
+  company?: string;
+  created_at?: string;
+  notes?: string;
 }
 
 const makeRows = (names: string[]): TestRow[] =>
@@ -22,16 +23,17 @@ const makeRows = (names: string[]): TestRow[] =>
     status: "lead",
     company: "",
     created_at: "",
+    notes: "",
   }));
 
 // Column defs covering name + email (used to scope globalFilter to specific columns)
-const nameCol: ColumnDef<TestRow, unknown> = {
+const nameCol: ColumnDef<TestRow, string> = {
   id: "name",
   accessorKey: "name",
   sortingFn: "alphanumeric",
 };
 
-const emailCol: ColumnDef<TestRow, unknown> = {
+const emailCol: ColumnDef<TestRow, string> = {
   id: "email",
   accessorKey: "email",
 };
@@ -62,6 +64,21 @@ describe("useTableState", () => {
       useTableState({ data: rows, columns: [nameCol, emailCol], searchableKeys: ["name", "email"] })
     );
     act(() => { result.current.setGlobalFilter("xyz"); });
+    expect(result.current.table.getRowModel().rows.length).toBe(0);
+  });
+
+  it("does NOT match text in non-searchable columns", () => {
+    // searchableKeys = ["name", "email"]; "notes" is NOT included
+    const notesCol: ColumnDef<TestRow, string> = { id: "notes", accessorKey: "notes" };
+    const rows: TestRow[] = [
+      { id: 1, name: "Bob", email: "bob@test.com" },
+      { id: 2, name: "Carol", email: "carol@test.com", notes: "alice is a contact" },
+    ];
+    const { result } = renderHook(() =>
+      useTableState({ data: rows, columns: [nameCol, emailCol, notesCol], searchableKeys: ["name", "email"] })
+    );
+    act(() => { result.current.setGlobalFilter("alice"); });
+    // "alice" only exists in the notes column (not in name/email), so no rows match
     expect(result.current.table.getRowModel().rows.length).toBe(0);
   });
 

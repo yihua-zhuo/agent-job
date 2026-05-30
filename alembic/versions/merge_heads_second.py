@@ -12,7 +12,7 @@ from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.
 revision: str = 'merge_heads_second'
-down_revision: str | Sequence[str] | None = '4001ca3d5d6f'
+down_revision: str | Sequence[str] | None = ('4001ca3d5d6f', '52b19ee00eaf')
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

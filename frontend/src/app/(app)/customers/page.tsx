@@ -439,6 +439,11 @@ function CustomersPageInner() {
     setGlobalFilter(view.keyword);
     setKeyword(view.keyword);
     setHiddenCols(new Set(view.hiddenCols));
+    if (view.sortKey) {
+      table.setSorting([{ id: view.sortKey, desc: view.sortDir === "desc" }]);
+    } else {
+      table.setSorting([]);
+    }
     setPage(1);
   }
 

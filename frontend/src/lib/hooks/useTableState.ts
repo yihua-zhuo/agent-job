@@ -27,7 +27,7 @@ export function useTableState<TData>({
 
   const table = useReactTable<TData>({
     data,
-    columns: columns as ColumnDef<TData, unknown>[],
+    columns,
     state: { globalFilter, sorting },
     onGlobalFilterChange: setGlobalFilter,
     onSortingChange: setSorting,
