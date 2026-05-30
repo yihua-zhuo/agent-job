@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 推荐 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0653-add-workflow-api-router-endpoints](../0653-add-workflow-api-router-endpoints.md) |
+| 依赖 | [0653-add-workflow-api-router-endpoints](0653-add-workflow-api-router-endpoints.md) |
 | 启用后赋能 | 0657-add-workflow-router, 0658-add-workflow-integration-tests |
 | 状态 | 📋 待开始 |
 

@@ -44,7 +44,7 @@ The CRM currently has no workflow execution layer. Issue #651 established the OR
 
 Issue #651 produced the ORM models that this service depends on. The models are expected at:
 
-[`src/db/models/workflow.py`](../../src/db/models/workflow.py) TBD — verify after #651 lands
+[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) TBD — verify after #651 lands
 
 Expected key models (verify from #651 output):
 - `WorkflowDefinition` — id, tenant_id, name, description, version, status, steps (relation)
@@ -330,7 +330,7 @@ gh pr create --base master --title "feat(automation): WorkflowService definition
 | 9 (依赖) | `[0651-实现工作流相关模型与枚举定义](../50-automation/0651-implement-workflow-related-models-and-enum-definitions.md)` | `TBD - 待验证：0651 工作流模型与枚举定义对应文件路径` |
 | 10 (启用后赋能) | `[0686-实现 POST/GET/PUT/DELETE 自动化规则路由端点](../50-automation/0686-add-post-get-put-delete-automation-rules-router-endpoints.md)` | `TBD - 待验证：0686 自动化规则路由端点对应文件路径` |
 | 10 (启用后赋能) | `[0687-构建规则执行引擎与触发调度](../50-automation/0687-build-rule-execution-engine-and-trigger-dispatch.md)` | `TBD - 待验证：0687 规则执行引擎与触发调度对应文件路径` |
-| 47 (model path) | `[`src/db/models/workflow_model.py`](../../src/db/models/workflow_model.py)` | `[`src/db/models/workflow.py`](../../src/db/models/workflow.py)` |
+| 47 (model path) | `[`src/db/models/workflow_model.py`](../../src/db/models/workflow_model.py)` | `[`src/db/models/workflow.py`](../../../src/db/models/workflow.py)` |
 | 312 (opportunity_service) | `[`src/services/opportunity_service.py`](../../src/services/opportunity_service.py)` | `TBD - 待验证：opportunity_service.py 分页模式对应文件路径` |
 
 Note: the code blocks in Steps 1 and 2 that reference imports from `src.db.models.workflow_model` were also updated to `src.db.models.workflow` (to match the corrected link).

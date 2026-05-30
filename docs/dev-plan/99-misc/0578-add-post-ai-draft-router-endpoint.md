@@ -6,7 +6,7 @@
 | 分类 | [50-automation](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [#577](0577-add-aidraft-pydantic-schemas-and-aidraftservice.md) |
+| 依赖 | [#577](../50-automation/0577-add-aidraft-pydantic-schemas-and-aidraftservice.md) |
 | 启用后赋能 | 前端 AI Draft 表单（待后续板块） |
 | 状态 | 📋 待开始 |
 

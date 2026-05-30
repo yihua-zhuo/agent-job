@@ -6,7 +6,7 @@
 | 分类 | 90-frontend |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [#498 Build App Marketplace backend](../../70-platform/0498-implement-api-key-auth-middleware-and-external-api-router.md) |
+| 依赖 | [#498 Build App Marketplace backend](../70-platform/0498-implement-api-key-auth-middleware-and-external-api-router.md) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 

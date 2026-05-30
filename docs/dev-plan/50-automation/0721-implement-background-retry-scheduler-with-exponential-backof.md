@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 2-2.5 工作日 |
-| 依赖 | [0720 - 实现 HMAC 签名与投递](50-automation/0720-implement-webhookdeliveryservice-hmac-signing-post-delivery.md) |
+| 依赖 | [0720 - 实现 HMAC 签名与投递](../50-automation/0720-implement-webhookdeliveryservice-hmac-signing-post-delivery.md) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
