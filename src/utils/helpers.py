@@ -6,18 +6,28 @@ import hashlib
 import json
 import re
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any
 
 
 def generate_id(*parts: str) -> str:
     """生成唯一ID"""
     combined = "_".join(str(p) for p in parts)
-    return hashlib.md5(combined.encode()).hexdigest()[:12]
+    # Truncated to 16 hex chars (64-bit space) for use as a short display ID.
+    # Birthday paradox: 50% collision at ~2.7B IDs; negligible at <1M.
+    # Acceptable for internal, non-URL/non-log use.
+    return hashlib.sha256(combined.encode()).hexdigest()[:16]
 
 
 def sanitize_filename(filename: str) -> str:
-    """清理文件名，移除不安全字符"""
-    filename = filename.replace("..", "")
+    """Strip path components and remove unsafe characters from a filename.
+
+    Step 1 (Path().name): strips any directory prefix, leaving only the filename.
+    Step 2: removes any character not in the safe set (alphanumeric, whitespace, dot, hyphen).
+    Step 3: collapses multiple hyphens/spaces to a single hyphen.
+    Step 4: strips leading/trailing hyphens, dots, and spaces.
+    """
+    filename = Path(filename).name  # strip directory, keep only basename
     filename = re.sub(r"[^\w\s.-]", "", filename)
     filename = re.sub(r"[-\s]+", "-", filename)
     return filename.strip("- .")

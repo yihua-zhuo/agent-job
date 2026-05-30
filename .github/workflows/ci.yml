@@ -70,7 +70,7 @@ jobs:
       - if: always()
         run: docker compose -f configs/docker-compose.test.yml down
 
-  migration-drift:
+migration-drift:
     name: Migration Drift Check
     runs-on: ubuntu-latest
     needs: unit-test
@@ -151,8 +151,7 @@ jobs:
       - name: Tear down Postgres
         if: always()
         run: docker compose -f configs/docker-compose.test.yml down -v || true
-
-  code-review:
+code-review:
     name: Code Review
     runs-on: ubuntu-latest
     needs: [coordinator, unit-test]

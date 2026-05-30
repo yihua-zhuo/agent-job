@@ -20,8 +20,14 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Pure merge-head marker — no schema changes from any of the three parent
+    # migrations (185055a0d4f0, addcp001, db67d696b6ab).  All three touch
+    # independent tables and apply cleanly in any order.  Rollback is a no-op
+    # because the parents already contain the full schema.
     pass
 
 
 def downgrade() -> None:
+    # No-op: the three parent migrations are self-contained and must be
+    # downgraded individually if needed.
     pass
