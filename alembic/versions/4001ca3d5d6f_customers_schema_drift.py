@@ -1,7 +1,7 @@
 """customers_schema_drift
 
 Revision ID: 4001ca3d5d6f
-Revises: 52b19ee00eaf
+Revises: 82ecf4a34e34
 Create Date: 2026-05-30 11:34:57.309144
 
 Add columns that exist on CustomerModel but were never migrated:

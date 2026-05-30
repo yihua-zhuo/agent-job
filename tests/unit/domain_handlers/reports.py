@@ -7,14 +7,27 @@ from tests.unit.conftest import MockResult, MockRow, MockState
 ORDER = 10
 
 
+def _get_tenant_id(sql_text, params):
+    """Extract tenant_id from bound params, handling SQLAlchemy's name mangling.
+
+    SQLAlchemy appends a numeric suffix when a param name appears multiple
+    times in a query (e.g. tenant_id_1, tenant_id_2). We strip any trailing
+    numeric segment and test whether 'tenant_id' remains.
+    """
+    for key, val in params.items():
+        stripped = key.rsplit("_", 1)[0]
+        while stripped and stripped[-1].isdigit():
+            stripped = stripped[:-1]
+        if stripped.rstrip("_") == "tenant_id":
+            return val
+    return params.get("tenant_id", 0)
+
+
 def make_report_handler(state: MockState):
     """Handle all report-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
-    if not hasattr(state, "report_records"):
-        state.report_records: dict[int, dict] = {}
-    if not hasattr(state, "report_records_next_id"):
-        state.report_records_next_id: int = 1
     def handler(sql_text, params):
         if "insert into reports" in sql_text:
+            tenant_id = _get_tenant_id(sql_text, params)
             rid = state.report_records_next_id
             state.report_records_next_id += 1
             record = {
@@ -34,40 +47,40 @@ def make_report_handler(state: MockState):
         if sql_text.startswith("update") and "reports" in sql_text:
             report_id = params.get("id")
             rec = state.report_records.get(report_id)
-            if rec is not None and rec.get("tenant_id") == (params.get("tenant_id") or 0):
-                for k, v in params.items():
-                    if k not in ("id", "tenant_id"):
-                        rec[k] = v
-                return MockResult([MockRow(rec.copy())])
-            return MockResult([])
+            if rec is None or rec.get("tenant_id") != _get_tenant_id(sql_text, params):
+                return MockResult([])
+            for k, v in params.items():
+                if k not in ("id", "tenant_id"):
+                    rec[k] = v
+            return MockResult([MockRow(rec.copy())])
 
         if sql_text.startswith("delete") and "reports" in sql_text:
             report_id = params.get("id")
             rec = state.report_records.get(report_id)
-            if rec is not None and rec.get("tenant_id") == (params.get("tenant_id") or 0):
-                del state.report_records[report_id]
-                return MockResult([MockRow({"id": report_id})])
-            return MockResult([])
+            if rec is None or rec.get("tenant_id") != _get_tenant_id(sql_text, params):
+                return MockResult([])
+            del state.report_records[report_id]
+            return MockResult([MockRow({"id": report_id})])
 
-        if "select" in sql_text and "count" in sql_text and "from reports" in sql_text:
-            tenant_id = params.get("tenant_id", 0)
+        if sql_text.startswith("select") and "count(" in sql_text and "from reports" in sql_text:
+            tenant_id = _get_tenant_id(sql_text, params)
             count_val = sum(1 for r in state.report_records.values() if r.get("tenant_id") == tenant_id)
-            return MockResult([[count_val]])
+            return MockResult([count_val])
 
         if "from reports where id" in sql_text and "tenant_id" in sql_text:
             report_id = params.get("id")
             rec = state.report_records.get(report_id)
-            if rec is not None and rec.get("tenant_id") == params.get("tenant_id"):
+            if rec is not None and rec.get("tenant_id") == _get_tenant_id(sql_text, params):
                 return MockResult([MockRow(rec.copy())])
             return MockResult([])
 
         if "select" in sql_text and "from reports" in sql_text and "order by" in sql_text:
-            tenant_id = params.get("tenant_id", 0)
+            tenant_id = _get_tenant_id(sql_text, params)
             rows = [MockRow(rec.copy()) for rec in state.report_records.values() if rec.get("tenant_id") == tenant_id]
             return MockResult(rows)
 
         if "select" in sql_text and "from reports" in sql_text and "order by" not in sql_text:
-            tenant_id = params.get("tenant_id", 0)
+            tenant_id = _get_tenant_id(sql_text, params)
             rows = [MockRow(rec.copy()) for rec in state.report_records.values() if rec.get("tenant_id") == tenant_id]
             return MockResult(rows)
 

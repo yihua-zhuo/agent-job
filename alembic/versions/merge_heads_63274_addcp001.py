@@ -134,6 +134,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("name", name="uq_identity_permission_name"),
     )
     op.create_index(op.f("ix_identity_permissions_name"), "identity_permissions", ["name"], unique=True)
 

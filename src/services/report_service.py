@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, delete, func, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.analytics import ReportModel
@@ -183,7 +183,7 @@ class ReportService:
         count_result = await self.session.execute(
             select(func.count(ReportModel.id)).where(ReportModel.tenant_id == tenant_id)
         )
-        total = count_result.scalar_one()
+        total = count_result.scalar_one_or_none() or 0
 
         result = await self.session.execute(
             select(ReportModel)
@@ -261,23 +261,15 @@ class ReportService:
     async def delete_report(self, report_id: int, tenant_id: int) -> None:
         """Hard-delete a report row; raises NotFoundException if missing or wrong tenant."""
         result = await self.session.execute(
-            select(ReportModel.id).where(
+            select(ReportModel).where(
                 and_(
                     ReportModel.id == report_id,
                     ReportModel.tenant_id == tenant_id,
                 )
             )
         )
-        row = result.scalar_one_or_none()
-        if row is None:
+        report = result.scalar_one_or_none()
+        if report is None:
             raise NotFoundException("Report")
-
-        await self.session.execute(
-            delete(ReportModel).where(
-                and_(
-                    ReportModel.id == report_id,
-                    ReportModel.tenant_id == tenant_id,
-                )
-            )
-        )
+        await self.session.delete(report)
         await self.session.flush()

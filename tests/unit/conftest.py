@@ -168,6 +168,8 @@ class MockState:
         self.deleted_user_ids: set[int] = set()
         self.activities: dict[int, dict] = {}
         self.activities_next_id: int = 1
+        self.report_records: dict[int, dict] = {}
+        self.report_records_next_id: int = 1
 
 
 def _load_domain_handler_modules():
@@ -278,7 +280,7 @@ def make_mock_session(handlers=None, state=None):
 
     session.execute = AsyncMock(side_effect=_execute_side_effect)
     session.add = MagicMock()
-    session.delete = MagicMock()
+    session.delete = AsyncMock()
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
     session.close = AsyncMock()

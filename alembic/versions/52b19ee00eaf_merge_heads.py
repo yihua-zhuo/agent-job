@@ -1,7 +1,7 @@
 """Merge six parallel heads into one.
 
 Revision ID: 52b19ee00eaf
-Revises: merge_heads_63274_addcp001
+Revises: 7b1a2c3d4e5f
 Create Date: 2026-05-30 11:03:03.754025
 
 Converges all six branches that descend from merge_heads_63274_addcp001
@@ -34,7 +34,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision: str = "52b19ee00eaf"
-down_revision: Union[str, None] = "merge_heads_63274_addcp001"
+down_revision: Union[str, None] = "7b1a2c3d4e5f"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
