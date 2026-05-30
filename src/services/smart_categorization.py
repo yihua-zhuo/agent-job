@@ -132,40 +132,43 @@ class SmartCategorizationService:
         自动标签客户
         基于：行为数据、交易数据
         """
-        seed = hash(customer_id)
+        rng = random.Random(customer_id)  # noqa: S311 -- deterministic, not cryptographic
 
         tags = []
 
-        # 基于活跃度
-        if seed % 3 == 0:
+        r = rng.randrange(3)
+        if r == 0:
             tags.append("active_user")
-        elif seed % 3 == 1:
+        elif r == 1:
             tags.append("occasional_user")
         else:
             tags.append("dormant_user")
 
         # 基于价值
-        if seed % 5 == 0:
+        r = rng.randrange(5)
+        if r == 0:
             tags.append("high_value")
-        elif seed % 5 == 4:
+        elif r == 4:
             tags.append("medium_value")
         else:
             tags.append("low_value")
 
         # 基于产品使用
-        if seed % 7 == 0:
+        r = rng.randrange(7)
+        if r == 0:
             tags.append("enterprise_tier")
-        elif seed % 7 in [1, 2]:
+        elif r in [1, 2]:
             tags.append("premium_tier")
-        elif seed % 7 in [3, 4]:
+        elif r in [3, 4]:
             tags.append("standard_tier")
         else:
             tags.append("basic_tier")
 
         # 基于行为特征
-        if seed % 11 < 3:
+        r = rng.randrange(11)
+        if r < 3:
             tags.append("early_adopter")
-        elif seed % 11 < 6:
+        elif r < 6:
             tags.append("feature_lover")
         else:
             tags.append("casual_user")

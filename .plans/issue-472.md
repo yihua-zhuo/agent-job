@@ -63,15 +63,17 @@ def clear() -> None:
     _tenant_id_var.set(None)
 ```
 
-### Step 2: Update `src/internal/middleware/__init__.py`
+### Step 2: Re-export from `src/internal/middleware/__init__.py`
 
-The file already exists as a package marker (`"""空文件，用于 Python 包标识"""`). Overwrite it to add the three re-exports:
+The file already exists as a package marker (`"""空文件，用于 Python 包标识"""`). Add the three re-exports **without overwriting the existing file** — consumer code should import directly from `src.internal.middleware.tenant_context` (or from the `__init__.py` re-export, which is optional):
 
 ```python
 from .tenant_context import clear, get_tenant_id, set_tenant_id
 
 __all__ = ["clear", "get_tenant_id", "set_tenant_id"]
 ```
+
+**Rule 125 note:** Do not use `__init__.py` as a central registry for feature-domain modules. The re-export here is a lightweight convenience; the canonical import path is `internal.middleware.tenant_context`.
 
 ### Step 3: Create `tests/unit/test_tenant_context.py`
 

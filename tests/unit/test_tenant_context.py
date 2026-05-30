@@ -14,8 +14,9 @@ from pkg.errors.app_exceptions import UnauthorizedException
 
 # NOTE: this fixture is not safe for parallel test execution (e.g. pytest-xdist).
 # The clear() in yield can race with another test's set_tenant_id if tests run
-# concurrently in the same process. Use a process-scoped or unique-key fixture if
-# parallel execution is needed.
+# concurrently in the same process. Mark this file serial to prevent parallel
+# execution; use a unique-key-per-test scoping strategy if parallel execution
+# is needed.
 @pytest.fixture(autouse=True)
 def _clear_tenant_context():
     """Ensure every test starts and ends with a clean tenant context."""
@@ -24,6 +25,10 @@ def _clear_tenant_context():
     clear()
 
 
+# Serialize this file to prevent race conditions in parallel execution.
+# Tenant context is process-global via contextvars; concurrent tests can
+# interfere via the autouse fixture above.
+@pytest.mark.serial
 class TestTenantContext:
     def test_set_and_get_tenant_id(self):
         """Setting a tenant_id can be retrieved."""
@@ -61,6 +66,24 @@ class TestTenantContext:
         task = asyncio.create_task(task_body())
         result = await task
         assert result == 13
+
+    async def test_no_tenant_id_in_task_created_before_set(self):
+        """A task created before set_tenant_id must NOT see tenant_id."""
+        async def task_body():
+            return get_tenant_id()
+
+        task = asyncio.create_task(task_body())
+        result = await task
+        assert result is None
+
+    def test_clear_returns_none_not_stale_value(self):
+        """After clear(), get_tenant_id returns None — not a stale tenant_id.
+
+        Ensures isolation across request boundaries (rule 126).
+        """
+        set_tenant_id(99)
+        clear()
+        assert get_tenant_id() is None
 
     def test_require_tenant_id_returns_value(self):
         """require_tenant_id returns the value when set."""
