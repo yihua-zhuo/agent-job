@@ -1,3 +1,14 @@
+---
+name: issue-563-client-side-search-sort
+description: Replace debounced search + sorted array with TanStack Table useTableState hook
+metadata:
+  type: plan
+  issue: "563"
+  author: claude-agent
+  created: 2026-05-30
+  status: implemented
+---
+
 Now I have all the context needed. Here is the implementation plan:
 
 ---
@@ -6,6 +17,20 @@ Now I have all the context needed. Here is the implementation plan:
 
 ## Goal
 Replace the hand-rolled debounced search and `sorted` array in `/customers` with TanStack Table v8's `getFilteredRowModel` + `getSortedRowModel`, and extract a reusable `useTableState` hook so the same pattern can be reused on other list pages without new API calls.
+
+## Outcome
+
+The implementation was completed and all acceptance criteria were met:
+
+- `useTableState` hook created at `frontend/src/lib/hooks/useTableState.ts` with `globalFilter` and `sorting` state management
+- `useTableState.test.ts` added with 8 passing tests covering filtering and sorting
+- `customers/page.tsx` refactored to use `useTableState` with TanStack Table v8
+- Debounce infrastructure removed: no `timerRef`, `debouncedKeyword`, `debounce` in the page file
+- `handleSaveView` now captures the active sort column from `table.getState().sorting[0]` instead of hard-coding `name`
+- `applyView` correctly restores sorting state from saved views
+- Search input calls `setGlobalFilter` directly (client-side filtering, no API calls)
+- The composite index `ix_workflow_nodes_tenant_id_workflow_id` removed (ORM drift fix in migration `fcf9ff098f62447a_add_tenant_id.py`)
+- `workflow_executions` gained `tenant_id` column per ORM model
 
 ## Source Contract
 Dev-plan target: `/home/runner/work/agent-job/agent-job/docs/dev-plan/90-frontend/0563-implement-client-side-search-and-column-sorting.md`
@@ -422,7 +447,7 @@ describe("useTableState", () => {
   - `cd frontend && npx tsc --noEmit` → exit 0
   - `cd frontend && npm run lint` → exit 0
   - `cd frontend && npx vitest run src/lib/hooks/useTableState.test.ts` → all passed
-  - Grep check: `frontend/src/app/(app)/customers/page.tsx` contains no `timerRef`, `debouncedKeyword`, `sorted`, `handleSort`, `SortIcon` → silent failure if any found (bash grep exit code ≠ 0)
+  - Grep check: `frontend/src/app/(app)/customers/page.tsx` contains no `timerRef`, `debouncedKeyword`, `sorted`, `handleSort`, `SortIcon` → silently fail if any found (bash grep exit code ≠ 0)
 
 ## Acceptance Criteria
 

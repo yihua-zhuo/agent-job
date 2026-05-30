@@ -456,13 +456,15 @@ function CustomersPageInner() {
   }
 
   function handleSaveView() {
-    const nameCol = table.getColumn("name");
+    const firstSort = table.getState().sorting[0];
+    const sortKey: SortKey | null = firstSort ? (firstSort.id as SortKey) : null;
+    const sortDir: "asc" | "desc" = firstSort ? (firstSort.desc ? "desc" : "asc") : "asc";
     const v: SavedView = {
       id: crypto.randomUUID(),
       name: newViewName.trim() || "Untitled View",
       keyword: globalFilter,
-      sortKey: nameCol?.getIsSorted() ? "name" : null,
-      sortDir: nameCol?.getIsSorted() === "asc" ? "asc" : nameCol?.getIsSorted() === "desc" ? "desc" : "asc",
+      sortKey,
+      sortDir,
       hiddenCols: Array.from(hiddenCols),
     };
     const next = [...savedViews, v];
