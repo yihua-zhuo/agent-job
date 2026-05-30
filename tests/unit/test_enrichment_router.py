@@ -11,7 +11,7 @@ from starlette.responses import JSONResponse
 from api.routers.enrichment import enrichment_router
 from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
-from pkg.errors.app_exceptions import AppException, ValidationException
+from pkg.errors.app_exceptions import AppException, NotFoundException, ValidationException
 from tests.unit.conftest import make_mock_session
 
 
@@ -146,3 +146,70 @@ class TestLookupEndpoint:
         assert "data" in body
         assert "message" in body
         assert isinstance(body["message"], str)
+
+
+class TestRefreshEndpoint:
+    """Unit tests for POST /api/v1/enrichment/refresh/{customer_id}."""
+
+    def test_refresh_returns_enriched_data(self, client_with_service):
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(
+            return_value={
+                "name": "Acme Corp",
+                "domain": "acme.com",
+                "geo_city": "New York",
+            }
+        )
+
+        resp = client.post("/api/v1/enrichment/refresh/42")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["name"] == "Acme Corp"
+        assert body["data"]["domain"] == "acme.com"
+
+    def test_refresh_passes_correct_args(self, client_with_service):
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(return_value={"name": "Acme Corp"})
+
+        resp = client.post(
+            "/api/v1/enrichment/refresh/99",
+            json={"domain": "acme.com", "company_name": None},
+        )
+        assert resp.status_code == 200
+        svc.refresh.assert_awaited_once_with(
+            customer_id=99,
+            tenant_id=1,
+            domain="acme.com",
+            company_name=None,
+        )
+
+    def test_refresh_passes_no_body(self, client_with_service):
+        """Refresh without request body passes None for domain and company_name."""
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(return_value={"name": "Acme Corp"})
+
+        resp = client.post("/api/v1/enrichment/refresh/7")
+        assert resp.status_code == 200
+        svc.refresh.assert_awaited_once_with(
+            customer_id=7,
+            tenant_id=1,
+            domain=None,
+            company_name=None,
+        )
+
+    def test_refresh_customer_not_found_returns_404(self, client_with_service):
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(side_effect=NotFoundException("Customer"))
+
+        resp = client.post("/api/v1/enrichment/refresh/9999")
+        assert resp.status_code == 404
+
+    def test_refresh_validation_error_returns_422(self, client_with_service):
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(side_effect=ValidationException("No company found for the given domain"))
+
+        resp = client.post("/api/v1/enrichment/refresh/42")
+        assert resp.status_code == 422
+        body = resp.json()
+        assert "No company found" in body["message"]

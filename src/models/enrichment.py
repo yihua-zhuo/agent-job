@@ -1,5 +1,8 @@
 """Pydantic request / response schemas for the enrichment API."""
 
+from datetime import datetime
+from typing import Literal
+
 from pydantic import BaseModel, field_validator, model_validator
 
 
@@ -33,3 +36,17 @@ class EnrichmentLookupRequest(BaseModel):
         if len(active) != 1:
             raise ValueError("Provide exactly one of domain or company_name")
         return self
+
+
+class EnrichmentStatusOut(BaseModel):
+    """Derived enrichment status included in customer GET responses."""
+
+    enrichment_status: Literal["none", "enriched", "stale"]
+    last_enriched_at: datetime | None
+
+
+class EnrichmentRefreshRequest(BaseModel):
+    """Optional request body for ``POST /api/v1/enrichment/refresh/{customer_id}``."""
+
+    domain: str | None = None
+    company_name: str | None = None

@@ -6,12 +6,15 @@ Router wraps successful returns in {"success": True, "data": ...} dicts.
 
 import math
 import re
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
+from db.models.customer_enrichment import CustomerEnrichmentModel
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.customer import CustomerStatus
 from services.customer_service import CustomerService
@@ -151,7 +154,45 @@ async def list_customers(
         tags=tags,
         tenant_id=ctx.tenant_id,
     )
-    return _paginated(items, total, page, page_size)
+
+    # Batch-fetch the most recent enrichment record for each customer in the page
+    customer_ids = [(c.id if hasattr(c, "id") else c["id"]) for c in items if (hasattr(c, "id") or "id" in c)]
+    customer_ids = [cid for cid in customer_ids if cid is not None]
+    enrichment_map: dict[int, CustomerEnrichmentModel] = {}
+    if customer_ids:
+        enrich_result = await session.execute(
+            select(CustomerEnrichmentModel)
+            .where(
+                and_(
+                    CustomerEnrichmentModel.customer_id.in_(customer_ids),
+                    CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
+                )
+            )
+            .order_by(CustomerEnrichmentModel.enriched_at.desc())
+        )
+        # Keep the latest enrichment record per customer
+        for row in enrich_result.all():
+            if row.customer_id not in enrichment_map:
+                enrichment_map[row.customer_id] = row
+
+    now = datetime.now(UTC)
+    enriched_items = []
+    for customer in items:
+        d = customer.to_dict() if hasattr(customer, "to_dict") else customer
+        cust_id = getattr(customer, "id", customer.get("id") if isinstance(customer, dict) else None)
+        enrich = enrichment_map.get(cust_id)
+        if enrich is None:
+            d["enrichment_status"] = "none"
+            d["last_enriched_at"] = None
+        else:
+            d["last_enriched_at"] = enrich.enriched_at.isoformat() if enrich.enriched_at else None
+            if enrich.next_refresh_at is not None and enrich.next_refresh_at <= now:
+                d["enrichment_status"] = "stale"
+            else:
+                d["enrichment_status"] = "enriched"
+        enriched_items.append(d)
+
+    return _paginated(enriched_items, total, page, page_size)
 
 
 @customers_router.get("/search")
@@ -173,7 +214,32 @@ async def get_customer(
 ):
     service = CustomerService(session)
     result = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result}
+    data = result.to_dict() if hasattr(result, "to_dict") else result
+
+    # Add derived enrichment status from joined enrichment record
+    enrich_result = await session.execute(
+        select(CustomerEnrichmentModel)
+        .where(
+            and_(
+                CustomerEnrichmentModel.customer_id == customer_id,
+                CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
+            )
+        )
+        .order_by(CustomerEnrichmentModel.enriched_at.desc())
+        .limit(1)
+    )
+    enrichment = enrich_result.scalar_one_or_none()
+    if enrichment is None:
+        data["enrichment_status"] = "none"
+        data["last_enriched_at"] = None
+    else:
+        data["last_enriched_at"] = enrichment.enriched_at.isoformat() if enrichment.enriched_at else None
+        if enrichment.next_refresh_at is not None and enrichment.next_refresh_at <= datetime.now(UTC):
+            data["enrichment_status"] = "stale"
+        else:
+            data["enrichment_status"] = "enriched"
+
+    return {"success": True, "data": data}
 
 
 @customers_router.put("/{customer_id}")

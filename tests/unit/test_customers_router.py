@@ -109,10 +109,17 @@ def client_with_service(monkeypatch):
         lambda session: mock_service,
     )
 
+    # Async-aware mock session for session.execute() calls (enrichment queries)
+    mock_session = MagicMock()
+    mock_enrich_result = MagicMock()
+    mock_enrich_result.all = MagicMock(return_value=[])
+    mock_enrich_result.scalar_one_or_none = MagicMock(return_value=None)
+    mock_session.execute = AsyncMock(return_value=mock_enrich_result)
+
     app = FastAPI()
     app.include_router(customers_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app.dependency_overrides[get_db] = lambda: mock_session
 
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:

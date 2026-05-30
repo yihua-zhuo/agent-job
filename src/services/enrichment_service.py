@@ -5,6 +5,7 @@ from typing import Any
 
 import httpx
 from sqlalchemy import and_, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from configs.settings import settings
@@ -139,3 +140,74 @@ class EnrichmentService:
                     out[f"metrics_{sub}"] = metrics[sub]
 
         return out
+
+    async def refresh(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        domain: str | None = None,
+        company_name: str | None = None,
+    ) -> dict[str, Any]:
+        """Re-call the enrichment provider for an existing customer and upsert the record.
+
+        Verifies customer ownership, calls the provider, upserts the
+        CustomerEnrichmentModel record, and returns the normalised dict.
+        """
+        result = await self.session.execute(
+            select(CustomerModel).where(
+                and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
+            )
+        )
+        customer = result.scalar_one_or_none()
+        if customer is None:
+            raise NotFoundException("Customer")
+
+        api_key: str = settings.clearbit_api_key
+        if not api_key:
+            raise ValidationException("Clearbit API key is not configured")
+
+        params: dict[str, str] = {}
+        if domain:
+            params["domain"] = domain.strip()
+        elif company_name:
+            params["name"] = company_name.strip()
+
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(
+                settings.clearbit_read_timeout,
+                connect=settings.clearbit_connect_timeout or 5.0,
+            )
+        ) as client:
+            response = await client.get(
+                "https://company.clearbit.com/v2/companies/find",
+                params=params,
+                headers={"Authorization": f"Bearer {api_key}"},
+            )
+
+        if response.status_code == 404:
+            raise ValidationException("No company found for the given domain or name")
+        if not response.is_success:
+            raise ValidationException(f"Clearbit API error: {response.status_code}")
+
+        raw_data: dict[str, Any] = response.json()
+        now = datetime.now(UTC)
+        stmt = pg_insert(CustomerEnrichmentModel).values(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider="clearbit",
+            raw_data_json=raw_data,
+            enriched_at=now,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tenant_id", "customer_id"],
+            set_={
+                "provider": "clearbit",
+                "raw_data_json": stmt.excluded.raw_data_json,
+                "enriched_at": stmt.excluded.enriched_at,
+                "updated_at": now,
+            },
+        )
+        await self.session.execute(stmt)
+        await self.session.flush()
+
+        return self._normalise_clearbit(raw_data)

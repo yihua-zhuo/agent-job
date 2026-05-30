@@ -4,9 +4,11 @@ from datetime import UTC, datetime
 from typing import Any
 
 from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
+from db.models.customer_enrichment import CustomerEnrichmentModel
 from models.customer import CustomerCreateDTO, CustomerStatus
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
@@ -73,6 +75,10 @@ class CustomerService:
             routing_svc = LeadRoutingService(self.session)
             await routing_svc.auto_assign_lead(customer.id, tenant_id)
 
+        # Step 9 — upsert enrichment data when present in payload
+        if isinstance(data, dict) and data.get("enrichment_data") is not None:
+            await self._upsert_enrichment(customer.id, tenant_id, data["enrichment_data"])
+
         return customer
 
     async def list_customers(
@@ -138,6 +144,11 @@ class CustomerService:
         customer.updated_at = datetime.now(UTC)
         await self.session.flush()
         await self.session.refresh(customer)
+
+        # Upsert enrichment data when present in payload
+        if data.get("enrichment_data") is not None:
+            await self._upsert_enrichment(customer.id, tenant_id, data["enrichment_data"])
+
         return customer
 
     async def delete_customer(self, customer_id: int, tenant_id: int) -> dict:
@@ -405,3 +416,39 @@ class CustomerService:
             )
         await self.session.flush()
         return recycled_ids
+
+    # -------------------------------------------------------------------------
+    # Enrichment helpers
+    # -------------------------------------------------------------------------
+
+    async def _upsert_enrichment(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        enrichment_data: dict[str, Any],
+    ) -> None:
+        """Upsert a CustomerEnrichmentModel record for the given customer.
+
+        Uses INSERT … ON CONFLICT (tenant_id, customer_id) DO UPDATE so that
+        each call creates the record if absent, or updates the existing row if a
+        record for the same (tenant_id, customer_id) pair already exists.
+        """
+        now = datetime.now(UTC)
+        stmt = pg_insert(CustomerEnrichmentModel).values(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider=enrichment_data.get("provider", "clearbit"),
+            raw_data_json=enrichment_data.get("raw_data_json", enrichment_data),
+            enriched_at=enrichment_data.get("enriched_at", now),
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tenant_id", "customer_id"],
+            set_={
+                "provider": stmt.excluded.provider,
+                "raw_data_json": stmt.excluded.raw_data_json,
+                "enriched_at": stmt.excluded.enriched_at,
+                "updated_at": now,
+            },
+        )
+        await self.session.execute(stmt)
+        await self.session.flush()
