@@ -2,7 +2,7 @@
 
 Merges the following revisions (all non-no-op, with real schema operations):
   a52e1317da90  — add import_export_jobs
-  63274a8b98b3c — (see alembic log for original description)
+  63274a8b98b3c — add webhook tables
   e646948c549a  — create automation_rules and automation_logs
   add_agent_tasks_001 — add_agent_tasks
   afa7c3f333bd  — add_sent_at_to_campaigns

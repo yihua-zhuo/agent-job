@@ -34,14 +34,14 @@ ls frontend/src/components/ui/input.tsx frontend/src/components/ui/button.tsx
 Create the file with:
 - `export interface LoginFormData { email: string; password: string; rememberMe: boolean }`
 - `export interface LoginProps { onSubmit: (data: LoginFormData) => Promise<void>; isLoading?: boolean }`
-- Internal `useState` for `email`, `password`, `rememberMe`, and local `isLoading`
+- Internal `useState` for `email`, `password`, `rememberMe`, and local `isLoading`; the component accepts an optional `isLoading` prop that overrides the internal state (prop-driven when supplied, internally managed when omitted)
 - `handleSubmit` calls `e.preventDefault()`, sets local `isLoading = true`, awaits `onSubmit(...)`, then resets `isLoading = false`
 - Renders `<form>` with `<Input type="email">`, `<Input type="password">`, a `<input type="checkbox">` labelled "Remember me", an `<a>` link to `/forgot-password`, and a `<Button type="submit">` that reads local `isLoading` and shows spinner text- All inputs and button receive `disabled={isLoading}` for accessibility
 
 ```tsx
 // frontend/src/components/Login.tsx
 "use client";
-import React, { useState, type FormEvent } from "react";
+import React, { useState, useCallback, type FormEvent } from "react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -53,23 +53,29 @@ export interface LoginFormData {
 
 export interface LoginProps {
   onSubmit: (data: LoginFormData) => Promise<void>;
+  isLoading?: boolean;
 }
 
-export function Login({ onSubmit }: LoginProps) {
+export function Login({ onSubmit, isLoading: activeLoading }: LoginProps) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [rememberMe, setRememberMe] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
+  const [internalLoading, setIsLoading] = useState(false);
+  const isLoading = activeLoading ?? internalLoading;
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    try {
-      await onSubmit({ email, password, rememberMe });
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const handleSubmit = useCallback(
+    async (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (isLoading) return;
+      setIsLoading(true);
+      try {
+        await onSubmit({ email, password, rememberMe });
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [email, password, rememberMe, onSubmit, isLoading]
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
@@ -100,9 +106,9 @@ export function Login({ onSubmit }: LoginProps) {
         />
         Remember me
       </label>
-      <a href="/forgot-password" className="text-sm text-muted-foreground hover:underline">
+      <Link href="/forgot-password" className="text-sm text-muted-foreground hover:underline">
         Forgot password?
-      </a>
+      </Link>
       <Button type="submit" disabled={isLoading} className="w-full">
         {isLoading ? "Signing in…" : "Sign In"}
       </Button>
@@ -228,7 +234,7 @@ cd frontend && npx prettier --write src/components/Login.tsx src/components/__te
 - Submitting the form (with no mock submit resolving) shows "Signing in…" button text and disables all form elements before `onSubmit` resolves
 - Submitting with a resolved `onSubmit` call resets `isLoading` to `false` and re-enables all fields
 - `LoginFormData` interface is exported from `frontend/src/components/Login.tsx` with exact shape: `{ email: string; password: string; rememberMe: boolean }`
-- `LoginProps` interface is exported with `onSubmit: (data: LoginFormData) => Promise<void>`
+- `LoginProps` interface is exported with `onSubmit: (data: LoginFormData) => Promise<void>` and an optional `isLoading?: boolean` prop (prop-driven; when omitted the component manages loading state internally)
 - The existing login page at `frontend/src/app/(auth)/login/page.tsx` is **not modified** by this component — architectural wiring to the page is left to #550
 
 ## Risks / Open Questions

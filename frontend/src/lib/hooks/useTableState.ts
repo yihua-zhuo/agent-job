@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -37,13 +37,10 @@ export function useTableState<TData>({
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  const getColumnCanGlobalFilter = useMemo(
-    () => (column: { id: string | null }) => {
-      if (searchableKeys.length === 0) return true;
-      return column.id !== null && searchableKeys.includes(column.id);
-    },
-    [searchableKeys]
-  );
+  const getColumnCanGlobalFilter = (column: { id: string | null }) => {
+    if (searchableKeys.length === 0) return true;
+    return column.id !== null && searchableKeys.includes(column.id);
+  };
 
   const table = useReactTable<TData>({
     data,
