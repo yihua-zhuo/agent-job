@@ -204,6 +204,10 @@ class TestRefreshEndpoint:
 
         resp = client.post("/api/v1/enrichment/refresh/9999")
         assert resp.status_code == 404
+        body = resp.json()
+        assert body["success"] is False
+        assert "not found" in body["message"]
+        assert body["code"] == "NOT_FOUND"
 
     def test_refresh_validation_error_returns_422(self, client_with_service):
         client, svc = client_with_service

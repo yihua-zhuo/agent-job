@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import and_, select
+from sqlalchemy import and_, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
@@ -160,20 +160,38 @@ async def list_customers(
     customer_ids = [cid for cid in customer_ids if cid is not None]
     enrichment_map: dict[int, CustomerEnrichmentModel] = {}
     if customer_ids:
-        enrich_result = await session.execute(
-            select(CustomerEnrichmentModel)
+        # Subquery to find the max enriched_at per customer, then fetch the full row
+        latest_subq = (
+            select(
+                CustomerEnrichmentModel.customer_id,
+                func.max(CustomerEnrichmentModel.enriched_at).label("max_enriched_at"),
+            )
             .where(
                 and_(
                     CustomerEnrichmentModel.customer_id.in_(customer_ids),
                     CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
                 )
             )
-            .order_by(CustomerEnrichmentModel.enriched_at.desc())
+            .group_by(CustomerEnrichmentModel.customer_id)
+            .subquery()
         )
-        # Keep the latest enrichment record per customer
+        enrich_result = await session.execute(
+            select(CustomerEnrichmentModel)
+            .where(
+                and_(
+                    CustomerEnrichmentModel.customer_id.in_(customer_ids),
+                    CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
+                    tuple_(
+                        CustomerEnrichmentModel.customer_id,
+                        CustomerEnrichmentModel.enriched_at,
+                    ).in_(
+                        select(latest_subq.c.customer_id, latest_subq.c.max_enriched_at)
+                    ),
+                )
+            )
+        )
         for row in enrich_result.all():
-            if row.customer_id not in enrichment_map:
-                enrichment_map[row.customer_id] = row
+            enrichment_map[row.customer_id] = row
 
     now = datetime.now(UTC)
     enriched_items = []

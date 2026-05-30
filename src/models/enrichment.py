@@ -1,8 +1,5 @@
 """Pydantic request / response schemas for the enrichment API."""
 
-from datetime import datetime
-from typing import Literal
-
 from pydantic import BaseModel, field_validator, model_validator
 
 
@@ -38,15 +35,21 @@ class EnrichmentLookupRequest(BaseModel):
         return self
 
 
-class EnrichmentStatusOut(BaseModel):
-    """Derived enrichment status included in customer GET responses."""
-
-    enrichment_status: Literal["none", "enriched", "stale"]
-    last_enriched_at: datetime | None
-
-
 class EnrichmentRefreshRequest(BaseModel):
     """Optional request body for ``POST /api/v1/enrichment/refresh/{customer_id}``."""
 
     domain: str | None = None
     company_name: str | None = None
+
+    @model_validator(mode="after")
+    def require_at_least_one(self) -> "EnrichmentRefreshRequest":
+        raw_domain: str | None = object.__getattribute__(self, "domain")
+        raw_name: str | None = object.__getattribute__(self, "company_name")
+        active = [
+            x.strip() if isinstance(x, str) else None
+            for x in (raw_domain, raw_name)
+            if x is not None and x != ""
+        ]
+        if len(active) == 0:
+            raise ValueError("At least one of domain or company_name is required")
+        return self

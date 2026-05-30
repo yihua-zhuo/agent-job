@@ -11,7 +11,7 @@ from api.routers.customers import (
 )
 from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
-from pkg.errors.app_exceptions import NotFoundException, ValidationException
+from pkg.errors.app_exceptions import AppException, NotFoundException, ValidationException
 
 
 # ---------------------------------------------------------------------------
