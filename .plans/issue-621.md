@@ -122,7 +122,8 @@ class AgentTaskService:
 Add the export so callers can import `AgentTaskService` from the `services` package:
 
 ```python
-from src.services.agent_task_service import AgentTaskService```
+from src.services.agent_task_service import AgentTaskService
+```
 
 **完成判定**: `PYTHONPATH=src ruff check src/services/__init__.py` → 0 errors
 
@@ -337,14 +338,13 @@ class TestListTasks:
 ### Step 5: Run full verification
 
 ```bash
-PYTHONPATH=src ruff check src/services/agent_task_service.py src/services/__init__.py
-PYTHONPATH=src ruff check tests/unit/test_agent_task_service.py tests/unit/domain_handlers/agent_tasks.py tests/unit/conftest.py
-PYTHONPATH=src ruff format --check src/services/agent_task_service.py
+PYTHONPATH=src ruff check src/
+PYTHONPATH=src ruff format --check src/
 PYTHONPATH=src pytest tests/unit/test_agent_task_service.py -v
 ```
 
 ## Test Plan
-- Unit tests in `tests/unit/`: `tests/unit/test_agent_task_service.py` (new) covers happy paths and error paths for `create_task`, `get_task`, `list_tasks`; `tests/unit/domain_handlers/agent_tasks.py` (new) provides the mock SQL handler; `tests/unit/conftest.py` (modify) adds `agent_tasks` state to `MockState`
+- Unit tests in `tests/unit/`: `tests/unit/test_agent_task_service.py` (new) covers happy paths and error paths for `create_task`, `get_task`, `list_tasks`; `tests/unit/domain_handlers/agent_tasks.py` (new) provides the mock SQL handler and initializes domain state via `hasattr` checks
 - Integration tests in `tests/integration/`: none — this board is service-only; integration tests belong in the router board that depends on this service
 - Dev-plan verification: `PYTHONPATH=src ruff check src/services/agent_task_service.py` → 0 errors; `PYTHONPATH=src pytest tests/unit/test_agent_task_service.py -v` → all passed
 
