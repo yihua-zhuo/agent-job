@@ -3,10 +3,10 @@
 | 元数据 | 值 |
 |---|---|
 | Issue | #428 |
-| 分类 | [00-foundations](../README.md#12-分类总览) |
+| 分类 | [00-foundations](../../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [统一 Identity ORM 模型结构 #427](../10-customers/0427-unify-identity-orm-model-structure.md) |
+| 依赖 | [统一 Identity ORM 模型结构 #427](../70-platform/0427-consolidate-existing-identity-orm-models-into-src-db-models-.md) |
 | 启用后赋能 | [创建 CustomerService + DB 仓储层 #430](), [实现 CampaignService #454](), [实现 WorkflowService #463]() |
 | 状态 | 📋 待开始 |
 
@@ -264,9 +264,9 @@ gh pr create --base master --title "refactor(#428): update identity model import
 
 ## 9. 参考
 
-- 同类参考实现：[统一 Identity ORM 模型结构 #427](../10-customers/0427-unify-identity-orm-model-structure.md)
+- 同类参考实现：[统一 Identity ORM 模型结构 #427](../70-platform/0427-consolidate-existing-identity-orm-models-into-src-db-models-.md)
 - 父 issue：[实现 Identity 模型层 #270](../../README.md)
-- 依赖前置：[统一 Identity ORM 模型结构 #427](../10-customers/0427-unify-identity-orm-model-structure.md)
+- 依赖前置：[统一 Identity ORM 模型结构 #427](../70-platform/0427-consolidate-existing-identity-orm-models-into-src-db-models-.md)
 
 ---
 
