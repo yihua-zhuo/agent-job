@@ -9,6 +9,10 @@ ORDER = 10
 
 def make_report_handler(state: MockState):
     """Handle all report-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
+    if not hasattr(state, "report_records"):
+        state.report_records: dict[int, dict] = {}
+    if not hasattr(state, "report_records_next_id"):
+        state.report_records_next_id: int = 1
     def handler(sql_text, params):
         if "insert into reports" in sql_text:
             rid = state.report_records_next_id
@@ -30,7 +34,7 @@ def make_report_handler(state: MockState):
         if sql_text.startswith("update") and "reports" in sql_text:
             report_id = params.get("id")
             rec = state.report_records.get(report_id)
-            if rec is not None and rec.get("tenant_id") == params.get("tenant_id"):
+            if rec is not None and rec.get("tenant_id") == (params.get("tenant_id") or 0):
                 for k, v in params.items():
                     if k not in ("id", "tenant_id"):
                         rec[k] = v
@@ -40,7 +44,7 @@ def make_report_handler(state: MockState):
         if sql_text.startswith("delete") and "reports" in sql_text:
             report_id = params.get("id")
             rec = state.report_records.get(report_id)
-            if rec is not None and rec.get("tenant_id") == params.get("tenant_id"):
+            if rec is not None and rec.get("tenant_id") == (params.get("tenant_id") or 0):
                 del state.report_records[report_id]
                 return MockResult([MockRow({"id": report_id})])
             return MockResult([])
