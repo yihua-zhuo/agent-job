@@ -35,10 +35,11 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
         # UPDATE (set status after creation)
         if "update agent_tasks" in sql_text:
             tid = normalized.get("id")
-            rec = state.agent_tasks.get(tid)
-            if rec is None or rec.get("tenant_id") != normalized.get("tenant_id"):
+            tenant_id = normalized.get("tenant_id")
+            if tid not in state.agent_tasks or state.agent_tasks[tid].get("tenant_id") != tenant_id:
                 return MockResult([])
-            base_keys = set(state.agent_tasks[tid].keys())
+            rec = state.agent_tasks[tid]
+            base_keys = set(rec.keys())
             for k, v in params.items():
                 base = re.sub(r"_\d+$", "", k)
                 if base in base_keys:

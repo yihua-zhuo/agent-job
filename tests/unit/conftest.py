@@ -19,7 +19,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from dotenv import load_dotenv
 from sqlalchemy import insert, select, table, text
-from sqlalchemy.exc import MultipleResultsFound
+from sqlalchemy.exc import CompileError, MultipleResultsFound, UnsupportedCompilationError
 
 # Load .env so DATABASE_URL is available in test environment.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
@@ -271,7 +271,7 @@ def make_mock_session(handlers=None, state=None):
         bound_params = {}
         try:
             bound_params.update(getattr(sql.compile(), "params", {}) or {})
-        except (TypeError, AttributeError, RuntimeError) as exc:
+        except (TypeError, AttributeError, RuntimeError, CompileError, UnsupportedCompilationError) as exc:
             # These are the exceptions SQLAlchemy's .compile() can raise at
             # bind-param extraction time; others (KeyboardInterrupt, SystemExit)
             # must not be silently swallowed.

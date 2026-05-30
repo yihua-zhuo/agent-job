@@ -27,4 +27,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    pass  # No-op: reverting any parent to its own prior head is handled by that parent's downgrade.
+    pass  # pass — Alembic cascades to each parent's downgrade; see 9aad50c58f54, addcp001, 9e805b1493a6 downgrades.

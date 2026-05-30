@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime as dt
 
 import pytest
 
@@ -12,14 +12,8 @@ from tests.unit.conftest import MockState, make_mock_session
 from tests.unit.domain_handlers.agent_tasks import make_agent_task_handler
 
 
-def _seed_agent_task(state: MockState, tenant_id: int, description: str, status: str, created_at: datetime) -> int:
-    """Seed an agent task directly into mock state, bypassing the ORM.
-
-    Used for tests that need to control initial state (e.g., fixed created_at
-    timestamps) where the service's flush() path does not emit a created_at
-    param.  This is the recommended seeding pattern for this file — direct
-    dict writes into state.agent_tasks must mirror AgentTaskModel fields.
-    """
+def _seed_agent_task(state: MockState, tenant_id: int, description: str, status: str, created_at: dt) -> int:
+    """Seed an agent task directly into mock state, bypassing the ORM."""
     task_id = state.agent_tasks_next_id
     state.agent_tasks_next_id += 1
     state.agent_tasks[task_id] = {
@@ -108,7 +102,7 @@ class TestListTasks:
         # SELECT path sees the updated status.
         state.agent_tasks[task_a.id]["status"] = "completed"
         # Seed a tenant-2 task that must be excluded from all results.
-        _seed_agent_task(state, tenant_id=2, description="Tenant 2 pending task", status="pending", created_at=datetime.now())
+        _seed_agent_task(state, tenant_id=2, description="Tenant 2 pending task", status="pending", created_at=dt.now())
         pending_tasks, total = await service.list_tasks(tenant_id=1, status="pending", page=1, page_size=20)
         # Assert COUNT path (total must exclude the tenant-2 task).
         assert total == 1
@@ -122,9 +116,9 @@ class TestListTasks:
     async def test_filters_by_date_range(self, service, mock_db_session):
         # Seed two tasks with distant dates into the mock state.
         state = mock_db_session._state
-        now = datetime.now()
-        past_date = datetime(2020, 1, 1)
-        future_date = datetime(2099, 1, 1)
+        now = dt.now()
+        past_date = dt(2020, 1, 1)
+        future_date = dt(2099, 1, 1)
         _seed_agent_task(state, tenant_id=1, description="Old task", status="pending", created_at=past_date)
         _seed_agent_task(state, tenant_id=1, description="Future task", status="pending", created_at=future_date)
         # Seed a third task under tenant 2 so cross-tenant COUNT exclusion can be verified.
@@ -139,26 +133,26 @@ class TestListTasks:
         )
         assert total == 0  # COUNT path also respects tenant isolation
         assert tasks == []
-        assert all(t.tenant_id == 1 for t in tasks)
 
     async def test_filters_by_date_range_returns_matching_tasks(self, service, mock_db_session):
         # Seed two tasks with known creation times inside a precise window.
         state = mock_db_session._state
-        mid_date = datetime(2024, 6, 15, 12, 0, 0)
+        mid_date = dt(2024, 6, 15, 12, 0, 0)
         _seed_agent_task(state, tenant_id=1, description="June task", status="pending", created_at=mid_date)
         _seed_agent_task(state, tenant_id=1, description="Another June task", status="pending", created_at=mid_date)
         # Seed a tenant-2 task inside the same window to verify cross-tenant SELECT exclusion.
         _seed_agent_task(state, tenant_id=2, description="Tenant 2 June task", status="pending", created_at=mid_date)
         tasks, total = await service.list_tasks(
             tenant_id=1,
-            date_from=datetime(2024, 6, 1),
-            date_to=datetime(2024, 6, 30),
+            date_from=dt(2024, 6, 1),
+            date_to=dt(2024, 6, 30),
             page=1,
             page_size=20,
         )
         # Both seeded tasks fall inside the window.
         assert total == 2
         assert len(tasks) == 2
+        assert all(t.tenant_id == 1 for t in tasks)
         descriptions = {t.description for t in tasks}
         assert descriptions == {"June task", "Another June task"}
         # Tenant-2 task must not appear in SELECT results.
@@ -185,3 +179,7 @@ class TestListTasks:
     async def test_raises_validation_for_invalid_status(self, service):
         with pytest.raises(ValidationException):
             await service.list_tasks(tenant_id=1, status="definitely_not_a_valid_status_xyz", page=1, page_size=20)
+
+    async def test_accepts_valid_status_strings(self, service):
+        tasks, total = await service.list_tasks(tenant_id=1, status="pending", page=1, page_size=20)
+        assert total >= 0
