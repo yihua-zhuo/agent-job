@@ -67,7 +67,7 @@ class Token(BaseModel):
     """Standard OAuth2 token response for Swagger UI Authorize button."""
 
     access_token: str
-    token_type: str = "bearer"  # noqa: S105
+    token_type: str = "bearer"  # noqa: S105  # OAuth2 protocol constant (RFC 6750), not a secret.
 
 
 # OAuth2 scheme — tokenUrl MUST match the login endpoint path.
@@ -288,4 +288,4 @@ async def login(
         role=user.role,
         tenant_id=user.tenant_id,
     )
-    return Token(access_token=token, token_type="bearer")  # noqa: S105,S106
+    return Token(access_token=token, token_type="bearer")  # noqa: S105,S106  # OAuth2 protocol constant (RFC 6750), not a secret.
