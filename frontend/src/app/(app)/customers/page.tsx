@@ -687,17 +687,24 @@ function CustomersPageInner() {
                     if (e.target.checked) setSelectedIds(new Set(table.getRowModel().rows.map((r) => r.original.id)));
                     else setSelectedIds(new Set());
                   }}
-                  checked={table.getRowModel().rows.length > 0 && selectedIds.size === table.getRowModel().rows.length}
+                  checked={
+                    table.getRowModel().rows.length > 0 &&
+                    table.getRowModel().rows.every((r) => selectedIds.has(r.original.id))
+                  }
                 />
               </th>
               {!hiddenCols.has("name") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.name, minWidth: widths.name }}>
-                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("name")?.getToggleSortingHandler()}>
+                  <button
+                    type="button"
+                    className="flex items-center cursor-pointer"
+                    onClick={table.getColumn("name")?.getToggleSortingHandler()}
+                  >
                     Name
                     {table.getColumn("name")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
                     {table.getColumn("name")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
                     {!table.getColumn("name")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
-                  </div>
+                  </button>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
                     onMouseDown={(e) => onMouseDown("name", e)}
@@ -706,12 +713,16 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("email") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.email, minWidth: widths.email }}>
-                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("email")?.getToggleSortingHandler()}>
+                  <button
+                    type="button"
+                    className="flex items-center cursor-pointer"
+                    onClick={table.getColumn("email")?.getToggleSortingHandler()}
+                  >
                     Email
                     {table.getColumn("email")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
                     {table.getColumn("email")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
                     {!table.getColumn("email")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
-                  </div>
+                  </button>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
                     onMouseDown={(e) => onMouseDown("email", e)}
@@ -720,12 +731,16 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("phone") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.phone, minWidth: widths.phone }}>
-                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("phone")?.getToggleSortingHandler()}>
+                  <button
+                    type="button"
+                    className="flex items-center cursor-pointer"
+                    onClick={table.getColumn("phone")?.getToggleSortingHandler()}
+                  >
                     Phone
                     {table.getColumn("phone")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
                     {table.getColumn("phone")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
                     {!table.getColumn("phone")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
-                  </div>
+                  </button>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
                     onMouseDown={(e) => onMouseDown("phone", e)}
@@ -734,12 +749,16 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("status") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.status, minWidth: widths.status }}>
-                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("status")?.getToggleSortingHandler()}>
+                  <button
+                    type="button"
+                    className="flex items-center cursor-pointer"
+                    onClick={table.getColumn("status")?.getToggleSortingHandler()}
+                  >
                     Status
                     {table.getColumn("status")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
                     {table.getColumn("status")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
                     {!table.getColumn("status")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
-                  </div>
+                  </button>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
                     onMouseDown={(e) => onMouseDown("status", e)}
@@ -748,12 +767,16 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("company") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.company, minWidth: widths.company }}>
-                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("company")?.getToggleSortingHandler()}>
+                  <button
+                    type="button"
+                    className="flex items-center cursor-pointer"
+                    onClick={table.getColumn("company")?.getToggleSortingHandler()}
+                  >
                     Company
                     {table.getColumn("company")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
                     {table.getColumn("company")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
                     {!table.getColumn("company")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
-                  </div>
+                  </button>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
                     onMouseDown={(e) => onMouseDown("company", e)}
@@ -762,12 +785,16 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("created_at") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.created_at, minWidth: widths.created_at }}>
-                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("created_at")?.getToggleSortingHandler()}>
+                  <button
+                    type="button"
+                    className="flex items-center cursor-pointer"
+                    onClick={table.getColumn("created_at")?.getToggleSortingHandler()}
+                  >
                     Created
                     {table.getColumn("created_at")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
                     {table.getColumn("created_at")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
                     {!table.getColumn("created_at")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
-                  </div>
+                  </button>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
                     onMouseDown={(e) => onMouseDown("created_at", e)}
