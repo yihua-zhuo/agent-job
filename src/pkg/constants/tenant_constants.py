@@ -2,3 +2,5 @@
 
 # Valid plan values for tenant subscriptions.
 VALID_PLANS = frozenset({"free", "starter", "pro", "professional", "enterprise"})
+
+__all__ = ["VALID_PLANS"]

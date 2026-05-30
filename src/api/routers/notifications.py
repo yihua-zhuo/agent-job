@@ -247,11 +247,7 @@ async def list_reminders(
         tenant_id=current_user.tenant_id,
         upcoming_only=upcoming_only,
     )
-    return {"success": True, "data": {"items": [_reminder_to_api(r) for r in reminders], "total": total}}
-
-
-def _reminder_to_api(r):
-    return r.to_dict()
+    return {"success": True, "data": {"items": [r.to_dict() for r in reminders], "total": total}}
 
 
 @notifications_router.delete(

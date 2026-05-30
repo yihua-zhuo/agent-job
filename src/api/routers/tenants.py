@@ -97,8 +97,9 @@ async def get_tenant(
 ):
     """Fetch a tenant by ID.
 
-    Access is scoped to the requesting tenant only (enforced by TenantService);
-    cross-tenant access is not supported at the router layer.
+    Authorization is enforced by TenantService: a tenant may only retrieve its own
+    record (requesting_tenant_id must match the target tenant_id). A service-level
+    ForbiddenException is raised for cross-tenant access attempts.
     """
     service = TenantService(session)
     data = await service.get_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id)

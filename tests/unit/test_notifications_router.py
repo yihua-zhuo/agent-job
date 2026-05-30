@@ -234,8 +234,9 @@ class TestSendNotification:
                 },
             )
             assert response.status_code == 422
-            detail = str(response.json())
-            assert "in_app" in detail and "email" in detail
+            # AppException handler returns {"success": false, "message": ..., "code": ...}
+            message = response.json().get("message", "")
+            assert "in_app" in message and "email" in message
 
 
 # ---------------------------------------------------------------------------
@@ -507,12 +508,12 @@ class TestInvalidTenant:
 # ---------------------------------------------------------------------------
 
 
-class TestCrossTenantIsolation:
+class TestRouterPassesTenantContext:
     """Verifies the router passes the correct tenant context to the service.
 
-    Rule 126 (cross-tenant isolation) is enforced at the service and DB layer.
-    This test confirms the router forwards the auth context (tenant_id) correctly.
-    Actual cross-tenant enforcement is verified in integration tests.
+    Actual cross-tenant isolation is enforced at the service and DB layer
+    (Rule 126) and verified in integration tests. This test only confirms the
+    router forwards the auth context (tenant_id) correctly to the service.
     """
 
     def test_cross_tenant_read_returns_empty_list(self):

@@ -46,8 +46,14 @@ class TestCopilotIntegration:
 
     async def test_history_integration(self, db_schema, async_session, api_client, tenant_id_web: int):
         """GET /copilot/{conv_id}/history returns {"success": True, "messages": [...], "total": N}}."""
-        # Use tenant_id_web so seeded data matches the JWT-authenticated tenant.
-        conv = await seed_conversation(async_session, tenant_id_web, user_id=1)
+        from sqlalchemy import select
+
+        from db.models.user import UserModel
+
+        result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
+        user = result.scalar_one_or_none()
+        user_id = user.id if user is not None else 1
+        conv = await seed_conversation(async_session, tenant_id_web, user_id=user_id)
         await seed_message(async_session, conv.id, tenant_id_web, "user", "Hello!")
         await seed_message(async_session, conv.id, tenant_id_web, "assistant", "Hi there!")
 
@@ -67,7 +73,14 @@ class TestCopilotIntegration:
 
     async def test_history_caps_at_20(self, db_schema, async_session, api_client, tenant_id_web: int):
         """History endpoint returns at most 20 messages even when more are seeded."""
-        conv = await seed_conversation(async_session, tenant_id_web, user_id=1)
+        from sqlalchemy import select
+
+        from db.models.user import UserModel
+
+        result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
+        user = result.scalar_one_or_none()
+        user_id = user.id if user is not None else 1
+        conv = await seed_conversation(async_session, tenant_id_web, user_id=user_id)
         for i in range(25):
             await seed_message(async_session, conv.id, tenant_id_web, "user", f"Message {i}")
         await async_session.commit()
