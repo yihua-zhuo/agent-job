@@ -400,7 +400,7 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
         tenant = TenantModel(id=tenant_id_web, name="Web Test Tenant", plan="free", status="active")
         async_session.add(tenant)
         await async_session.flush()
-    # Create the test user in the DB so /users/me resolves correctly.
+    # Create the test user in the DB so /users/me resolves correctly (Rule 126).
     user_svc = UserService(async_session)
     try:
         user = await user_svc.create_user(

@@ -121,10 +121,12 @@ async def update_tenant(
     session: AsyncSession = Depends(get_db),
 ):
     # Note: router-level check removed — TenantService.update_tenant already enforces
-    # tenant isolation by passing tenant_id as _tenant_id (service-layer guard, rule 128).
+    # tenant isolation via _tenant_id (service-layer guard, rule 128).
+    # _tenant_id must be passed as a keyword argument to distinguish the requesting
+    # tenant (ctx.tenant_id) from the target resource (tenant_id in the URL path).
     service = TenantService(session)
     update_data = body.model_dump()
     # Strip None values so the service's merge logic handles omitted fields.
     update_data = {k: v for k, v in update_data.items() if v is not None}
-    data = await service.update_tenant(ctx.tenant_id, tenant_id, **update_data)
+    data = await service.update_tenant(tenant_id, _tenant_id=ctx.tenant_id, **update_data)
     return {"success": True, "data": data, "message": "Tenant updated"}

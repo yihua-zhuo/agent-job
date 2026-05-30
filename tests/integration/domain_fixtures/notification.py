@@ -50,7 +50,12 @@ async def _seed_reminder(
     related_type: str | None = None,
     related_id: int | None = None,
 ) -> ReminderModel:
-    """Seed a reminder for integration tests."""
+    """Seed a reminder for integration tests.
+
+    Args:
+        remind_at: Must be a timezone-aware datetime (UTC). Passing a naive datetime
+            will raise an error in the DB layer on PostgreSQL due to mixed tz awareness.
+    """
     from datetime import UTC, datetime
 
     reminder = ReminderModel(

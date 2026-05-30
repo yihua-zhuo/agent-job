@@ -10,6 +10,7 @@ from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext
 from pkg.errors.app_exceptions import (
     AppException,
+    ForbiddenException,
     NotFoundException,
     ValidationException,
 )
@@ -278,3 +279,10 @@ class TestTenantCrossTenantIsolation:
         svc.get_tenant_usage = AsyncMock(side_effect=NotFoundException("Tenant"))
         resp = client.get("/api/v1/tenants/usage")
         assert resp.status_code == 404
+
+    def test_update_tenant_rejects_cross_tenant_id(self, client_with_service):
+        """Tenant A updating tenant B's record via URL path tenant_id returns 403."""
+        client, svc = client_with_service
+        svc.update_tenant = AsyncMock(side_effect=ForbiddenException("Tenant 9999"))
+        resp = client.put("/api/v1/tenants/9999", json={"name": "Stolen"})
+        assert resp.status_code == 403

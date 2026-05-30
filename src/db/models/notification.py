@@ -1,13 +1,16 @@
 """Notification ORM model."""
 
+import logging
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, and_, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, and_, func, text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
 from pkg.constants.notification_constants import PAYLOAD_PARAMS_ALLOWED_KEYS
+
+logger = logging.getLogger(__name__)
 
 
 class NotificationModel(Base):
@@ -23,8 +26,8 @@ class NotificationModel(Base):
             "user_id",
             "tenant_id",
             postgresql_where=and_(
-                Column("channel") == "in_app",
-                Column("read_at").is_(None),
+                text("channel = 'in_app'"),
+                text("read_at IS NULL"),
             ),
         ),
     )
@@ -54,6 +57,7 @@ class NotificationModel(Base):
         if params:
             unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
             if unknown:
+                logger.warning("Notification %d payload_params dropped keys: %s", self.id, sorted(unknown))
                 params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
         return {
             "id": self.id,

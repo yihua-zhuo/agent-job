@@ -48,8 +48,8 @@ def upgrade() -> None:
         )
     )
     op.execute(text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END WHERE status IS NULL"))
-    op.execute(text("UPDATE notifications SET read_at = created_at WHERE is_read = true AND read_at IS NULL"))
     op.execute(text("UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL"))
+    op.execute(text("UPDATE notifications SET read_at = created_at WHERE is_read = true AND read_at IS NULL AND delivered_at IS NULL"))
     op.execute(text("UPDATE notifications SET priority = 'normal' WHERE priority IS NULL"))
 
     # Phase 3: drop old columns
@@ -121,10 +121,20 @@ def downgrade() -> None:
     op.execute(text("ALTER TABLE notifications ALTER COLUMN is_read DROP NOT NULL"))
     op.execute(text("ALTER TABLE notifications ALTER COLUMN is_read SET NOT NULL"))
 
-    # Phase 2 (reversed): drop new columns — done last so the downgrade remains
-    # individually reversible without relying on ordering of other migrations
+    # Phase 2 (reversed): drop data-restoration columns first, then the old columns
+    # that depend on them last (is_read must survive until after the UPDATE).
     op.drop_column("notifications", "read_at")
     op.drop_column("notifications", "delivered_at")
     op.drop_column("notifications", "priority")
     op.drop_column("notifications", "status")
     op.drop_column("notifications", "params_")
+    op.drop_column("notifications", "template")
+    op.drop_column("notifications", "channel")
+
+    # Old columns dropped last, after the backward data-restoration UPDATEs complete.
+    op.drop_column("notifications", "related_id")
+    op.drop_column("notifications", "related_type")
+    op.drop_column("notifications", "is_read")
+    op.drop_column("notifications", "content")
+    op.drop_column("notifications", "title")
+    op.drop_column("notifications", "type")

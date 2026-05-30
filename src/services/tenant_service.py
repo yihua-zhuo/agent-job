@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.tenant import TenantModel
 from db.models.user import UserModel
-from pkg.errors.app_exceptions import NotFoundException, ValidationException
+from pkg.errors.app_exceptions import ForbiddenException, NotFoundException, ValidationException
 
 
 class TenantService:
@@ -64,7 +64,7 @@ class TenantService:
 
     async def update_tenant(self, tenant_id: int, _tenant_id: int = 0, **kwargs) -> dict:
         if _tenant_id and tenant_id != _tenant_id:
-            raise NotFoundException(f"Tenant {tenant_id}")
+            raise ForbiddenException(f"Tenant {tenant_id}")
         tenant = await self._fetch_tenant(tenant_id, _tenant_id)
 
         allowed = {"name", "plan", "status"}

@@ -225,15 +225,16 @@ def make_reminder_handler(state):
             return MockResult([], rowcount=0)
 
         if "from reminders" in sql_text_lower and "count" not in sql_text_lower:
+            if "tenant_id" not in params or "user_id" not in params:
+                return None
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             # is_completed_filter comes from params (set by the service via upcoming_only).
-            # When "is_completed" is absent from params, upcoming_only=True was used server-side
-            # (service appended is_completed==False as a bound param). We treat is_completed=None
-            # in params as a signal to exclude completed reminders by default.
+            # When is_completed is in params, the caller wants completed reminders included
+            # (upcoming_only=False). absent means upcoming-only mode (upcoming_only=True).
             is_completed_filter = params.get("is_completed")
             now = datetime.now(UTC)
-            upcoming_only = "is_completed" not in params
+            upcoming_only = "is_completed" in params
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = [

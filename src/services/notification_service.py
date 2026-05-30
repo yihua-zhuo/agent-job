@@ -103,7 +103,7 @@ class NotificationService:
         )
         notification = result.scalar_one_or_none()
         if notification is None:
-            raise NotFoundException("通知")
+            raise NotFoundException("Notification")
         notification.read_at = datetime.now(UTC)
         notification.status = "read"
         await self.session.flush()
@@ -137,7 +137,7 @@ class NotificationService:
             )
         )
         if (result.rowcount or 0) == 0:
-            raise NotFoundException("通知")
+            raise NotFoundException("Notification")
         await self.session.flush()
         return {"id": notification_id}
 
