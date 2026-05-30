@@ -25,8 +25,6 @@ class _TenantStats:
             "plan": self.tenant.plan,
             "status": self.tenant.status,
             "user_count": self.user_count,
-            "storage_used": 0,
-            "api_calls": 0,
         }
 
 
@@ -70,20 +68,7 @@ class TenantService:
         return tenant
 
     async def get_tenant(self, tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
-        result = await self.session.execute(
-            select(TenantModel).where(
-                and_(
-                    TenantModel.id == tenant_id,
-                    TenantModel.id == requesting_tenant_id if requesting_tenant_id else True,
-                )
-            )
-        )
-        tenant = result.scalar_one_or_none()
-        if tenant is None or tenant.status == "deleted":
-            raise NotFoundException(f"Tenant {tenant_id}")
-        if requesting_tenant_id and tenant_id != requesting_tenant_id:
-            raise ForbiddenException(f"Tenant {tenant_id}")
-        return tenant
+        return await self._fetch_tenant(tenant_id, requesting_tenant_id)
 
     async def update_tenant(self, tenant_id: int, requesting_tenant_id: int = 0, **kwargs) -> TenantModel:
         if requesting_tenant_id and tenant_id != requesting_tenant_id:
@@ -161,12 +146,11 @@ class TenantService:
     async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int = 0) -> _TenantStats:
         if requesting_tenant_id and tenant_id != requesting_tenant_id:
             raise ForbiddenException(f"Cannot view stats for tenant {tenant_id}")
-        await self._fetch_tenant(tenant_id, requesting_tenant_id)
+        tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
         user_count_result = await self.session.execute(
             select(func.count(UserModel.id)).where(UserModel.tenant_id == tenant_id)
         )
         user_count = user_count_result.scalar() or 0
-        tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
         return _TenantStats(tenant, user_count)
 
     async def get_tenant_usage(self, tenant_id: int, requesting_tenant_id: int = 0) -> _TenantStats:

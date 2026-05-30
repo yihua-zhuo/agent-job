@@ -492,7 +492,7 @@ class TestNotificationIntegration:
         count = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert count >= 2
 
-    async def test_create_and_cancel_reminder(self, db_schema, tenant_id, async_session, _seed_tenant):
+    async def test_create_and_cancel_reminder(self, db_schema, tenant_id, async_session):
         svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.create_reminder(
@@ -508,6 +508,7 @@ class TestNotificationIntegration:
 
         # Verify the reminder was actually deleted from the DB.
         from sqlalchemy import select
+
         from db.models.reminder import ReminderModel
 
         result_check = await async_session.execute(
@@ -617,4 +618,5 @@ class TestTenantIntegration:
         assert stats is not None
         stats_dict = stats.to_dict()
         assert "user_count" in stats_dict
-        assert "api_calls" in stats_dict
+        assert "tenant_id" in stats_dict
+        assert "name" in stats_dict

@@ -31,6 +31,15 @@ TENANT_ROW = {
     "settings": {},
     "created_at": None,
     "updated_at": None,
+    "to_dict": lambda: {
+        "id": 1,
+        "name": "Acme Corp",
+        "plan": "enterprise",
+        "status": "active",
+        "settings": {},
+        "created_at": None,
+        "updated_at": None,
+    },
 }
 
 
