@@ -8,6 +8,8 @@ from fastapi.responses import JSONResponse
 
 from api import iter_routers
 from configs.settings import settings
+from internal.db.engine import dispose_async_engine
+from internal.middleware.tenant_context import TenantContextMiddleware
 from middleware.logging import LoggingMiddleware, logger
 from pkg.errors.app_exceptions import AppException
 
@@ -20,9 +22,7 @@ async def lifespan(app: FastAPI):
     ensure_engine()
     logger.info("app_started", env=settings.env, app_name=settings.app_name)
     yield
-    from db.connection import dispose_engine
-
-    dispose_engine()
+    await dispose_async_engine()
     logger.info("app_shutdown")
 
 
@@ -47,6 +47,7 @@ def create_app() -> FastAPI:
 
     # ── Middleware ──────────────────────────────────────────────────────────
     app.add_middleware(LoggingMiddleware)
+    app.add_middleware(TenantContextMiddleware)
 
     # CORS
     allowed_origins = [o.strip() for o in settings.cors_origins.split(",") if o.strip()]
