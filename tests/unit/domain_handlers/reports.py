@@ -11,14 +11,20 @@ def _get_tenant_id(sql_text, params):
     """Extract tenant_id from bound params, handling SQLAlchemy's name mangling.
 
     SQLAlchemy appends a numeric suffix when a param name appears multiple
-    times in a query (e.g. tenant_id_1, tenant_id_2). We strip any trailing
-    numeric segment and test whether 'tenant_id' remains.
+    times in a query (e.g. tenant_id_1, tenant_id_2). We strip a trailing
+    numeric suffix only when it forms a contiguous numeric segment after an
+    underscore, so e.g. user_id → user_i is no longer incorrectly stripped.
     """
     for key, val in params.items():
-        stripped = key.rsplit("_", 1)[0]
-        while stripped and stripped[-1].isdigit():
-            stripped = stripped[:-1]
-        if stripped.rstrip("_") == "tenant_id":
+        if "_" in key:
+            prefix, suffix = key.rsplit("_", 1)
+            if suffix.isdigit():
+                stripped = prefix
+            else:
+                continue
+        else:
+            stripped = key.rstrip("0123456789")
+        if stripped == "tenant_id":
             return val
     return params.get("tenant_id", 0)
 
@@ -28,9 +34,12 @@ def _get_report_id(params):
 
     SQLAlchemy renames duplicate param occurrences (e.g. `id` → `id_1`) when
     the same column appears multiple times in a compiled statement.
+    Handles both bare `id` and `report_id` bound parameters.
     """
     if "id" in params:
         return params["id"]
+    if "report_id" in params:
+        return params["report_id"]
     for key, val in params.items():
         if key.startswith("id_") and isinstance(val, int):
             return val
@@ -39,11 +48,16 @@ def _get_report_id(params):
 
 def make_report_handler(state: MockState):
     """Handle all report-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
+    # Domain-owned state stored via the opaque slot so conftest.py stays agnostic.
+    if "reports" not in state.opaque:
+        state.opaque["reports"] = {"records": {}, "next_id": 1}
+    _reports = state.opaque["reports"]
+
     def handler(sql_text, params):
         if "insert into reports" in sql_text:
-            tenant_id = _get_tenant_id(sql_text, params)
-            rid = state.report_records_next_id
-            state.report_records_next_id += 1
+            _get_tenant_id(sql_text, params)
+            rid = _reports["next_id"]
+            _reports["next_id"] += 1
             record = {
                 "id": rid,
                 "tenant_id": params.get("tenant_id", 0),
@@ -55,12 +69,12 @@ def make_report_handler(state: MockState):
                 "last_run_at": params.get("last_run_at"),
                 "created_at": params.get("created_at"),
             }
-            state.report_records[rid] = record
+            _reports["records"][rid] = record
             return MockResult([MockRow(record.copy())])
 
         if sql_text.startswith("update") and "reports" in sql_text:
             report_id = _get_report_id(params)
-            rec = state.report_records.get(report_id)
+            rec = _reports["records"].get(report_id)
             if rec is None or rec.get("tenant_id") != _get_tenant_id(sql_text, params):
                 return MockResult([])
             for k, v in params.items():
@@ -70,32 +84,29 @@ def make_report_handler(state: MockState):
 
         if sql_text.startswith("delete") and "reports" in sql_text:
             report_id = _get_report_id(params)
-            rec = state.report_records.get(report_id)
+            rec = _reports["records"].get(report_id)
             if rec is None or rec.get("tenant_id") != _get_tenant_id(sql_text, params):
                 return MockResult([])
-            del state.report_records[report_id]
+            del _reports["records"][report_id]
             return MockResult([MockRow({"id": report_id})])
 
         if sql_text.startswith("select") and "count(" in sql_text and "from reports" in sql_text:
             tenant_id = _get_tenant_id(sql_text, params)
-            count_val = sum(1 for r in state.report_records.values() if r.get("tenant_id") == tenant_id)
+            count_val = sum(1 for r in _reports["records"].values() if r.get("tenant_id") == tenant_id)
             return MockResult([count_val])
 
+        # Require both 'where reports.id' and 'tenant_id' to reduce false positives.
         if "where reports.id" in sql_text and "tenant_id" in sql_text:
             report_id = _get_report_id(params)
-            rec = state.report_records.get(report_id)
+            rec = _reports["records"].get(report_id)
             if rec is not None and rec.get("tenant_id") == _get_tenant_id(sql_text, params):
                 return MockResult([MockRow(rec.copy())])
             return MockResult([])
 
-        if "select" in sql_text and "from reports" in sql_text and "order by" in sql_text:
+        # All other SELECT from reports (list with or without ORDER BY).
+        if "select" in sql_text and "from reports" in sql_text:
             tenant_id = _get_tenant_id(sql_text, params)
-            rows = [MockRow(rec.copy()) for rec in state.report_records.values() if rec.get("tenant_id") == tenant_id]
-            return MockResult(rows)
-
-        if "select" in sql_text and "from reports" in sql_text and "order by" not in sql_text:
-            tenant_id = _get_tenant_id(sql_text, params)
-            rows = [MockRow(rec.copy()) for rec in state.report_records.values() if rec.get("tenant_id") == tenant_id]
+            rows = [MockRow(rec.copy()) for rec in _reports["records"].values() if rec.get("tenant_id") == tenant_id]
             return MockResult(rows)
 
         return None

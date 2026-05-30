@@ -311,13 +311,25 @@ def upgrade() -> None:
     # automation_logs / automation_rules are created by e646948c549a (in the
     # 52b19ee00eaf ancestry); this is a catch-up for DBs that arrived here
     # via a path that skips that migration.
+    # PostgreSQL does not support IF NOT EXISTS for ADD CONSTRAINT, so we
+    # use a DO block to catch and suppress the "already exists" error.
     op.execute(
-        "ALTER TABLE automation_logs ADD CONSTRAINT fk_automation_logs_tenant_id "
-        "FOREIGN KEY (tenant_id) REFERENCES tenants(id)"
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE automation_logs ADD CONSTRAINT fk_automation_logs_tenant_id "
+            "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "EXCEPTION WHEN duplicate_object THEN NULL; "
+            "END $$"
+        )
     )
     op.execute(
-        "ALTER TABLE automation_rules ADD CONSTRAINT fk_automation_rules_tenant_id "
-        "FOREIGN KEY (tenant_id) REFERENCES tenants(id)"
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE automation_rules ADD CONSTRAINT fk_automation_rules_tenant_id "
+            "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "EXCEPTION WHEN duplicate_object THEN NULL; "
+            "END $$"
+        )
     )
 
     # missing tenant_id indexes on auth tables
@@ -347,8 +359,8 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_user_credentials_tenant_id"), table_name="user_credentials")
     op.drop_index(op.f("ix_refresh_tokens_tenant_id"), table_name="refresh_tokens")
     op.drop_index(op.f("ix_device_trust_tenant_id"), table_name="device_trust")
-    op.execute("ALTER TABLE automation_rules DROP CONSTRAINT fk_automation_rules_tenant_id")
-    op.execute("ALTER TABLE automation_logs DROP CONSTRAINT fk_automation_logs_tenant_id")
+    op.execute(sa.text("ALTER TABLE automation_rules DROP CONSTRAINT IF EXISTS fk_automation_rules_tenant_id"))
+    op.execute(sa.text("ALTER TABLE automation_logs DROP CONSTRAINT IF EXISTS fk_automation_logs_tenant_id"))
     op.drop_constraint("uq_agent_tasks_task_id", "agent_tasks", type_="unique")
     op.create_index(op.f("ix_agent_tasks_task_id"), "agent_tasks", ["task_id"], unique=True)  # noqa: E501
     op.drop_index(op.f("ix_identity_user_roles_user_id"), table_name="identity_user_roles")

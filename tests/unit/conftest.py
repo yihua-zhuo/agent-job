@@ -87,6 +87,9 @@ class MockRow:
             raise NotImplementedError("get() not supported for list-based MockRow")
         return self._mapping.get(key, default)
 
+    def to_dict(self):
+        return self._mapping
+
     def __repr__(self):
         return f"MockRow({self._mapping!r})"
 
@@ -168,9 +171,9 @@ class MockState:
         self.deleted_user_ids: set[int] = set()
         self.activities: dict[int, dict] = {}
         self.activities_next_id: int = 1
-        # domain-owned state — reports table is managed by domain_handlers/reports.py
-        self.report_records: dict[int, dict] = {}
-        self.report_records_next_id: int = 1
+        # domain-agnostic opaque slot — each domain handler may store its own
+        # state here via state.opaque['domain_name'] = {...}.
+        self.opaque: dict = {}
 
 
 def _load_domain_handler_modules():

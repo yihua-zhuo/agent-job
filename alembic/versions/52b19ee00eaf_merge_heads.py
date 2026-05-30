@@ -111,14 +111,14 @@ def upgrade() -> None:
         sa.Column("task_id", sa.String(length=64), nullable=False),
         sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("status", sa.String(length=50), nullable=False, server_default="pending"),
+        sa.Column("status", sa.String(length=50), nullable=False, server_default=sa.text("'pending'")),
         sa.Column("subtasks", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default="[]"),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index("ix_agent_tasks_tenant_id", "agent_tasks", ["tenant_id"], unique=False)
-    op.create_index("ix_agent_tasks_task_id_tenant_id", "agent_tasks", ["task_id", "tenant_id"], unique=True)
+    # Composite (task_id, tenant_id) unique is redundant — task_id alone is unique.
     op.create_index(op.f("ix_agent_tasks_task_id"), "agent_tasks", ["task_id"], unique=True)
 
     # ── afa7c3f333bd: add sent_at to campaigns ────────────────────────────────
@@ -132,9 +132,9 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("report_type", sa.String(length=100), nullable=False),
         sa.Column("config", sa.JSON(), nullable=False),
-        sa.Column("owner_tenant_id", sa.Integer(), nullable=False),
+        sa.Column("owner_tenant_id", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("created_by", sa.Integer(), nullable=False),
-        sa.Column("is_favorite", sa.Boolean(), nullable=False),
+        sa.Column("is_favorite", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
