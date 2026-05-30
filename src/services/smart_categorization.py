@@ -178,6 +178,10 @@ class SmartCategorizationService:
         RFM模型: 最近消费(Recency)、消费频率(Frequency)、消费金额(Monetary)
         """
         # 模拟生成客户分群数据
+        # NOTE: random module is used here only for deterministic fake data.
+        # If real customer segmentation is added in the future, do NOT use the
+        # global random module — use a cryptographically secure random source
+        # for any non-deterministic behavior affecting real business decisions.
         segments = []
 
         rng = random.Random(42)  # noqa: S311 -- deterministic simulation, not cryptographic

@@ -20,9 +20,9 @@ async def lifespan(app: FastAPI):
     ensure_engine()
     logger.info("app_started", env=settings.env, app_name=settings.app_name)
     yield
-    from db.connection import dispose_engine
+    from internal.db.engine import dispose_async_engine
 
-    dispose_engine()
+    await dispose_async_engine()
     logger.info("app_shutdown")
 
 
