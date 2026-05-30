@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
@@ -12,13 +13,13 @@ _LIMIT_RE = re.compile(r"limit\s*:?\s*(\w+)", re.IGNORECASE)
 ORDER = 10
 
 
-def make_agent_task_handler(state: MockState):
+def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResult | None]:
     if not hasattr(state, "agent_tasks"):
         state.agent_tasks = {}
     if not hasattr(state, "agent_tasks_next_id"):
         state.agent_tasks_next_id = 1
 
-    def handler(sql_text, params):
+    def handler(sql_text: str, params: dict) -> MockResult | None:
         # Normalize compiled SQLAlchemy params: when SQLAlchemy emits multiple
         # params with the same base name (e.g. created_at_1, created_at_2 for two
         # >= and <= comparisons), keep ALL of them so filters receive both bounds.

@@ -3,7 +3,7 @@
 | 元数据 | 值 |
 |---|---|
 | Issue | #428 |
-| 分类 | [00-foundations](../../README.md#12-分类总览) |
+| 分类 | [00-foundations](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
 | 依赖 | [统一 Identity ORM 模型结构 #427](../70-platform/0427-consolidate-existing-identity-orm-models-into-src-db-models-.md) |

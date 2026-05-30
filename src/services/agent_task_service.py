@@ -6,7 +6,7 @@ import uuid
 from datetime import UTC, datetime
 from enum import StrEnum
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import Result, and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.agent_tasks import AgentTaskModel
@@ -44,7 +44,7 @@ class AgentTaskService:
         return task
 
     async def get_task(self, task_id: int, tenant_id: int) -> AgentTaskModel:
-        result = await self.session.execute(
+        result: Result[AgentTaskModel] = await self.session.execute(
             select(AgentTaskModel).where(
                 and_(
                     AgentTaskModel.id == task_id,

@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import json as _json
 import pkgutil
+import re
 import sys
 import warnings
 from contextlib import asynccontextmanager
@@ -17,7 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from dotenv import load_dotenv
-from sqlalchemy import insert, table
+from sqlalchemy import insert, select, table, text
 from sqlalchemy.exc import MultipleResultsFound
 
 # Load .env so DATABASE_URL is available in test environment.
@@ -58,7 +59,7 @@ class MockRow:
                 if json_key in self._mapping and isinstance(self._mapping[json_key], str):
                     try:
                         self._mapping[json_key] = _json.loads(self._mapping[json_key])
-                    except Exception:  # noqa: S110 - invalid JSON should leave the original value intact.
+                    except (AttributeError, TypeError):  # noqa: S110
                         pass
 
     def __getitem__(self, key):
@@ -306,7 +307,7 @@ def make_mock_session(handlers=None, state=None):
                 continue
             # Guard: tablename must be a valid SQL identifier (alphanumeric + underscore).
             # This prevents arbitrary SQL injection through a malicious __tablename__.
-            if not tablename.isidentifier():
+            if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", tablename):
                 continue
             params = {}
             # Extract every public attribute from the ORM object so handlers
@@ -337,15 +338,15 @@ def make_mock_session(handlers=None, state=None):
         if tablename is None or obj_id is None:
             return
         # Guard: tablename must be a valid SQL identifier.
-        if not tablename.isidentifier():
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", tablename):
             return
         tenant_id = getattr(obj, "tenant_id", None)
         params = {"id": obj_id}
         if tenant_id is not None:
             params["tenant_id"] = tenant_id
-            sql_text = "select * from " + tablename + " where id = :id and tenant_id = :tenant_id"  # noqa: S608
+            sql_text = str(select(text("*")).where(text("id = :id AND tenant_id = :tenant_id")))  # noqa: S608
         else:
-            sql_text = "select * from " + tablename + " where id = :id"  # noqa: S608
+            sql_text = str(select(text("*")).where(text("id = :id")))  # noqa: S608
         for h in handlers:
             result = h(sql_text, params)
             if result is not None:
