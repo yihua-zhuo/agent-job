@@ -30,6 +30,13 @@ class TriggerType(Enum):
     CUSTOM = "custom"
 
 
+class EventType(Enum):
+    SENT = "sent"
+    OPENED = "opened"
+    CLICKED = "clicked"
+    BOUNCED = "bounced"
+
+
 @dataclass
 class Campaign:
     id: int | None
