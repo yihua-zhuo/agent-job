@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, text
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,20 +15,14 @@ class WebhookModel(Base):
     __tablename__ = "webhooks"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     url: Mapped[str] = mapped_column(String(2000), nullable=False)
     events: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
     secret: Mapped[str | None] = mapped_column(String(255), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=text("now()"), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=text("now()"), nullable=False)
 
-    __table_args__ = (
-        Index("ix_webhooks_tenant_active", "tenant_id", "is_active"),
-    )
+    __table_args__ = (Index("ix_webhooks_tenant_active", "tenant_id", "is_active"),)
 
     def to_dict(self) -> dict:
         return {
@@ -48,22 +42,19 @@ class WebhookDeliveryModel(Base):
     __tablename__ = "webhook_deliveries"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    webhook_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False
-    )
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id"), nullable=False, index=True
-    )
+    webhook_id: Mapped[int] = mapped_column(Integer, ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     event_type: Mapped[str] = mapped_column(String(100), nullable=False)
     payload: Mapped[dict] = mapped_column(JSON, nullable=False)
     status: Mapped[str] = mapped_column(String(20), default="pending", nullable=False)
     response: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     attempts: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    next_retry_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    __table_args__ = (
-        Index("ix_webhook_deliveries_webhook_id", "webhook_id"),
-    )
+    __table_args__ = (Index("ix_webhook_deliveries_webhook_id", "webhook_id"),)
 
     def to_dict(self) -> dict:
         return {
@@ -76,4 +67,7 @@ class WebhookDeliveryModel(Base):
             "response": self.response,
             "attempts": self.attempts,
             "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
+            "next_retry_at": self.next_retry_at.isoformat() if self.next_retry_at else None,
+            "last_attempt_at": self.last_attempt_at.isoformat() if self.last_attempt_at else None,
+            "error_message": self.error_message,
         }
