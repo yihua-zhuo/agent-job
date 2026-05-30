@@ -1,15 +1,15 @@
-"""Merge six parallel heads into one.
+"""Merge nine parallel heads into one.
 
 Revision ID: 52b19ee00eaf
 Revises: 7b1a2c3d4e5f
 Create Date: 2026-05-30 11:03:03.754025
 
-Converges all six branches that descend from merge_heads_63274_addcp001
-into a single linear head.  All structural DDL from the six branches is
+Converges all nine branches that descend from merge_heads_63274_addcp001
+into a single linear head.  All structural DDL from the nine branches is
 replicated here so that any single-head upgrade path produces the complete
 schema.
 
-The six branches are:
+The nine branches are:
 - a52e1317da90: import_jobs + export_jobs
 - 82ecf4a34e34: pass-through merge (auth + ai heads)
 - e646948c549a: automation_rules + automation_logs
@@ -112,7 +112,7 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
         sa.Column("status", sa.String(length=50), nullable=False, server_default=sa.text("'pending'")),
-        sa.Column("subtasks", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default="[]"),
+        sa.Column("subtasks", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),

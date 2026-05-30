@@ -76,7 +76,6 @@ Reading order followed:
 - `list_reports` returns `tuple[list[ReportModel], int]` with correct total count and respects pagination (`LIMIT/OFFSET`)
 - All five methods include `tenant_id` in every SQL `WHERE` clause
 - `PYTHONPATH=src pytest tests/unit/test_report_service.py -v` passes all cases
-- `ReportModel` fields assigned in `update_report` match only the columns that actually exist on the model (no `updated_at` — remove the dev-plan's erroneous assignment)
 
 ## Risks / Open Questions
 - **`ReportModel` has no `updated_at` column**: The dev-plan Step 5 code sets `report.updated_at = datetime.now(UTC)` but `ReportModel` only has `created_at`. This assignment must be removed. The `flush()` + `refresh()` calls still correctly persist changes without it.

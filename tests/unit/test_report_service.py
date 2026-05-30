@@ -200,6 +200,12 @@ class TestUpdateReport:
         with pytest.raises(NotFoundException, match="Report"):
             await svc.update_report(report_id=999, tenant_id=1, data={"name": "New Name"})
 
+    async def test_raises_not_found_for_wrong_tenant(self, mock_db_session):
+        """update_report raises NotFoundException when report belongs to a different tenant."""
+        svc = ReportService(mock_db_session)
+        with pytest.raises(NotFoundException, match="Report"):
+            await svc.update_report(report_id=20, tenant_id=99, data={"name": "Hijack Attempt"})
+
 
 # ---------------------------------------------------------------------------
 # TestDeleteReport

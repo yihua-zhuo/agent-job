@@ -7,24 +7,21 @@ from tests.unit.conftest import MockResult, MockRow, MockState
 ORDER = 10
 
 
-def _get_tenant_id(sql_text, params):
+def _get_tenant_id(params):
     """Extract tenant_id from bound params, handling SQLAlchemy's name mangling.
 
     SQLAlchemy appends a numeric suffix when a param name appears multiple
-    times in a query (e.g. tenant_id_1, tenant_id_2). We strip a trailing
-    numeric suffix only when it forms a contiguous numeric segment after an
-    underscore, so e.g. user_id → user_i is no longer incorrectly stripped.
+    times in a query (e.g. tenant_id_1, tenant_id_2). We only strip the
+    suffix when the key contains an underscore and the suffix is purely
+    numeric — avoiding corruption of keys like created_by.
     """
     for key, val in params.items():
         if "_" in key:
             prefix, suffix = key.rsplit("_", 1)
             if suffix.isdigit():
-                stripped = prefix
-            else:
-                continue
-        else:
-            stripped = key.rstrip("0123456789")
-        if stripped == "tenant_id":
+                if prefix == "tenant_id":
+                    return val
+        elif key == "tenant_id":
             return val
     return params.get("tenant_id", 0)
 
@@ -55,7 +52,6 @@ def make_report_handler(state: MockState):
 
     def handler(sql_text, params):
         if "insert into reports" in sql_text:
-            _get_tenant_id(sql_text, params)
             rid = _reports["next_id"]
             _reports["next_id"] += 1
             record = {
@@ -75,7 +71,7 @@ def make_report_handler(state: MockState):
         if sql_text.startswith("update") and "reports" in sql_text:
             report_id = _get_report_id(params)
             rec = _reports["records"].get(report_id)
-            if rec is None or rec.get("tenant_id") != _get_tenant_id(sql_text, params):
+            if rec is None or rec.get("tenant_id") != _get_tenant_id(params):
                 return MockResult([])
             for k, v in params.items():
                 if k not in ("id", "tenant_id"):
@@ -85,13 +81,13 @@ def make_report_handler(state: MockState):
         if sql_text.startswith("delete") and "reports" in sql_text:
             report_id = _get_report_id(params)
             rec = _reports["records"].get(report_id)
-            if rec is None or rec.get("tenant_id") != _get_tenant_id(sql_text, params):
+            if rec is None or rec.get("tenant_id") != _get_tenant_id(params):
                 return MockResult([])
             del _reports["records"][report_id]
             return MockResult([MockRow({"id": report_id})])
 
         if sql_text.startswith("select") and "count(" in sql_text and "from reports" in sql_text:
-            tenant_id = _get_tenant_id(sql_text, params)
+            tenant_id = _get_tenant_id(params)
             count_val = sum(1 for r in _reports["records"].values() if r.get("tenant_id") == tenant_id)
             return MockResult([count_val])
 
@@ -99,13 +95,13 @@ def make_report_handler(state: MockState):
         if "where reports.id" in sql_text and "tenant_id" in sql_text:
             report_id = _get_report_id(params)
             rec = _reports["records"].get(report_id)
-            if rec is not None and rec.get("tenant_id") == _get_tenant_id(sql_text, params):
+            if rec is not None and rec.get("tenant_id") == _get_tenant_id(params):
                 return MockResult([MockRow(rec.copy())])
             return MockResult([])
 
         # All other SELECT from reports (list with or without ORDER BY).
         if "select" in sql_text and "from reports" in sql_text:
-            tenant_id = _get_tenant_id(sql_text, params)
+            tenant_id = _get_tenant_id(params)
             rows = [MockRow(rec.copy()) for rec in _reports["records"].values() if rec.get("tenant_id") == tenant_id]
             return MockResult(rows)
 
