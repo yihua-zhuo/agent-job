@@ -120,12 +120,15 @@ class TestCopilotRouter:
     @pytest.mark.asyncio
     async def test_chat_missing_auth_returns_401(self):
         """A request without auth override returns 401."""
-        app.dependency_overrides.pop(require_auth, None)
-
-        transport = ASGITransport(app=app)
-        async with AsyncClient(transport=transport, base_url="http://test") as ac:
-            response = await ac.post("/copilot/chat?message=token")
-        assert response.status_code == 401
+        original = app.dependency_overrides.pop(require_auth, None)
+        try:
+            transport = ASGITransport(app=app)
+            async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                response = await ac.post("/copilot/chat?message=token")
+            assert response.status_code == 401
+        finally:
+            if original is not None:
+                app.dependency_overrides[require_auth] = original
 
     @pytest.mark.asyncio
     async def test_history_returns_envelope(self):
@@ -144,11 +147,7 @@ class TestCopilotRouter:
             "updated_at": None,
         }
 
-        with (
-            patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history,
-            patch.object(CopilotService, "get_conversation", new_callable=AsyncMock) as mock_get_conv,
-        ):
-            mock_get_conv.return_value = MagicMock()
+        with patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history:
             mock_get_history.return_value = ([mock_msg], 1)
 
             transport = ASGITransport(app=app)
@@ -186,11 +185,7 @@ class TestCopilotRouter:
             }
             mock_messages.append(msg)
 
-        with (
-            patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history,
-            patch.object(CopilotService, "get_conversation", new_callable=AsyncMock) as mock_get_conv,
-        ):
-            mock_get_conv.return_value = MagicMock()
+        with patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history:
             # Service returns first 20 (newest) as per .limit(20) in get_history
             mock_get_history.return_value = (mock_messages[:20], 25)
 
@@ -209,12 +204,8 @@ class TestCopilotRouter:
         """The router passes conversation_id and tenant_id to service.get_history."""
         from services.copilot_service import CopilotService
 
-        with (
-            patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history,
-            patch.object(CopilotService, "get_conversation", new_callable=AsyncMock) as mock_get_conv,
-        ):
-            mock_get_conv.return_value = MagicMock()
-            mock_get_history.return_value = ([], 0)
+        with patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history:
+            mock_get_history.return_value = ([], 1)
 
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -230,8 +221,8 @@ class TestCopilotRouter:
         """GET /copilot/999/history returns 404 when the conversation does not exist."""
         from services.copilot_service import CopilotService
 
-        with patch.object(CopilotService, "get_conversation", new_callable=AsyncMock) as mock_get_conv:
-            mock_get_conv.side_effect = NotFoundException("Conversation")
+        with patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history:
+            mock_get_history.side_effect = NotFoundException("Conversation")
 
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as ac:
@@ -245,8 +236,7 @@ class TestCopilotRouter:
         from services.copilot_service import CopilotService
 
         # Simulate: tenant 200 calls history for conversation 1 (created under tenant 100).
-        # get_conversation is called with tenant_id=200; since the conversation belongs
-        # to tenant 100, it raises NotFoundException → 404.
+        # get_history filters by tenant_id, so for tenant 200 total==0 → NotFoundException → 404.
         async def mock_tenant_200():
             return AuthContext(user_id=888, tenant_id=200, roles=["admin"])
 
@@ -254,8 +244,8 @@ class TestCopilotRouter:
         app.dependency_overrides[require_auth] = mock_tenant_200
 
         try:
-            with patch.object(CopilotService, "get_conversation", new_callable=AsyncMock) as mock_get_conv:
-                mock_get_conv.side_effect = NotFoundException("Conversation")
+            with patch.object(CopilotService, "get_history", new_callable=AsyncMock) as mock_get_history:
+                mock_get_history.side_effect = NotFoundException("Conversation")
 
                 transport = ASGITransport(app=app)
                 async with AsyncClient(transport=transport, base_url="http://test") as ac:

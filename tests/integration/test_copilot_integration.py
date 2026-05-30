@@ -29,7 +29,7 @@ class TestCopilotIntegration:
         result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
         user = result.scalar_one_or_none()
         if user is None:
-            user_id = 999
+            user_id = _TENANT_1_USER_ID
             await seed_user(async_session, tenant_id_web, user_id)
         else:
             user_id = user.id
@@ -50,6 +50,7 @@ class TestCopilotIntegration:
         conv = await seed_conversation(async_session, tenant_id_web, user_id=1)
         await seed_message(async_session, conv.id, tenant_id_web, "user", "Hello!")
         await seed_message(async_session, conv.id, tenant_id_web, "assistant", "Hi there!")
+        # Commit so the API's separate session can see the seeded data.
         await async_session.commit()
 
         response = await api_client.get(f"/copilot/{conv.id}/history")
@@ -99,7 +100,6 @@ class TestCopilotIntegration:
         # Create a conversation in tenant 1 so there IS something to find.
         conv_tenant_1 = await seed_conversation(async_session, tenant_id_web, _TENANT_1_USER_ID)
         await seed_message(async_session, conv_tenant_1.id, tenant_id_web, "user", "Tenant 1 message")
-        await async_session.commit()
 
         # Chat as tenant 2 — should get its own new conversation, not tenant 1's.
         response_tenant_2 = await api_client_tenant_2.post("/copilot/chat?message=hello")

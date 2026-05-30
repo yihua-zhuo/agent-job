@@ -26,7 +26,7 @@ Reading order followed:
 
 2. **Wire `CopilotService` into the chat endpoint.**
    - Add `from services.copilot_service import CopilotService` inside the handler or at module top (safe — no circular import risk).
-   - Replace stub with `svc = CopilotService(session)` and call `svc.persist_message(...)` to persist the user's message, then invoke AI and persist the assistant's reply.
+   - Replace stub with `svc = CopilotService(session)` and call `svc.chat(...)`; `chat()` internally persists the user message, invokes the AI gateway, and persists the assistant reply before returning an `AIResponse`.
    - Return `{"success": True, "data": result}` where `result` is the service's return value.
 
 3. **Wire `CopilotService` into the history endpoint.**

@@ -11,7 +11,7 @@ from db.models.conversation_message import ConversationMessageModel
 from db.models.customer import CustomerModel
 from db.models.opportunity import OpportunityModel
 from internal.ai_gateway import AIChatGateway, AIResponse
-from pkg.errors.app_exceptions import NotFoundException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 class CopilotService:
@@ -146,7 +146,11 @@ class CopilotService:
         await self.session.flush()
 
     async def get_history(self, conversation_id: int, tenant_id: int) -> tuple[list[ConversationMessageModel], int]:
-        """Return (messages, total_count) for a conversation, newest first, capped at 20."""
+        """Return (messages, total_count) for a conversation, newest first, capped at 20.
+
+        Raises NotFoundException if no messages exist for this conversation under the
+        given tenant — confirming the conversation exists and is accessible.
+        """
         count_result = await self.session.execute(
             select(func.count(ConversationMessageModel.id)).where(
                 and_(
@@ -156,6 +160,9 @@ class CopilotService:
             )
         )
         total = count_result.scalar_one()
+        if total == 0:
+            # Raise so callers (including the router) get a 404 for missing/inaccessible conversations.
+            raise NotFoundException("Conversation")
 
         result = await self.session.execute(
             select(ConversationMessageModel)
@@ -246,6 +253,8 @@ class CopilotService:
         history_msgs = [{"role": m.role, "content": m.content} for m in reversed(messages_history)]
         history_msgs.append({"role": "user", "content": message})
         ai_response = await self.invoke_ai(history_msgs, tenant_id=tenant_id)
+        if not ai_response.reply:
+            raise ValidationException("AI gateway returned a response with no reply field")
         await self.persist_message(
             conversation_id=conversation.id,
             tenant_id=tenant_id,
@@ -272,4 +281,4 @@ class CopilotService:
         try:
             return await asyncio.wait_for(gateway.chat(messages), timeout=30)
         except TimeoutError as e:
-            raise type(e)("AI gateway did not respond within 30 seconds") from None
+            raise TimeoutError("AI gateway did not respond within 30 seconds") from e

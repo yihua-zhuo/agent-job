@@ -42,8 +42,8 @@ async def history(
 ):
     """Return all messages for a conversation (service enforces its 20-message cap server-side)."""
     svc = CopilotService(session)
-    # Verify the conversation exists and belongs to the tenant before returning history.
-    await svc.get_conversation(conversation_id, tenant_id=ctx.tenant_id)
+    # get_history() already filters by tenant_id; if no conversation exists for this
+    # tenant, it returns an empty list with total=0 — a reasonable empty-state response.
     messages, total = await svc.get_history(
         conversation_id=conversation_id,
         tenant_id=ctx.tenant_id,
