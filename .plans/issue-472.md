@@ -112,6 +112,8 @@ class TestTenantContext:
         clear()
 ```
 
+> **Note on test fixtures:** Tests use plain integer literals (e.g. `42`, `99`, `7`) via explicit `set_tenant_id` calls rather than a `tenant_id` fixture. The shared `tests/unit/conftest.py` provides a `tenant_id` fixture, but CLAUDE.md Rule 125 discourages adding domain-specific fixtures there for new features. Each test manages its own setup/teardown via the `_cleanup` autouse fixture, so no shared fixture is needed.
+
 ### Step 4: Lint + format verification
 
 Run both ruff check and format check on the two new files, then on the whole `src/` tree to confirm nothing regressed:
@@ -145,3 +147,4 @@ Fix any reported issues.
 - `ruff check src/ && ruff format --check src/internal/middleware/tenant_context.py src/internal/middleware/__init__.py` both exit 0
 - No FastAPI, Starlette, or SQLAlchemy imports in `tenant_context.py`
 - `TenantMiddleware` and `TenantService` are not touched
+- Smoke test: `TenantMiddleware` and `TenantService` remain importable and functional (`PYTHONPATH=src python -c "from internal.middleware.fastapi_tenant import TenantMiddleware; from services.tenant_service import TenantService; print('ok')"` exits 0)

@@ -3,6 +3,7 @@
 使用决策树规则进行线索分类和客户分群
 """
 
+import hashlib
 import random
 from dataclasses import dataclass
 
@@ -132,9 +133,7 @@ class SmartCategorizationService:
         自动标签客户
         基于：行为数据、交易数据
         """
-        import hashlib
-
-        seed = int(hashlib.md5(str(customer_id).encode()).hexdigest()[:8], 16)  # noqa: S324
+        seed = int(hashlib.md5(str(customer_id).encode()).hexdigest()[:8], 16)  # noqa: S324 -- non-cryptographic deterministic tagging
 
         tags = []
 
@@ -182,12 +181,11 @@ class SmartCategorizationService:
         # 模拟生成客户分群数据
         segments = []
 
-        # 生成模拟 RFM 分数
-        random.seed(42)
+        rng = random.Random(42)  # noqa: S311 -- deterministic simulation, not cryptographic
         for i in range(1, 501):
-            r_score = random.randint(1, 5)  # noqa: S311
-            f_score = random.randint(1, 5)  # noqa: S311
-            m_score = random.randint(1, 5)  # noqa: S311
+            r_score = rng.randint(1, 5)
+            f_score = rng.randint(1, 5)
+            m_score = rng.randint(1, 5)
 
             rfm_total = r_score + f_score + m_score
 
@@ -212,7 +210,5 @@ class SmartCategorizationService:
                     "description": self.RFM_SEGMENTS[segment]["description"],
                 }
             )
-
-        random.seed()
 
         return segments
