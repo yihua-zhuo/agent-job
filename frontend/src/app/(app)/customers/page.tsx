@@ -2,7 +2,7 @@
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTableState } from "@/lib/hooks/useTableState";
-import { flexRender, ColumnDef } from "@tanstack/react-table";
+import { ColumnDef } from "@tanstack/react-table";
 import { useCustomers, useCreateCustomer, useDeleteCustomer } from "@/lib/api/queries";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
