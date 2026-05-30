@@ -308,6 +308,7 @@ class TestListOpportunitiesEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["total"] == 1
+        assert body["data"]["items"][0]["name"] == "Big Deal"
 
     def test_with_filters(self, client_with_service):
         client, svc = client_with_service
