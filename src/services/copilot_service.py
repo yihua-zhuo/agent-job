@@ -1,13 +1,17 @@
 """Copilot service — builds system prompts from CRM context and exposes a tool registry."""
 
-from sqlalchemy import and_, select
+import asyncio
+
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.activity import ActivityModel
+from db.models.conversation import ConversationModel
+from db.models.conversation_message import ConversationMessageModel
 from db.models.customer import CustomerModel
 from db.models.opportunity import OpportunityModel
-from pkg.errors.app_exceptions import NotFoundException
-from services.churn_prediction import ChurnPredictionService
+from internal.ai_gateway import AIChatGateway, AIResponse
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 class CopilotService:
@@ -55,6 +59,54 @@ class CopilotService:
         return list(result.scalars().all())
 
     # ------------------------------------------------------------------
+    # Conversation management
+    # ------------------------------------------------------------------
+
+    async def get_or_create_conversation(
+        self,
+        tenant_id: int,
+        user_id: int,
+        channel: str = "copilot",
+    ) -> ConversationModel:
+        """Return the most recent conversation for tenant+user, creating one if none exist."""
+        result = await self.session.execute(
+            select(ConversationModel)
+            .where(
+                and_(
+                    ConversationModel.tenant_id == tenant_id,
+                    ConversationModel.user_id == user_id,
+                )
+            )
+            .order_by(ConversationModel.id.desc())
+            .limit(1)
+        )
+        conversation = result.scalar_one_or_none()
+        if conversation is None:
+            conversation = ConversationModel(
+                tenant_id=tenant_id,
+                user_id=user_id,
+                channel=channel,
+            )
+            self.session.add(conversation)
+            await self.session.flush()
+        return conversation
+
+    async def get_conversation(self, conversation_id: int, tenant_id: int) -> ConversationModel:
+        """Fetch a single conversation, raising NotFoundException if missing or belongs to another tenant."""
+        result = await self.session.execute(
+            select(ConversationModel).where(
+                and_(
+                    ConversationModel.id == conversation_id,
+                    ConversationModel.tenant_id == tenant_id,
+                )
+            )
+        )
+        conversation = result.scalar_one_or_none()
+        if conversation is None:
+            raise NotFoundException("Conversation")
+        return conversation
+
+    # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
 
@@ -76,10 +128,55 @@ class CopilotService:
             lines.append(f"Activity[{act.type}]: {act.content or ''} at {act.created_at}")
         return "\n".join(lines)
 
-    async def persist_message(self, tenant_id: int, customer_id: int, role: str, content: str) -> None:
-        """Persist a conversation message. DB write is deferred until the message schema is defined."""
-        # TODO: Replace with ConversationMessageModel insert once schema is finalized (issue #505).
-        return
+    async def persist_message(
+        self,
+        conversation_id: int,
+        tenant_id: int,
+        role: str,
+        content: str,
+    ) -> None:
+        """Persist a conversation message to the database."""
+        msg = ConversationMessageModel(
+            conversation_id=conversation_id,
+            tenant_id=tenant_id,
+            role=role,
+            content=content,
+        )
+        self.session.add(msg)
+        await self.session.flush()
+
+    async def get_history(self, conversation_id: int, tenant_id: int) -> tuple[list[ConversationMessageModel], int]:
+        """Return (messages, total_count) for a conversation, newest first, capped at 20.
+
+        Raises NotFoundException if no messages exist for this conversation under the
+        given tenant — confirming the conversation exists and is accessible.
+        """
+        count_result = await self.session.execute(
+            select(func.count(ConversationMessageModel.id)).where(
+                and_(
+                    ConversationMessageModel.conversation_id == conversation_id,
+                    ConversationMessageModel.tenant_id == tenant_id,
+                )
+            )
+        )
+        total = count_result.scalar_one()
+        if total == 0:
+            # Raise so callers (including the router) get a 404 for missing/inaccessible conversations.
+            raise NotFoundException("Conversation")
+
+        result = await self.session.execute(
+            select(ConversationMessageModel)
+            .where(
+                and_(
+                    ConversationMessageModel.conversation_id == conversation_id,
+                    ConversationMessageModel.tenant_id == tenant_id,
+                )
+            )
+            .order_by(ConversationMessageModel.created_at.desc(), ConversationMessageModel.id.desc())
+            .limit(20)
+        )
+        messages = list(result.scalars().all())
+        return messages, total
 
     def get_tool_registry(self) -> dict[str, dict]:
         """Return the copilot tool registry dict."""
@@ -94,6 +191,7 @@ class CopilotService:
             return await self._get_recent_activities(tenant_id, customer_id)
 
         async def get_churn_risk_handler(tenant_id: int, customer_id: int):
+            from services.churn_prediction import ChurnPredictionService
             return await ChurnPredictionService(self.session).get_churn_prediction(customer_id, tenant_id)
 
         return {
@@ -128,3 +226,59 @@ class CopilotService:
                 "deferred": True,
             },
         }
+
+    async def chat(
+        self,
+        tenant_id: int,
+        user_id: int,
+        message: str,
+    ) -> AIResponse:
+        """Persist user message, invoke AI, persist assistant reply, return AI response.
+
+        This is the single entry point for the copilot chat flow. The router calls
+        no other service methods for this workflow.
+        """
+        conversation = await self.get_or_create_conversation(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            channel="copilot",
+        )
+        await self.persist_message(
+            conversation_id=conversation.id,
+            tenant_id=tenant_id,
+            role="user",
+            content=message,
+        )
+        messages_history, _ = await self.get_history(conversation.id, tenant_id=tenant_id)
+        history_msgs = [{"role": m.role, "content": m.content} for m in reversed(messages_history)]
+        history_msgs.append({"role": "user", "content": message})
+        ai_response = await self.invoke_ai(history_msgs, tenant_id=tenant_id)
+        if not ai_response.reply:
+            raise ValidationException("AI gateway returned a response with no reply field")
+        await self.persist_message(
+            conversation_id=conversation.id,
+            tenant_id=tenant_id,
+            role="assistant",
+            content=ai_response.reply,
+        )
+        return ai_response
+
+    async def invoke_ai(self, messages: list[dict[str, str]], tenant_id: int | None = None) -> AIResponse:
+        """Invoke the AI chat gateway with the given message history.
+
+        A 30-second timeout is applied so slow/hung AI responses do not block
+        the request event loop indefinitely (Rule 44 / Rule 131).
+
+        Args:
+            messages: List of ``{"role": "user"|"assistant", "content": "..."}`` entries.
+            tenant_id: Tenant owning this conversation (reserved for future context injection;
+                not currently used by the gateway stub).
+
+        Returns:
+            AIResponse with reply, optional suggestions, and optional actions.
+        """
+        gateway = AIChatGateway()
+        try:
+            return await asyncio.wait_for(gateway.chat(messages), timeout=30)
+        except TimeoutError as e:
+            raise TimeoutError("AI gateway did not respond within 30 seconds") from e
