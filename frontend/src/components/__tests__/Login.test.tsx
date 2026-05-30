@@ -74,7 +74,7 @@ describe("Login component", () => {
         ).toBe(true);
         expect(screen.getByPlaceholderText("········").disabled).toBe(true);
       },
-      { timeout: 3000 }
+      { timeout: 1000 }
     );
     // Release the mock so the component resets for subsequent tests.
     release();

@@ -15,10 +15,11 @@ export default defineConfig({
       include: ["src/**/*.ts", "src/**/*.tsx"],
       exclude: ["src/**/*.d.ts"],
       thresholds: {
-        branches: 70,
-        functions: 70,
-        lines: 70,
+        lines: 80,
+        functions: 80,
+        branches: 80,
       },
+      failureOnLowCoverage: true,
     },
   },
   resolve: {

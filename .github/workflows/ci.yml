@@ -136,7 +136,7 @@ migration-drift:
           echo "       - FK re-creations that silently drop ondelete=CASCADE"
           echo "       - unrelated index churn"
           echo "  3. The new migration's down_revision must point to the"
-          echo "     current head ($(alembic current 2>/dev/null | tail -1 | awk '{print $1}'))."
+          echo "     current head (obtain with: alembic current)."
           echo "  4. Verify both directions work:"
           echo "       alembic upgrade head && alembic downgrade -1 && alembic upgrade head"
           echo "  5. Re-run this job by pushing — the second autogen should"

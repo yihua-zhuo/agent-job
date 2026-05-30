@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -59,8 +58,5 @@ export function useTableState<TData>({
     getColumnCanGlobalFilter,
   });
 
-  return useMemo(
-    () => ({ table, globalFilter, setGlobalFilter, sorting }),
-    [table, globalFilter, sorting]
-  );
+  return { table, globalFilter, setGlobalFilter, sorting };
 }

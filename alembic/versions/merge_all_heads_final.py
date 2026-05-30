@@ -7,7 +7,8 @@ Create Date: 2026-05-30 14:00:00.000000
 Converges all 12 open migration heads into a single linear chain so that
 `alembic upgrade head` resolves to one unambiguous revision.  All 12
 revisions touch independent tables; the merge is a no-op that records the
-historical convergence.
+historical convergence.  Marks the convergence point of 12 independent
+heads; constituent upgrade() methods run as part of the upgrade chain.
 
 """
 from collections.abc import Sequence
@@ -39,8 +40,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Downgrade path: merge was append-only; re-converge the 12 heads by
-    # letting each constituent migration's own downgrade() run independently.
-    # This migrates the DB back to the pre-merge multi-head state, not a
-    # single linear revision, matching the intent of the original merge.
+    # Append-only merge — no reverse path to a single linear revision.
+    # Letting each constituent migration's own downgrade() run independently
+    # returns the DB to the pre-merge multi-head state.
     pass
