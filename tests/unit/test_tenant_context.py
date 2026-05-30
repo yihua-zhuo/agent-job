@@ -41,7 +41,10 @@ class TestTenantContext:
         assert get_tenant_id() == 0
 
     def test_clear_tenant_id(self):
-        """Clearing removes the stored tenant_id."""
+        """Clearing removes the stored tenant_id.
+
+        Ensures isolation across request boundaries (rule 126).
+        """
         set_tenant_id(99)
         clear()
         assert get_tenant_id() is None
@@ -75,15 +78,6 @@ class TestTenantContext:
         task = asyncio.create_task(task_body())
         result = await task
         assert result is None
-
-    def test_clear_returns_none_not_stale_value(self):
-        """After clear(), get_tenant_id returns None — not a stale tenant_id.
-
-        Ensures isolation across request boundaries (rule 126).
-        """
-        set_tenant_id(99)
-        clear()
-        assert get_tenant_id() is None
 
     def test_require_tenant_id_returns_value(self):
         """require_tenant_id returns the value when set."""

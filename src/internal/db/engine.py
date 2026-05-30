@@ -112,7 +112,6 @@ def _build_async_engine(url: str) -> AsyncEngine:
             raise ValueError(
                 "Invalid Supabase pooler URL: no port separator ':' found in host portion"
             )
-        _host = host_port[:last_colon]
         port_and_path = host_port[last_colon + 1 :]
         if "/" in port_and_path:
             port, path = port_and_path.split("/", 1)

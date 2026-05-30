@@ -65,7 +65,7 @@ def clear() -> None:
 
 ### Step 2: Re-export from `src/internal/middleware/__init__.py`
 
-The file already exists as a package marker (`"""空文件，用于 Python 包标识"""`). Add the three re-exports **without overwriting the existing file** — consumer code should import directly from `src.internal.middleware.tenant_context` (or from the `__init__.py` re-export, which is optional):
+The file already exists as a package marker (`"""空文件，用于 Python 包标识"""`). Add the three re-exports to it — consumer code should import directly from `src.internal.middleware.tenant_context` (or from the `__init__.py` re-export, which is optional):
 
 ```python
 from .tenant_context import clear, get_tenant_id, set_tenant_id
@@ -146,7 +146,7 @@ Fix any reported issues.
 - `src/internal/middleware/tenant_context.py` exists with `set_tenant_id(tenant_id: int)`, `get_tenant_id() -> int | None`, and `clear()` — all backed by a single `ContextVar`
 - `src/internal/middleware/__init__.py` re-exports the three functions
 - `tests/unit/test_tenant_context.py` exists and its 3 tests pass
-- `ruff check src/ && ruff format --check src/internal/middleware/tenant_context.py src/internal/middleware/__init__.py` both exit 0
+- `ruff check src/ && ruff format --check src/internal/middleware/tenant_context.py src/internal/middleware/__init__.py src/` both exit 0
 - No FastAPI, Starlette, or SQLAlchemy imports in `tenant_context.py`
 - `TenantMiddleware` and `TenantService` are not touched
 - Smoke test: `TenantMiddleware` and `TenantService` remain importable and functional (`PYTHONPATH=src python -c "from internal.middleware.fastapi_tenant import TenantMiddleware; from services.tenant_service import TenantService; print('ok')"` exits 0)

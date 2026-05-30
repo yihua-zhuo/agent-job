@@ -6,8 +6,6 @@ asyncio tasks within the same request context.
 
 from contextvars import ContextVar
 
-from starlette.middleware.base import BaseHTTPMiddleware
-
 from pkg.errors.app_exceptions import UnauthorizedException
 
 _tenant_id_var: ContextVar[int | None] = ContextVar("tenant_id", default=None)
@@ -47,16 +45,20 @@ def clear() -> None:
     _tenant_id_var.set(None)
 
 
-class TenantContextMiddleware(BaseHTTPMiddleware):
-    """Middleware that ensures tenant context is cleared after every request.
+class TenantContextMiddleware:
+    """ASGI middleware that ensures tenant context is cleared after every request.
 
-    Wraps call_next in try/finally so that clear() runs even if an exception
-    fires during request processing — preventing tenant context from leaking
-    into subsequent requests on the same worker.
+    Uses the pure ASGI interface so that set_tenant_id() calls made inside
+    the endpoint are visible to clear() in the same task context — unlike
+    BaseHTTPMiddleware, which runs call_next in a separate task and prevents
+    ContextVar mutations from propagating back to the dispatch caller.
     """
 
-    async def dispatch(self, request, call_next):
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
         try:
-            return await call_next(request)
+            await self.app(scope, receive, send)
         finally:
             clear()
