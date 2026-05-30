@@ -160,10 +160,28 @@ def make_schedule_handler(state: MockState):
     def handler(sql_text, params):
         # INSERT: upsert a schedule record keyed on (tenant_id, report_id).
         if "insert into report_schedules" in sql_text:
-            sched_id = _schedules["next_id"]
-            _schedules["next_id"] += 1
             tenant_id = params.get("tenant_id")
             report_id = params.get("report_id")
+            existing = next(
+                (
+                    rec
+                    for rec in _schedules["records"].values()
+                    if rec.get("tenant_id") == tenant_id and rec.get("report_id") == report_id
+                ),
+                None,
+            )
+            if existing is not None:
+                existing.update(
+                    {
+                        "schedule": params.get("schedule", existing.get("schedule", {})),
+                        "active": params.get("active", existing.get("active", True)),
+                        "updated_at": params.get("updated_at"),
+                    }
+                )
+                return MockResult([MockRow(existing.copy())])
+
+            sched_id = _schedules["next_id"]
+            _schedules["next_id"] += 1
             record = {
                 "id": sched_id,
                 "tenant_id": tenant_id,
@@ -193,10 +211,12 @@ def make_schedule_handler(state: MockState):
         # SELECT: list schedules for a tenant (covers schedule_report's existing-record check).
         if "select" in sql_text and "from report_schedules" in sql_text:
             tenant_id = params.get("tenant_id")
+            report_id = params.get("report_id")
             rows = [
                 MockRow(rec.copy())
                 for rec in _schedules["records"].values()
                 if rec.get("tenant_id") == tenant_id
+                and (report_id is None or rec.get("report_id") == report_id)
             ]
             return MockResult(rows)
 

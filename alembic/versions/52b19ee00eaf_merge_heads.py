@@ -122,6 +122,9 @@ def upgrade() -> None:
     op.create_index("ix_agent_tasks_tenant_id", "agent_tasks", ["tenant_id"], unique=False)
     # Composite (task_id, tenant_id) unique is redundant — task_id alone is unique.
     op.create_index(op.f("ix_agent_tasks_task_id"), "agent_tasks", ["task_id"], unique=True)
+    # Convert anonymous unique index to a named constraint (rule 125 / migration encapsulation).
+    op.drop_index(op.f("ix_agent_tasks_task_id"), table_name="agent_tasks")
+    op.create_unique_constraint("uq_agent_tasks_task_id", "agent_tasks", ["task_id"])
 
     # ── afa7c3f333bd: add sent_at to campaigns ────────────────────────────────
     op.add_column("campaigns", sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True))
@@ -197,6 +200,7 @@ def upgrade() -> None:
     op.create_table(
         "customer_enrichments",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
+        sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("customer_id", sa.Integer(), nullable=False),
         sa.Column("provider", sa.String(length=100), nullable=False),
         sa.Column("raw_data_json", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
@@ -205,6 +209,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.ForeignKeyConstraint(["customer_id"], ["customers.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_customer_enrichments_customer_id"), "customer_enrichments", ["customer_id"], unique=False)
@@ -212,5 +217,33 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Tables dropped by merge_heads_63274_addcp001 downgrade
-    pass
+    # Drop all nine tables in reverse dependency order (child before parent).
+    op.drop_index(op.f("ix_customer_enrichments_next_refresh_at"), table_name="customer_enrichments")
+    op.drop_index(op.f("ix_customer_enrichments_customer_id"), table_name="customer_enrichments")
+    op.drop_table("customer_enrichments")
+    op.drop_index(op.f("ix_opportunity_activities_opportunity_id"), table_name="opportunity_activities")
+    op.drop_index(op.f("ix_opportunity_activities_tenant_id"), table_name="opportunity_activities")
+    op.drop_table("opportunity_activities")
+    op.drop_index("ix_conversation_messages_tenant_id", table_name="conversation_messages")
+    op.drop_index("ix_conversation_messages_tenant_conv", table_name="conversation_messages")
+    op.drop_index(op.f("ix_conversation_messages_conversation_id"), table_name="conversation_messages")
+    op.drop_table("conversation_messages")
+    op.drop_index("ix_conversations_tenant_user", table_name="conversations")
+    op.drop_index(op.f("ix_conversations_user_id"), table_name="conversations")
+    op.drop_index(op.f("ix_conversations_tenant_id"), table_name="conversations")
+    op.drop_table("conversations")
+    op.drop_index(op.f("ix_report_definitions_owner_tenant_id"), table_name="report_definitions")
+    op.drop_index(op.f("ix_report_definitions_report_type"), table_name="report_definitions")
+    op.drop_index(op.f("ix_report_definitions_tenant_id"), table_name="report_definitions")
+    op.drop_table("report_definitions")
+    op.drop_index(op.f("ix_automation_logs_rule_id"), table_name="automation_logs")
+    op.drop_index(op.f("ix_automation_logs_tenant_id"), table_name="automation_logs")
+    op.drop_table("automation_logs")
+    op.drop_index(op.f("ix_automation_rules_trigger_event"), table_name="automation_rules")
+    op.drop_index(op.f("ix_automation_rules_tenant_id"), table_name="automation_rules")
+    op.drop_table("automation_rules")
+    op.drop_table("agent_tasks")
+    op.drop_index(op.f("ix_export_jobs_tenant_id"), table_name="export_jobs")
+    op.drop_table("export_jobs")
+    op.drop_index(op.f("ix_import_jobs_tenant_id"), table_name="import_jobs")
+    op.drop_table("import_jobs")

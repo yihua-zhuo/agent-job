@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy import and_, func, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.analytics import ReportModel
@@ -142,10 +142,8 @@ class ReportService:
         """定时生成报表 — upserts the schedule row for (tenant_id, report_id)."""
         result = await self.session.execute(
             select(ReportScheduleModel).where(
-                and_(
-                    ReportScheduleModel.tenant_id == tenant_id,
-                    ReportScheduleModel.report_id == report_id,
-                )
+                ReportScheduleModel.tenant_id == tenant_id,
+                ReportScheduleModel.report_id == report_id,
             )
         )
         existing = result.scalar_one_or_none()
@@ -198,10 +196,8 @@ class ReportService:
         """Fetch a single report, enforcing tenant isolation."""
         result = await self.session.execute(
             select(ReportModel).where(
-                and_(
-                    ReportModel.id == report_id,
-                    ReportModel.tenant_id == tenant_id,
-                )
+                ReportModel.id == report_id,
+                ReportModel.tenant_id == tenant_id,
             )
         )
         report = result.scalar_one_or_none()
@@ -239,10 +235,8 @@ class ReportService:
         """Partial update of a report; raises NotFoundException if missing or wrong tenant."""
         result = await self.session.execute(
             select(ReportModel).where(
-                and_(
-                    ReportModel.id == report_id,
-                    ReportModel.tenant_id == tenant_id,
-                )
+                ReportModel.id == report_id,
+                ReportModel.tenant_id == tenant_id,
             )
         )
         report = result.scalar_one_or_none()
@@ -261,10 +255,8 @@ class ReportService:
         """Hard-delete a report row; raises NotFoundException if missing or wrong tenant."""
         result = await self.session.execute(
             select(ReportModel).where(
-                and_(
-                    ReportModel.id == report_id,
-                    ReportModel.tenant_id == tenant_id,
-                )
+                ReportModel.id == report_id,
+                ReportModel.tenant_id == tenant_id,
             )
         )
         report = result.scalar_one_or_none()

@@ -52,8 +52,8 @@ Reading order followed:
    - Use `MockRow` / `MockResult` from `conftest.py`
 
 8. **Create `tests/unit/test_report_service.py`** (new file)
-   - Follow the pattern of `tests/unit/test_customer_service.py` — inline `mock_db_session` fixture using `MagicMock` + `AsyncMock` (no `make_mock_session` dependency needed)
-   - `mock_db_session` wires `session.execute` to return appropriate `MockResult` objects for each test case
+   - Follow the pattern of `tests/unit/test_customer_service.py` — define a `mock_db_session` fixture that uses `MockState` + `make_mock_session([make_report_handler(state)])` rather than inline `MagicMock` + `AsyncMock`; this follows the composable handler pattern required by rule 135
+   - `mock_db_session` wires `session.execute` via `make_mock_session` for each test case
    - Test classes: `TestListReports`, `TestGetReport`, `TestCreateReport`, `TestUpdateReport`, `TestDeleteReport`
    - Covers: happy path, not-found (missing id), tenant-isolation (wrong tenant → `NotFoundException`), empty list, pagination offset
 
