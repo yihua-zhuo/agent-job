@@ -19,16 +19,16 @@ Reading order followed:
 
 ## Affected Files
 
-- `src/services/copilot_service.py` — replace `send_email` and `create_task` deferred stubs (L218-L227) with real async methods; update `get_tool_registry()` to set `handler` to the new methods and `deferred: False`
+- `src/services/copilot_service.py` — replace `send_email` and `create_task` deferred stubs (L257-L266) with real async methods; update `get_tool_registry()` to set `handler` to the new methods and `deferred: False`
 - `tests/unit/test_copilot_service.py` — add four new test cases (`test_send_email_tool_valid`, `test_send_email_tool_invalid_recipients`, `test_create_task_tool_valid`, `test_create_task_tool_empty_title`); update `test_tool_registry_returns_six_tools` to assert 6 active / 0 deferred (updating counts from 4 active + 2 deferred)
 
 ## Implementation Steps
 
 **Step 1: Confirm TaskService.create_task exists and import it**
 
-`TaskService.create_task` is at `src/services/task_service.py` L18 with signature:
+`create_task` is at `src/services/task_service.py` L18 with signature:
 ```python
-async def create_task(self, title: str, description: str = "", assigned_to: int = 0,
+async def create_task(title: str, description: str = "", assigned_to: int = 0,
                       due_date: datetime | None = None, tenant_id: int = 0, **kwargs) -> TaskModel
 ```
 This is confirmed to exist; no inline SQL needed.
@@ -60,7 +60,7 @@ with:
 
 **Step 4: Add `send_email_tool` async method to `CopilotService`**
 
-Insert after the `_get_recent_activities` method (before L61, the "Conversation management" comment block):
+Insert after the `_get_recent_activities` method (which ends at L61), before the "Conversation management" comment block (L100):
 
 ```python
 async def send_email_tool(
@@ -101,7 +101,7 @@ with:
 
 **Step 6: Add `create_task_tool` async method to `CopilotService`**
 
-Insert after `send_email_tool` (Step 4 location, before the "Conversation management" block):
+Insert after `send_email_tool` (L78), before the "Conversation management" comment block (L100):
 
 ```python
 async def create_task_tool(

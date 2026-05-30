@@ -124,6 +124,8 @@ async def test_create_task_tool_valid(mock_db_session):
     )
     assert result["success"] is True
     assert "task" in result
+    assert result["task"]["title"] == "Fix the bug"
+    assert result["task"]["description"] == "Investigate and resolve"
 
 
 @pytest.mark.asyncio
