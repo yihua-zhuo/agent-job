@@ -300,7 +300,9 @@ class TestTenantStatsEndpoint:
             "storage_used": 1024,
             "api_calls": 5000,
         }
-        svc.get_tenant_stats = AsyncMock(return_value=stats_data)
+        mock_stats = MagicMock()
+        mock_stats.to_dict.return_value = stats_data
+        svc.get_tenant_stats = AsyncMock(return_value=mock_stats)
         resp = client.get("/api/v1/tenants/stats")
         assert resp.status_code == 200
         body = resp.json()
@@ -318,15 +320,18 @@ class TestTenantUsageEndpoint:
         client, svc = tenant_router_client
         usage_data = {
             "tenant_id": 1,
+            "name": "Acme Corp",
+            "plan": "enterprise",
+            "status": "active",
             "user_count": 5,
-            "storage_used": 512,
-            "api_calls": 2500,
         }
-        svc.get_tenant_usage = AsyncMock(return_value=usage_data)
+        mock_usage = MagicMock()
+        mock_usage.to_dict.return_value = usage_data
+        svc.get_tenant_usage = AsyncMock(return_value=mock_usage)
         resp = client.get("/api/v1/tenants/usage")
         assert resp.status_code == 200
         body = resp.json()
-        assert body["data"]["api_calls"] == 2500
+        assert body["data"]["tenant_id"] == 1
 
 
 # ---------------------------------------------------------------------------

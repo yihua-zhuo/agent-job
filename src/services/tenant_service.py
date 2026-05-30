@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.tenant import TenantModel
 from db.models.user import UserModel
+from pkg.constants.tenant_constants import VALID_PLANS
 from pkg.errors.app_exceptions import ForbiddenException, NotFoundException, ValidationException
 
 
@@ -40,6 +41,8 @@ class TenantService:
         admin_email: str | None = None,
         settings: dict | None = None,
     ) -> TenantModel:
+        if plan not in VALID_PLANS:
+            raise ValidationException(f"plan must be one of {sorted(VALID_PLANS)}, got {plan!r}")
         merged: dict = dict(settings or {})
         if admin_email is not None:
             merged["admin_email"] = admin_email

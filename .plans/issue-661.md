@@ -8,7 +8,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - `src/services/notification_service.py` — Update field references to match the new model (field renames: type → channel, is_read → read_at check, title/content → template/params)
 - `alembic/versions/<new_revision>.py` — New migration (chains from `82ecf4a34e34`) adding composite + partial indexes on `notifications`
 - `tests/unit/domain_handlers/notification.py` — New handler for unit-test mock SQL engine
-- `tests/unit/conftest.py` — Notification handler is auto-discovered by `ORDER`-sorted import; no manual registration needed
+- `tests/unit/domain_handlers/notification.py` — New handler for unit-test mock SQL engine; discovered automatically by `conftest.py`'s `_load_domain_handler_modules()` via `pkgutil.iter_modules` over the `tests.unit.domain_handlers` package. The handler module must export `get_handlers(state)` and `__all__` listing all exported symbols; `ORDER` controls loading sequence (handled internally by the sorted import).
 - `tests/unit/test_notifications_router.py` — Tests already use the new field names (`channel`, `template`, `params`, `status`, `read_at`); no updates required
 
 ## Implementation Steps

@@ -76,7 +76,7 @@ async def get_tenant_stats(
 ):
     service = TenantService(session)
     data = await service.get_tenant_stats(tenant_id=ctx.tenant_id, requesting_tenant_id=ctx.tenant_id)
-    return {"success": True, "data": data}
+    return {"success": True, "data": data.to_dict()}
 
 
 @tenants_router.get("/usage")
@@ -86,7 +86,7 @@ async def get_tenant_usage(
 ):
     service = TenantService(session)
     data = await service.get_tenant_usage(tenant_id=ctx.tenant_id, requesting_tenant_id=ctx.tenant_id)
-    return {"success": True, "data": data}
+    return {"success": True, "data": data.to_dict()}
 
 
 @tenants_router.get("/{tenant_id}")
