@@ -6,8 +6,8 @@
 | 分类 | 10-customers |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [创建 CustomerRepository（#430）](../20-sales/0430-add-customer-repository.md) |
-| 启用后赋能 | [实现客户功能 Service 层](../20-sales/0432-update-test-customer-service-py-mocks-for-customerrepository.md) |
+| 依赖 | [创建 CustomerRepository（#430）](0430-create-src-db-repositories-customer-py-with-customerreposito.md) |
+| 启用后赋能 | [实现客户功能 Service 层](../99-misc/0432-update-test-customer-service-py-mocks-for-customerrepository.md) |
 | 状态 | 📋 待开始 |
 
 ---

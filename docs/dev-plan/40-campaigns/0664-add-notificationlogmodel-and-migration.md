@@ -334,8 +334,8 @@ gh pr create --base master --title "feat(campaigns): add NotificationLogModel an
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/reminder.py`](../../src/db/models/reminder.py) — ReminderModel 结构与字段模式一致
-- 同类参考实现：[`src/db/models/notification.py`](../../src/db/models/notification.py) — NotificationModel
+- 同类参考实现：[`src/db/models/reminder.py`](../../../src/db/models/reminder.py) — ReminderModel 结构与字段模式一致
+- 同类参考实现：[`src/db/models/notification.py`](../../../src/db/models/notification.py) — NotificationModel
 - 第三方文档：[Alembic autogenerate documentation](https://alembic.sqlalchemy.org/en/latest/autogenerate.html)
 - 父 issue / 关联：#646, #663
 

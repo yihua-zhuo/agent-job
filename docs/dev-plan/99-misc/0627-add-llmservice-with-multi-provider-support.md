@@ -5,7 +5,7 @@
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [0626](0626-add-llms-full-prompt-pipeline.md)（需要 LLMService 作为 provider 底座） |
+| 启用后赋能 | TBD - 待验证：0626（需要 LLMService 作为 provider 底座） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -14,7 +14,7 @@
 
 ### 1.1 为什么做
 
-The existing [`AIChatGateway`](../../src/internal/ai_gateway.py) in this repo is a single-provider stub hardcoded to a fictional MiniMax-like backend. The CRM needs to call different LLM providers (OpenAI, Anthropic, MiniMax, etc.) across tenants and use-cases, with unified `.chat()` and `.embed()` semantics, built-in retry/backoff, and per-tenant cost tracking. No such abstraction exists today.
+The existing [`AIChatGateway`](../../../src/internal/ai_gateway.py) in this repo is a single-provider stub hardcoded to a fictional MiniMax-like backend. The CRM needs to call different LLM providers (OpenAI, Anthropic, MiniMax, etc.) across tenants and use-cases, with unified `.chat()` and `.embed()` semantics, built-in retry/backoff, and per-tenant cost tracking. No such abstraction exists today.
 
 ### 1.2 做完后
 
@@ -97,7 +97,7 @@ N/A — 新建模块
 
 - Service Constructor：`__init__(self, session: AsyncSession)` — session is required, no default.
 - Service错误抛 `ValidationException`（按 issue 明确要求 on provider errors），**不**返回 `ApiResponse.error()`。
-- Service **不**调用 `.to_dict()`，不返回 envelope dict — caller handles.
+- Service **不**调用 `.to_dict()`，不返回 envelope dict — caller handles。
 - Multi-tenant：cost tracking state is keyed by `tenant_id` dict in memory for this iteration (no new ORM model required).
 
 ### 4.4 已知坑
@@ -294,8 +294,8 @@ gh pr create --base master --title "#627 feat: LLMService with multi-provider su
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/ai_service.py`](../../src/services/ai_service.py) — follows the same service pattern (`__init__(session)`, raises `AppException` subclasses)
-- 同类参考实现：[`src/internal/ai_gateway.py`](../../src/internal/ai_gateway.py) — the current stub LLM adapter; `LLMService` replaces its role for non-conversation use-cases
+- 同类参考实现：[`src/services/ai_service.py`](../../../src/services/ai_service.py) — follows the same service pattern (`__init__(session)`, raises `AppException` subclasses)
+- 同类参考实现：[`src/internal/ai_gateway.py`](../../../src/internal/ai_gateway.py) — the current stub LLM adapter; `LLMService` replaces its role for non-conversation use-cases
 - 父 issue：#41
 - 关联 issue：#626（LLMService 是 #626 的依赖）, #627（本 issue 本身）
 

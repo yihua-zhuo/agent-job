@@ -432,7 +432,7 @@ gh pr create --base master --title "feat(#610): implement CodeReviewService with
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/ai_service.py`](../../src/services/ai_service.py) — AI service复用 `AIChatGateway` 的模式- 第三方文档：[AIChatGateway stub](https://github.com/anthropics/claude-code/blob/main/README.md) — 仅作 LLM 调用接口参考
+- 同类参考实现：[`src/services/ai_service.py`](../../../src/services/ai_service.py) — AI service复用 `AIChatGateway` 的模式- 第三方文档：[AIChatGateway stub](https://github.com/anthropics/claude-code/blob/main/README.md) — 仅作 LLM 调用接口参考
 - 父 issue /关联：#44（父 issue）；#609（依赖的 Model 建表）
 
 ---

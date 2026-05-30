@@ -41,7 +41,7 @@ The `ActivityService` class in `src/services/activity_service.py` implements 9 m
 
 ### 2.1 现有实现
 
-主入口：[`src/services/activity_service.py`](../../src/services/activity_service.py) L{1}-L{200}
+主入口：[`src/services/activity_service.py`](../../../src/services/activity_service.py) L{1}-L{200}
 
 ```python
 # TBD - 待验证：src/services/activity_service.py — 预期包含
@@ -273,8 +273,8 @@ gh pr create --base master --title "test: add ActivityService unit tests (#486)"
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py)
-- 同类参考实现：[`tests/unit/conftest.py`](../../tests/unit/conftest.py) — MockState / make_mock_session 模式
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py)
+- 同类参考实现：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — MockState / make_mock_session 模式
 - 父 issue / 关联：#452（父），#485（依赖），#487（后续赋能）
 
 ---

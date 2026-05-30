@@ -50,7 +50,7 @@ TBD - 待验证：`tests/unit/conftest.py` — existing `MockState`, `make_mock_
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`tests/unit/conftest.py`](../../tests/unit/conftest.py) — add `make_opportunity_handler(state)` if not yet present
+  - TBD - 待验证：`tests/unit/conftest.py` — add `make_opportunity_handler(state)` if not yet present
 - 要建：
   - `tests/unit/test_opportunity.py` — full unit test suite for OpportunityService
 
@@ -74,7 +74,7 @@ TBD - 待验证：`tests/unit/conftest.py` — existing `MockState`, `make_mock_
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/unit/conftest.py`](../../tests/unit/conftest.py) | Add `make_opportunity_handler(state)` factory if not already present; may also need `make_count_handler(state)` for paginated list total count |
+| TBD - 待验证：`tests/unit/conftest.py` | Add `make_opportunity_handler(state)` factory if not already present; may also need `make_count_handler(state)` for paginated list total count |
 
 ### 3.3 新增能力
 
@@ -273,7 +273,7 @@ ruff check tests/unit/conftest.py tests/unit/test_opportunity.py
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — `make_customer_handler` pattern + all CRUD test methods
+- 同类参考实现：TBD - 待验证：`tests/unit/test_customer_service.py` — `make_customer_handler` pattern + all CRUD test methods
 - 父 issue / 关联：#552 (parent), #570 (dependency — integration tests for Opportunity)
 - CLAUDE.md §Unit Test SQL Mocks — `MockState`, `make_mock_session`, `make_<entity>_handler` pattern
 

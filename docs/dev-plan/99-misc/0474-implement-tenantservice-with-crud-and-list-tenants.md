@@ -6,8 +6,8 @@
 | 分类 | 99-misc |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [#473 板块](../99-misc/0473-add-tenant-model.md) |
-| 启用后赋能 | [#447 板块](../20-sales/0447-???-parent.md)（父 issue，最终全租户视图依赖此服务） |
+| 依赖 | #473 板块 — TBD - 待验证（确认 99-misc 目录是否存在，若存在则路径为 `../99-misc/0473-add-tenant-model.md`） |
+| 启用后赋能 | #447 板块 — TBD - 待验证（父 issue，最终全租户视图依赖此服务） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -139,11 +139,12 @@ N/A — 无新依赖引入，使用项目已有包（SQLAlchemy 2.x async、pyte
 
 ### Step 1:确认 Tenant ORM 模型并设计 tenant_handler mock
 
-确认 #473 已创建的 `Tenant` ORM 模型的字段名（`id`, `tenant_uuid`, `name`, `status`, `plan`, `quota`, `usage` 等），读取 [`src/db/models/tenant.py`](../../src/db/models/tenant.py) 确认 schema。参考 `make_customer_handler` 工厂模式，在 `tests/unit/conftest.py` 新增 `make_tenant_handler(state)`，支持 SELECT / INSERT / UPDATE / DELETE 四类操作的 mock拦截。
+确认 #473 已创建的 `Tenant` ORM模型的字段名（`id`, `tenant_uuid`, `name`, `status`, `plan`, `quota`, `usage` 等），读取 [`src/db/models/tenant.py`](../../../src/db/models/tenant.py) 确认 schema。参考 `make_customer_handler` 工厂模式，在 `tests/unit/conftest.py` 新增 `make_tenant_handler(state)`，支持 SELECT / INSERT / UPDATE / DELETE 四类操作的 mock拦截。
 
 操作：
 - a) 读取 `src/db/models/tenant.py`，确认字段名和 `__tablename__`
-- b) 在 `tests/unit/conftest.py` 中新增 `make_tenant_handler(state)` 函数，参照 `make_customer_handler` 的返回格式```python
+- b) 在 `tests/unit/conftest.py` 中新增 `make_tenant_handler(state)` 函数，参照 `make_customer_handler` 的返回格式
+```python
 # 测试代码（conftest.py 新增）
 def make_tenant_handler(state: MockState):
     """Returns (query_handler, insert_handler, ...) for tenant table."""
@@ -187,7 +188,8 @@ class TenantService:
         entity = result.scalar_one_or_none()
         if entity is None:
             raise NotFoundException("Tenant")
-        return entity```
+        return entity
+```
 
 **完成判定**：`ruff check src/services/tenant_service.py` → 0 errors；`PYTHONPATH=src python -c "from services.tenant_service import TenantService; print('ok')"` exit 0
 
@@ -283,8 +285,7 @@ class TestTenantService:
 
 - [ ] `ruff check src/services/tenant_service.py tests/unit/test_tenant_service.py tests/unit/conftest.py` →0 errors
 - [ ] `PYTHONPATH=src pytest tests/unit/test_tenant_service.py -v` → ≥ 7 passed- [ ] `PYTHONPATH=src python -c "from services.tenant_service import TenantService; from pkg.errors.app_exceptions import NotFoundException,ValidationException,ForbiddenException; print('imports ok')"` → 0 errors
-- [ ] `PYTHONPATH=src python -c "from tests.unit.conftest import make_tenant_handler, MockState; s=MockState(); h=make_tenant_handler(s); print('tenant mock ok')"` → 0 errors
-- [ ] `ruff format --check src/services/tenant_service.py tests/unit/test_tenant_service.py` →0 differences（格式合规）
+- [ ] `PYTHONPATH=src python`
 
 ---
 
@@ -294,8 +295,8 @@ class TestTenantService:
 |------|------|------|---------|
 | #473尚未合并，Tenant ORM 模型字段未知，导致 mock handler 与实际 schema 不匹配 | 中 | 高 | 本板块在 #473 合并后再实施；两板块设置序衔依赖，合并后补 dev-plan |
 | `delete_tenant` 与 `suspend_tenant` 的 status 值（`deleted` vs `suspended`）与前端期望不一致 | 低 | 中 | 与前端对齐后修改常量值；不涉及数据迁移 |
-| `list_tenants` 的 `is_deleted` 过滤逻辑与租户软删除字段设计（软删除字段是 `status` 还是独立 `is_deleted` 列）不一致 | 低 | 中 | 若模型采用 status = 'deleted' 而非独立 flag，调整 WHERE条件；立即在 §4.4 已知坑中记录此模糊点 |
-| 单元测试 mock handler遗漏边界条件（如空表 ZERO results） | 低 | 中 |补充对应 mock handler 处理 `scalar_one()` 在空结果时报错场景 |
+| `list_tenants` 的软删除过滤逻辑（`status` 还是独立 `is_deleted` 列）设计与预期不符 | 低 | 中 | 若模型用 `status='deleted'` 而非独立 flag，需调整 WHERE 条件；及时在 §4.4 已知坑中记录此模糊点 |
+| 单元测试 mock handler遗漏边界条件（如空表 ZERO results） | 低 | 中 | 补充对应 mock handler 处理 `scalar_one()` 在空结果时报错场景 |
 
 ---
 
@@ -305,7 +306,7 @@ class TestTenantService:
 # 1. commit + PR
 git add src/services/tenant_service.py tests/unit/test_tenant_service.py tests/unit/conftest.py
 git commit -m "feat(service): implement TenantService with 7 CRUD and list methods"
-git push -u origin "$(git branch --show-current)"
+git push -u origin "$(git branch --describe --abbrev=0)"
 gh pr create --base master --title "feat: implement TenantService (#474)" --body "Closes #474"
 
 # 2. 更新进度
@@ -317,8 +318,8 @@ gh pr create --base master --title "feat: implement TenantService (#474)" --body
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — 参照其结构（session / raise / return ORM）
-- 同类测试实现：[`tests/unit/conftest.py`](../../tests/unit/conftest.py) — `make_customer_handler` / `make_user_handler` 工厂函数提供 mock handler 模式参考
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — 参照其结构（session / raise / return ORM）
+- 同类测试实现：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — `make_customer_handler` / `make_user_handler` 工厂函数提供 mock handler 模式参考
 - 父 issue /关联：#447（父 issue，多租户 CRM整体规划）、#473（Tenant ORM 模型，先决条件）
 
 ---

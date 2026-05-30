@@ -16,7 +16,8 @@ gh pr create --base master --title "feat(#597): add Recommendation and RiskSigna
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/customer.py`](../../src/db/models/customer.py) — JSON 列（`tags`、`recycle_history`）模式一致- 同类参考实现：[`src/db/models/opportunity.py`](../../src/db/models/opportunity.py) — 基础 model + FK 索引模式
+- 同类参考实现：[`src/db/models/customer.py`](../../../src/db/models/customer.py) — JSON 列（`tags`、`recycle_history`）模式一致
+- 同类参考实现：[`src/db/models/opportunity.py`](../../../src/db/models/opportunity.py) — 基础 model + FK 索引模式
 - 关联：#46（父 issue — AI 推荐与风险信号系统）
 - 第三方文档：[SQLAlchemy 2.x async](https://docs.sqlalchemy.org/en/20/), [Alembic autogenerate](https://alembic.sqlalchemy.org/en/latest/autogenerate.html)
 
@@ -27,3 +28,5 @@ gh pr create --base master --title "feat(#597): add Recommendation and RiskSigna
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+
+----- END CORRECTED BOARD -----

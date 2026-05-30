@@ -343,7 +343,7 @@ gh pr create --base master --title "test(#723): integration tests for WebhookDel
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/integration/`](../../tests/integration/) — 现有集成测试文件结构参考
+- 同类参考实现：[`tests/integration/`](../../../tests/integration/) — 现有集成测试文件结构参考
 - 父 issue / 关联：#722（WebhookDeliveryService 实现）、#496（Webhook 功能总览）
 
 ---

@@ -6,7 +6,7 @@
 | 分类 | [50-automation](../README.md#12-分类总览) |
 | 优先级 | 推荐 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [0524-build-channel-base-abstraction](./0524-build-channel-base-abstraction.md) |
+| 依赖 | TBD - 待验证：确认依赖板块编号（0524）及所在目录是否存在 |
 | 启用后赋能 | [板块名](../README.md) — #71（父 issue）后续各 channel 实现依赖此 wrapper |
 | 状态 | 📋 待开始 |
 

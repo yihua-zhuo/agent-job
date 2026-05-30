@@ -47,8 +47,8 @@ TBD - 待验证：`tests/unit/conftest.py` L? — 现有 `make_customer_handler(
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`tests/unit/conftest.py`](../../tests/unit/conftest.py) — 新增 `make_customer_repository_handler(state)` 函数
-  - [`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — 在 `mock_db_session` fixture 中加入该 handler
+  - [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — 新增 `make_customer_repository_handler(state)` 函数
+  - [`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — 在 `mock_db_session` fixture 中加入该 handler
 - 要建：无
 
 ### 2.3 缺什么
@@ -68,8 +68,8 @@ TBD - 待验证：`tests/unit/conftest.py` L? — 现有 `make_customer_handler(
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/unit/conftest.py`](../../tests/unit/conftest.py) | 新增 `make_customer_repository_handler(state)` — 参照现有 `make_customer_handler` / `make_user_handler` 模式，提供 INSERT / UPDATE / DELETE / SELECT / COUNT handlers，注册至 `make_mock_session` |
-| [`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) | 在 `mock_db_session` fixture 的 `handlers` 列表中追加 `make_customer_repository_handler(state)` 调用 |
+| [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) | 新增 `make_customer_repository_handler(state)` — 参照现有 `make_customer_handler` / `make_user_handler` 模式，提供 INSERT / UPDATE / DELETE / SELECT / COUNT handlers，注册至 `make_mock_session` |
+| [`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) | 在 `mock_db_session` fixture 的 `handlers` 列表中追加 `make_customer_repository_handler(state)` 调用 |
 
 ### 3.3 新增能力
 
@@ -181,7 +181,7 @@ gh pr create --base master --title "test: update mocks for CustomerRepository in
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/conftest.py`](../../tests/unit/conftest.py) — 现有 `make_customer_handler`、`make_user_handler`、`make_count_handler` 工厂函数
+- 同类参考实现：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — 现有 `make_customer_handler`、`make_user_handler`、`make_count_handler` 工厂函数
 - 父 issue / 关联：#252（父）, #431（依赖）
 
 ---

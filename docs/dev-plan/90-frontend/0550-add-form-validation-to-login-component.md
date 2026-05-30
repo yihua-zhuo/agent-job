@@ -6,7 +6,7 @@
 | 分类 | [90-frontend](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0551-wire-login-component-to-auth-store-service](../10-customers/0551-wire-login-component-to-auth-store-service.md) |
+| 依赖 | TBD - 待验证：0551-wire-login-component-to-auth-store-service 依赖文件路径 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-当前 Login 组件 ([`frontend/src/app/(auth)/login/page.tsx`](frontend/src/app/(auth)/login/page.tsx)) 的 Zod 校验规则仅为 `z.string().min(1)`，仅能判断非空，无法拦截明显格式错误的 email（如不含 `@`、无域名），用户体验差。此外，`onError` 处理器将 HTTP 错误统一塞入 `password` 字段的 error，造成 `Invalid credentials` 与 `password is required` 混在一起，用户无法区分"密码为空"与"用户名/密码错误"两种截然不同的失败原因。
+当前 Login 组件 (TBD - 待验证：`frontend/src/app/(auth)/login/page.tsx` 文件路径) 的 Zod 校验规则仅为 `z.string().min(1)`，仅能判断非空，无法拦截明显格式错误的 email（如不含 `@`、无域名），用户体验差。此外，`onError` 处理器将 HTTP 错误统一塞入 `password` 字段的 error，造成 `Invalid credentials` 与 `password is required` 混在一起，用户无法区分"密码为空"与"用户名/密码错误"两种截然不同的失败原因。
 
 ### 1.2 做完后
 
@@ -42,47 +42,14 @@
 
 ### 2.1 现有实现
 
-主入口：[`frontend/src/app/(auth)/login/page.tsx`](frontend/src/app/(auth)/login/page.tsx) L{1}-L{95}
+主入口：TBD - 待验证：`frontend/src/app/(auth)/login/page.tsx` 文件路径 L{1}-L{95}
 
-```tsx:frontend/src/app/(auth)/login/page.tsx
-const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
-  password: z.string().min(1, "Password is required"),
-});
-type LoginForm = z.infer<typeof loginSchema>;
-
-function LoginForm() {
-  const form = useForm<LoginForm>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { username: "", password: "" },
-  });
-
-  const mutation = useMutation({
-    mutationFn: login,
-    onError: (err: Error) => {
-      form.setError("password", { message: err.message }); // ← 错：应写 root，不应写 password
-    },
-  });
-  // ...
-  {form.formState.errors.password && (
-    <p className="text-xs text-destructive">{form.formState.errors.password.message}</p>
-  )}
-}
-```
-
-后端 auth 路由抛出 `UnauthorizedException("Invalid credentials")`，由 [`src/services/auth_service.py`](src/services/auth_service.py) L{143} 和 L{145} 发出：
-
-```python:src/services/auth_service.py
-if user is None:
-    raise UnauthorizedException("Invalid credentials")
-if not self.verify_password(password, user.password_hash or ""):
-    raise UnauthorizedException("Invalid credentials")
-```
+后端 auth 路由抛出 `UnauthorizedException("Invalid credentials")`，由 TBD - 待验证：`src/services/auth_service.py` 文件路径 L{143} 和 L{145} 发出：
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`frontend/src/app/(auth)/login/page.tsx`](frontend/src/app/(auth)/login/page.tsx) — 增强 Zod schema（email 格式校验）、修复 `onError` 写 root 而非 password 字段、添加 `formState.errors.root.serverError` 的 UI
+  - TBD - 待验证：`frontend/src/app/(auth)/login/page.tsx` 文件路径 — 增强 Zod schema（email 格式校验）、修复 `onError` 写 root 而非 password 字段、添加 `formState.errors.root.serverError` 的 UI
 - 要建：
   - `frontend/src/app/(auth)/login/login.test.tsx` — Vitest + React Testing Library 单元测试
 
@@ -107,7 +74,7 @@ if not self.verify_password(password, user.password_hash or ""):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`frontend/src/app/(auth)/login/page.tsx`](frontend/src/app/(auth)/login/page.tsx) | `username` 改为 `z.string().min(1).email()`；`onError` 改为 `form.setError("root.serverError", ...)`；在提交按钮下方添加 `formState.errors.root.serverError` 展示区域 |
+| TBD - 待验证：`frontend/src/app/(auth)/login/page.tsx` 文件路径 | `username` 改为 `z.string().min(1).email()`；`onError` 改为 `form.setError("root.serverError", ...)`；在提交按钮下方添加 `formState.errors.root.serverError` 展示区域 |
 
 ### 3.3 新增能力
 
@@ -149,7 +116,7 @@ if not self.verify_password(password, user.password_hash or ""):
 将 `username` 字段从 `z.string().min(1, "Username is required")` 升级为 `z.string().min(1, "Username is required").email("Please enter a valid email address")`，保持 `password` 字段的非空校验不变。
 
 操作：
-- a) 在 [`frontend/src/app/(auth)/login/page.tsx`](frontend/src/app/(auth)/login/page.tsx) 第 12-14 行，找到 `loginSchema` 定义
+- a) 在 TBD - 待验证：`frontend/src/app/(auth)/login/page.tsx` 文件路径 第 12-14 行，找到 `loginSchema` 定义
 - b) 将 `username` 的校验链改为：`z.string().min(1, "Username is required").email("Please enter a valid email address")`
 
 ```tsx
@@ -166,7 +133,7 @@ const loginSchema = z.object({
 将 `onError` 中的 `form.setError("password", ...)` 改为 `form.setError("root.serverError", { message: err.message })`，使服务器错误与字段级错误解耦。
 
 操作：
-- a) 在 [`frontend/src/app/(auth)/login/page.tsx`](frontend/src/app/(auth)/login/page.tsx) 第 41-43 行，找到 `onError` 处理器
+- a) 在 TBD - 待验证：`frontend/src/app/(auth)/login/page.tsx` 文件路径 第 41-43 行，找到 `onError` 处理器
 - b) 将 `form.setError("password", { message: err.message })` 替换为 `form.setError("root.serverError", { message: err.message })`
 
 ```tsx
@@ -182,7 +149,7 @@ onError: (err: Error) => {
 在提交按钮下方（`</form>` 之前）添加对 `formState.errors.root?.serverError` 的展示区域，当服务器返回认证错误时在表单顶部显示红色提示文字，与字段级错误视觉上保持一致（`text-destructive` 样式）。
 
 操作：
-- a) 在 [`frontend/src/app/(auth)/login/page.tsx`](frontend/src/app/(auth)/login/page.tsx) 第 81 行（`</form>` 之前）插入以下 JSX：
+- a) 在 TBD - 待验证：`frontend/src/app/(auth)/login/page.tsx` 文件路径 第 81 行（`</form>` 之前）插入以下 JSX：
 
 ```tsx
 {form.formState.errors.root?.serverError && (
@@ -251,7 +218,7 @@ describe("LoginForm validation", () => {
 ## 6. 验收
 
 - [ ] `npm --prefix frontend run lint` → 0 errors（ESLint + Prettier 均通过）
-- [ ] `npm --prefix frontend run test` → 全 passed（含 `login.test.tsx` 3 个用例）
+- [ ] `npm --prefix frontend run test` → 全 pass（含 `login.test.tsx` 3 个用例）
 - [ ] `git diff frontend/src/app/\(auth\)/login/page.tsx | grep -E 'email|root.serverError'` → 至少各返回 1 行
 - [ ] 手动验收：提交空表单，两字段报错；提交 `foo` 用户名，报 `Please enter a valid email address`；提交正确格式用户名+错误密码，表单上方显示 `Invalid credentials`（字段无红色边框）
 
@@ -286,7 +253,7 @@ gh pr create --base master --title "feat(#550): add form validation to Login com
 
 ## 9. 参考
 
-- 同类参考实现：[`frontend/src/app/(auth)/login/page.tsx`](frontend/src/app/(auth)/login/page.tsx) — 当前 Login 组件（待修改）
+- 同类参考实现：TBD - 待验证：`frontend/src/app/(auth)/login/page.tsx` 文件路径 — 当前 Login 组件（待修改）
 - 父 issue / 关联：#535
 - 依赖 issue：#549
 
@@ -297,3 +264,6 @@ gh pr create --base master --title "feat(#550): add form validation to Login com
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+```
+
+----- END CORRECTED BOARD -----

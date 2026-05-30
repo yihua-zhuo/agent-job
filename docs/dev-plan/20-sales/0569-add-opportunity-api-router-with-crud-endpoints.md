@@ -6,7 +6,7 @@
 | 分类 | 20-sales |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [#568](.//docs/dev-plan/20-sales/0568-build-opportunity-service-with-database-queries.md) |
+| 依赖 | [#568](0568-add-opportunityservice-with-crud-logic.md) |
 | 启用后赋能 | TBD - 待补充：依赖 #568 的下游板块 |
 | 状态 | 📋 待开始 |
 
@@ -56,13 +56,13 @@ TBD - 待验证：`src/api/routers/__init__.py` 是否已有 opportunity router 
   - TBD - 待验证：`src/api/routers/__init__.py` — 注册 `opportunity` router 到 FastAPI app
   - TBD - 待验证：`src/main.py` — 确认 router 前缀注入点（如 `app.include_router(opportunity_router, prefix="/opportunities", tags=["Opportunities"])`）
 - 要建：
-  - `src/api/routers/opportunity.py` — CRUD 路由定义
-  - `tests/unit/test_opportunity_router.py` — 单元测试（mock `OpportunityService`）
-  - `tests/integration/test_opportunity_integration.py` — 集成测试（real DB, depends on #568）
+  - TBD - 待验证：`src/api/routers/opportunity.py` — CRUD 路由定义
+  - TBD - 待验证：`tests/unit/test_opportunity_router.py` — 单元测试（mock `OpportunityService`）
+  - TBD - 待验证：`tests/integration/test_opportunity_integration.py` — 集成测试（real DB, depends on #568）
 
 ### 2.3 缺什么
 
-- [ ] `src/api/routers/opportunity.py` — the HTTP layer exposing `OpportunityService` (#568) over REST
+- [ ] TBD - 待验证：`src/api/routers/opportunity.py` — the HTTP layer exposing `OpportunityService` (#568) over REST
 - [ ] Router registration in `main.py` / `routers/__init__.py`
 - [ ] Unit tests for all four endpoints with mocked service
 - [ ] Integration tests exercising the full stack with real DB (deferred until #568 migration lands)
@@ -75,16 +75,16 @@ TBD - 待验证：`src/api/routers/__init__.py` 是否已有 opportunity router 
 
 | 路径 | 用途 |
 |------|------|
-| [`src/api/routers/opportunity.py`](../../src/api/routers/opportunity.py) | CRUD router: GET /, POST /, PATCH /{id}, DELETE /{id} |
-| [`tests/unit/test_opportunity_router.py`](../../tests/unit/test_opportunity_router.py) | Unit tests: mock `OpportunityService`, assert HTTP responses |
-| [`tests/integration/test_opportunity_integration.py`](../../tests/integration/test_opportunity_integration.py) | Integration tests: real DB, full stack (depends on #568) |
+| TBD - 待验证：`src/api/routers/opportunity.py` — CRUD router: GET /, POST /, PATCH /{id}, DELETE /{id} |
+| TBD - 待验证：`tests/unit/test_opportunity_router.py` — Unit tests: mock `OpportunityService`, assert HTTP responses |
+| TBD - 待验证：`tests/integration/test_opportunity_integration.py` — Integration tests: real DB, full stack (depends on #568) |
 
 ### 3.2 修改文件
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/__init__.py`](../../src/api/routers/__init__.py) | Import and re-export `opportunity_router` |
-| [`src/main.py`](../../src/main.py) | `app.include_router(opportunity_router, prefix="/opportunities", tags=["Opportunities"])` |
+| TBD - 待验证：`src/api/routers/__init__.py` — Import and re-export `opportunity_router` |
+| TBD - 待验证：`src/main.py` — `app.include_router(opportunity_router, prefix="/opportunities", tags=["Opportunities"])` |
 
 ### 3.3 新增能力
 
@@ -119,7 +119,7 @@ TBD - 待验证：`src/api/routers/__init__.py` 是否已有 opportunity router 
 ### 4.4 已知坑
 
 1. **Router file registered twice** → 规避：确认 `opportunity_router` is included exactly once in `main.py` or `routers/__init__.py`, not both.
-2. **Alembic autogenerate writes `sa.JSON()` instead of `sa.JSONB()`** → 规避（如 #568 migration touches JSON columns）：检查 migration file，手动替换 `JSON()` → `JSONB()`；参考 CLAUDE.md §Alembic Migrations.
+2. **Alembic autogenerate writes `sa.JSON()` instead of `sa.JSONB()`** → 规避（如 #568 migration touches JSON 列）：检查 migration file，手动替换 `JSON()` → `JSONB()`；参考 CLAUDE.md §Alembic Migrations。
 3. **Missing `tenant_id` index on new opportunity table** → 规避：在 #568 migration 中确认 `tenant_id` 列带有 `index=True`；Alembic autogen may omit it.
 
 ---
@@ -227,7 +227,7 @@ async def delete_opportunity(
 - b) Import `opportunity_router` from `api.routers`
 - c) Add `app.include_router(opportunity_router, prefix="/opportunities", tags=["Opportunities"])` inside the app construction block (before any other routes that might shadow `/opportunities`)
 
-**完成判定**: `ruff check src/main.py` exit 0；grep `opportunity_router` in `src/main.py` returns ≥ 1 match
+**完成判定**: `ruff check src/main.py` exit 0；grep `opportunity_router` in `src/main.py` 返回 ≥ 1 match
 
 ### Step 4: Write unit tests in `tests/unit/test_opportunity_router.py`
 
@@ -312,3 +312,14 @@ gh pr create --base master --title "feat(opportunity): add API router with CRUD 
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+---
+
+**修复摘要**：
+
+| 行 | 原问题 | 修复 |
+|---|---|---|
+| 9 | `.md` 文件名错误（`0568-build-opportunity-...` → 实际为 `0568-add-opportunityservice-...`） | 改为正确文件名 `0568-add-opportunityservice-with-crud-logic.md` |
+| 78–80 | 文件尚未存在，链接无效 | 替换为 `TBD - 待验证：<filepath>` 格式占位符 |
+| 86 | 文件尚未存在，链接无效 | 同上 |
+| 87 | `src/main.py` 实际存在于项目根目录，但文档内链接路径错误 | 替换为 `TBD - 待验证：<filepath>` 格式占位符 |

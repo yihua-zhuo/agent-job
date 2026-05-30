@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(default=10, ge=0)
 
     # JWT
-    jwt_secret: str | None = Field(default=None)
+    jwt_secret: str | None = Field(default=None, alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256")
     access_token_expire_minutes: int = Field(default=30, ge=1)
 

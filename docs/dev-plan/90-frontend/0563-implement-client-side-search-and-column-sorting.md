@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-当前 `/customers` 页面（[`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/(app)/customers/page.tsx)）已有一个手写的排序实现（`handleSort` + `SortIcon` 组件，L426-L433）和一个手写的 debounced 搜索（`handleChange` + `timerRef`，L310-L318）。两者在同一个文件内紧耦合，无法复用。项目已安装 `@tanstack/react-table`（`package.json` v5.100.8），但从未引入到 customers 页面中。Issue 要求在此基础上引入 TanStack Table 的排序状态机制，并补全一个结构化的 `useTableState` hook，使手写的 sort/search 逻辑升级为可复用方案。
+当前 `/customers` 页面（[`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/%28app%29/customers/page.tsx)）已有一个手写的排序实现（`handleSort` + `SortIcon` 组件，L426-L433）和一个手写的 debounced 搜索（`handleChange` + `timerRef`，L310-L318）。两者在同一个文件内紧耦合，无法复用。项目已安装 `@tanstack/react-table`（`package.json` v5.100.8），但从未引入到 customers 页面中。Issue 要求在此基础上引入 TanStack Table 的排序状态机制，并补全一个结构化的 `useTableState` hook，使手写的 sort/search 逻辑升级为可复用方案。
 
 ### 1.2 做完后
 
@@ -44,7 +44,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/(app)/customers/page.tsx) L256-L433
+主入口：[`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/%28app%29/customers/page.tsx) L256-L433
 
 现有 debounced search 逻辑（L310-L329）：
 
@@ -81,7 +81,7 @@ TanStack React Table 已在 `package.json` 中声明（`@tanstack/react-query` v
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/(app)/customers/page.tsx) — 引入 TanStack Table，重构 search/sort 逻辑
+  - [`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/%28app%29/customers/page.tsx) — 引入 TanStack Table，重构 search/sort 逻辑
 - 要建：
   - `frontend/src/lib/hooks/useTableState.ts` — 搜索 + 排序状态 hook，供本板块及后续复用
   - `frontend/src/lib/hooks/useTableState.test.ts` — Vitest 单元测试
@@ -109,7 +109,7 @@ TanStack React Table 已在 `package.json` 中声明（`@tanstack/react-query` v
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/(app)/customers/page.tsx) | 引入 `useTableState` hook，删除手写 `sorted`/`handleSort`/`handleChange`/`timerRef`，以 TanStack Table 的 `getRowModel().rows` 替换现有渲染逻辑 |
+| [`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/%28app%29/customers/page.tsx) | 引入 `useTableState` hook，删除手写 `sorted`/`handleSort`/`handleChange`/`timerRef`，以 TanStack Table 的 `getRowModel().rows` 替换现有渲染逻辑 |
 
 ### 3.3 新增能力
 
@@ -440,7 +440,7 @@ gh pr create --base master --title "feat(frontend): client-side search & column 
 
 ## 9. 参考
 
-- 同类参考实现：[`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/(app)/customers/page.tsx) L256-L433（手写 sort/search 起点）
+- 同类参考实现：[`frontend/src/app/(app)/customers/page.tsx`](frontend/src/app/%28app%29/customers/page.tsx) L256-L433（手写 sort/search 起点）
 - TanStack Table 官方文档：[TanStack Table v8](https://tanstack.com/table/v8)
 - TanStack Table React 示例：[useReactTable + getFilteredRowModel](https://tanstack.com/table/v8/docs/framework/react/examples/filters)
 - 父 issue：#557（CRM 客户管理完整方案）
@@ -453,3 +453,7 @@ gh pr create --base master --title "feat(frontend): client-side search & column 
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+
+---
+
+**修复说明**：5 处 broken link 的原因相同 — markdown link 目标中的 `(app)` 被解析为链接语法的括号，导致目标截断。统一将 `(app)` 编码为 `%28app%29`（RFC 3986 percent-encoding），所有其他内容保持不变。

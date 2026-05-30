@@ -44,7 +44,7 @@ WebhookService and WebhookDeliveryService are currently covered by zero unit tes
 
 Pattern reference (customer service, confirmed existing):
 
-[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) L{1}-L{50}
+[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) L{1}-L{50}
 
 ```{python}
 # Mock session pattern from test_customer_service.py
@@ -110,7 +110,7 @@ async def test_get_customer_success(customer_service):
 
 ### 4.1 关键选型
 
-- **Mock SQLAlchemy session only, not httpx**: Unit tests run fast (<5s) and must not depend on network. httpx mocking belongs in `tests/integration/test_webhook_delivery_service_integration.py` (covered by #721).
+- **Mock SQLAlchemy session only, not httpx**: Unit tests run fast (<5s) and must not depend on network. httpx mocking belongs in `TBD - 待验证：integration test file for WebhookDeliveryService` (covered by #721).
 - **Handler-based mock (same pattern as test_customer_service.py)**: Reuse `make_mock_session` + per-table handler factories. This avoids global autouse patching and keeps each test isolated.
 
 ### 4.2 版本约束
@@ -380,9 +380,9 @@ gh pr create --base master --title "test(#722): unit tests for WebhookService an
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py)
-- Mock session helpers：[`tests/unit/conftest.py`](../../tests/unit/conftest.py)
-- Integration test counterpart：[`tests/integration/test_webhook_delivery_service_integration.py`](../../tests/integration/test_webhook_delivery_service_integration.py) (covered by #721)
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py)
+- Mock session helpers：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py)
+- Integration test counterpart：TBD - 待验证：integration test file for WebhookDeliveryService (covered by #721)
 - 父 issue：#496
 - 前置依赖：#721
 

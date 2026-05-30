@@ -1,6 +1,12 @@
 "use client";
+import { useMemo } from "react";
 import { useCustomers } from "@/lib/api/queries";
-import { useReactTable, getCoreRowModel, getPaginationRowModel } from "@tanstack/react-table";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getPaginationRowModel,
+  flexRender,
+} from "@tanstack/react-table";
 import { ColumnDef } from "@tanstack/react-table";
 
 interface CustomerRow {
@@ -73,15 +79,20 @@ const columns: ColumnDef<CustomerRow>[] = [
 export default function CustomersTablePage() {
   const { data, isLoading, isError } = useCustomers(1, 20);
 
-  const items: CustomerRow[] = (data?.data?.items ?? []).map((c) => ({
-    id: Number(c.id),
-    name: String(c.name ?? ""),
-    industry: String(c.company ?? ""),
-    status: String(c.status ?? ""),
-    lead_tier: Array.isArray(c.tags) && c.tags.length > 0 ? String(c.tags[0]) : "unknown",
-    last_activity: String(c.created_at ?? ""),
-    value: String((c as Record<string, unknown>).value ?? "—"),
-  }));
+  const items: CustomerRow[] = useMemo(
+    () =>
+      (data?.data?.items ?? []).map((c) => ({
+        id: Number(c.id),
+        name: String(c.name ?? ""),
+        industry: String(c.company ?? ""),
+        status: String(c.status ?? ""),
+        lead_tier:
+          Array.isArray(c.tags) && c.tags.length > 0 ? String(c.tags[0]) : "unknown",
+        last_activity: String(c.created_at ?? ""),
+        value: String((c as Record<string, unknown>).value ?? "—"),
+      })),
+    [data]
+  );
 
   const table = useReactTable({
     data: items,
@@ -112,7 +123,9 @@ export default function CustomersTablePage() {
                     scope="col"
                     className="px-4 py-3 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold"
                   >
-                    {header.isPlaceholder ? null : header.getContext().renderedValue}
+                    {header.isPlaceholder
+                      ? null
+                      : flexRender(header.column.columnDef.header, header.getContext())}
                   </th>
                 ))
               )}
@@ -130,7 +143,7 @@ export default function CustomersTablePage() {
                 <tr key={row.id} className="border-b hover:bg-muted/40 transition-colors">
                   {row.getVisibleCells().map((cell) => (
                     <td key={cell.id} className="px-4 py-3">
-                      {cell.getValue() as string}
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
                     </td>
                   ))}
                 </tr>

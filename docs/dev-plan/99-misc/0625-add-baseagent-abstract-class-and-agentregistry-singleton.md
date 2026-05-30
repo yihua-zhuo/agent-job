@@ -21,7 +21,7 @@ The CRM system is evolving toward AI-augmented workflows that invoke LLM provide
 ### 1.2 做完后
 
 - **用户视角**：无用户可见变化 — 纯底层架构。
-- **开发者视角**：`from src.agents.registry import registry; agent = registry.get("base")` returns the registered `BaseAgent` instance. `registry.list_agents()` returns `["base"]`. Any new agent can inherit `BaseAgent`, decorate itself with `@registry.register("my_agent")`, and immediately benefit from discoverability and uniform `run()` semantics.
+- **开发者视角**：`from src.agents.registry import registry; agent = registry.get("base")` returns the registered `BaseAgent` instance. `registry.list_agents()` returns `["base"]`. Any new agent can inherit `BaseAgent`, decorate itself with `@registry.register("my_agent")`, and immediately benefit from discoverability and uniform `run()` semantics。
 
 ### 1.3 不做什么（剔除）
 
@@ -31,9 +31,9 @@ The CRM system is evolving toward AI-augmented workflows that invoke LLM provide
 
 ### 1.4 关键 KPI
 
-- [`ruff check src/agents/` →0 errors](file:///Users/yihuazhuo/Desktop/git/github/agent-job)
-- [`PYTHONPATH=src pytest tests/unit/test_base_agent.py -v` → 4 passed](file:///Users/yihuazhuo/Desktop/git/github/agent-job)
-- [`PYTHONPATH=src pytest tests/unit/test_agent_registry.py -v` → 5 passed](file:///Users/yihuazhuo/Desktop/git/github/agent-job)
+- `ruff check src/agents/` → 0 errors — TBD - 待验证
+- `PYTHONPATH=src pytest tests/unit/test_base_agent.py -v` → 4 passed — TBD - 待验证
+- `PYTHONPATH=src pytest tests/unit/test_agent_registry.py -v` → 5 passed — TBD - 待验证
 - `src/agents/base.py` and `src/agents/registry.py` exist with correct public APIs
 
 ---
@@ -59,7 +59,8 @@ N/A — 新建模块
 ### 2.3 缺什么
 
 - [ ] No abstract agent base class with typed `run()` signature and dependency injection points
-- [ ] No centralized registry for agent discovery and lookup- [ ] No `@register` decorator for declarative agent registration
+- [ ] No centralized registry for agent discovery and lookup
+- [ ] No `@register` decorator for declarative agent registration
 - [ ] No singleton guarantee in registry — current design risk of duplicate instances
 - [ ] No unit tests covering agent base class or registry behavior
 
@@ -70,7 +71,7 @@ N/A — 新建模块
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/agents/base.py` | Abstract `BaseAgent` class with `llm`/`db` constructor params and abstract `run(task: str) -> Dict` |
 | `src/agents/registry.py` | Singleton `AgentRegistry` with `@register(name)` decorator, `get(name)`, and `list_agents()` |
 | `tests/unit/test_base_agent.py` | Unit tests: instantiation, abstract method raises `NotImplementedError`, type hints |
@@ -86,7 +87,9 @@ N/A — 新建模块
 
 - **Abstract class**：`BaseAgent(ABC)` in `src/agents/base.py` — constructor accepts `llm: Any` and `db: AsyncSession`; defines `@abstractmethod run(task: str) -> Dict`
 - **Singleton**：`AgentRegistry` in `src/agents/registry.py` — module-level singleton; `@register(name)` class decorator; `get(name: str) -> BaseAgent`; `list_agents() -> list[str]`
-- **Registration**：module-level `registry = AgentRegistry()` instance; `BaseAgent` subclasses in `src/agents/` auto-register via decorator---
+- **Registration**：module-level `registry = AgentRegistry()` instance; `BaseAgent` subclasses in `src/agents/` auto-register via decorator
+
+---
 
 ## 4. 设计决策与已知坑
 
@@ -137,7 +140,7 @@ class BaseAgent(ABC):
         raise NotImplementedError("Subclasses must implement run()")
 ```
 
-**完成判定**：`ls src/agents/base.py` exists / `ruff check src/agents/base.py` →0 errors
+**完成判定**：`ls src/agents/base.py` exists / `ruff check src/agents/base.py` → 0 errors
 
 ### Step 2: Create `src/agents/registry.py` with `AgentRegistry`
 
@@ -170,7 +173,8 @@ class AgentRegistry:
             raise KeyError(f"Agent '{name}' not registered")
         cls = self._agents[name]
         raise TypeError("AgentRegistry.get() requires llm and db args — use get_with_deps()")
-        # stub; real implementation fills in llm/db from outer scope or caller    def list_agents(self) -> List[str]:
+        # stub; real implementation fills in llm/db from outer scope or caller
+    def list_agents(self) -> List[str]:
         return list(self._agents.keys())
 
 registry = AgentRegistry()
@@ -197,9 +201,10 @@ Add `@registry.register("base")` decorator to `BaseAgent` in `src/agents/base.py
 - b) Test 1: `BaseAgent` cannot be instantiated directly (is abstract)
 - c) Test 2: subclass without `run()` raises `TypeError` at instantiation
 - d) Test 3: subclass with `run()`returns expected dict (mock `llm`/`db`)
-- e) Test 4: `run()` re-raises `NotImplementedError` when called on concrete stub```python
+- e) Test 4: `run()` re-raises `NotImplementedError` when called on concrete stub
+```python
 import pytest
-from unittest.mock.AsyncMock
+from unittest.mock import AsyncMock
 from sqlalchemy.ext.asyncio import AsyncSession
 from src.agents.base import BaseAgent
 
@@ -243,12 +248,14 @@ async def test_llm_and_db_stored():
 - a) Create `tests/unit/test_agent_registry.py`
 - b) Test1: `registry` is same object on repeated imports (singleton)
 - c) Test 2: `register` decorator stores class under given name
-- d) Test 3: `get` raises `KeyError` for unknown agent- e) Test 4: `get` returns instance with llm/db passed through
+- d) Test 3: `get` raises `KeyError` for unknown agent
+- e) Test 4: `get` returns instance with llm/db passed through
 - e) Test 5: `list_agents` returns all registered names including "base"
 
 ```python
 import pytest
-from src.agents.registry import AgentRegistry, registry, registerfrom src.agents.base import BaseAgent
+from src.agents.registry import AgentRegistry, registry
+from src.agents.base import BaseAgent
 
 class TestAgent(BaseAgent):
     async def run(self, task: str):
@@ -291,7 +298,7 @@ async def test_list_agents_includes_base():
 ### Step 6: Final lint check
 
 操作：
-- a) Run `ruff check src/agents/` —0 errors
+- a) Run `ruff check src/agents/` — 0 errors
 - b) Run `ruff check tests/unit/test_base_agent.py tests/unit/test_agent_registry.py` — 0 errors
 - c) Run `ruff format --check src/agents/ tests/unit/test_base_agent.py tests/unit/test_agent_registry.py` — all pass
 

@@ -6,7 +6,7 @@
 | 分类 | 99-misc |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [Add ChatService abstraction #614](../99-misc/0614-add-chatservice-abstraction.md) |
+| 依赖 | [Add ChatService abstraction #614](./0614-add-chatservice-with-intent-classification-and-db-query-help.md) |
 | 启用后赋能 | 父 issue #43 AI Chat Assistant 功能 |
 | 状态 | 📋 待开始 |
 
@@ -44,7 +44,7 @@ Issue #43 的父 issue 要求提供 AI 对话功能。当前的 `src/api/routers
 ### 2.1 现有实现
 
 主入口 — `AIService.list_conversations` 已实现会话列表查询：
-[`src/services/ai_service.py`](../../src/services/ai_service.py) L63-L92
+[`src/services/ai_service.py`](../../../src/services/ai_service.py) L63-L92
 
 ```python
 63:    async def list_conversations(
@@ -80,7 +80,7 @@ Issue #43 的父 issue 要求提供 AI 对话功能。当前的 `src/api/routers
 ```
 
 已有 `ChatRequest` + `ChatResponse` Pydantic 模型（无新建需求）：
-[`src/models/ai.py`](../../src/models/ai.py) L8-L25
+[`src/models/ai.py`](../../../src/models/ai.py) L8-L25
 
 ```python
  8:class ChatRequest(BaseModel):
@@ -98,7 +98,7 @@ Issue #43 的父 issue 要求提供 AI 对话功能。当前的 `src/api/routers
 ```
 
 现有 `ai_router` 中的 `POST /chat` 需要两次请求（先 create conversation，再 send）：
-[`src/api/routers/ai.py`](../../src/api/routers/ai.py) L73-L108
+[`src/api/routers/ai.py`](../../../src/api/routers/ai.py) L73-L108
 
 ```python
 73:@ai_router.post("/chat")
@@ -157,7 +157,7 @@ Issue #43 的父 issue 要求提供 AI 对话功能。当前的 `src/api/routers
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/api/routers/ai_chat.py` | 新路由：POST /ai/chat（一步完成聊天）和 GET /ai/sessions（分页会话列表） |
 | `tests/unit/test_ai_chat_router.py` | 单元测试：验证端点响应格式、错误处理、auth 校验 |
 | `tests/integration/test_ai_chat_integration.py` | 集成测试：真实 DB 场景，验证 router 与 service 联动 |
@@ -422,7 +422,7 @@ gh pr create --base master --title "feat(ai): add POST /ai/chat and GET /ai/sess
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/ai.py`](../../src/api/routers/ai.py) — `POST /chat` 现有实现（复用其 `_success` / `_paginated_response` 辅助函数和 AIService 调用模式）
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) — 分页端点的标准模式（Query 参数、_paginated 辅助函数）
+- 同类参考实现：[`src/api/routers/ai.py`](../../../src/api/routers/ai.py) — `POST /chat` 现有实现（复用其 `_success` / `_paginated_response` 辅助函数和 AIService 调用模式）
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — 分页端点的标准模式（Query 参数、_paginated 辅助函数）
 - 父 issue / 关联：#43（AI Chat Assistant 父 issue）
 - 依赖 issue：#614（Add ChatService abstraction — 提供 service 层抽象，本板块在其完成后替换 AIService import）

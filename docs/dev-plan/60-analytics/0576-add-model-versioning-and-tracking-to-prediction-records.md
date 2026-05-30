@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [0575-add-churn-prediction-model-and-records](../50-automation/0575-add-churn-prediction-model-and-records.md) |
+| 依赖 | TBD - 待验证：迁移自 #575，需确认 0575 文档在 50-automation 目录中的正确文件名 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -86,7 +86,7 @@ TBD - 待验证：`src/api/routers/churn.py` or equivalent — if a router expos
 
 | 路径 | 改动要点 |
 |------|---------|
-| `src/db/models/churn_prediction.py` | Add `model_name: Mapped[str]`, `model_version: Mapped[str]`, `training_data_start_date: Mapped[datetime \| None]` columns; add index on `(model_name, model_version)` |
+| `src/db/models/churn_prediction.py` | Add `model_name: Mapped[str]`, `model_version: Mapped[str]`, `training_data_start_date: Mapped[datetime | None]` columns; add index on `(model_name, model_version)` |
 | `src/services/churn_prediction_service.py` (or batch job file) | Call `ChurnModelService.get_current_model()` and stamp prediction records with version fields |
 | `tests/unit/test_churn_prediction.py` | Add test cases for new columns |
 | `tests/integration/test_churn_prediction_integration.py` | Add test cases asserting columns are persisted correctly |
@@ -381,7 +381,7 @@ gh pr create --base master --title "feat(#576): add model versioning and trackin
 
 ## 9. 参考
 
-- Parent / 关联：#51 (analytics foundation parent), #575 (churn prediction model and records)
+- Parent / 关联：#51 (analytics foundation parent), TBD - 待验证：#575 对应的文件名，确认是否已实现及所在目录
 - SQLAlchemy async: `select(ModelVersion).order_by(desc(ModelVersion.trained_at)).limit(1)` pattern for "latest per group"
 - Alembic JSONB: see CLAUDE.md §4.4 Known Gotchas — always verify `timezone=True` on DateTime and `JSONB` not `JSON` after autogenerate
 

@@ -47,7 +47,7 @@ N/A — 新建模块
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/main.py`](../../src/main.py) — register `analytics_router` and `reports_router` under `/analytics` and `/reports` prefixes
+  - [`src/main.py`](../../../src/main.py) — register `analytics_router` and `reports_router` under `/analytics` and `/reports` prefixes
 - 要建：
   - `src/api/routers/analytics.py` — analytics router with standard session/auth injection pattern
   - `src/api/routers/reports.py` — reports router with standard session/auth injection pattern
@@ -76,7 +76,7 @@ N/A — 新建模块
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | Import and register `analytics_router` and `reports_router` with `app.include_router()` under `/analytics` and `/reports` prefixes |
+| [`src/main.py`](../../../src/main.py) | Import and register `analytics_router` and `reports_router` with `app.include_router()` under `/analytics` and `/reports` prefixes |
 
 ### 3.3 新增能力
 

@@ -6,8 +6,8 @@
 | 分类 | [90-frontend](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [#521](../docs/dev-plan/90-frontend/0521-build-workflow-data-models-api-routes.md) |
-| 启用后赋能 | [#524](TBD), [#525](TBD), [#526](TBD) |
+| 依赖 | [#521](0501-build-workflow-data-models-api-routes.md) |
+| 启用后赋能 | #524, #525, #526 — TBD |
 | 状态 | 📋 待开始 |
 
 ---
@@ -49,9 +49,9 @@ N/A — 新建模块 (`src/workflow/editor/` is net-new; this is the first front
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`frontend/src/app/(app)/automation/rules/page.tsx`](../../frontend/src/app/(app)/automation/rules/page.tsx) — embed the new editor at the rules list page or as a sub-route
-  - [`frontend/src/components/layout/app-sidebar.tsx`](../../frontend/src/components/layout/app-sidebar.tsx) — add nav link to `/automation/rules`
-  - [`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) — add RTK Query endpoints for rule fetch/create/update
+  - `frontend/src/app/(app)/automation/rules/page.tsx` — TBD - 待验证：确认前端页面实际路径
+  - [`frontend/src/components/layout/app-sidebar.tsx`](../../../frontend/src/components/layout/app-sidebar.tsx) — add nav link to `/automation/rules`
+  - [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) — add RTK Query endpoints for rule fetch/create/update
 - 要建：
   - `frontend/src/workflow/editor/Canvas.tsx` — root React Flow canvas with pan/zoom/grid
   - `frontend/src/workflow/editor/NodePalette.tsx` — draggable node type sidebar
@@ -102,9 +102,9 @@ N/A — 新建模块 (`src/workflow/editor/` is net-new; this is the first front
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`frontend/src/app/(app)/automation/rules/page.tsx`](../../frontend/src/app/(app)/automation/rules/page.tsx) | Replace static rule list or inject `<WorkflowEditor ruleId={id}>` on the editor route |
-| [`frontend/src/components/layout/app-sidebar.tsx`](../../frontend/src/components/layout/app-sidebar.tsx) | Add `<Link href="/automation/rules/new">` entry to Automation section |
-| [`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) | Add `useGetRule`, `useUpdateRule` RTK Query endpoints wired to `/automation/rules/:id` |
+| `frontend/src/app/(app)/automation/rules/page.tsx` | TBD - 待验证：确认前端页面实际路径 |
+| [`frontend/src/components/layout/app-sidebar.tsx`](../../../frontend/src/components/layout/app-sidebar.tsx) | Add `<Link href="/automation/rules/new">` entry to Automation section |
+| [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) | Add `useGetRule`, `useUpdateRule` RTK Query endpoints wired to `/automation/rules/:id` |
 
 ### 3.3 新增能力
 
@@ -280,7 +280,7 @@ export function NodeWrapper(props: NodeProps<RuleNodeData>) {
 ### Step 6: Integrate into app route and sidebar nav
 
 操作：
-- a) In `frontend/src/app/(app)/automation/rules/page.tsx`, replace the static list (or add a tab/button) to route to `/automation/rules/[id]/page.tsx` where the editor mounts
+- a) In `frontend/src/app/(app)/automation/rules/page.tsx`, replace the static list (or add a tab/button) to route to `/automation/rules/[id]/page.tsx` where the editor mounts — TBD - 待验证：确认前端页面实际路径
 - b) Add to `frontend/src/components/layout/app-sidebar.tsx`:
   ```tsx<SidebarItem href="/automation/rules" label="Automation" icon={<AutomationIcon />} />
   ```
@@ -331,8 +331,10 @@ gh pr create --base master --title "feat(frontend): workflow editor React fronte
 
 ## 9. 参考
 
-- 同类参考实现：[`frontend/src/app/(app)/automation/rules/page.tsx`](../../frontend/src/app/(app)/automation/rules/page.tsx) — existing rules page structure to extend- 同类参考实现：[`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) — existing RTK Query definition pattern to follow
-- `@xyflow/react` docs：[Getting Started](https://reactflow.dev/docs/learn/getting-started/introduction/) — custom nodes, connection line, drag-and-drop from external source- 父 issue：#73
+- 同类参考实现：`frontend/src/app/(app)/automation/rules/page.tsx` — TBD - 待验证：确认前端页面实际路径
+- 同类参考实现：[`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) — existing RTK Query definition pattern to follow
+- `@xyflow/react` docs：[Getting Started](https://reactflow.dev/docs/learn/getting-started/introduction/) — custom nodes, connection line, drag-and-drop from external source
+- 父 issue：#73
 - 依赖 issue / 关联：#521---
 
 ## Changelog

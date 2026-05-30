@@ -6,8 +6,8 @@
 | 分类 | 40-campaigns |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [456 · Add Marketing API Router and wire into main.py](0456-add-marketing-api-router-and-wire-into-main-py.md) |
-| 启用后赋能 | [458 · Add TriggerService with check-triggers and execute-trigger methods](0458-implement-triggerservice-with-check-triggers-and-execute-tri.md) |
+| 依赖 | [456 · Add Marketing API Router and wire into main.py](0456-add-campaign-related-orm-models-enums-and-database-migration.md) |
+| 启用后赋能 | TBD - 待验证：TriggerService 相关设计文档（#458 依赖） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-Issue #450 确立了「营销自动化」板块，其中 MarketingService 是业务逻辑的核心层。目前没有任何 marketing domain service，所有 campaign 数据无法被业务代码操控。缺少这一层，launch/pause/stats 等运营操作无法落地，trigger 引擎也无从消费事件。
+Issue #450确立了「营销自动化」板块，其中 MarketingService 是业务逻辑的核心层。目前没有任何 marketing domain service，所有 campaign 数据无法被业务代码操控。缺少这一层，launch/pause/stats 等运营操作无法落地，trigger 引擎也无从消费事件。
 
 ### 1.2 做完后
 
@@ -116,7 +116,7 @@ TBD - 待验证：`grep -rn "class Campaign" src/db/models/` 或 `grep -rn "clas
 
 1. **Alembic autogenerate 把 JSONB 写成 JSON、把 TIMESTAMPTZ 写成 DateTime** → 规避：migration 生成后手动检查并修正 `sa.JSON()` → `sa.JSONB()`，`DateTime(timezone=True)` 保留 timezone flag。
 2. **SQLAlchemy Base 子类列名 `metadata` 与 `Base.metadata` 冲突** → 规避：所有 event/payload 相关字段命名用 `event_metadata` 或 `payload`，不在 ORM model 中出现裸 `metadata` 列名。
-3. **`async with get_db() as session:` 是错误用法** → 规避：router 层用 `session: AsyncSession = Depends(get_db)`，service 层只接受 constructor 注入的 session。
+3. **`async session` 是错误用法** → 规避：router 层用 `session: AsyncSession = Depends(get_db)`，service 层只接受 constructor 注入的 session。`async with get_db() as session:`规避：router 层用 `session: AsyncSession = Depends(get_db)`，service 层只接受 constructor 注入的 session。
 
 ---
 
@@ -270,8 +270,7 @@ alembic upgrade head && alembic downgrade -1 && alembic upgrade head
 ```
 
 生成文件后检查 `alembic/versions/<id>_create_campaign_and_campaign_event_tables.py`：
-- `campaigns` 表有 `tenant_id` 索引
-- `campaign_events` 表有 `tenant_id`、`campaign_id`、`user_id`、`event_type` 索引
+- `campaigns` 表有 `tenant_id` 索引- `campaign_events` 表有 `tenant_id`、`campaign_id`、`user_id`、`event_type` 索引
 - JSON 列用 `JSONB` 而非 `JSON`
 
 **完成判定**：`alembic upgrade head && alembic downgrade -1 && alembic upgrade head` 三次 exit 0
@@ -320,9 +319,7 @@ class TestCreateCampaign:
 
 ---
 
-## 6. 验收
-
-- [ ] `PYTHONPATH=src ruff check src/services/marketing_service.py` → 0 errors
+## 6. 验收- [ ] `PYTHONPATH=src ruff check src/services/marketing_service.py` → 0 errors
 - [ ] `PYTHONPATH=src ruff check src/db/models/campaign.py src/db/models/campaign_event.py` → 0 errors（如文件存在）
 - [ ] `PYTHONPATH=src mypy src/services/marketing_service.py` → 0 errors
 - [ ] `PYTHONPATH=src pytest tests/unit/test_marketing_service.py -v` → ≥ 10 passed
@@ -372,7 +369,7 @@ gh pr create --base master --title "feat(marketing): implement MarketingService 
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — CRM service 规范范本
-- 同类参考实现：[`src/services/sales_service.py`](../../src/services/sales_service.py) — 多 entity service 模式参考
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — CRM service 规范范本
+- 同类参考实现：[`src/services/sales_service.py`](../../../src/services/sales_service.py) — 多 entity service 模式参考
 - 父 issue / 关联：#450（营销自动化总 issue）、#456（Marketing API Router）
 - 依赖 issue：#456

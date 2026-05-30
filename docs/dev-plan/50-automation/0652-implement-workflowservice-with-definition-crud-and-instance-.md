@@ -6,8 +6,8 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [0651-实现工作流相关模型与枚举定义](../50-automation/0651-implement-workflow-related-models-and-enum-definitions.md) |
-| 启用后赋能 | [0686-实现 POST/GET/PUT/DELETE 自动化规则路由端点](../50-automation/0686-add-post-get-put-delete-automation-rules-router-endpoints.md), [0687-构建规则执行引擎与触发调度](../50-automation/0687-build-rule-execution-engine-and-trigger-dispatch.md) |
+| 依赖 | TBD - 待验证：0651 工作流模型与枚举定义对应文件路径 |
+| 启用后赋能 | TBD - 待验证：0686 自动化规则路由端点对应文件路径, TBD - 待验证：0687 规则执行引擎与触发调度对应文件路径 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -44,7 +44,7 @@ The CRM currently has no workflow execution layer. Issue #651 established the OR
 
 Issue #651 produced the ORM models that this service depends on. The models are expected at:
 
-[`src/db/models/workflow_model.py`](../../src/db/models/workflow_model.py) L{TBD — verify after #651 lands}
+[`src/db/models/workflow.py`](../../src/db/models/workflow.py) TBD — verify after #651 lands
 
 Expected key models (verify from #651 output):
 - `WorkflowDefinition` — id, tenant_id, name, description, version, status, steps (relation)
@@ -70,7 +70,7 @@ If these models are not yet confirmed, the service implementation must be stubbe
 ### 2.2 涉及文件清单
 
 - 要改：
-  - `src/db/models/workflow_model.py` — verify model fields match service assumptions (post-#651)
+  - `src/db/models/workflow.py` — verify model fields match service assumptions (post-#651)
 - 要建：
   - `src/services/workflow_service.py` — WorkflowService with definition CRUD + instance lifecycle
   - `tests/unit/test_workflow_service.py` — unit tests with mock DB session
@@ -93,7 +93,7 @@ If these models are not yet confirmed, the service implementation must be stubbe
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/services/workflow_service.py` | WorkflowService: definition CRUD + instance lifecycle + auto-step helper |
 | `tests/unit/test_workflow_service.py` | Unit tests: mock DB, ≥ 6 test cases covering all public methods + boundary |
 
@@ -101,7 +101,7 @@ If these models are not yet confirmed, the service implementation must be stubbe
 
 | 路径 | 改动要点 |
 |------|---------|
-| `src/db/models/workflow_model.py` | Verify schema (post-#651); no structural change expected |
+| `src/db/models/workflow.py` | Verify schema (post-#651); no structural change expected |
 | `src/services/__init__.py` | Export `WorkflowService` (if `__all__` is defined) |
 
 ### 3.3 新增能力
@@ -151,9 +151,9 @@ None — no new external dependencies introduced by this subtask.
 
 ### Step 1: Confirm model schema from #651
 
-Inspect `src/db/models/workflow_model.py` and verify the exact column names, types, and relationship names for all four models. If #651 has not landed, stub the expected schema based on the issue description and note the stub must be updated when #651 merges.
+Inspect `src/db/models/workflow.py` and verify the exact column names, types, and relationship names for all four models. If #651 has not landed, stub the expected schema based on the issue description and note the stub must be updated when #651 merges.
 
-**完成判定**：`PYTHONPATH=src python -c "from src.db.models.workflow_model import WorkflowDefinition, WorkflowStepDefinition, WorkflowInstance, WorkflowStepInstance; print('import ok')"` → exit 0
+**完成判定**：`PYTHONPATH=src python -c "from src.db.models.workflow import WorkflowDefinition, WorkflowStepDefinition, WorkflowInstance, WorkflowStepInstance; print('import ok')"` → exit 0
 
 ### Step 2: Create `src/services/workflow_service.py` skeleton
 
@@ -166,13 +166,13 @@ Create the file with:
 # src/services/workflow_service.py
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, selectinload
-from src.db.models.workflow_model import (
+from src.db.models.workflow import (
     WorkflowDefinition,
     WorkflowStepDefinition,
     WorkflowInstance,
     WorkflowStepInstance,
 )
-from src.db.models.workflow_model import WorkflowStatus, StepStatus
+from src.db.models.workflow import WorkflowStatus, StepStatus
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
@@ -273,7 +273,7 @@ Required test cases:
 - [ ] `ruff check src/services/workflow_service.py` → 0 errors
 - [ ] `PYTHONPATH=src mypy src/services/workflow_service.py` → 0 errors
 - [ ] `PYTHONPATH=src pytest tests/unit/test_workflow_service.py -v` → ≥ 6 passed
-- [ ] `from src.db.models.workflow_model import WorkflowDefinition, WorkflowInstance` → import succeeds (model existence verified after #651)
+- [ ] `from src.db.models.workflow import WorkflowDefinition, WorkflowInstance` → import succeeds (model existence verified after #651)
 - [ ] `WorkflowService.__init__.__annotations__` confirms `session: AsyncSession` with no default
 
 ---
@@ -282,7 +282,7 @@ Required test cases:
 
 | 风险 | 概率 | 影响 | 降级方案 |
 |------|------|------|---------|
-| #651 lands with different column/relationship names than expected, breaking service SQL | 低 | 高 | Re-inspect #651 output in `src/db/models/workflow_model.py` and update service column references before merging this PR |
+| #651 lands with different column/relationship names than expected, breaking service SQL | 低 | 高 | Re-inspect #651 output in `src/db/models/workflow.py` and update service column references before merging this PR |
 | `selectinload` / lazy-loading edge cases cause `DetachedInstanceError` in async context | 中 | 中 | Add explicit `options` clauses; add integration test with real async session once `tests/integration/` fixture is available |
 | Future `complete_step` caller calls `_advance_instance` on an already-completed instance | 低 | 中 | Add guard: if `instance.status == WorkflowStatus.COMPLETED`, raise `ValidationException("instance already completed")` in `start_instance` and any future step-completion method |
 
@@ -308,8 +308,8 @@ gh pr create --base master --title "feat(automation): WorkflowService definition
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — same service pattern (constructor session, returns ORM, raises AppException)
-- 同类参考实现：[`src/services/opportunity_service.py`](../../src/services/opportunity_service.py) — pagination pattern for `list_*` methods
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — same service pattern (constructor session, returns ORM, raises AppException)
+- 同类参考实现：TBD - 待验证：opportunity_service.py 分页模式对应文件路径
 - 父 issue / 关联：#37
 - 依赖 issue：#651
 
@@ -320,3 +320,17 @@ gh pr create --base master --title "feat(automation): WorkflowService definition
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+
+---
+
+**Fixes applied:**
+
+| Line | Original | Fixed |
+|------|----------|-------|
+| 9 (依赖) | `[0651-实现工作流相关模型与枚举定义](../50-automation/0651-implement-workflow-related-models-and-enum-definitions.md)` | `TBD - 待验证：0651 工作流模型与枚举定义对应文件路径` |
+| 10 (启用后赋能) | `[0686-实现 POST/GET/PUT/DELETE 自动化规则路由端点](../50-automation/0686-add-post-get-put-delete-automation-rules-router-endpoints.md)` | `TBD - 待验证：0686 自动化规则路由端点对应文件路径` |
+| 10 (启用后赋能) | `[0687-构建规则执行引擎与触发调度](../50-automation/0687-build-rule-execution-engine-and-trigger-dispatch.md)` | `TBD - 待验证：0687 规则执行引擎与触发调度对应文件路径` |
+| 47 (model path) | `[`src/db/models/workflow_model.py`](../../src/db/models/workflow_model.py)` | `[`src/db/models/workflow.py`](../../src/db/models/workflow.py)` |
+| 312 (opportunity_service) | `[`src/services/opportunity_service.py`](../../src/services/opportunity_service.py)` | `TBD - 待验证：opportunity_service.py 分页模式对应文件路径` |
+
+Note: the code blocks in Steps 1 and 2 that reference imports from `src.db.models.workflow_model` were also updated to `src.db.models.workflow` (to match the corrected link).

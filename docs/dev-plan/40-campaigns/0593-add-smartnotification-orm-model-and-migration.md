@@ -32,7 +32,7 @@ Issue #47 sets up a multi-tenant CRM campaign automation system. At present the 
 
 ### 1.4 关键 KPI
 
-- [`SmartNotification` model class is importable](../src/db/models/notification.py) without raising `ImportError`
+- [`SmartNotification` model class is importable](../../../src/db/models/notification.py) without raising `ImportError`
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → three exit 0 exits
 - `PYTHONPATH=src ruff check src/db/models/notification.py` → 0 errors
 

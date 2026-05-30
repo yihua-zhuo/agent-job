@@ -6,7 +6,7 @@
 | 分类 | 40-campaigns |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [#637 Add email and SMS delivery integrations](../20-sales/0637-add-email-and-sms-delivery-integrations.md) |
+| 依赖 | [#637 Add email and SMS delivery integrations](../40-campaigns/0637-add-email-and-sms-delivery-integrations.md) |
 | 启用后赋能 | 自动化规则（automation_rules）、线索路由（lead_routing_service）、工作流（workflow_service）均通过 NotificationService 发送通知，本板块完成前这些下游服务无法完整测试 |
 | 状态 | 📋 待开始 |
 
@@ -45,7 +45,7 @@ CRM 需要通知能力以驱动用户参与（engagement）。当前 `Notificati
 
 ### 2.1 现有实现
 
-主入口：[`src/api/routers/notifications.py`](../../src/api/routers/notifications.py) L1-L269
+主入口：[`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) L1-L269
 
 ```python
 1:"""Notifications router — /api/v1/notifications and /api/v1/reminders endpoints.
@@ -65,7 +65,7 @@ CRM 需要通知能力以驱动用户参与（engagement）。当前 `Notificati
 15:notifications_router = APIRouter(prefix="/api/v1", tags=["notifications"])
 ```
 
-Service 层：[`src/services/notification_service.py`](../../src/services/notification_service.py) L1-L208
+Service 层：[`src/services/notification_service.py`](../../../src/services/notification_service.py) L1-L208
 
 已实现方法：
 - `send_notification()` — 写 notifications 表
@@ -77,15 +77,15 @@ Service 层：[`src/services/notification_service.py`](../../src/services/notifi
 - `create_reminder()` / `cancel_reminder()` / `get_reminders()` — 提醒 CRUD
 
 Model 层：
-- [`src/db/models/notification.py`](../../src/db/models/notification.py) — `NotificationModel`，已实现 `to_dict()`
-- [`src/db/models/reminder.py`](../../src/db/models/reminder.py) — `ReminderModel`，已实现 `to_dict()`
+- [`src/db/models/notification.py`](../../../src/db/models/notification.py) — `NotificationModel`，已实现 `to_dict()`
+- [`src/db/models/reminder.py`](../../../src/db/models/reminder.py) — `ReminderModel`，已实现 `to_dict()`
 
-已有单元测试：[`tests/unit/test_notifications_router.py`](../../tests/unit/test_notifications_router.py) — 28 个测试用例，覆盖所有端点 + 无效 tenant 边界情况。
+已有单元测试：[`tests/unit/test_notifications_router.py`](../../../tests/unit/test_notifications_router.py) — 28 个测试用例，覆盖所有端点 + 无效 tenant 边界情况。
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/api/routers/notifications.py`](../../src/api/routers/notifications.py) — 清除 L181、L196 的 TODO 注释，实现 preferences 读写至 DB
+  - [`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) — 清除 L181、L196 的 TODO 注释，实现 preferences 读写至 DB
 - 要建：
   - `src/db/models/notification_preferences.py` — 存储用户通知偏好（含 tenant_id multi-tenancy）
   - `alembic/versions/<id>_add_notification_preferences_table.py` — 创建 notification_preferences 表
@@ -113,7 +113,7 @@ Model 层：
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/notifications.py`](../../src/api/routers/notifications.py) | 实现 `get_notification_preferences` / `update_notification_preferences` 读写 `NotificationPreferences` model（消除 TODO） |
+| [`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) | 实现 `get_notification_preferences` / `update_notification_preferences` 读写 `NotificationPreferences` model（消除 TODO） |
 
 ### 3.3 新增能力
 
@@ -424,8 +424,8 @@ gh pr create --base master --title "feat(notifications): add preferences storage
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) — router 中 `session: AsyncSession = Depends(get_db)` 注入模式
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — service 层返回 ORM + 抛异常模式
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — router 中 `session: AsyncSession = Depends(get_db)` 注入模式
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service 层返回 ORM + 抛异常模式
 - 父 issue：#39
 - 依赖 issue：#637（email/SMS delivery）
 

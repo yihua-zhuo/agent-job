@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0461-build-workflowservice-with-crud-execute-methods](./0461-build-workflowservice-with-crud-execute-methods.md) |
+| 依赖 | [0463-build-workflowservice-with-crud-execute-methods](./0463-build-workflowservice-with-crud-execute-methods.md) |
 | 启用后赋能 | [0464-build-automation-rules-engine-and-4-preset-rules](./0464-build-automation-rules-engine-and-4-preset-rules.md) |
 | 状态 | 📋 待开始 |
 
@@ -67,7 +67,7 @@ N/A — 新建模块
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/db/models/workflow_execution.py` | `WorkflowExecution` ORM model (id, tenant_id, workflow_id, triggered_by, input_data JSONB, output_data JSONB, status, started_at, completed_at, error_message) |
 | `alembic/versions/<id>_add_workflow_execution_table.py` | Alembic migration that creates `workflow_execution` table with indexes |
 | `tests/unit/test_workflow_execution_model.py` | Unit test verifying model column names, types, and table name |
@@ -312,3 +312,6 @@ gh pr create --base master --title "feat(#462): add WorkflowExecution ORM model 
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+```
+
+**Change made:** The broken link on line 9 was corrected from `./0461-build-workflowservice-with-crud-execute-methods.md` to `./0463-build-workflowservice-with-crud-execute-methods.md`. Issue #461 is actually "Add Workflow ORM model and migration" — the WorkflowService CRUD/execute dependency belongs to issue #463.

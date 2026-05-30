@@ -6,7 +6,7 @@
 | 分类 | 10-customers |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [#585 客户评分系统基础](../50-automation/0585-add-score-tier-and-bulk-recalculation-to-customers.md) |
+| 依赖 | [#585 客户评分系统基础](../60-analytics/0585-integrate-ai-agent-framework-for-enhanced-scoring-factors.md) |
 | 启用后赋能 | 20-sales (销售可按热度筛选客户), 30-tickets (ticket可基于参与度触发) |
 | 状态 | 📋 待开始 |
 
@@ -43,16 +43,16 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) L{1}-L{50}
+主入口：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) L{1}-L{50}
 
 TBD - 待验证：确认现有 `GET /customers/` 签名和 `CustomerService.list_customers()` 方法是否存在（预期位于 src/api/routers/customers.py 和 src/services/customer_service.py）
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/api/routers/customers.py`](../../src/api/routers/customers.py) — 新增 `lead_tier` 和 `order_by_score` query 参数，透传给 service
-  - [`src/services/customer_service.py`](../../src/services/customer_service.py) — `list_customers` 方法新增筛选/排序逻辑
-  - [`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — 新增 unit test cases for lead_tier filter + order_by_score
+  - [`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — 新增 `lead_tier` 和 `order_by_score` query 参数，透传给 service
+  - [`src/services/customer_service.py`](../../../src/services/customer_service.py) — `list_customers` 方法新增筛选/排序逻辑
+  - [`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — 新增 unit test cases for lead_tier filter + order_by_score
 - 要建：
   - `src/api/routers/events.py` — 新增 `POST /events/engagement` webhook endpoint
   - `tests/integration/test_engagement_webhook_integration.py` — webhook + score recal集成测试
@@ -82,9 +82,9 @@ TBD - 待验证：确认现有 `GET /customers/` 签名和 `CustomerService.list
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/customers.py`](../../src/api/routers/customers.py) | `GET /` 新增 `lead_tier: str | None` / `order_by_score: bool = False` query params |
-| [`src/services/customer_service.py`](../../src/services/customer_service.py) | `list_customers` 支持 `lead_tier` 过滤和 `order_by_score` DESC 排序 |
-| [`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) | 新增 4 个 unit cases：hot filter, warm filter, cold filter, order_by_score |
+| [`src/api/routers/customers.py`](../../../src/api/routers/customers.py) | `GET /` 新增 `lead_tier: str | None` / `order_by_score: bool = False` query params |
+| [`src/services/customer_service.py`](../../../src/services/customer_service.py) | `list_customers` 支持 `lead_tier` 过滤和 `order_by_score` DESC 排序 |
+| [`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) | 新增 4 个 unit cases：hot filter, warm filter, cold filter, order_by_score |
 
 ### 3.3 新增能力
 
@@ -235,7 +235,7 @@ async def create_engagement_event(
     return {"success": True, "data": {"customer_id": body.customer_id, "new_score": new_score}}
 ```
 
-在 [`src/main.py`](../../src/main.py) 中注册新 router（查找 `APIRouter` 导入段，添加 `include_router` 行）：
+在 [`src/main.py`](../../../src/main.py) 中注册新 router（查找 `APIRouter` 导入段，添加 `include_router` 行）：
 
 ```python
 from api.routers.events import router as events_router
@@ -387,7 +387,7 @@ gh pr create --base master --title "feat(#586): add lead tier filter + auto-rank
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) —现有 list + filter逻辑- 父 issue /关联：#49, #585-父 issue / 关联：#586（本案）
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) —现有 list + filter逻辑- 父 issue /关联：#49, #585-父 issue / 关联：#586（本案）
 
 ---
 

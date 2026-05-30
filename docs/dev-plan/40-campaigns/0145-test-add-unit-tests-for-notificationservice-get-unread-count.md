@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/notification_service.py`](../../src/services/notification_service.py) L128-L139
+主入口：[`src/services/notification_service.py`](../../../src/services/notification_service.py) L128-L139
 
 ```python
 128:139:src/services/notification_service.py
@@ -259,8 +259,8 @@ gh pr create --base master --title "test: add get_unread_count unit test for Not
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_activity_service.py`](../../tests/unit/test_activity_service.py) —同样采用 `MockState` + `make_mock_session` fixture pattern，服务层 async 方法的单元测试标准模板
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — `MagicMock` session + `AsyncMock` execute 的轻量 mock模式
+- 同类参考实现：[`tests/unit/test_activity_service.py`](../../../tests/unit/test_activity_service.py) —同样采用 `MockState` + `make_mock_session` fixture pattern，服务层 async 方法的单元测试标准模板
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — `MagicMock` session + `AsyncMock` execute 的轻量 mock模式
 - 父 issue / 关联：#145
 
 ---

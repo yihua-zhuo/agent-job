@@ -9,7 +9,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [0685-implement-automationrule-service](../50-automation/0685-implement-automationrule-service.md) |
+| 启用后赋能 | [0685-implement-ruleservice-with-crud-operations](../50-automation/0685-implement-ruleservice-with-crud-operations.md) |
 | 状态 | 📋 待开始 |
 
 ---
@@ -27,7 +27,8 @@
 
 ### 1.3 不做什么（剔除）
 
-- [ ] 不实现完整的调度器（APScheduler / Celery）；在 `ChurnService` 提供同步入口方法，由 cron / 调用方自行按需调度- [ ] 不接入真实通知渠道（NotificationService stub，即 `pass`；真实集成依赖 #47）
+- [ ] 不实现完整的调度器（APScheduler / Celery）；在 `ChurnService` 提供同步入口方法，由 cron / 调用方自行按需调度
+- [ ] 不接入真实通知渠道（NotificationService stub，即 `pass`；真实集成依赖 #47）
 - [ ] 不创建 REST API router（路由属于下游 #673 板块）
 
 ### 1.4 关键 KPI
@@ -48,7 +49,7 @@ N/A — 新建模块。`src/services/churn_service.py` 和 `src/db/models/churn_
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/main.py`](../../src/main.py) — 在 `ensure_engine()` 后注册 `ChurnService` 的调度初始化钩子（可选，按需）
+  - [`src/main.py`](../../../src/main.py) — 在 `ensure_engine()` 后注册 `ChurnService` 的调度初始化钩子（可选，按需）
 - 要建：
   - `src/db/models/churn_alert.py` — `ChurnAlertModel` ORM 模型，对应 `churn_alerts` 表
   - `src/services/churn_service.py` — `ChurnService`：查询高风险客户 → 创建预警记录 → 调用 NotificationService stub
@@ -59,7 +60,8 @@ N/A — 新建模块。`src/services/churn_service.py` 和 `src/db/models/churn_
 
 - [ ] 无 `ChurnAlertModel` ORM 模型 — 无法持久化预警记录
 - [ ] 无 `ChurnService` — 无业务逻辑将分数阈值与预警创建关联
-- [ ] 无 Alembic migration — `churn_alerts` 表未创建- [ ] `get_high_risk_customers` 只是返回列表，并未在 DB 中留下"已预警"痕迹
+- [ ] 无 Alembic migration — `churn_alerts` 表未创建
+- [ ] `get_high_risk_customers` 只是返回列表，并未在 DB 中留下"已预警"痕迹
 - [ ] 无幂等性控制 — 若不加去重，重复调用会产生重复预警记录
 
 ---
@@ -79,7 +81,7 @@ N/A — 新建模块。`src/services/churn_service.py` 和 `src/db/models/churn_
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | 可选：若要自动触发预警，可在 lifespan add startup hook 里调用 `ChurnService.check_all_customers`；暂无需改 |
+| [`src/main.py`](../../../src/main.py) | 可选：若要自动触发预警，可在 lifespan add startup hook 里调用 `ChurnService.check_all_customers`；暂无需改 |
 
 ### 3.3 新增能力
 
@@ -279,7 +281,7 @@ class ChurnService:
         if await self._alert_exists_today(customer_id, tenant_id):
             return None
 
- alert = ChurnAlertModel(
+        alert = ChurnAlertModel(
             tenant_id=tenant_id,
             customer_id=customer_id,
             score=score,
@@ -325,7 +327,9 @@ class ChurnService:
 
 - b) `ruff format src/services/churn_service.py`
 
-**完成判定**：`ruff check src/services/churn_service.py` → 0 errors；`ruff format --check src/services/churn_service.py` → pass---
+**完成判定**：`ruff check src/services/churn_service.py` → 0 errors；`ruff format --check src/services/churn_service.py` → pass
+
+---
 
 ### Step 4: 创建 `tests/unit/test_churn_service.py`
 
@@ -426,10 +430,10 @@ gh pr create --base master --title "feat(#674): wire early warning alert on scor
 
 ## 9. 参考
 
-- `ChurnPredictionService`（现有）：[`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) L49-L268
-- `NotificationService`（复用）：[`src/services/notification_service.py`](../../src/services/notification_service.py) L23-L47
-- ORM 参考模型：[`src/db/models/notification.py`](../../src/db/models/notification.py) L11-L40
--依赖板块（#673）：尚无板块文档，需后续下游 #673 创建 router 后方可暴露 REST endpoint
+- `ChurnPredictionService`（现有）：[`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) L49-L268
+- `NotificationService`（复用）：[`src/services/notification_service.py`](../../../src/services/notification_service.py) L23-L47
+- ORM 参考模型：[`src/db/models/notification.py`](../../../src/db/models/notification.py) L11-L40
+- 依赖板块（#673）：尚无板块文档，需后续下游 #673 创建 router 后方可暴露 REST endpoint
 - 父 issue：#35
 
 ---

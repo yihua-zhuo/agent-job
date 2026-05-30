@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [自动化 · 实现基础节点接口与引擎调度循环](./0517-implement-base-node-interface-and-engine-scheduling-loop.md) |
+| 依赖 | [自动化 · 实现 DAG 执行引擎核心](./0517-implement-dag-execution-engine-core.md) |
 | 启用后赋能 | 自动化 · 实现 Action 与终态节点类型, 自动化 · 实现循环与子流程节点类型 |
 | 状态 | 📋 待开始 |
 

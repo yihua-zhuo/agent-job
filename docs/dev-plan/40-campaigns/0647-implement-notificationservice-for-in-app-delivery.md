@@ -6,8 +6,8 @@
 | 分类 | 40-campaigns |
 | 优先级 | 推荐 |
 | 工作量 | 2 工作日 |
-| 依赖 | [板块名](../50-automation/0646-implement-notification-model-and-preferences-api.md) |
-| 启用后赋能 | [板块名](../60-analytics/...), [板块名](../60-analytics/...) |
+| 依赖 | TBD - 待验证：确认 #646 板块文件路径 |
+| 启用后赋能 | TBD - 待验证：确认赋能 Analytics 板块编号, TBD - 待验证：确认赋能 Analytics 板块编号 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -402,7 +402,7 @@ gh pr create --base master --title "feat(notifications): implement NotificationS
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — service 层模式参考
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service 层模式参考
 - 第三方文档：[FastAPI Dependency Injection](https://fastapi.tiangolo.com/tutorial/dependencies/)
 - 父 issue / 关联：#39, #646
 

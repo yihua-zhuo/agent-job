@@ -45,7 +45,7 @@ Issue #663 is a schema-first subtask of the notification-preferences epic (#646)
 
 N/A — 新建模块。`src/db/models/` currently has no `notification_preference.py`. The `notification.py` sibling file (`src/db/models/notification.py` L1-L40) is the closest reference for naming conventions and `to_dict()` pattern.
 
-主入口（参考实现）：[`src/db/models/notification.py`](../../src/db/models/notification.py) L1-L40
+主入口（参考实现）：[`src/db/models/notification.py`](../../../src/db/models/notification.py) L1-L40
 
 ```python:src/db/models/notification.py
 class NotificationModel(Base):
@@ -64,7 +64,7 @@ class NotificationModel(Base):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/db/models/__init__.py`](../../src/db/models/__init__.py) — auto-discovery picks up new model; no explicit change needed, but review to confirm the file is loadable
+  - [`src/db/models/__init__.py`](../../../src/db/models/__init__.py) — auto-discovery picks up new model; no explicit change needed, but review to confirm the file is loadable
 - 要建：
   - `src/db/models/notification_preference.py` — ORM model class `NotificationPreferenceModel`
   - `alembic/versions/<rev>_<slug>.py` — Alembic migration creating the `notification_preferences` table
@@ -93,7 +93,7 @@ class NotificationModel(Base):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/db/models/__init__.py`](../../src/db/models/__init__.py) | No code change required; auto-discovery via `pkgutil.iter_modules` loads the new model automatically |
+| [`src/db/models/__init__.py`](../../../src/db/models/__init__.py) | No code change required; auto-discovery via `pkgutil.iter_modules` loads the new model automatically |
 
 ### 3.3 新增能力
 
@@ -347,9 +347,9 @@ gh pr create --base master --title "model: add NotificationPreferenceModel and m
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/notification.py`](../../src/db/models/notification.py) — `NotificationModel` used as naming and structure template
-- Alembic conventions：[`alembic/versions/b2c3dce4b714_create_all_tables.py`](../../alembic/versions/b2c3dce4b714_create_all_tables.py) — first-create-all-tables migration
-- Auto-discovery mechanism：[`src/db/models/__init__.py`](../../src/db/models/__init__.py) — confirms no explicit export needed
+- 同类参考实现：[`src/db/models/notification.py`](../../../src/db/models/notification.py) — `NotificationModel` used as naming and structure template
+- Alembic conventions：[`alembic/versions/b2c3dce4b714_create_all_tables.py`](../../../alembic/versions/b2c3dce4b714_create_all_tables.py) — first-create-all-tables migration
+- Auto-discovery mechanism：[`src/db/models/__init__.py`](../../../src/db/models/__init__.py) — confirms no explicit export needed
 - 父 issue / 关联：#646
 
 ---

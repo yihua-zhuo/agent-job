@@ -5,7 +5,7 @@
 | 周次 | W20.1 |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [0681-add-opportunity-foreign-key-constraints](./0681-add-opportunity-foreign-key-constraints.md) |
+| 依赖 | TBD - 待验证：文件不存在，请确认 0681 board 文件路径后更新 |
 | 启用后赋能 | [0682-add-deal-comparison-orm-model-and-migration](./0682-add-deal-comparison-orm-model-and-migration.md) — 下游：deal comparison service / API router（待建） |
 | 状态 | 📋 待开始 |
 
@@ -43,14 +43,14 @@ Issue #682 is a subtask of #665 (sales pipeline comparison capabilities). Before
 
 ### 2.1 现有实现
 
-No `deal_comparison` model exists yet. The nearest reference is [`src/db/models/opportunity.py`](../../src/db/models/opportunity.py) L1-L46, which defines the `OpportunityModel` that `deal_comparisons` will FK into. [`src/db/models/ai_conversation.py`](../../src/db/models/ai_conversation.py) L1-L88 provides the canonical pattern for JSONB + FK + composite index in this codebase.
+No `deal_comparison` model exists yet. The nearest reference is [`src/db/models/opportunity.py`](../../../src/db/models/opportunity.py) L1-L46, which defines the `OpportunityModel` that `deal_comparisons` will FK into. [`src/db/models/ai_conversation.py`](../../../src/db/models/ai_conversation.py) L1-L88 provides the canonical pattern for JSONB + FK + composite index in this codebase.
 
 主入口：N/A — 新建模块
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`alembic/env.py`](../../alembic/env.py) — already has `import db.models` at L14; the new model in `src/db/models/deal_comparison.py` is auto-discovered via pkgutil, no change needed.
+  - [`alembic/env.py`](../../../alembic/env.py) — already has `import db.models` at L14; the new model in `src/db/models/deal_comparison.py` is auto-discovered via pkgutil, no change needed.
 - 要建：
   - `src/db/models/deal_comparison.py` — ORM model
   - `alembic/versions/<id>_create_deal_comparisons_table.py` — Alembic migration
@@ -81,8 +81,8 @@ No `deal_comparison` model exists yet. The nearest reference is [`src/db/models/
 
 | 路径 | 改动要点 |
 |------|---------|
-| TBD - 待补充：无修改文件 | [`alembic/env.py`](../../alembic/env.py) already has `import db.models` on L14 — auto-discovers new models via pkgutil, no change needed |
-| TBD - 待补充：无修改文件 | [`src/db/models/__init__.py`](../../src/db/models/__init__.py) auto-imports all model modules via pkgutil; no change needed |
+| TBD - 待补充：无修改文件 | [`alembic/env.py`](../../../alembic/env.py) already has `import db.models` on L14 — auto-discovers new models via pkgutil, no change needed |
+| TBD - 待补充：无修改文件 | [`src/db/models/__init__.py`](../../../src/db/models/__init__.py) auto-imports all model modules via pkgutil; no change needed |
 
 ### 3.3 新增能力
 
@@ -455,12 +455,12 @@ git push
 
 ## 9. 参考
 
-- ORM model reference：[`src/db/models/opportunity.py`](../../src/db/models/opportunity.py) L1-L46
-- JSONB + FK pattern：[`src/db/models/ai_conversation.py`](../../src/db/models/ai_conversation.py) L1-L88
-- Example migration：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L1-L59
-- Alembic env（auto-discovers models）：[`alembic/env.py`](../../alembic/env.py) L14
-- Unit test pattern：[`tests/unit/conftest.py`](../../tests/unit/conftest.py) — MockRow / MockResult
-- Upstream dependency：[`0681-add-opportunity-foreign-key-constraints`](./0681-add-opportunity-foreign-key-constraints.md)
+- ORM model reference：[`src/db/models/opportunity.py`](../../../src/db/models/opportunity.py) L1-L46
+- JSONB + FK pattern：[`src/db/models/ai_conversation.py`](../../../src/db/models/ai_conversation.py) L1-L88
+- Example migration：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L1-L59
+- Alembic env（auto-discovers models）：[`alembic/env.py`](../../../alembic/env.py) L14
+- Unit test pattern：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — MockRow / MockResult
+- Upstream dependency：TBD - 待验证：文件不存在，请确认 0681 board 文件路径后更新
 - Parent issue：[`#665`](https://github.com/.../issues/665) — 父 issue
 
 ---

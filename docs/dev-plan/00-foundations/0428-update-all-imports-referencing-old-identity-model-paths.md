@@ -265,7 +265,7 @@ gh pr create --base master --title "refactor(#428): update identity model import
 ## 9. 参考
 
 - 同类参考实现：[统一 Identity ORM 模型结构 #427](../70-platform/0427-consolidate-existing-identity-orm-models-into-src-db-models-.md)
-- 父 issue：[实现 Identity 模型层 #270](../../README.md)
+- 父 issue：[实现 Identity 模型层 #270](../README.md)
 - 依赖前置：[统一 Identity ORM 模型结构 #427](../70-platform/0427-consolidate-existing-identity-orm-models-into-src-db-models-.md)
 
 ---
@@ -275,3 +275,9 @@ gh pr create --base master --title "refactor(#428): update identity model import
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+```
+
+**Changes made (2):**
+
+- **Line 6**: `../../README.md` → `../README.md` — `docs/dev-plan/00-foundations/` is one level deep under `docs/dev-plan/`, so the README is at `../README.md` (one `..` up), not two.
+- **Line 268**: `../../README.md` → `../README.md` — same fix; both links had the identical path error.

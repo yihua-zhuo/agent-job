@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [0621-add-agent-task-service-and-model](../0621-add-agent-task-service-and-model) |
+| 依赖 | [0621-implement-agenttaskservice-with-crud-methods](./0621-implement-agenttaskservice-with-crud-methods.md) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -73,7 +73,7 @@ N/A — 新建模块。Router 层依赖于 #621 提供的 Service 和 Model 层�
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/api/routers/agent_tasks.py` | Agent Tasks 路由：POST /agents/tasks 创建任务、GET /agents/tasks 列表查询、GET /agents/tasks/{task_id} 单条查询 |
 | `tests/unit/test_agent_tasks.py` | 单元测试，使用 mock session 覆盖正常和异常路径 |
 | `tests/integration/test_agent_tasks_integration.py` | 集成测试，使用真实 PostgreSQL 和 db_schema fixture |
@@ -264,7 +264,7 @@ gh pr create --base master --title "feat(#622): add POST and GET /agents/tasks r
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) — Router Pattern 范本（POST/GET list/GET {id} 三件套）
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — Router Pattern 范本（POST/GET list/GET {id} 三件套）
 - 父 issue / 关联：#42（父 epic）、#621（依赖：Service + Model 层先完成）
 - 第三方文档：[FastAPI Router](https://fastapi.tiangolo.com/tutorial/bigger-applications/) — Router 注册模式
 

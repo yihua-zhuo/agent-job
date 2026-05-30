@@ -6,7 +6,7 @@
 | 分类 | 90-frontend |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [构建分析 API 端点](040-automation/0540-build-analytics-api-endpoints-for-reports.md) |
+| 依赖 | [构建分析 API 端点](60-analytics/0540-add-analytics-api-endpoints-and-service-wiring.md) |
 | 启用后赋能 | 分析数据可视化（#56 子任务后续），全栈功能入口 |
 | 状态 | 📋 待开始 |
 

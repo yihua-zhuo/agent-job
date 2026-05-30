@@ -41,9 +41,9 @@
 
 ### 2.1 现有实现
 
-[`src/services/workflow_service.py`](../../src/services/workflow_service.py) L1-L227 — 已实现全部 9 个 public 方法 + 2 个 private helper，ORM 模型为 `WorkflowModel` 与 `WorkflowExecutionModel`（`src/db/models/workflow.py`）。
+[`src/services/workflow_service.py`](../../../src/services/workflow_service.py) L1-L227 — 已实现全部 9 个 public 方法 + 2 个 private helper，ORM 模型为 `WorkflowModel` 与 `WorkflowExecutionModel`（`src/db/models/workflow.py`）。
 
-[`src/db/models/workflow.py`](../../src/db/models/workflow.py) L12-L76 — 两个模型均含 `tenant_id`、`id`、`to_dict()` 方法。
+[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) L12-L76 — 两个模型均含 `tenant_id`、`id`、`to_dict()` 方法。
 
 ```python
 # workflow_service.py L19-51 — constructor + create_workflow
@@ -108,8 +108,8 @@ class WorkflowService:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/unit/conftest.py`](../../tests/unit/conftest.py) | 新增 `workflow_handler` 函数（注册到 `DOMAIN_HANDLERS` 映射，供 `make_mock_session` 调用） |
-| [`src/services/__init__.py`](../../src/services/__init__.py) | 确认 `WorkflowService` 已导出（如有 `__all__`，追加） |
+| [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) | 新增 `workflow_handler` 函数（注册到 `DOMAIN_HANDLERS` 映射，供 `make_mock_session` 调用） |
+| [`src/services/__init__.py`](../../../src/services/__init__.py) | 确认 `WorkflowService` 已导出（如有 `__all__`，追加） |
 
 ### 3.3 新增能力
 
@@ -379,8 +379,8 @@ gh pr create --base master --title "feat(automation): add WorkflowService unit t
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_pipeline_service.py`](../../tests/unit/test_pipeline_service.py) — 相同 mock DB 模式（`MockState` + `make_mock_session` + domain handler）
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — service 测试中 `pytest.raises(NotFoundException)` 的标准写法
+- 同类参考实现：[`tests/unit/test_pipeline_service.py`](../../../tests/unit/test_pipeline_service.py) — 相同 mock DB 模式（`MockState` + `make_mock_session` + domain handler）
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — service 测试中 `pytest.raises(NotFoundException)` 的标准写法
 - 父 issue / 关联：#449（Workflow 子系统总览）
 - 依赖 issue：#462（上游 service 基础实现）
 

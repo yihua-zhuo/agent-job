@@ -110,7 +110,7 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
   return (
     <aside
       className={cn(
-        "flex h-screen flex-col border-r bg-sidebar transition-all duration-200",
+        "flex h-screen flex-col border-r bg-background transition-all duration-200",
         collapsed ? "w-[4rem]" : "w-[14rem]"
       )}
     >

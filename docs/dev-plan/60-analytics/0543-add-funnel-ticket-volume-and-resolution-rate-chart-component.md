@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 1.5 工作日 |
-| 依赖 | [analytics-dashboard-api-endpoints](../50-automation/0542-add-analytics-dashboard-api-endpoints.md) |
+| 依赖 | TBD - 待验证：`../50-automation/0542-add-analytics-dashboard-api-endpoints.md` — 请确认文件是否存在及正确路径 |
 | 启用后赋能 | [父板块：CRM Analytics Dashboard #56](../README.md#父板块) |
 | 状态 | 📋 待开始 |
 
