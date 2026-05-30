@@ -78,7 +78,7 @@ class NotificationService:
         page: int = 1,
         page_size: int = 20,
     ) -> tuple[list[NotificationModel], int]:
-        """获取用户通知列表"""
+        """Fetch paginated notification list for a user."""
         user_check = await self.session.execute(
             select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
@@ -105,7 +105,7 @@ class NotificationService:
         return result.scalars().all(), total
 
     async def mark_as_read(self, notification_id: int, tenant_id: int) -> NotificationModel:
-        """标记通知已读"""
+        """Mark a notification as read."""
         result = await self.session.execute(
             select(NotificationModel).where(
                 and_(
@@ -123,7 +123,7 @@ class NotificationService:
         return notification
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int) -> dict:
-        """标记所有通知已读"""
+        """Mark all unread notifications as read for a user."""
         user_check = await self.session.execute(
             select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
@@ -145,7 +145,7 @@ class NotificationService:
         return {"marked_count": marked_count}
 
     async def delete_notification(self, notification_id: int, tenant_id: int) -> NotificationModel:
-        """删除通知"""
+        """Delete a notification."""
         result = await self.session.execute(
             select(NotificationModel).where(
                 and_(
@@ -200,7 +200,7 @@ class NotificationService:
         related_type: str | None = None,
         related_id: int | None = None,
     ) -> ReminderModel:
-        """创建提醒"""
+        """Create a reminder."""
         if isinstance(remind_at, str):
             remind_at = datetime.fromisoformat(remind_at)
         reminder = ReminderModel(
@@ -218,7 +218,7 @@ class NotificationService:
         return reminder
 
     async def cancel_reminder(self, reminder_id: int, tenant_id: int) -> ReminderModel:
-        """取消提醒"""
+        """Cancel a reminder."""
         result = await self.session.execute(
             select(ReminderModel).where(
                 and_(
@@ -229,7 +229,7 @@ class NotificationService:
         )
         reminder = result.scalar_one_or_none()
         if reminder is None:
-            raise NotFoundException("提醒")
+            raise NotFoundException("Reminder")
         await self.session.execute(
             sql_delete(ReminderModel).where(and_(ReminderModel.id == reminder_id, ReminderModel.tenant_id == tenant_id))
         )
@@ -242,7 +242,7 @@ class NotificationService:
         tenant_id: int,
         upcoming_only: bool = True,
     ) -> tuple[list[ReminderModel], int]:
-        """获取用户的提醒列表"""
+        """Fetch reminders for a user."""
         user_check = await self.session.execute(
             select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )

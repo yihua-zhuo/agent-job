@@ -1452,9 +1452,9 @@ class TestEdgeCases:
     async def test_get_nonexistent_tenant(
         self, api_client: AsyncClient
     ):
-        """Getting info for a non-existent tenant returns 404."""
+        """Cross-tenant access is forbidden before existence check (no tenant enumeration)."""
         resp = await api_client.get("/api/v1/tenants/999999999")
-        assert resp.status_code == 404
+        assert resp.status_code == 403
 
     async def test_list_tenant_users_for_nonexistent_tenant(
         self, api_client: AsyncClient
@@ -1604,9 +1604,9 @@ class TestEdgeCases:
         assert resp2.status_code in (201, 200, 409, 422), f"Body: {resp2.text}"
 
     async def test_get_nonexistent_tenant_returns_404(self, api_client: AsyncClient):
-        """Get a non-existent tenant returns 404."""
+        """Get a non-existent tenant returns 403 (cross-tenant access denied)."""
         resp = await api_client.get("/api/v1/tenants/999999999")
-        assert resp.status_code == 404, f"Body: {resp.text}"
+        assert resp.status_code == 403, f"Body: {resp.text}"
 
     async def test_update_nonexistent_tenant_returns_403(self, api_client: AsyncClient):
         """Updating a tenant you don't own is forbidden (403) before the not-found check runs."""

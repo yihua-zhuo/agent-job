@@ -60,9 +60,9 @@ class TenantService:
         return tenant
 
     async def _fetch_tenant(self, target_tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
+        if requesting_tenant_id > 0 and requesting_tenant_id != target_tenant_id:
+            raise ForbiddenException(f"Access denied to tenant {target_tenant_id}")
         conditions = [TenantModel.id == target_tenant_id]
-        if requesting_tenant_id > 0:
-            conditions.append(TenantModel.id == requesting_tenant_id)
         result = await self.session.execute(select(TenantModel).where(and_(*conditions)))
         tenant = result.scalar_one_or_none()
         if tenant is None or tenant.status == "deleted":
@@ -140,8 +140,6 @@ class TenantService:
         return items, total
 
     async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int = 0) -> "TenantService._TenantStats":
-        if requesting_tenant_id and tenant_id != requesting_tenant_id:
-            raise ForbiddenException(f"Cannot view stats for tenant {tenant_id}")
         tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
         user_count_result = await self.session.execute(
             select(func.count(UserModel.id)).where(UserModel.tenant_id == tenant_id)

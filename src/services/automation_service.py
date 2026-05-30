@@ -16,6 +16,11 @@ from services.task_service import TaskService
 
 logger = logging.getLogger(__name__)
 
+
+def _unimplemented_action(action_type: str, params: dict, key: str) -> dict:
+    logger.warning("%s action is not implemented: %s=%s", action_type, key, params.get(key))
+    return {"type": action_type, "status": "not_implemented", key: params.get(key)}
+
 # Supported trigger events
 TRIGGER_EVENTS: tuple[str, ...] = (
     "ticket.created",
@@ -133,14 +138,11 @@ class AutomationService:
             return {"type": action_type, "status": "created"}
 
         elif action_type == "email.send":
-            logger.warning("email.send action is not implemented: template=%s", params.get("template"))
-            return {"type": action_type, "status": "not_implemented", "template": params.get("template")}
+            return _unimplemented_action(action_type, params, "template")
         elif action_type == "webhook.call":
-            logger.warning("webhook.call action is not implemented: url=%s", params.get("url"))
-            return {"type": action_type, "status": "not_implemented", "url": params.get("url")}
+            return _unimplemented_action(action_type, params, "url")
         elif action_type == "tag.add":
-            logger.warning("tag.add action is not implemented: tag=%s", params.get("tag"))
-            return {"type": action_type, "status": "not_implemented", "tag": params.get("tag")}
+            return _unimplemented_action(action_type, params, "tag")
         elif action_type == "ticket.assign":
             assignee_id = params.get("assignee_id")
             if assignee_id:

@@ -95,6 +95,11 @@ async def get_tenant(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Fetch a tenant by ID.
+
+    Access is scoped to the requesting tenant only (enforced by TenantService);
+    cross-tenant access is not supported at the router layer.
+    """
     service = TenantService(session)
     data = await service.get_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id)
     return {"success": True, "data": data}

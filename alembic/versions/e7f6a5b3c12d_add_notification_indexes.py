@@ -25,7 +25,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column("notifications", Column("channel", String(length=50), nullable=True))
     op.add_column("notifications", Column("template", String(length=255), nullable=True))
-    op.add_column("notifications", Column("params_", JSON(), nullable=True))
+    op.add_column("notifications", Column("params_", JSON(), nullable=True, server_default="{}"))
     op.add_column("notifications", Column("status", String(length=50), nullable=True))
     op.add_column("notifications", Column("priority", String(length=20), nullable=True))
     op.add_column("notifications", Column("delivered_at", DateTime(timezone=True), nullable=True))
@@ -49,7 +49,7 @@ def upgrade() -> None:
     )
     op.execute(text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END WHERE status IS NULL"))
     op.execute(text("UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL"))
-    op.execute(text("UPDATE notifications SET read_at = created_at WHERE is_read = true AND read_at IS NULL AND delivered_at IS NULL"))
+    op.execute(text("UPDATE notifications SET read_at = created_at WHERE is_read = true AND read_at IS NULL"))
     op.execute(text("UPDATE notifications SET priority = 'normal' WHERE priority IS NULL"))
 
     # Phase 3: drop old columns

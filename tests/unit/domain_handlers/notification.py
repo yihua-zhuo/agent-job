@@ -223,6 +223,19 @@ def make_reminder_handler(state):
                 return MockResult([], rowcount=1)
             return MockResult([], rowcount=0)
 
+        if "count(" in sql_text_lower and "from reminders" in sql_text_lower:
+            assert "user_id" in params and "tenant_id" in params, (
+                f"reminder count must bind user_id and tenant_id (got keys: {list(params.keys())})"
+            )
+            tenant_id = params.get("tenant_id")
+            user_id = params.get("user_id")
+            count = sum(
+                1
+                for r in state._reminders.values()
+                if r.get("tenant_id") == tenant_id and r.get("user_id") == user_id
+            )
+            return MockResult([[count]])
+
         if "from reminders" in sql_text_lower and "count" not in sql_text_lower:
             assert "user_id" in params and "tenant_id" in params, (
                 f"list-reminders must bind user_id and tenant_id (got keys: {list(params.keys())})"
