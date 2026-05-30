@@ -7,9 +7,6 @@ Create Date: 2026-05-30 12:12:00.000000
 Drift captured:
 workflow_executions.tenant_id — the ORM model added this column
 (default=0, nullable=False, index=True).  Existing rows get server_default=0.
-
-The composite index ix_workflow_nodes_tenant_id_workflow_id is declared in the
-ORM model WorkflowNodeModel.__table_args__; no migration op is needed for it.
 """
 
 from collections.abc import Sequence

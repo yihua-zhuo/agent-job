@@ -29,7 +29,7 @@ Create the file mirroring the `TaskService`/`CustomerService` pattern. Key decis
 - `AgentTaskModel` has a **required** `task_id: Mapped[str]` column (`String(64)`, unique). Since the service signature takes only `description` and `tenant_id`, generate a `task_id` via `uuid.uuid4().hex[:16]` prefixed with `"atask_"`.
 - `status` defaults to `AgentTaskStatus.PENDING` (`"pending"`) via the column's `server_default`; still pass it explicitly for clarity.
 - `subtasks` defaults to `[]` via `default=list`; pass `[]` explicitly.
-- `created_at`/`updated_at` use `server_default=func.now()` — only pass explicit values if the ORM requires them; otherwise rely on the DB default. Follow `TaskService` which passes explicit `datetime.now(UTC)` timestamps.
+- `created_at`/`updated_at` use `server_default=func.now()` — the service does not pass explicit timestamps; it relies on the DB default and `refresh()` to populate them after the insert.
 
 ```python
 """Agent task service — CRUD via SQLAlchemy ORM."""
@@ -51,15 +51,12 @@ class AgentTaskService:
     async def create_task(self, description: str, tenant_id: int) -> AgentTaskModel:
         if not description or not description.strip():
             raise ValidationException("description cannot be empty")
-        now = datetime.now(UTC)
         task = AgentTaskModel(
             task_id=f"atask_{uuid.uuid4().hex[:16]}",
             tenant_id=tenant_id,
             description=description.strip(),
             status=AgentTaskStatus.PENDING,
             subtasks=[],
-            created_at=now,
-            updated_at=now,
         )
         self.session.add(task)
         await self.session.flush()
@@ -117,15 +114,17 @@ class AgentTaskService:
 
 ---
 
-### Step 2: Update `src/services/__init__.py`
+### Step 2: Verify `AgentTaskService` is importable
 
-Add the export so callers can import `AgentTaskService` from the `services` package:
+`agent_task_service.py` exports itself via `__all__`, so callers can import directly:
 
 ```python
 from services.agent_task_service import AgentTaskService
 ```
 
-**完成判定**: `PYTHONPATH=src ruff check src/services/__init__.py` → 0 errors
+No `__init__.py` modification is needed. Verify the module is loadable:
+
+**完成判定**: `PYTHONPATH=src python -c "from services.agent_task_service import AgentTaskService; print('ok')"` → ok
 
 ---
 
@@ -135,9 +134,12 @@ Create the domain handler following the `customers.py` pattern. This file is aut
 
 The handler must cover:
 - `INSERT INTO agent_tasks` → allocate auto-increment ID, store in `state.agent_tasks`, return `MockResult([MockRow(record)])`
+- `UPDATE agent_tasks SET … WHERE id = ? AND tenant_id = ?` → update in-place, return updated row
 - `SELECT … FROM agent_tasks WHERE id = ? AND tenant_id = ?` → return matching record or `MockResult([])`
-- `SELECT … FROM agent_tasks WHERE tenant_id = ?` (list) → filter by `tenant_id`, apply optional `status`/`date_from`/`date_to` filters, return paginated rows
-- `SELECT count(…) FROM agent_tasks` → return count matching tenant filter
+- `SELECT … FROM agent_tasks WHERE tenant_id = ?` (list) → filter by `tenant_id`, apply optional `status`/`date_from`/`date_to` filters, apply `OFFSET`/`LIMIT` pagination, return rows ordered by `created_at DESC`
+- `SELECT count(…) FROM agent_tasks` → return count matching tenant filter (also respects `status` and date bounds after normalization)
+
+The handler also normalizes SQLAlchemy's numbered bind params (e.g. `created_at_1`, `created_at_2`) by stripping the `_N` suffix and collecting multiple values for the same base name into a list for date-bound filtering.
 
 State key: `state.agent_tasks` (dict mapping `int` id → `dict` record), `state.agent_tasks_next_id` (int, start at 1).
 
@@ -312,6 +314,22 @@ class TestListTasks:
     async def test_returns_empty_for_unknown_tenant(self, service):
         await service.create_task("Task 1", tenant_id=1)
         tasks, total = await service.list_tasks(tenant_id=99, page=1, page_size=20)
+        assert total == 0
+        assert tasks == []
+
+    async def test_raises_validation_for_invalid_status(self, service):
+        with pytest.raises(ValidationException):
+            await service.list_tasks(tenant_id=1, status="definitely_not_a_valid_status_xyz", page=1, page_size=20)
+
+    async def test_raises_validation_for_invalid_tenant_id(self, service):
+        with pytest.raises(ValidationException):
+            await service.create_task("Task", tenant_id=0)
+        with pytest.raises(ValidationException):
+            await service.create_task("Task", tenant_id=-1)
+
+    async def test_sanitizes_page_and_page_size(self, service):
+        # page <= 0 is normalized to 1; page_size <= 0 is normalized to 1
+        tasks, total = await service.list_tasks(tenant_id=1, page=0, page_size=-5)
         assert total == 0
         assert tasks == []
 ```

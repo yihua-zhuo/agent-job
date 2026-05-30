@@ -91,7 +91,10 @@ def upgrade() -> None:
     op.create_index(op.f("ix_workflow_nodes_tenant_id"), "workflow_nodes", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_workflow_nodes_workflow_id"), "workflow_nodes", ["workflow_id"], unique=False)
     op.create_index(
-        op.f("ix_workflow_nodes_tenant_id_workflow_id"), "workflow_nodes", ["tenant_id", "workflow_id"], unique=False
+        op.f("ix_workflow_nodes_tenant_id_workflow_id"),
+        "workflow_nodes",
+        ["tenant_id", "workflow_id"],
+        unique=False,
     )
 
     # ── addcp001: churn_predictions ────────────────────────────────────────

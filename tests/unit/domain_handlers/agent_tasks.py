@@ -1,12 +1,4 @@
-"""Agent task SQL handlers for unit tests.
-
-.. note::
-    Stateful handlers (those that mutate ``MockState``) are not safe for
-    parallel test execution.  All tests using this handler share a single
-    ``MockState`` instance per test session, so tests must run serially
-    (the project's pytest configuration already disables parallel execution
-    by default).
-"""
+"""Agent task SQL handlers for unit tests."""
 
 from __future__ import annotations
 
@@ -17,8 +9,6 @@ from tests.unit.conftest import MockResult, MockRow, MockState
 
 _OFFSET_RE = re.compile(r"offset\s*:?\s*(\w+)", re.IGNORECASE)
 _LIMIT_RE = re.compile(r"limit\s*:?\s*(\w+)", re.IGNORECASE)
-
-ORDER = 10
 
 
 def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResult | None]:
@@ -81,7 +71,7 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
             return MockResult([MockRow(record.copy())])
 
         # COUNT
-        if "select" in sql_text and "count" in sql_text and "from agent_tasks" in sql_text:
+        if "select" in sql_text and "count" in sql_text and "from agent_tasks " in sql_text:
             tenant_id = normalized.get("tenant_id")
             if tenant_id is None:
                 raise ValueError("agent_tasks COUNT requires tenant_id in params")
@@ -118,7 +108,7 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
             return MockResult([])
 
         # SELECT list (no id filter)
-        if "select" in sql_text and "from agent_tasks" in sql_text and "where id" not in sql_text:
+        if "select" in sql_text and "from agent_tasks " in sql_text and "where id" not in sql_text:
             tenant_id = normalized.get("tenant_id")
             if tenant_id is None:
                 raise ValueError("agent_tasks SELECT list requires tenant_id in params")

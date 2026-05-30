@@ -271,8 +271,10 @@ def make_mock_session(handlers=None, state=None):
         bound_params = {}
         try:
             bound_params.update(getattr(sql.compile(), "params", {}) or {})
-        except Exception as exc:  # noqa: BLE001 - not a bare except; specific intent per Rule 25.
-            # Surface the compile error so SQL binding bugs do not silently pass.
+        except (TypeError, AttributeError, RuntimeError) as exc:
+            # These are the exceptions SQLAlchemy's .compile() can raise at
+            # bind-param extraction time; others (KeyboardInterrupt, SystemExit)
+            # must not be silently swallowed.
             raise RuntimeError(f"mock session: SQL compilation failed: {exc}") from exc
         bound_params.update(params or {})
         for h in handlers:
