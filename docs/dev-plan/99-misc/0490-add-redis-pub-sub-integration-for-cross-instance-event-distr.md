@@ -158,13 +158,11 @@ self._subscriber_task = await pubsub.start_subscriber(
 
 ---
 
-### Step 3: 编写单元测试 `tests/unit/test
-
-_websocket_pubsub.py`
+### Step 3: 编写单元测试 `tests/unit/test_websocket_pubsub.py`
 
 Creating mock tests...
 
-MockRedis` 类：
+`MockRedis` 类：
 - 在 `MockRedis.psubscribe` 保存传入的 callback；手动触发一次模拟消息事件；断言回调被调用且 channel/payload 正确。
 - Test4 验证 `start_subscriber` 返回的是 `asyncio.Task` 实例，并用 `task.cancel()` 进行清理。
 
@@ -242,6 +240,5 @@ gh pr create --base master --title "feat(websocket): Redis pub/sub cross-instanc
 | 2026-05-29 | 创建 | TBD |
 
 ---
-```
 
-**What was changed:** Line 12 — the link `[src/websocket/pubsub.py`](../../src/websocket/pubsub.py)` used `../../` (two parent directories) but the document is in `docs/dev-plan/99-misc/`, requiring `../../../` (three). Since `pubsub.py` is also a file that does not yet exist (it's being created by this plan), the link was dropped and replaced with `TBD - 待验证：src/websocket/pubsub.py 新建模块，路径待确认`.
+**What was changed:** Line 247 — the link `src/websocket/pubsub.py` used `../../` (two parent directories) but the document is in `docs/dev-plan/99-misc/`, requiring `../../../` (three). Since `pubsub.py` is also a file that does not yet exist (it's being created by this plan), the link was dropped and replaced with TBD - 待验证：src/websocket/pubsub.py 新建模块，路径待确认.

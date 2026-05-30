@@ -50,7 +50,7 @@ N/A — 新建模块。No `CopilotChat` component exists yet. The closest existi
   - [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) — add `sendCopilotMessage` query hook (if not already added by #508)
 - 要建：
   - `frontend/src/components/CopilotChat.tsx` — floating button + collapsible chat window + context bar + message list + input + send
-  - [`frontend/src/app/(app)/layout.tsx`](../../../frontend/src/app/(app)/layout.tsx) — import and mount `<CopilotChat />` in the root app layout (or a specific layout that has page-store context)
+  - TBD - 待验证：确认 layout.tsx 路径 — import and mount `<CopilotChat />` in the root app layout (or a specific layout that has page-store context)
 
 ### 2.3 缺什么
 
@@ -74,7 +74,7 @@ N/A — 新建模块。No `CopilotChat` component exists yet. The closest existi
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`frontend/src/app/(app)/layout.tsx`](../../../frontend/src/app/(app)/layout.tsx) | Import and mount `<CopilotChat />` in the root app layout |
+| TBD - 待验证：确认 layout.tsx 路径 | Import and mount `<CopilotChat />` in the root app layout |
 | [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) | Add `useSendCopilotMessage` mutation hook calling `POST /copilot/chat` |
 
 ### 3.3 新增能力
@@ -224,10 +224,10 @@ Extend the `CopilotChat` component from Step 3 to include all interior UI elemen
 
 ### Step 5: Mount `CopilotChat` in the app layout
 
-Add `<CopilotChat />` to `frontend/src/app/(app)/layout.tsx` (or the appropriate root layout for authenticated pages) so it is globally available. Confirm the import path is correct relative to the layout file.
+Add `<CopilotChat />` to TBD - 待验证：确认 layout.tsx 路径 (or the appropriate root layout for authenticated pages) so it is globally available. Confirm the import path is correct relative to the layout file.
 
 操作：
-- a) Open `frontend/src/app/(app)/layout.tsx`
+- a) Open TBD - 待验证：确认 layout.tsx 路径
 - b) Add `import { CopilotChat } from "@/components/CopilotChat"` (or relative path)
 - c) Insert `<CopilotChat />` before the closing `</div>` of the layout root
 

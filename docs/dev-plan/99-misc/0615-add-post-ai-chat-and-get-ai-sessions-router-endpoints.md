@@ -6,7 +6,7 @@
 | 分类 | 99-misc |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [Add ChatService abstraction #614](./0614-add-chatservice-with-intent-classification-and-db-query-help.md) |
+| 依赖 | [Add ChatService abstraction #614](../50-automation/0614-add-chatservice-with-intent-classification-and-db-query-help.md) |
 | 启用后赋能 | 父 issue #43 AI Chat Assistant 功能 |
 | 状态 | 📋 待开始 |
 

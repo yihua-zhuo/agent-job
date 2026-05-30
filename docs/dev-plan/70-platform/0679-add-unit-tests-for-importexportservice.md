@@ -57,8 +57,7 @@
         raise ValueError(f"不支持的文件格式: {file_format}")
 ```
 
-```startLine:375:endLine:399:src/services/import_export_service.py
-    def validate_import_data(self, data: list[dict], entity_type: str) -> dict:
+```startLine:375:endLine:399:src/services/import_export_service.py def validate_import_data(self, data: list[dict], entity_type: str) -> dict:
         errors = []
         required = self.required_fields.get(entity_type, [])
 
@@ -469,3 +468,5 @@ git push
 1. **Line 9 (metadata table "启用后赋能")**: Replaced the broken forward link to the non-existent `#0688` board with `TBD - 待验证：integration tests for full rule lifecycle (#0688)` — the referenced board doesn't exist yet.
 
 2. **Line 74 (Section 3.1 table "路径" for the verify script)**: Replaced the broken `[field](row[field])` "link" (a Python variable accidentally rendered as a broken markdown link) with `TBD - 待验证：verify script path` — the verify script path in `docs/dev-plan/70-platform/verify/` is not yet confirmed.
+
+3. **Line 471 (Section 6 acceptance checklist)**: Same fix — the same Python variable fragment appeared again in the acceptance checklist, replaced with `TBD - 待验证：verify script path`.

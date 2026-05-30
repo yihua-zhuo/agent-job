@@ -86,7 +86,7 @@ TBD - 待验证：`src/api/routers/` 下是否有 `notification.py` 或 `notific
 | 路径 | 改动要点 |
 |------|---------|
 | [`src/db/models/notification.py`](../../../src/db/models/notification.py) | 新增 `NotificationAnalytics` ORM model（含 id, notification_id, tenant_id, opened_at, clicked_at, channel） |
-| [`src/api/routers/notifications.py`](../../src/api/routers/notifications.py)（或新建） | 新增 `PATCH /notifications/{id}/open` 端点，调用 `NotificationAnalyticsService.track_open` |
+| [`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py)（或新建） | 新增 `PATCH /notifications/{id}/open` 端点，调用 `NotificationAnalyticsService.track_open` |
 
 ### 3.3 新增能力
 

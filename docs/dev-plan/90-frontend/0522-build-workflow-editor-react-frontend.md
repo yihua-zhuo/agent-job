@@ -6,7 +6,7 @@
 | 分类 | [90-frontend](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [#521](0501-build-workflow-data-models-api-routes.md) |
+| 依赖 | [#521](../50-automation/0521-add-workflow-api-routers.md) |
 | 启用后赋能 | #524, #525, #526 — TBD |
 | 状态 | 📋 待开始 |
 
@@ -64,7 +64,8 @@ N/A — 新建模块 (`src/workflow/editor/` is net-new; this is the first front
   - `frontend/src/workflow/editor/ConnectionLine.tsx` — custom SVG connection line renderer
   - `frontend/src/workflow/editor/ConfigPanel.tsx` — slide-in side panel with JSON config form for selected node
   - `frontend/src/workflow/editor/types.ts` — TypeScript interfaces for graph nodes, edges, and rule payload
-  - `frontend/src/workflow/editor/utils.ts` — helpers: serialise rule JSON ↔ React Flow state - `frontend/src/workflow/editor/WorkflowEditor.tsx` — top-level component that composes Canvas + Palette + ConfigPanel
+  - `frontend/src/workflow/editor/utils.ts` — helpers: serialise rule JSON ↔ React Flow state
+  - `frontend/src/workflow/editor/WorkflowEditor.tsx` — top-level component that composes Canvas + Palette + ConfigPanel
 
 ### 2.3 缺什么
 
@@ -155,7 +156,8 @@ Install the React Flow package, create the directory tree, and export barrel fil
 操作：
 - a) `cd frontend && npm install @xyflow/react`
 - b) `mkdir -p frontend/src/workflow/editor/nodes`
-- c) Create `frontend/src/workflow/editor/types.ts` with the core interfaces- d) Create `frontend/src/workflow/editor/utils.ts` with stub `ruleGraphToFlow` and `flowToRuleGraph` identity functions
+- c) Create `frontend/src/workflow/editor/types.ts` with the core interfaces
+- d) Create `frontend/src/workflow/editor/utils.ts` with stub `ruleGraphToFlow` and `flowToRuleGraph` identity functions
 - e) Create `frontend/src/workflow/editor/index.ts` barrel re-exporting all public members
 
 ```typescript
@@ -194,7 +196,8 @@ export interface RuleGraph {
 Each node is a styled card with a type badge, a label, fixed left target handle, and right source handle.
 
 操作：
-- a) In `frontend/src/workflow/editor/nodes/TriggerNode.tsx`, create a component that renders `<Card>` from the existing UI library with a "⚡ Trigger" badge- b) Add `<Handle type="target" position={Position.Left} id="in" />` and `<Handle type="source" position={Position.Right} id="out" />`
+- a) In `frontend/src/workflow/editor/nodes/TriggerNode.tsx`, create a component that renders `<Card>` from the existing UI library with a "⚡ Trigger" badge
+- b) Add `<Handle type="target" position={Position.Left} id="in" />` and `<Handle type="source" position={Position.Right} id="out" />`
 - c) Repeat for `ConditionNode` ("⚖ Condition"), `ActionNode` ("⚙ Action"), `ApprovalNode` ("✅ Approval"), `LoopNode` ("🔄 Loop")
 - d) Create `frontend/src/workflow/editor/nodes/index.ts` exporting all five
 
@@ -270,7 +273,8 @@ export function NodeWrapper(props: NodeProps<RuleNodeData>) {
 `NodePalette` shows draggable tile buttons for each node type; dragging exports `ruleNode` data via React Flow's `onDragStart` + `onDrop`. `ConfigPanel` shows a textarea pre-filled with the selected node's `data.config` JSON; on change it calls `updateNodeData`.
 
 操作：
-- a) Write `frontend/src/workflow/editor/NodePalette.tsx` — render `<div className="palette">` with five `<button>` tiles listing type and icon- b) Wire `onDragStart` to set `dataTransfer.setData('application/reactflow', JSON.stringify({ type, label, config }))`
+- a) Write `frontend/src/workflow/editor/NodePalette.tsx` — render `<div className="palette">` with five `<button>` tiles listing type and icon
+- b) Wire `onDragStart` to set `dataTransfer.setData('application/reactflow', JSON.stringify({ type, label, config }))`
 - c) Write `frontend/src/workflow/editor/ConfigPanel.tsx` — `useEffect` watches selected node id; renders `<textarea>` bound to `JSON.stringify(selectedNode?.data?.config, null, 2)`
 - d) On `<textarea>` change, `updateNodeData(selectedNodeId, { ...data, config: JSON.parse(newValue) })`
 - e) Add a "Save Rule" `<button>` in `WorkflowEditor` that calls the on-save handler
@@ -282,7 +286,8 @@ export function NodeWrapper(props: NodeProps<RuleNodeData>) {
 操作：
 - a) In `frontend/src/app/(app)/automation/rules/page.tsx`, replace the static list (or add a tab/button) to route to `/automation/rules/[id]/page.tsx` where the editor mounts — TBD - 待验证：确认前端页面实际路径
 - b) Add to `frontend/src/components/layout/app-sidebar.tsx`:
-  ```tsx<SidebarItem href="/automation/rules" label="Automation" icon={<AutomationIcon />} />
+  ```tsx
+  <SidebarItem href="/automation/rules" label="Automation" icon={<AutomationIcon />} />
   ```
 - c) Add RTK Query hooks to `frontend/src/lib/api/queries.ts`:
   - `useGetRule` → `GET /automation/rules/:id`
@@ -335,10 +340,16 @@ gh pr create --base master --title "feat(frontend): workflow editor React fronte
 - 同类参考实现：[`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) — existing RTK Query definition pattern to follow
 - `@xyflow/react` docs：[Getting Started](https://reactflow.dev/docs/learn/getting-started/introduction/) — custom nodes, connection line, drag-and-drop from external source
 - 父 issue：#73
-- 依赖 issue / 关联：#521---
+- 依赖 issue / 关联：#521
+
+---
 
 ## Changelog
 
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+
+---
+
+**Fix applied**: The link on line 9 was updated from `0501-build-workflow-data-models-api-routes.md` (which incorrectly put the file under `90-frontend/`) to `../50-automation/0521-add-workflow-api-routers.md` — correctly crossing up to `50-automation/` where issue #521 actually lives.

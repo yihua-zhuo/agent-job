@@ -405,7 +405,7 @@ gh pr create --base master --title "feat(webhooks): implement WebhookService" --
 
 - 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — 标准 service 模式（`__init__(session)`, `tenant_id` 过滤, ORM 返回）
 - 父 issue / 关联：#496（webhook 系统父 epic）、#718（WebhookModel，依赖项）
-- 错误处理规范：[`pkg/errors/app_exceptions.py`](../../../pkg/errors/app_exceptions.py) — `NotFoundException` / `ValidationException` 定义
+- 错误处理规范：[`pkg/errors/app_exceptions.py`](../../../src/pkg/errors/app_exceptions.py) — `NotFoundException` / `ValidationException` 定义
 
 ---
 

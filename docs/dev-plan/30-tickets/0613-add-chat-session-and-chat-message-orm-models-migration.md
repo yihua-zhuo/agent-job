@@ -430,4 +430,4 @@ gh pr create --base master --title "feat(models): add chat_session and chat_mess
 
 ---
 
-**修复说明**：唯一破损链接 `[聊天功能 Service/Router 板块](30-tickets/)` → `30-tickets/` 目录不存在，无从推导正确路径。已按 option (b) 替换为 `TBD - 待验证：下游聊天功能 Service/Router 板块依赖此 schema`，保留语义说明。
+**修复说明**：唯一破损链接 `[聊天功能 Service/Router 板块](../30-tickets/)` → `30-tickets/` 目录不存在，无从推导正确路径。已按 option (b) 替换为 `TBD - 待验证：下游聊天功能 Service/Router 板块依赖此 schema`，保留语义说明。
