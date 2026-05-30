@@ -40,7 +40,7 @@ describe("useTableState", () => {
     expect(result.current.table.getRowModel().rows.length).toBe(3);
   });
 
-  it("filters across multiple searchableKeys (email)", () => {
+  it("filters rows by globalFilter across default string columns", () => {
     const rows = makeRows(["Alice", "Bob", "Charlie"]);
     const { result } = renderHook(() =>
       useTableState({ data: rows, columns: [] })

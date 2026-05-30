@@ -162,6 +162,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     accessorKey: "status",
     header: "Status",
     enableSorting: true,
+    enableGlobalFilter: false,
     cell: ({ getValue }) => {
       const status = getValue() as string;
       return (
@@ -177,6 +178,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     accessorKey: "company",
     header: "Company",
     enableSorting: true,
+    enableGlobalFilter: false,
     cell: ({ getValue }) => (
       <span className="truncate block">{getValue() as string || "—"}</span>
     ),
@@ -187,6 +189,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     accessorKey: "created_at",
     header: "Created",
     enableSorting: true,
+    enableGlobalFilter: false,
     cell: ({ getValue }) => {
       const dateStr = getValue() as string;
       return <span>{formatDate(dateStr)}</span>;
@@ -349,6 +352,7 @@ function CustomersPageInner() {
   const [page, setPage] = useState(initPage);
   const [pageSize, setPageSize] = useState(initPageSize);
   const [keyword, setKeyword] = useState("");
+  const debounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pageRef = useRef(initPage);
 
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
@@ -413,11 +417,24 @@ function CustomersPageInner() {
     columns: customerColumns,
   });
 
+  // Debounce the globalFilter update so the table only re-filters after the user stops typing
+  useEffect(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    debounceTimerRef.current = setTimeout(() => {
+      setGlobalFilter(keyword);
+      setPage(1);
+    }, 300);
+    return () => {
+      if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+    };
+  }, [keyword, setGlobalFilter]);
+
   const clearSearch = useCallback(() => {
+    if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
     setKeyword("");
     setGlobalFilter("");
     setPage(1);
-  }, []);
+  }, [setGlobalFilter]);
 
   // Escape key clears search when search input is focused
   useEffect(() => {
@@ -596,8 +613,6 @@ function CustomersPageInner() {
             value={globalFilter}
             onChange={(e) => {
               setKeyword(e.target.value);
-              setGlobalFilter(e.target.value);
-              setPage(1);
             }}
             placeholder="Search customers…"
             className="pl-8 pr-8 rounded-lg border-[1px] shadow-sm focus:ring-2 focus:ring-primary focus:ring-offset-1"
