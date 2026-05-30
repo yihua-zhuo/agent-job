@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
-import { Login } from "../Login";
+import { Login, type LoginFormData } from "../Login";
 
 describe("Login component", () => {
-  const mockSubmit = vi.fn<[Promise<void>]>();
+  const mockSubmit = vi.fn<[LoginFormData], Promise<void>>();
 
   beforeEach(() => {
     vi.clearAllMocks();
