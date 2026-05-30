@@ -10,6 +10,7 @@ Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 from __future__ import annotations
 
 import uuid
+from datetime import datetime, timezone
 
 import pytest
 
@@ -446,12 +447,12 @@ class TestNotificationIntegration:
         )
         return reg.id
 
-    async def test_send_and_get_notification(self, db_schema, tenant_id, async_session):
+    async def test_send_and_get_notification(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.send_notification(
             user_id=uid,
-            notification_type="info",
+            notification_type="in_app",
             title="Pipeline Updated",
             content="Your deal moved to closed_won!",
             tenant_id=tenant_id,
@@ -461,30 +462,37 @@ class TestNotificationIntegration:
         items, total = await svc.get_user_notifications(user_id=uid, tenant_id=tenant_id)
         ids = [n.id for n in items]
         assert nid in ids
+        assert total >= 1
 
-    async def test_mark_notification_as_read(self, db_schema, tenant_id, async_session):
+    async def test_mark_notification_as_read(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
+
+        # Verify truncation guarantees a clean baseline before making assertions
+        # that depend on zero pre-existing unread notifications.
+        baseline = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
+        assert baseline == 0
+
         sent = await svc.send_notification(
-            user_id=uid, notification_type="info", title="Test", content="Body", tenant_id=tenant_id
+            user_id=uid, notification_type="in_app", title="Test", content="Body", tenant_id=tenant_id
         )
 
         marked = await svc.mark_as_read(sent.id, tenant_id=tenant_id)
-        assert marked.is_read is True
+        assert marked.read_at is not None
 
         unread = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert unread == 0
 
-    async def test_unread_count(self, db_schema, tenant_id, async_session):
+    async def test_unread_count(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
-        await svc.send_notification(user_id=uid, notification_type="info", title="N1", content="m", tenant_id=tenant_id)
-        await svc.send_notification(user_id=uid, notification_type="info", title="N2", content="m", tenant_id=tenant_id)
+        await svc.send_notification(user_id=uid, notification_type="in_app", title="N1", content="m", tenant_id=tenant_id)
+        await svc.send_notification(user_id=uid, notification_type="in_app", title="N2", content="m", tenant_id=tenant_id)
 
         count = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert count >= 2
 
-    async def test_create_and_cancel_reminder(self, db_schema, tenant_id, async_session):
+    async def test_create_and_cancel_reminder(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.create_reminder(
@@ -492,11 +500,64 @@ class TestNotificationIntegration:
             tenant_id=tenant_id,
             title="Team standup",
             content="Daily standup meeting",
-            remind_at="2099-12-31T10:00:00+00:00",
+            remind_at=datetime(2099, 12, 31, 10, 0, 0, tzinfo=timezone.utc),
         )
 
         cancelled = await svc.cancel_reminder(result.id, tenant_id=tenant_id)
-        assert cancelled["id"] == result.id
+        assert cancelled.id == result.id
+
+        # Verify the reminder was actually deleted from the DB.
+        from sqlalchemy import select
+        from db.models.reminder import ReminderModel
+
+        result_check = await async_session.execute(
+            select(ReminderModel).where(ReminderModel.id == result.id)
+        )
+        assert result_check.scalar_one_or_none() is None
+
+    async def test_notification_cross_tenant_isolation(
+        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant, _seed_tenant_2
+    ):
+        """Notification under tenant A is invisible to tenant B (Rule 126).
+
+        Negative assertion: tenant A cannot retrieve tenant B's notification by ID.
+        """
+        svc = NotificationService(async_session)
+
+        # Create user and notification under tenant 1
+        uid1 = await self._seed_user(tenant_id, async_session)
+        notif1 = await svc.send_notification(
+            user_id=uid1, notification_type="in_app", title="T1", content="m", tenant_id=tenant_id
+        )
+
+        # Create user under tenant 2 and send a notification to them
+        uid2 = await self._seed_user(tenant_id_2, async_session)
+        notif2 = await svc.send_notification(
+            user_id=uid2, notification_type="in_app", title="T2", content="m", tenant_id=tenant_id_2
+        )
+
+        # Tenant 2 sees only their own T2 notification, not tenant 1's T1.
+        items2, total2 = await svc.get_user_notifications(user_id=uid2, tenant_id=tenant_id_2)
+        assert total2 == 1
+        assert len(items2) == 1
+        assert items2[0].id == notif2.id
+        assert items2[0].template == "T2"
+
+        # Tenant 1 sees only their own T1 notification, not tenant 2's T2.
+        items1, total1 = await svc.get_user_notifications(user_id=uid1, tenant_id=tenant_id)
+        assert total1 == 1
+        assert len(items1) == 1
+        assert items1[0].id == notif1.id
+        assert items1[0].template == "T1"
+
+        # Negative assertion: tenant A cannot read tenant B's notification by ID.
+
+        with pytest.raises(NotFoundException):
+            # Use tenant 1's context to fetch tenant 2's notification ID.
+            await svc.mark_as_read(notif2.id, tenant_id=tenant_id)
+        with pytest.raises(NotFoundException):
+            # Use tenant 2's context to fetch tenant 1's notification ID.
+            await svc.mark_as_read(notif1.id, tenant_id=tenant_id_2)
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -515,12 +576,12 @@ class TestTenantIntegration:
             admin_email=f"admin_{suffix}@example.com",
         )
         assert result is not None
-        assert result["name"] == f"Acme Corp {suffix}"
-        assert result["plan"] == "pro"
+        assert result.name == f"Acme Corp {suffix}"
+        assert result.plan == "pro"
 
-        fetched = await svc.get_tenant(result["id"])
+        fetched = await svc.get_tenant(result.id)
         assert fetched is not None
-        assert fetched["name"] == f"Acme Corp {suffix}"
+        assert fetched.name == f"Acme Corp {suffix}"
 
     async def test_update_tenant(self, db_schema, async_session):
         svc = TenantService(async_session)
@@ -528,12 +589,12 @@ class TestTenantIntegration:
         created = await svc.create_tenant(
             name=f"Original {suffix}", plan="free", admin_email=f"admin_{suffix}@example.com"
         )
-        tid = created["id"]
+        tid = created.id
 
         updated = await svc.update_tenant(tid, plan="enterprise", name=f"Updated {suffix}")
         assert updated is not None
-        assert updated["plan"] == "enterprise"
-        assert updated["name"] == f"Updated {suffix}"
+        assert updated.plan == "enterprise"
+        assert updated.name == f"Updated {suffix}"
 
     async def test_list_tenants(self, db_schema, async_session):
         svc = TenantService(async_session)
@@ -542,7 +603,7 @@ class TestTenantIntegration:
         await svc.create_tenant(name=f"List Tenant B {suffix}", plan="pro", admin_email=f"b_{suffix}@x.com")
 
         items, total = await svc.list_tenants()
-        names = [t["name"] for t in items]
+        names = [t.name for t in items]
         assert any(f"List Tenant A {suffix}" in n for n in names)
         assert any(f"List Tenant B {suffix}" in n for n in names)
 
@@ -550,9 +611,10 @@ class TestTenantIntegration:
         svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
         created = await svc.create_tenant(name=f"Stats Tenant {suffix}", plan="pro", admin_email=f"s_{suffix}@x.com")
-        tid = created["id"]
+        tid = created.id
 
         stats = await svc.get_tenant_stats(tid)
         assert stats is not None
-        assert "user_count" in stats
-        assert "api_calls" in stats
+        stats_dict = stats.to_dict()
+        assert "user_count" in stats_dict
+        assert "api_calls" in stats_dict

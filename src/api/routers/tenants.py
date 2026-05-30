@@ -75,7 +75,7 @@ async def get_tenant_stats(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    data = await service.get_tenant_stats(ctx.tenant_id)
+    data = await service.get_tenant_stats(tenant_id=ctx.tenant_id, requesting_tenant_id=ctx.tenant_id)
     return {"success": True, "data": data}
 
 
@@ -85,7 +85,7 @@ async def get_tenant_usage(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    data = await service.get_tenant_usage(ctx.tenant_id)
+    data = await service.get_tenant_usage(tenant_id=ctx.tenant_id, requesting_tenant_id=ctx.tenant_id)
     return {"success": True, "data": data}
 
 
@@ -96,7 +96,7 @@ async def get_tenant(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    data = await service.get_tenant(tenant_id)
+    data = await service.get_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id)
     return {"success": True, "data": data}
 
 
@@ -120,18 +120,11 @@ async def update_tenant(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    # TenantService.update_tenant enforces cross-tenant isolation at the service
+    # layer via requesting_tenant_id — providing context for the design intent.
     service = TenantService(session)
-    update_data = body.model_dump(exclude_none=True)
-    data = await service.update_tenant(tenant_id, **update_data)
-    return {"success": True, "data": data, "message": "租户更新成功"}
-
-
-@tenants_router.delete("/{tenant_id}")
-async def delete_tenant(
-    tenant_id: int,
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    service = TenantService(session)
-    data = await service.delete_tenant(tenant_id)
-    return {"success": True, "data": data, "message": "租户删除成功"}
+    update_data = body.model_dump()
+    # Strip None values so the service's merge logic handles omitted fields.
+    update_data = {k: v for k, v in update_data.items() if v is not None}
+    data = await service.update_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id, **update_data)
+    return {"success": True, "data": data, "message": "Tenant updated"}

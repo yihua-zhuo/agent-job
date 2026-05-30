@@ -24,6 +24,7 @@ import os
 import pkgutil
 import random
 import sys
+import uuid
 from collections.abc import AsyncGenerator, Generator
 
 # Ensure src/ is on sys.path so top-level package imports resolve
@@ -249,26 +250,62 @@ def tenant_id_2() -> int:
     return random.randint(10_000_000, 99_999_999)
 
 
+# ── Shared seed fixtures ─────────────────────────────────────────────────────────
 @pytest_asyncio.fixture
-async def _seed_customer(async_session, tenant_id):
-    """Seed a customer record for the given tenant so FK constraints are satisfied.
+async def _seed_tenant(async_session, tenant_id: int) -> int:
+    """Seed a tenant record so FK constraints on notifications are satisfied.
 
-    Returns the customer_id of the inserted row.
+    Returns the tenant_id (same as input, for caller convenience).
     """
-    from db.models.customer import CustomerModel
+    from db.models.tenant import TenantModel
 
-    customer = CustomerModel(
-        tenant_id=tenant_id,
-        name="Integration Test Customer",
-        email="test-customer@example.com",
+    tenant = TenantModel(
+        id=tenant_id,
+        name="Integration Test Tenant",
+        plan="free",
         status="active",
     )
-    async_session.add(customer)
+    async_session.add(tenant)
     await async_session.flush()
-    return customer.id
+    return tenant_id
 
 
-# ── Per-file cleanup rule (mandatory) ───────────────────────────────────────────
+@pytest_asyncio.fixture
+async def _seed_notification_user(async_session, tenant_id: int, _seed_tenant) -> int:
+    """Seed tenant + user so notification FK constraints are satisfied.
+
+    Returns the user_id of the inserted row.
+    """
+    from services.user_service import UserService
+
+    user_svc = UserService(async_session)
+    suffix = uuid.uuid4().hex[:8]
+    user = await user_svc.create_user(
+        username=f"notif_{suffix}",
+        email=f"notif_{suffix}@example.com",
+        password="TestPass123!",
+        tenant_id=tenant_id,
+    )
+    return user.id
+
+
+@pytest_asyncio.fixture
+async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
+    """Seed the second tenant record for cross-tenant isolation tests."""
+    from db.models.tenant import TenantModel
+
+    tenant = TenantModel(
+        id=tenant_id_2,
+        name="Integration Test Tenant 2",
+        plan="free",
+        status="active",
+    )
+    async_session.add(tenant)
+    await async_session.flush()
+    return tenant_id_2
+
+
+# ── Per-file cleanup rule (mandatory) ────────────────────────────────────────────
 # Every integration test file must clean up all created data after its tests
 # complete. This fixture runs once per module (i.e. per test file) as the
 # FINAL cleanup step, on top of the per-test db_schema truncation above.
@@ -314,11 +351,26 @@ def fastapi_app():
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client(fastapi_app) -> AsyncGenerator[AsyncClient, None]:
-    """Async HTTP client that hits the FastAPI app directly via ASGI."""
+async def client(fresh_schema, fastapi_app, async_session) -> AsyncGenerator[AsyncClient, None]:
+    """Async HTTP client that hits the FastAPI app directly via ASGI.
+
+    Overrides get_db to share the same session/connection as the test's async_session
+    fixture, ensuring data seeded by auth fixtures is visible to request handlers.
+
+    Note: async_session is intentionally consumed here (not used directly by this
+    fixture) to guarantee write ordering with auth_headers_web — the session
+    dependency override is established before any request runs.
+    """
+    from db.connection import get_db
+
+    async def _override_get_db():
+        yield async_session
+
+    fastapi_app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
+    fastapi_app.dependency_overrides.pop(get_db, None)
 
 
 @pytest.fixture
@@ -332,44 +384,46 @@ def tenant_id_2_web() -> int:
 
 
 @pytest_asyncio.fixture(scope="function")
-async def auth_headers_web(db_schema, tenant_id_web) -> dict[str, str]:
+async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str, str]:
     """Return a valid JWT Authorization header for the test tenant."""
     os.environ["JWT_SECRET"] = TEST_JWT_SECRET
     os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
+    # Seed tenant only if it doesn't already exist (idempotent — prevents
+    # duplicate-key errors when another fixture already created it).
+    from sqlalchemy import select
+
+    from db.models.tenant import TenantModel
     from services.auth_service import AuthService
     from services.user_service import UserService
-
-    factory = _get_test_async_session_factory()
-    async with factory() as session:
-        from db.models.tenant import TenantModel
-        from sqlalchemy import select
-        # Seed tenant only if it doesn't already exist (idempotent — prevents
-        # duplicate-key errors when another fixture already created it).
-        result = await session.execute(select(TenantModel).where(TenantModel.id == tenant_id_web))
-        if result.scalar_one_or_none() is None:
-            tenant = TenantModel(id=tenant_id_web, name=f"Tenant {tenant_id_web}", plan="free", status="active")
-            session.add(tenant)
-        # Create the test user in the DB so /users/me resolves correctly.
-        user_svc = UserService(session)
-        await user_svc.create_user(
+    result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_web))
+    if result.scalar_one_or_none() is None:
+        tenant = TenantModel(id=tenant_id_web, name="Web Test Tenant", plan="free", status="active")
+        async_session.add(tenant)
+        await async_session.flush()
+    # Create the test user in the DB so /users/me resolves correctly (Rule 126).
+    user_svc = UserService(async_session)
+    try:
+        user = await user_svc.create_user(
             username="webtest",
             email="webtest@example.com",
             password="TestPass123!",
             role="admin",
             tenant_id=tenant_id_web,
         )
-        await session.commit()
-        # Retrieve the actual DB-assigned user id (not hardcoded 999).
-        created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
-        actual_user_id = created_user.id if created_user else 999
+        actual_user_id = user.id
+    except Exception:
+        # Already exists from a prior fixture run; look up the real id.
+        existing = await user_svc.get_user_by_username(tenant_id_web, "webtest")
+        assert existing is not None, "auth_headers_web failed to seed the test user"
+        actual_user_id = existing.id
 
-        auth_svc = AuthService(session, secret_key=TEST_JWT_SECRET)
-        token = auth_svc.generate_token(
-            user_id=actual_user_id,
-            username="webtest",
-            role="admin",
-            tenant_id=tenant_id_web,
-        )
+    auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
+    token = auth_svc.generate_token(
+        user_id=actual_user_id,
+        username="webtest",
+        role="admin",
+        tenant_id=tenant_id_web,
+    )
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -378,21 +432,39 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
     """Return a valid JWT Authorization header for tenant 2."""
     os.environ["JWT_SECRET"] = TEST_JWT_SECRET
     os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
+    from sqlalchemy import select
+
+    from db.models.tenant import TenantModel
     from services.auth_service import AuthService
+    from services.user_service import UserService
 
     # Seed tenant only if it doesn't already exist (idempotent — prevents
     # duplicate-key errors when another fixture already created it).
-    from db.models.tenant import TenantModel
-    from sqlalchemy import select
     result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_2_web))
     if result.scalar_one_or_none() is None:
         tenant = TenantModel(id=tenant_id_2_web, name=f"Tenant {tenant_id_2_web}", plan="free", status="active")
         async_session.add(tenant)
         await async_session.flush()
 
+    # Create the test user in tenant 2 so /users/me resolves correctly (Rule 126).
+    user_svc = UserService(async_session)
+    try:
+        user = await user_svc.create_user(
+            username="webtest2",
+            email="webtest2@example.com",
+            password="TestPass123!",
+            role="admin",
+            tenant_id=tenant_id_2_web,
+        )
+        actual_user_id = user.id
+    except Exception:
+        existing = await user_svc.get_user_by_username(tenant_id_2_web, "webtest2")
+        assert existing is not None, "auth_headers_tenant_2 failed to seed the test user"
+        actual_user_id = existing.id
+
     auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
     token = auth_svc.generate_token(
-        user_id=999,
+        user_id=actual_user_id,
         username="webtest2",
         role="admin",
         tenant_id=tenant_id_2_web,
@@ -404,8 +476,14 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
 async def api_client(
     client: AsyncClient,
     auth_headers_web: dict[str, str],
+    async_session: AsyncSession,
 ) -> AsyncClient:
-    """HTTP client pre-populated with valid auth headers."""
+    """HTTP client pre-populated with valid auth headers.
+
+    Depends on async_session so the router's get_db dependency shares the same
+    session/connection as the test, ensuring any data seeded by auth_headers_web
+    is visible to request handlers.
+    """
     client.headers.update(auth_headers_web)
     return client
 
@@ -414,13 +492,23 @@ async def api_client(
 async def api_client_tenant_2(
     fastapi_app,
     auth_headers_tenant_2: dict[str, str],
+    async_session: AsyncSession,
 ) -> AsyncGenerator[AsyncClient, None]:
     """HTTP client authenticated as tenant 2.
 
     Uses its own AsyncClient so headers don't leak across tenant boundaries —
     sharing the `client` fixture would mutate the headers on `api_client` too.
+    Shares the same async_session as auth_headers_tenant_2 so that user-records
+    created during auth fixture setup are visible to request handlers.
     """
+    from db.connection import get_db
+
+    async def _override_get_db():
+        yield async_session
+
+    fastapi_app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         ac.headers.update(auth_headers_tenant_2)
         yield ac
+    fastapi_app.dependency_overrides.pop(get_db, None)

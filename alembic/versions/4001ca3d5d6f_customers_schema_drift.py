@@ -19,7 +19,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision: str = '4001ca3d5d6f'
-down_revision: Union[str, None] = '52b19ee00eaf'
+down_revision: Union[str, None] = '82ecf4a34e34'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

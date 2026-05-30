@@ -86,7 +86,7 @@ async def list_notifications(
         page=page,
         page_size=page_size,
     )
-    return _paginated_dicts(items, total, page, page_size)
+    return _paginated_dicts([i.to_dict() for i in items], total, page, page_size)
 
 
 @notifications_router.post(
@@ -104,15 +104,15 @@ async def send_notification(
 
     svc = NotificationService(session)
     data = await svc.send_notification(
+        tenant_id=current_user.tenant_id,
         user_id=body.user_id,
         notification_type=body.notification_type,
         title=body.title,
         content=body.content,
-        tenant_id=current_user.tenant_id,
         related_type=body.related_type,
         related_id=body.related_id,
     )
-    return {"success": True, "data": data, "message": "通知发送成功"}
+    return {"success": True, "data": data.to_dict(), "message": "通知发送成功"}
 
 
 @notifications_router.put(
@@ -130,7 +130,7 @@ async def mark_notification_read(
 
     svc = NotificationService(session)
     data = await svc.mark_as_read(notification_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data, "message": "通知已标记为已读"}
+    return {"success": True, "data": data.to_dict(), "message": "通知已标记为已读"}
 
 
 @notifications_router.post(
@@ -225,7 +225,7 @@ async def create_reminder(
         related_type=body.related_type,
         related_id=body.related_id,
     )
-    return {"success": True, "data": data, "message": "提醒创建成功"}
+    return {"success": True, "data": data.to_dict(), "message": "提醒创建成功"}
 
 
 @notifications_router.get(
@@ -242,12 +242,22 @@ async def list_reminders(
         raise HTTPException(status_code=401, detail="无效的租户信息")
 
     svc = NotificationService(session)
-    reminders = await svc.get_reminders(
+    reminders, total = await svc.get_reminders(
         user_id=current_user.user_id,
         tenant_id=current_user.tenant_id,
         upcoming_only=upcoming_only,
     )
-    return {"success": True, "data": reminders}
+    return {"success": True, "data": {"items": [_reminder_to_api(r) for r in reminders], "total": total}}
+
+
+def _reminder_to_api(r):
+    # Standardize on ORM objects (ReminderModel/to_dict) — the duck-typing fallback
+    # for dict is a safety net for edge-case payloads that bypass the service layer.
+    if hasattr(r, "to_dict"):
+        return r.to_dict()
+    if isinstance(r, dict):
+        return r
+    return r
 
 
 @notifications_router.delete(

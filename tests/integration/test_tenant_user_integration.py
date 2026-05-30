@@ -72,12 +72,12 @@ class TestTenantServiceIntegration:
             admin_email=f"ent_{suffix}@example.com",
         )
         assert result is not None
-        tid = result["id"]
+        tid = result.id
 
         fetched = await svc.get_tenant(tid)
         assert fetched is not None
-        assert fetched["name"] == f"Tenant Create {suffix}"
-        assert fetched["plan"] == "enterprise"
+        assert fetched.name == f"Tenant Create {suffix}"
+        assert fetched.plan == "enterprise"
 
     async def test_update_tenant(self, db_schema, tenant_id, async_session):
         svc = TenantService(async_session)
@@ -87,11 +87,11 @@ class TestTenantServiceIntegration:
             plan="free",
             admin_email=f"old_{suffix}@example.com",
         )
-        tid = created["id"]
+        tid = created.id
 
         updated = await svc.update_tenant(tid, name=f"Tenant New {suffix}", plan="pro")
         assert updated is not None
-        assert updated["name"] == f"Tenant New {suffix}"
+        assert updated.name == f"Tenant New {suffix}"
 
     async def test_delete_tenant(self, db_schema, tenant_id, async_session):
         svc = TenantService(async_session)
@@ -101,7 +101,7 @@ class TestTenantServiceIntegration:
             plan="free",
             admin_email=f"del_{suffix}@example.com",
         )
-        tid = created["id"]
+        tid = created.id
 
         deleted = await svc.delete_tenant(tid)
         assert deleted is not None
@@ -128,10 +128,13 @@ class TestTenantServiceIntegration:
             plan="free",
             admin_email=f"stats_{suffix}@example.com",
         )
-        tid = created["id"]
+        tid = created.id
         stats = await svc.get_tenant_stats(tid)
         assert stats is not None
-        assert isinstance(stats, dict)
+        assert hasattr(stats, "to_dict")
+        stats_dict = stats.to_dict()
+        assert "user_count" in stats_dict
+        assert "tenant_id" in stats_dict
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

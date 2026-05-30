@@ -19,6 +19,7 @@ import pytest
 
 if TYPE_CHECKING:
     from httpx import AsyncClient
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 pytestmark = pytest.mark.integration
 
@@ -224,6 +225,7 @@ class TestCustomerEndpoints:
         tenant_id_web: int,
         tenant_id_2_web: int,
     ):
+        """Tenant A's customers are invisible to tenant B, and vice versa (Rule 126)."""
         suffix = uuid.uuid4().hex[:6]
         resp1 = await api_client.post(
             "/api/v1/customers",
@@ -237,6 +239,15 @@ class TestCustomerEndpoints:
 
         detail_resp = await api_client_tenant_2.get(f"/api/v1/customers/{t1_id}")
         assert detail_resp.status_code == 404
+
+        # Tenant 2 can see its own resources (positive isolation assertion).
+        resp2 = await api_client_tenant_2.post(
+            "/api/v1/customers",
+            json={"name": f"Tenant 2 Customer {suffix}", "email": f"t2-{suffix}@example.com"},
+        )
+        t2_id = resp2.json()["data"]["id"]
+        self_t2 = await api_client_tenant_2.get(f"/api/v1/customers/{t2_id}")
+        assert self_t2.status_code == 200
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -641,7 +652,7 @@ class TestTenantEndpoints:
         assert data["success"] is True
 
     async def test_get_tenant_stats(
-        self, api_client: AsyncClient, tenant_id_web: int, async_session
+        self, api_client: AsyncClient, tenant_id_web: int, async_session: AsyncSession,
     ):
         # Service's get_tenant_stats calls _fetch(tenant_id), which 404s unless a
         # tenant row matches the JWT's tenant_id. Seed one with the exact id
@@ -660,7 +671,7 @@ class TestTenantEndpoints:
         assert resp.status_code == 200, f"Body: {resp.text}"
 
     async def test_get_tenant_usage(
-        self, api_client: AsyncClient, tenant_id_web: int, async_session
+        self, api_client: AsyncClient, tenant_id_web: int, async_session: AsyncSession,
     ):
         from sqlalchemy import select
 
@@ -813,7 +824,7 @@ class TestNotificationEndpoints:
             "/api/v1/notifications/send",
             json={
                 "user_id": 1,
-                "notification_type": "info",
+                "notification_type": "in_app",
                 "title": "Test Notification",
                 "content": "This is a test notification",
             },
@@ -1597,13 +1608,13 @@ class TestEdgeCases:
         resp = await api_client.get("/api/v1/tenants/999999999")
         assert resp.status_code == 404, f"Body: {resp.text}"
 
-    async def test_update_nonexistent_tenant_returns_404(self, api_client: AsyncClient):
-        """Update a non-existent tenant returns 404."""
+    async def test_update_nonexistent_tenant_returns_403(self, api_client: AsyncClient):
+        """Updating a tenant you don't own is forbidden (403) before the not-found check runs."""
         resp = await api_client.put(
             "/api/v1/tenants/999999999",
             json={"name": "Does Not Exist"},
         )
-        assert resp.status_code == 404, f"Body: {resp.text}"
+        assert resp.status_code == 403, f"Body: {resp.text}"
 
     async def test_create_tenant_invalid_plan(self, api_client: AsyncClient):
         """Create tenant with invalid plan returns 422."""
