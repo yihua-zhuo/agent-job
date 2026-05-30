@@ -79,6 +79,9 @@ def make_agent_task_handler(state: MockState):
                 return MockResult([[0]])
             status_filter = normalized.get("status")
             date_bounds = normalized.get("created_at")
+            if date_bounds is not None:
+                lo = date_bounds[0] if isinstance(date_bounds, list) else date_bounds
+                hi = date_bounds[-1] if isinstance(date_bounds, list) else date_bounds
             count_val = sum(
                 1 for r in state.agent_tasks.values()
                 if r.get("tenant_id") == tenant_id
@@ -87,10 +90,7 @@ def make_agent_task_handler(state: MockState):
                     date_bounds is None
                     or (
                         r.get("created_at") is not None
-                        and not (
-                            r.get("created_at") < date_bounds[0]
-                            or r.get("created_at") > date_bounds[-1]
-                        )
+                        and not (r.get("created_at") < lo or r.get("created_at") > hi)
                     )
                 )
             )

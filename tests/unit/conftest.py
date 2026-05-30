@@ -17,6 +17,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from dotenv import load_dotenv
+from sqlalchemy import insert, table
 from sqlalchemy.exc import MultipleResultsFound
 
 # Load .env so DATABASE_URL is available in test environment.
@@ -269,9 +270,10 @@ def make_mock_session(handlers=None, state=None):
             bound_params.update(getattr(sql.compile(), "params", {}) or {})
         except Exception as exc:  # noqa: BLE001 - some SQLAlchemy test doubles are not compilable.
             bound_params["_compile_error"] = exc
-            pass
         bound_params.update(params or {})
         for h in handlers:
+            # Pass lowercased tablename so "INSERT INTO Agent_Tasks" matches
+            # "insert into agent_tasks" in handlers.
             result = h(sql_text, bound_params)
             if result is not None:
                 return result
@@ -315,7 +317,10 @@ def make_mock_session(handlers=None, state=None):
                 val = getattr(obj, key, None)
                 if val is not None:
                     params[key] = val
-            sql_text = "insert into " + tablename  # noqa: S608
+            # Build INSERT via SQLAlchemy Core to avoid raw string concat.
+            # Lowercase the SQL text so handlers that match "insert into <table>"
+            # (lowercased by _execute_side_effect) also work here.
+            sql_text = str(insert(table(tablename))).lower()
             for h in handlers:
                 result = h(sql_text, params)
                 if result is not None:
