@@ -90,7 +90,10 @@ class TenantService:
         conditions = [TenantModel.id == tenant_id]
         stmt = update(TenantModel).where(and_(*conditions)).values(**update_values).returning(TenantModel)
         result = await self.session.execute(stmt)
-        return self._to_dict(result.scalar_one())
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise NotFoundException(f"Tenant {tenant_id}")
+        return self._to_dict(row)
 
     async def suspend_tenant(self, tenant_id: int, requesting_tenant_id: int = 0) -> dict:
         return await self.update_tenant(tenant_id, requesting_tenant_id=requesting_tenant_id, status="suspended")

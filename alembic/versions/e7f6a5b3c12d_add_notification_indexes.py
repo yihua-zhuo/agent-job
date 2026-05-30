@@ -12,7 +12,7 @@ params_, status, priority, delivered_at, read_at) then adds:
 """
 
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, and_, column, text
-from sqlalchemy.dialects.postgresql import JSON as PgJSON
+from sqlalchemy.dialects.postgresql import JSON
 
 from alembic import op
 
@@ -25,7 +25,7 @@ depends_on = None
 def upgrade() -> None:
     op.add_column("notifications", Column("channel", String(length=50), nullable=True))
     op.add_column("notifications", Column("template", String(length=255), nullable=True))
-    op.add_column("notifications", Column("params_", JSON().with_variant(PgJSON(), "postgresql"), nullable=True))
+    op.add_column("notifications", Column("params_", JSON(), nullable=True))
     op.add_column("notifications", Column("status", String(length=50), nullable=True))
     op.add_column("notifications", Column("priority", String(length=20), nullable=True))
     op.add_column("notifications", Column("delivered_at", DateTime(timezone=True), nullable=True))

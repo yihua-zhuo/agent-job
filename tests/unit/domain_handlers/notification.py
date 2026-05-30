@@ -242,6 +242,23 @@ def make_reminder_handler(state):
     return handler
 
 
+def _reminder_to_row(r: dict):
+    return MockRow(
+        {
+            "id": r.get("id"),
+            "tenant_id": r.get("tenant_id"),
+            "user_id": r.get("user_id"),
+            "title": r.get("title"),
+            "content": r.get("content"),
+            "remind_at": r.get("remind_at"),
+            "related_type": r.get("related_type"),
+            "related_id": r.get("related_id"),
+            "is_completed": r.get("is_completed", False),
+            "created_at": r.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC),
+        }
+    )
+
+
 def get_handlers(state):
     return [make_notification_handler(state), make_reminder_handler(state)]
 

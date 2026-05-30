@@ -112,7 +112,7 @@ async def send_notification(
         related_type=body.related_type,
         related_id=body.related_id,
     )
-    return {"success": True, "data": data, "message": "通知发送成功"}
+    return {"success": True, "data": data.to_dict(), "message": "通知发送成功"}
 
 
 @notifications_router.put(

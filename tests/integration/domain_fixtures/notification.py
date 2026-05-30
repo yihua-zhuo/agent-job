@@ -76,4 +76,4 @@ async def _seed_reminder(
     return reminder
 
 
-__all__ = ["_seed_notification"]
+__all__ = ["_seed_notification", "_seed_reminder"]

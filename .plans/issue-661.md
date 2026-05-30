@@ -12,7 +12,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - `tests/unit/test_notifications_router.py` — Tests already use the new field names (`channel`, `template`, `params`, `status`, `read_at`); no updates required
 
 ## Implementation Steps
-1. **Replace `src/db/models/notification.py`** with the new `NotificationModel`:
+1. **Replace `src/db/models/notification.py`** — DONE: model already updated with all 11 fields, `to_dict()` serializes `params_` as `"params"`.
    - Fields: `id` (pk), `user_id` (index=True), `tenant_id` (index=True), `channel` (String(50)), `template` (String(255)), `payload_params` (JSON, mapped_column `params_`, using `postgresql.JSON`), `status` (String(50)), `priority` (String(20)), `created_at` (DateTime, `server_default=func.now()`), `delivered_at` (DateTime, nullable), `read_at` (DateTime, nullable).
    - Add `__table_args__` with a composite index: `Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status")`.
    - Import `JSON` from `sqlalchemy.dialects.postgresql`.
@@ -22,8 +22,10 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
 
 3. **Update `src/services/notification_service.py`**: Already complete — the service was updated to use the new field names (`channel`, `template`, `params_`, `read_at`, `status`) in place of the legacy names.
+   - `send_notification` builds `payload_params` as `{"content": content, "related_type": ..., "related_id": ...}`.
+   - `mark_as_read` sets `read_at` + `status` via ORM attributes, then calls `flush()` only (no `refresh()`).
 
-4. **Update `tests/unit/test_notifications_router.py`** — `_MockNotificationModel.to_dict()` now outputs `"params"` (not `"params_"`) to match `NotificationModel.to_dict()`.
+4. **Update `tests/unit/test_notifications_router.py`** — `_MockNotificationModel.to_dict()` at line ~51 now outputs `"params"` (not `"params_"`) to match `NotificationModel.to_dict()`.
 
 5. **Generate the migration** (follow CLAUDE.md exactly): Already complete — the migration at `alembic/versions/e7f6a5b3c12d_add_notification_indexes.py` already contains the manually written partial index (lines 70-78).
    - `docker compose -f configs/docker-compose.test.yml up -d test-db`

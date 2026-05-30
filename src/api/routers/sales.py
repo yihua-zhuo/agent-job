@@ -165,7 +165,7 @@ async def list_opportunities(
     session: AsyncSession = Depends(get_db),
 ):
     service = SalesService(session)
-    items = await service.list_opportunities(
+    result = await service.list_opportunities(
         ctx.tenant_id,
         page=page,
         page_size=page_size,
@@ -173,14 +173,14 @@ async def list_opportunities(
         stage=stage,
         owner_id=owner_id,
     )
-    # Service returns a list for list methods
+    # Service returns dict with 'items' and 'total' keys
     return {
         "success": True,
         "data": {
-            "items": items,
-            "total": len(items),
-            "page": page,
-            "page_size": page_size,
+            "items": result.get("items", []),
+            "total": result.get("total", 0),
+            "page": result.get("page", page),
+            "page_size": result.get("page_size", page_size),
         },
     }
 
