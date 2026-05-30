@@ -168,7 +168,7 @@ code-review:
   quality-check:
     name: Quality Control
     runs-on: ubuntu-latest
-    needs: code-review
+    needs: [unit-test]
     continue-on-error: false
     steps:
       - uses: actions/checkout@v4

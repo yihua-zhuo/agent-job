@@ -1,4 +1,4 @@
-Now I have enough to ground the plan in the real codebase.
+This plan implements issue #549: extract a reusable `Login` component from the existing login page.
 
 # Implementation Plan — Issue #549
 

@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, type FormEvent } from "react";
+import React, { useState, useCallback, type FormEvent } from "react";
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -22,24 +22,24 @@ export function Login({ onSubmit, isLoading: externalLoading }: LoginProps) {
   const [internalLoading, setIsLoading] = useState(false);
   const isLoading = externalLoading ?? internalLoading;
 
-  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (externalLoading !== undefined) {
-      await onSubmit({ email, password, rememberMe });
-    } else {
+  const handleSubmit = useCallback(
+    async (e: FormEvent<HTMLFormElement>) => {
+      e.preventDefault();
+      if (isLoading) return;
       setIsLoading(true);
       try {
         await onSubmit({ email, password, rememberMe });
       } finally {
         setIsLoading(false);
       }
-    }
-  };
+    },
+    [email, password, rememberMe, onSubmit, isLoading]
+  );
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="space-y-1.5">
-        <label htmlFor="email" className="sr-only">Username</label>
+        <label htmlFor="email" className="sr-only">Email address</label>
         <Input
           id="email"
           type="email"

@@ -42,7 +42,7 @@ describe("Login component", () => {
   });
 
   it("shows loading indicator and disables fields while submitting", async () => {
-    let release: () => void;
+    let release: () => void = () => {};
     mockSubmit.mockImplementation(
       () => new Promise<void>((resolve) => { release = resolve; })
     );
@@ -57,7 +57,15 @@ describe("Login component", () => {
         expect(screen.getByPlaceholderText("••••••••").disabled).toBe(true);
       });
     } finally {
-      release!();
+      release();
     }
+  });
+
+  it("disables fields and shows loading when external isLoading is true", async () => {
+    render(<Login onSubmit={mockSubmit} isLoading={true} />);
+    expect(screen.getByRole("button", { name: /signing in…/i })).toBeDisabled();
+    expect(screen.getByPlaceholderText("username")).toBeDisabled();
+    expect(screen.getByPlaceholderText("••••••••")).toBeDisabled();
+    expect(mockSubmit).not.toHaveBeenCalled();
   });
 });

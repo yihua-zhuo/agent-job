@@ -5,7 +5,7 @@ Revises: 9aad50c58f54, a52e1317da90, add_agent_tasks_001, 63274a8b98b3c, afa7c3f
 Create Date: 2026-05-30 14:00:00.000000
 
 Converges all 12 open migration heads into a single linear chain so that
-`alembic upgrade head` resolves to one unambiguous revision.  All12
+`alembic upgrade head` resolves to one unambiguous revision.  All 12
 revisions touch independent tables; the merge is a no-op that records the
 historical convergence.
 
