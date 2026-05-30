@@ -1,6 +1,8 @@
 "use client";
 import { useState, useRef, useCallback, useEffect, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
+import { useTableState } from "@/lib/hooks/useTableState";
+import { flexRender, ColumnDef } from "@tanstack/react-table";
 import { useCustomers, useCreateCustomer, useDeleteCustomer } from "@/lib/api/queries";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -96,7 +98,6 @@ function useColumnResize(initialWidths: Record<string, number>) {
 
   return { widths, onMouseDown, dragging };
 }
-type SortDir = "asc" | "desc";
 
 interface CustomerRowData {
   id: number;
@@ -107,6 +108,86 @@ interface CustomerRowData {
   company: string;
   created_at: string;
 }
+
+const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
+  {
+    id: "select",
+    header: ({ table }) => (
+      <input
+        type="checkbox"
+        className="accent-primary h-4 w-4 cursor-pointer"
+        onChange={table.getToggleAllRowsSelectedHandler()}
+        checked={table.getIsAllRowsSelected()}
+        aria-label="Select all"
+      />
+    ),
+    cell: ({ row }) => (
+      <input
+        type="checkbox"
+        checked={row.getIsSelected()}
+        onChange={row.getToggleSelectedHandler()}
+        className="accent-primary h-4 w-4 cursor-pointer"
+      />
+    ),
+    size: 40,
+  },
+  {
+    id: "name",
+    accessorKey: "name",
+    header: "Name",
+    cell: ({ getValue }) => (
+      <span className="font-medium truncate block">{getValue() as string || "—"}</span>
+    ),
+    size: 160,
+  },
+  {
+    id: "email",
+    accessorKey: "email",
+    header: "Email",
+    cell: ({ getValue }) => <CopyCell value={getValue() as string} type="email" />,
+    size: 200,
+  },
+  {
+    id: "phone",
+    accessorKey: "phone",
+    header: "Phone",
+    cell: ({ getValue }) => <CopyCell value={getValue() as string} type="phone" />,
+    size: 140,
+  },
+  {
+    id: "status",
+    accessorKey: "status",
+    header: "Status",
+    cell: ({ getValue }) => {
+      const status = getValue() as string;
+      return (
+        <span className={`inline-flex items-center rounded px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[status] ?? "bg-gray-100 text-gray-800"}`}>
+          {status}
+        </span>
+      );
+    },
+    size: 120,
+  },
+  {
+    id: "company",
+    accessorKey: "company",
+    header: "Company",
+    cell: ({ getValue }) => (
+      <span className="truncate block">{getValue() as string || "—"}</span>
+    ),
+    size: 160,
+  },
+  {
+    id: "created_at",
+    accessorKey: "created_at",
+    header: "Created",
+    cell: ({ getValue }) => {
+      const dateStr = getValue() as string;
+      return <span>{formatDate(dateStr)}</span>;
+    },
+    size: 120,
+  },
+];
 
 function formatDate(dateStr: string): string {
   const d = new Date(dateStr);
@@ -253,53 +334,37 @@ interface CreateForm {
 
 const blankCreateForm: CreateForm = { name: "", email: "", phone: "", company: "", status: "lead" };
 
-const SortIcon = ({ col, sortKey, sortDir }: { col: SortKey; sortKey: SortKey | null; sortDir: SortDir }) => {
-  if (sortKey !== col) {
-    return <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 transition-opacity inline ml-1" />;
-  }
-  return sortDir === "asc"
-    ? <ChevronUp className="h-3 w-3 opacity-100 inline ml-1 text-primary" />
-    : <ChevronDown className="h-3 w-3 opacity-100 inline ml-1 text-primary" />;
-};
-
 function CustomersPageInner() {
   const searchParams = useSearchParams();
 
   const initPage = Number(searchParams.get("page") ?? 1);
   const initPageSize = Number(searchParams.get("pageSize") ?? 20);
-  const initKeyword = searchParams.get("q") ?? "";
 
   const [page, setPage] = useState(initPage);
   const [pageSize, setPageSize] = useState(initPageSize);
-  const [keyword, setKeyword] = useState(initKeyword);
-  const [debouncedKeyword, setDebouncedKeyword] = useState(initKeyword);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [keyword, setKeyword] = useState("");
   const pageRef = useRef(initPage);
-  const debouncedKeywordRef = useRef(initKeyword);
 
-  const [sortKey, setSortKey] = useState<SortKey | null>(null);
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
   const [hiddenCols, setHiddenCols] = useState<Set<string>>(new Set());
 
-  // Create dialog
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState<CreateForm>(blankCreateForm);
   const createCustomer = useCreateCustomer();
 
-  // Delete dialog
   const [deletingCustomer, setDeletingCustomer] = useState<CustomerRowData | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   const deleteCustomer = useDeleteCustomer();
 
-  // Bulk / column state
+  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadViews());
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [newViewName, setNewViewName] = useState("");
 
   function pushParams(overrides: Record<string, string | null>) {
     const params = new URLSearchParams();
     if (pageRef.current > 1) params.set("page", String(pageRef.current));
     if (pageSize !== 20) params.set("pageSize", String(pageSize));
-    if (debouncedKeywordRef.current) params.set("q", debouncedKeywordRef.current);
     for (const [k, v] of Object.entries(overrides)) {
       if (v !== null) params.set(k, v);
     }
@@ -307,24 +372,44 @@ function CustomersPageInner() {
     window.history.replaceState(null, "", qs ? `?${qs}` : window.location.pathname);
   }
 
-  const handleChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const val = e.target.value;
-    setKeyword(val);
-    if (timerRef.current) clearTimeout(timerRef.current);
-    timerRef.current = setTimeout(() => {
-      setDebouncedKeyword(val);
-      setPage(1);
-    }, 300);
-  }, []);
+  useEffect(() => {
+    pushParams({ page: page > 1 ? String(page) : null });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page]);
+
+  const { data, isLoading, isError, refetch, isFetching } = useCustomers(page, pageSize);
 
   useEffect(() => {
-    pushParams({ q: debouncedKeyword || null, page: page > 1 ? String(page) : null });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, debouncedKeyword]);
+    if (!refetch) return;
+    const interval = setInterval(() => { refetch(); }, 30_000);
+    return () => clearInterval(interval);
+  }, [refetch]);
+
+  const { widths, onMouseDown } = useColumnResize({
+    name: 160, email: 200, phone: 140, status: 120, company: 160, created_at: 120,
+  });
+
+  const rawItems = data?.data?.items ?? [];
+  const info = data?.data;
+
+  const items: CustomerRowData[] = rawItems.map((c) => ({
+    id: Number(c.id),
+    name: String(c.name ?? ""),
+    email: String(c.email ?? ""),
+    phone: String(c.phone ?? ""),
+    status: String(c.status ?? ""),
+    company: String(c.company ?? ""),
+    created_at: String(c.created_at ?? ""),
+  }));
+
+  const { table, globalFilter, setGlobalFilter } = useTableState({
+    data: items,
+    columns: customerColumns,
+  });
 
   const clearSearch = useCallback(() => {
     setKeyword("");
-    setDebouncedKeyword("");
+    setGlobalFilter("");
     setPage(1);
   }, []);
 
@@ -340,37 +425,9 @@ function CustomersPageInner() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [clearSearch]);
 
-  useEffect(() => {
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, []);
-
-  const { data, isLoading, isError, refetch, isFetching } = useCustomers(
-    debouncedKeyword ? 1 : page,
-    pageSize
-  );
-
-
-  // Auto-refresh every 30s
-  useEffect(() => {
-    if (!refetch) return;
-    const interval = setInterval(() => { refetch(); }, 30_000);
-    return () => clearInterval(interval);
-
-  }, [refetch]);
-  const { widths, onMouseDown } = useColumnResize({
-    name: 160, email: 200, phone: 140, status: 120, company: 160, created_at: 120,
-  });
-
-  // Saved views
-  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadViews());
-  const [showSaveDialog, setShowSaveDialog] = useState(false);
-  const [newViewName, setNewViewName] = useState("");
-
   function applyView(view: SavedView) {
+    setGlobalFilter(view.keyword);
     setKeyword(view.keyword);
-    setDebouncedKeyword(view.keyword);
-    setSortKey(view.sortKey);
-    setSortDir(view.sortDir);
     setHiddenCols(new Set(view.hiddenCols));
     setPage(1);
   }
@@ -382,12 +439,13 @@ function CustomersPageInner() {
   }
 
   function handleSaveView() {
+    const nameCol = table.getColumn("name");
     const v: SavedView = {
       id: crypto.randomUUID(),
       name: newViewName.trim() || "Untitled View",
-      keyword: debouncedKeyword,
-      sortKey,
-      sortDir,
+      keyword: globalFilter,
+      sortKey: nameCol?.getIsSorted() ? "name" : null,
+      sortDir: (nameCol?.getIsSorted() === "asc" ? "asc" : "desc") as "asc" | "desc",
       hiddenCols: Array.from(hiddenCols),
     };
     const next = [...savedViews, v];
@@ -396,40 +454,6 @@ function CustomersPageInner() {
     setShowSaveDialog(false);
     setNewViewName("");
     toast.success(`View "${v.name}" saved`);
-  }
-
-  const rawItems = data?.data?.items ?? [];
-  const info = data?.data;
-
-  const items: CustomerRowData[] = rawItems.map((c) => ({
-    id: Number(c.id),
-    name: String(c.name ?? ""),
-    email: String(c.email ?? ""),
-    phone: String(c.phone ?? ""),
-    status: String(c.status ?? ""),
-    company: String(c.company ?? ""),
-    created_at: String(c.created_at ?? ""),
-  }));
-
-  const sorted = [...items].sort((a, b) => {
-    if (!sortKey) return 0;
-    let av: string | number = a[sortKey];
-    let bv: string | number = b[sortKey];
-    if (sortKey === "created_at") {
-      av = new Date(av as string).getTime();
-      bv = new Date(bv as string).getTime();
-    }
-    const cmp = av < bv ? -1 : av > bv ? 1 : 0;
-    return sortDir === "asc" ? cmp : -cmp;
-  });
-
-  function handleSort(key: SortKey) {
-    if (sortKey === key) {
-      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
-    } else {
-      setSortKey(key);
-      setSortDir("asc");
-    }
   }
 
   function toggleSelect(id: number) {
@@ -563,13 +587,17 @@ function CustomersPageInner() {
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
           <Input
             type="text"
-            value={keyword}
-            onChange={handleChange}
+            value={globalFilter}
+            onChange={(e) => {
+              setKeyword(e.target.value);
+              setGlobalFilter(e.target.value);
+              setPage(1);
+            }}
             placeholder="Search customers…"
             className="pl-8 pr-8 rounded-lg border-[1px] shadow-sm focus:ring-2 focus:ring-primary focus:ring-offset-1"
             aria-label="Search customers"
           />
-          {keyword && (
+          {globalFilter && (
             <button
               type="button"
               onClick={clearSearch}
@@ -637,16 +665,19 @@ function CustomersPageInner() {
                   className="accent-primary h-4 w-4 cursor-pointer"
                   aria-label="Select all"
                   onChange={(e) => {
-                    if (e.target.checked) setSelectedIds(new Set(items.map((c) => c.id)));
+                    if (e.target.checked) setSelectedIds(new Set(table.getRowModel().rows.map((r) => r.original.id)));
                     else setSelectedIds(new Set());
                   }}
-                  checked={items.length > 0 && selectedIds.size === items.length}
+                  checked={table.getRowModel().rows.length > 0 && selectedIds.size === table.getRowModel().rows.length}
                 />
               </th>
               {!hiddenCols.has("name") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.name, minWidth: widths.name }}>
-                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("name")}>
-                    Name<SortIcon col="name" sortKey={sortKey} sortDir={sortDir} />
+                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("name")?.getToggleSortingHandler()}>
+                    Name
+                    {table.getColumn("name")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
+                    {table.getColumn("name")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
+                    {!table.getColumn("name")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
                   </div>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
@@ -656,8 +687,11 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("email") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.email, minWidth: widths.email }}>
-                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("email")}>
-                    Email<SortIcon col="email" sortKey={sortKey} sortDir={sortDir} />
+                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("email")?.getToggleSortingHandler()}>
+                    Email
+                    {table.getColumn("email")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
+                    {table.getColumn("email")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
+                    {!table.getColumn("email")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
                   </div>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
@@ -667,8 +701,11 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("phone") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.phone, minWidth: widths.phone }}>
-                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("phone")}>
-                    Phone<SortIcon col="phone" sortKey={sortKey} sortDir={sortDir} />
+                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("phone")?.getToggleSortingHandler()}>
+                    Phone
+                    {table.getColumn("phone")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
+                    {table.getColumn("phone")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
+                    {!table.getColumn("phone")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
                   </div>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
@@ -678,8 +715,11 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("status") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.status, minWidth: widths.status }}>
-                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("status")}>
-                    Status<SortIcon col="status" sortKey={sortKey} sortDir={sortDir} />
+                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("status")?.getToggleSortingHandler()}>
+                    Status
+                    {table.getColumn("status")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
+                    {table.getColumn("status")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
+                    {!table.getColumn("status")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
                   </div>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
@@ -689,8 +729,11 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("company") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.company, minWidth: widths.company }}>
-                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("company")}>
-                    Company<SortIcon col="company" sortKey={sortKey} sortDir={sortDir} />
+                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("company")?.getToggleSortingHandler()}>
+                    Company
+                    {table.getColumn("company")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
+                    {table.getColumn("company")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
+                    {!table.getColumn("company")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
                   </div>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
@@ -700,8 +743,11 @@ function CustomersPageInner() {
               )}
               {!hiddenCols.has("created_at") && (
                 <th scope="col" className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold select-none group relative" style={{ width: widths.created_at, minWidth: widths.created_at }}>
-                  <div className="flex items-center cursor-pointer" onClick={() => handleSort("created_at")}>
-                    Created<SortIcon col="created_at" sortKey={sortKey} sortDir={sortDir} />
+                  <div className="flex items-center cursor-pointer" onClick={table.getColumn("created_at")?.getToggleSortingHandler()}>
+                    Created
+                    {table.getColumn("created_at")?.getIsSorted() === "asc" && <ChevronUp className="h-3 w-3 ml-1 text-primary" />}
+                    {table.getColumn("created_at")?.getIsSorted() === "desc" && <ChevronDown className="h-3 w-3 ml-1 text-primary" />}
+                    {!table.getColumn("created_at")?.getIsSorted() && <ChevronUp className="h-3 w-3 opacity-0 group-hover:opacity-40 ml-1" />}
                   </div>
                   <div
                     className="absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-primary/50 active:bg-primary"
@@ -727,31 +773,31 @@ function CustomersPageInner() {
             ))}
             {isError && (
               <tr>
-                <td colSpan={hiddenCols.size === 0 ? 8 : 8} className="px-3 py-10 text-center text-destructive">Failed to load customers</td>
+                <td colSpan={8} className="px-3 py-10 text-center text-destructive">Failed to load customers</td>
               </tr>
             )}
-            {!isLoading && !isError && sorted.length === 0 && (
+            {!isLoading && !isError && table.getRowModel().rows.length === 0 && (
               <tr>
                 <td colSpan={8} className="px-3 py-12 text-center">
                   <div className="flex flex-col items-center gap-2">
                     <Search className="h-8 w-8 text-muted-foreground/50" />
                     <p className="font-medium text-muted-foreground">No customers found</p>
-                    {keyword && <p className="text-sm text-muted-foreground/70">No results for &ldquo;{keyword}&rdquo;</p>}
+                    {globalFilter && <p className="text-sm text-muted-foreground/70">No results for &ldquo;{globalFilter}&rdquo;</p>}
                   </div>
                 </td>
               </tr>
             )}
-            {sorted.map((c) => (
+            {table.getRowModel().rows.map((row) => (
               <CustomerRow
-                key={c.id}
-                c={c}
+                key={row.original.id}
+                c={row.original}
                 onNavigate={navigateToCustomer}
-                selected={selectedIds.has(c.id)}
+                selected={selectedIds.has(row.original.id)}
                 onToggle={toggleSelect}
                 onDelete={openDelete}
                 widths={widths}
                 hiddenCols={hiddenCols}
-                onRowClick={() => navigateToCustomer(c.id)}
+                onRowClick={() => navigateToCustomer(row.original.id)}
               />
             ))}
           </tbody>
