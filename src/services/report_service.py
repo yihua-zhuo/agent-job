@@ -42,11 +42,7 @@ class ReportService:
         """生成PDF报表 — sync, no DB needed."""
         report_data = report_data or {"config": config or {}, "date_range": date_range or {}}
         title = title or f"{report_type or 'report'} report"
-        content = (
-            "%PDF-1.4\n"
-            f"1 0 obj << /Type /Catalog >> endobj\n% {title}\n"
-            "%%EOF\n"
-        ).encode()
+        content = (f"%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n% {title}\n%%EOF\n").encode()
         filename = f"{report_type or 'report'}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}.pdf"
         return {
             "status": "generated",
@@ -74,10 +70,7 @@ class ReportService:
         """生成Excel报表 — sync, no DB needed."""
         report_data = report_data or {"config": config or {}, "date_range": date_range or {}}
         title = title or f"{report_type or 'report'} report"
-        content = (
-            "PK\x03\x04"
-            f"Generated Excel placeholder for {title}\n"
-        ).encode()
+        content = (f"PK\x03\x04Generated Excel placeholder for {title}\n").encode()
         filename = f"{report_type or 'report'}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}.xlsx"
         return {
             "status": "generated",
@@ -188,9 +181,7 @@ class ReportService:
         offset = (max(1, page) - 1) * page_size
 
         count_result = await self.session.execute(
-            select(func.count(ReportModel.id)).where(
-                ReportModel.tenant_id == tenant_id
-            )
+            select(func.count(ReportModel.id)).where(ReportModel.tenant_id == tenant_id)
         )
         total = count_result.scalar_one()
 

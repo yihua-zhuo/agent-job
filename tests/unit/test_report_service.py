@@ -6,7 +6,6 @@ import pytest
 
 from pkg.errors.app_exceptions import NotFoundException
 from services.report_service import ReportService
-from tests.unit.conftest import MockState, make_mock_session
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -41,14 +40,6 @@ def mock_db_session():
     session.flush = AsyncMock()
     session.refresh = AsyncMock()
     return session
-
-
-@pytest.fixture
-def mock_session_with_handlers():
-    """Mock session backed by the reports domain handler."""
-    state = MockState()
-    session = make_mock_session([], state=state)
-    return session, state
 
 
 # ---------------------------------------------------------------------------
@@ -230,6 +221,12 @@ class TestDeleteReport:
         # Should have called execute twice: once to verify existence, once to delete
         assert mock_db_session.execute.call_count == 2
         mock_db_session.flush.assert_called_once()
+
+        # Verify the second execute call is a DELETE with correct WHERE clause
+        delete_call = mock_db_session.execute.await_args_list[1]
+        sql_str = str(delete_call.args[0]).lower()
+        assert "delete" in sql_str
+        assert "id" in sql_str or "report" in sql_str  # DELETE targets report table
 
     async def test_raises_not_found_for_missing_id(self, mock_db_session):
         """delete_report raises NotFoundException when report doesn't exist."""
