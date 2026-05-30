@@ -349,7 +349,6 @@ def make_mock_session(handlers=None, state=None):
         params = {"id": obj_id}
         if tenant_id is not None:
             params["tenant_id"] = tenant_id
-            # Tablename is guarded by the regex on line 346 above, so S608 is inapplicable.
             sql_text = str(select(text("*")).where(text("id = :id AND tenant_id = :tenant_id")))
         else:
             sql_text = str(select(text("*")).where(text("id = :id")))

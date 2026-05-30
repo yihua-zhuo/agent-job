@@ -13,13 +13,15 @@ from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 class AgentTaskService:
-    _VALID_STATUSES = frozenset({
-        AgentTaskStatus.PENDING,
-        AgentTaskStatus.DISPATCHED,
-        AgentTaskStatus.RUNNING,
-        AgentTaskStatus.COMPLETED,
-        AgentTaskStatus.FAILED,
-    })
+    _VALID_STATUSES = frozenset(
+        {
+            AgentTaskStatus.PENDING,
+            AgentTaskStatus.DISPATCHED,
+            AgentTaskStatus.RUNNING,
+            AgentTaskStatus.COMPLETED,
+            AgentTaskStatus.FAILED,
+        }
+    )
 
     def __init__(self, session: AsyncSession):
         self.session = session
@@ -75,9 +77,7 @@ class AgentTaskService:
         if date_to is not None:
             conditions.append(AgentTaskModel.created_at <= date_to)
 
-        count_result = await self.session.execute(
-            select(func.count(AgentTaskModel.id)).where(and_(*conditions))
-        )
+        count_result = await self.session.execute(select(func.count(AgentTaskModel.id)).where(and_(*conditions)))
         total = count_result.scalar_one()
 
         page = max(page, 1)

@@ -27,4 +27,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    pass  # pass — Alembic cascades to each parent's downgrade; see 9aad50c58f54, addcp001, 9e805b1493a6 downgrades.
+    pass  # pass — alembic downgrade -1 rolls back all three sub-revisions via their own downgrade() functions (9aad50c58f54, addcp001, 9e805b1493a6).

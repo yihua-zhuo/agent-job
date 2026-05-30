@@ -31,4 +31,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    pass
+    pass  # alembic downgrade -1 cascades to sub-revisions' own downgrade() functions.

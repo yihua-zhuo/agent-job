@@ -5,8 +5,6 @@ Now I have all the ground truth I need. Let me write the plan.
 ## Goal
 Implement `AgentTaskService` in `src/services/agent_task_service.py` with `create_task`, `get_task`, and `list_tasks` CRUD methods, following the established service pattern (required `AsyncSession`, ORM returns, `AppException` subclasses). Unit tests and a mock SQL handler in `conftest.py` are also in scope. No router, no migration (migration already shipped in #620).
 
-## Source Contract
-Dev-plan target: `/home/runner/work/agent-job/agent-job/docs/dev-plan/50-automation/0621-implement-agenttaskservice-with-crud-methods.md`
 Template depth: `deep`
 Reading order followed:
 1. `/home/runner/work/agent-job/agent-job/docs/dev-plan/README.md`
@@ -17,7 +15,6 @@ Reading order followed:
 - `src/services/agent_task_service.py` — **new** — `AgentTaskService` class with `create_task`, `get_task`, `list_tasks`
 - `tests/unit/domain_handlers/agent_tasks.py` — **new** — `make_agent_task_handler(state)` for unit test mock session
 - `tests/unit/test_agent_task_service.py` — **new** — unit tests for all three service methods
-- `tests/unit/conftest.py` — **modify** — add `make_agent_task_handler` to domain handler auto-loader (via `__init__.py` re-exports)
 
 ## Implementation Steps
 

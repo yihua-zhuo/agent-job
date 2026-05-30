@@ -20,6 +20,10 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
         state.agent_tasks_next_id = 1
 
     def handler(sql_text: str, params: dict) -> MockResult | None:
+        # Normalize compiled SQL: collapse whitespace/newlines so that
+        # "SELECT * \nWHERE ..." and "SELECT * WHERE ..." are equivalent.
+        sql_text = re.sub(r"\s+", " ", sql_text).strip()
+
         # Normalize compiled SQLAlchemy params: when SQLAlchemy emits multiple
         # params with the same base name (e.g. created_at_1, created_at_2 for two
         # >= and <= comparisons), keep ALL of them so filters receive both bounds.
@@ -33,6 +37,31 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
                 normalized[base].append(v)
             else:
                 normalized[base] = [normalized[base], v]
+
+        # SELECT by id + tenant (refresh path — SELECT * WHERE ...)
+        if sql_text.lower().startswith("select * where id = :id"):
+            tid = normalized.get("id")
+            tenant_id = normalized.get("tenant_id")
+            if tid is None:
+                raise ValueError("refresh SELECT * WHERE id requires id in params")
+            rec = state.agent_tasks.get(tid)
+            if rec is not None and (tenant_id is None or rec.get("tenant_id") == tenant_id):
+                return MockResult([MockRow(rec.copy())])
+            return MockResult([])
+
+        # SELECT by id + tenant (ORM path — SELECT <cols> FROM agent_tasks WHERE agent_tasks.id = ...)
+        # Guard: "agent_tasks.id = :" in the WHERE clause (not just in the SELECT column list).
+        # This correctly distinguishes a COUNT query (SELECT func.count(agent_tasks.id) ... WHERE ... tenant_id = :tenant_id)
+        # from a row query (SELECT ... FROM agent_tasks WHERE agent_tasks.id = :id AND ...).
+        if "from agent_tasks where" in sql_text and re.search(r"agent_tasks\.id\s*=", sql_text):
+            tid = normalized.get("id")
+            tenant_id = normalized.get("tenant_id")
+            if tid is None or tenant_id is None:
+                raise ValueError("agent_tasks SELECT by id requires both id and tenant_id in params")
+            rec = state.agent_tasks.get(tid)
+            if rec is not None and rec.get("tenant_id") == tenant_id:
+                return MockResult([MockRow(rec.copy())])
+            return MockResult([])
 
         # UPDATE (set status after creation)
         if "update agent_tasks" in sql_text:
@@ -110,8 +139,9 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
                 return MockResult([MockRow(rec.copy())])
             return MockResult([])
 
-        # SELECT list (no id filter)
-        if "select" in sql_text and "from agent_tasks " in sql_text and "where id" not in sql_text:
+        # SELECT list (no standalone "id" in WHERE — distinct from by-id path above).
+        # Uses word-boundary matching so substrings like "order_id" don't mis-route.
+        if "select" in sql_text and "from agent_tasks " in sql_text and not re.search(r"\bid\b", sql_text.split("where", 1)[-1] if "where" in sql_text else ""):
             tenant_id = normalized.get("tenant_id")
             if tenant_id is None:
                 raise ValueError("agent_tasks SELECT list requires tenant_id in params")
@@ -141,13 +171,14 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
                     if created < date_bounds[0] or created > date_bounds[-1]:
                         continue
                 rows.append(MockRow(rec.copy()))
-            # Apply ORDER BY created_at DESC, id ASC (id is a stable secondary key
-            # when timestamps collide) before pagination.
+            # Apply ORDER BY created_at DESC, id DESC (id DESC mirrors the DB's
+            # implicit auto-increment ordering as a stable secondary key when
+            # timestamps collide) before pagination.
             order_match = _ORDER_RE.search(sql_text)
             if order_match is not None:
                 order_clause = order_match.group(1).lower()
                 if "desc" in order_clause and "created_at" in order_clause:
-                    rows.sort(key=lambda r: (r.get("created_at") or datetime.min, r.get("id")), reverse=True)
+                    rows.sort(key=lambda r: (r.get("created_at") or datetime.min, r.get("id") or 0), reverse=True)
             offset_match = _OFFSET_RE.search(sql_text)
             limit_match = _LIMIT_RE.search(sql_text)
             if offset_match is not None:
@@ -164,7 +195,7 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
                     rows = rows[: int(limit_val)]
             return MockResult(rows)
 
-        return None
+        raise RuntimeError(f"no handler matched SQL: {sql_text[:80]}")
 
     return handler
 
