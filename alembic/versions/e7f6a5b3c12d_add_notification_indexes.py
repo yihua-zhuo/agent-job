@@ -17,7 +17,7 @@ from sqlalchemy.dialects.postgresql import JSON
 from alembic import op
 
 revision = "e7f6a5b3c12d"
-down_revision = "9d8e7f6a5b3c"
+down_revision = "82ecf4a34e34"
 branch_labels = None
 depends_on = None
 
@@ -64,7 +64,7 @@ def upgrade() -> None:
     op.create_index(
         "ix_notifications_user_tenant_status",
         "notifications",
-        column_names=["user_id", "tenant_id", "status"],
+        ["user_id", "tenant_id", "status"],
     )
     # Partial index for efficient lookup of unread in-app notifications.
     # PostgreSQL partial indexes include all rows matching the WHERE clause; the two
@@ -92,7 +92,7 @@ def downgrade() -> None:
     op.add_column("notifications", Column("type", String(length=50), nullable=True))
     op.add_column("notifications", Column("title", String(length=255), nullable=True))
     op.add_column("notifications", Column("content", String(length=2000), nullable=True))
-    op.add_column("notifications", Column("is_read", Boolean(), nullable=True, server_default=text("false")))
+    op.add_column("notifications", Column("is_read", Boolean(), nullable=True))
     op.add_column("notifications", Column("related_type", String(length=50), nullable=True))
     op.add_column("notifications", Column("related_id", Integer(), nullable=True))
 

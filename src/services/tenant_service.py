@@ -1,5 +1,6 @@
 """Tenant service — CRUD via SQLAlchemy ORM (TenantModel)."""
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, func, select
@@ -8,6 +9,25 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.tenant import TenantModel
 from db.models.user import UserModel
 from pkg.errors.app_exceptions import ForbiddenException, NotFoundException, ValidationException
+
+
+@dataclass
+class _TenantStats:
+    """Stats aggregate returned by get_tenant_stats / get_tenant_usage."""
+
+    tenant: TenantModel
+    user_count: int
+
+    def to_dict(self) -> dict:
+        return {
+            "tenant_id": self.tenant.id,
+            "name": self.tenant.name,
+            "plan": self.tenant.plan,
+            "status": self.tenant.status,
+            "user_count": self.user_count,
+            "storage_used": 0,
+            "api_calls": 0,
+        }
 
 
 class TenantService:
@@ -38,7 +58,6 @@ class TenantService:
         )
         self.session.add(tenant)
         await self.session.flush()
-        await self.session.refresh(tenant)
         return tenant
 
     async def _fetch_tenant(self, target_tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
@@ -139,7 +158,7 @@ class TenantService:
         items = list(result.scalars().all())
         return items, total
 
-    async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
+    async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int = 0) -> _TenantStats:
         if requesting_tenant_id and tenant_id != requesting_tenant_id:
             raise ForbiddenException(f"Cannot view stats for tenant {tenant_id}")
         await self._fetch_tenant(tenant_id, requesting_tenant_id)
@@ -148,27 +167,8 @@ class TenantService:
         )
         user_count = user_count_result.scalar() or 0
         tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
-        # Return an ORM-like object with stats attached; avoid FabricatedData.
-        class _TenantStats:
-            def __init__(self, tenant_obj: TenantModel, user_count: int):
-                object.__setattr__(self, "tenant", tenant_obj)
-                object.__setattr__(self, "user_count", user_count)
-
-            def to_dict(self) -> dict:
-                t = object.__getattribute__(self, "tenant")
-                uc = object.__getattribute__(self, "user_count")
-                return {
-                    "tenant_id": t.id,
-                    "name": t.name,
-                    "plan": t.plan,
-                    "status": t.status,
-                    "user_count": uc,
-                    "storage_used": 0,
-                    "api_calls": 0,
-                }
-
         return _TenantStats(tenant, user_count)
 
-    async def get_tenant_usage(self, tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
+    async def get_tenant_usage(self, tenant_id: int, requesting_tenant_id: int = 0) -> _TenantStats:
         """Return tenant usage data. Delegates to get_tenant_stats for real implementation."""
         return await self.get_tenant_stats(tenant_id, requesting_tenant_id)

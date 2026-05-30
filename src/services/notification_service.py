@@ -158,7 +158,9 @@ class NotificationService:
         # Capture the domain object before deleting from session.
         domain = notification
         await self.session.execute(
-            delete(NotificationModel).where(NotificationModel.id == notification_id)
+            delete(NotificationModel).where(
+                and_(NotificationModel.id == notification_id, NotificationModel.tenant_id == tenant_id)
+            )
         )
         await self.session.flush()
         return domain
@@ -233,7 +235,9 @@ class NotificationService:
         if reminder is None:
             raise NotFoundException("提醒")
         await self.session.execute(
-            delete(ReminderModel).where(ReminderModel.id == reminder_id)
+            delete(ReminderModel).where(
+                and_(ReminderModel.id == reminder_id, ReminderModel.tenant_id == tenant_id)
+            )
         )
         await self.session.flush()
         return reminder

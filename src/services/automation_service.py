@@ -135,7 +135,8 @@ class AutomationService:
             logger.warning("webhook.call action is not implemented: url=%s", params.get("url"))
             return {"type": action_type, "status": "not_implemented", "url": params.get("url")}
         elif action_type == "tag.add":
-            return {"type": action_type, "status": "added", "tag": params.get("tag")}
+            logger.warning("tag.add action is not implemented: tag=%s", params.get("tag"))
+            return {"type": action_type, "status": "not_implemented", "tag": params.get("tag")}
         elif action_type == "ticket.assign":
             return {"type": action_type, "status": "assigned", "assignee_id": params.get("assignee_id")}
         elif action_type == "ticket.update_priority":

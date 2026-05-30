@@ -6,7 +6,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 ## Affected Files
 - `src/db/models/notification.py` — Replace the existing model with the new field set and updated `to_dict()`
 - `src/services/notification_service.py` — Update field references to match the new model (field renames: type → channel, is_read → read_at check, title/content → template/params)
-- `alembic/versions/<new_revision>.py` — New migration (chains from `9d8e7f6a5b3c`) adding composite + partial indexes on `notifications`
+- `alembic/versions/<new_revision>.py` — New migration (chains from `82ecf4a34e34`) adding composite + partial indexes on `notifications`
 - `tests/unit/domain_handlers/notification.py` — New handler for unit-test mock SQL engine
 - `tests/unit/conftest.py` — Notification handler is auto-discovered by `ORDER`-sorted import; no manual registration needed
 - `tests/unit/test_notifications_router.py` — Tests already use the new field names (`channel`, `template`, `params`, `status`, `read_at`); no updates required
