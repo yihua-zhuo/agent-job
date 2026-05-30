@@ -168,6 +168,7 @@ class MockState:
         self.deleted_user_ids: set[int] = set()
         self.activities: dict[int, dict] = {}
         self.activities_next_id: int = 1
+        # domain-owned state — reports table is managed by domain_handlers/reports.py
         self.report_records: dict[int, dict] = {}
         self.report_records_next_id: int = 1
 
@@ -291,6 +292,10 @@ def make_mock_session(handlers=None, state=None):
     session.scalar_one_or_none = MagicMock()
     session.scalar_one = MagicMock()
     session.result = MagicMock()
+    # Store state reference in the mock's __dict__ so tests can seed records
+    # via session._state.report_records[id] = {...}.  Direct __dict__ write
+    # is required to bypass MagicMock's attribute interception.
+    session.__dict__["_state"] = state
 
     @asynccontextmanager
     async def _mock_aenter():

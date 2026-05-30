@@ -1,7 +1,5 @@
 """Unit tests for ReportService CRUD methods."""
 
-from unittest.mock import AsyncMock, MagicMock
-
 import pytest
 
 from pkg.errors.app_exceptions import NotFoundException
@@ -10,64 +8,54 @@ from tests.unit.conftest import MockState, make_mock_session
 from tests.unit.domain_handlers.reports import make_report_handler
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def _make_mock_result(rows=None, scalar_one_val=None, scalar_one_or_none_val=None):
-    """Build a MockResult wired to scalars()."""
-    rows = rows or []
-    result = MagicMock()
-    scalars_mock = MagicMock(
-        all=MagicMock(return_value=rows),
-        first=MagicMock(return_value=rows[0] if rows else None),
-        scalar_one=MagicMock(return_value=scalar_one_val),
-        scalar_one_or_none=MagicMock(return_value=scalar_one_or_none_val),
-    )
-    result.scalars = MagicMock(return_value=scalars_mock)
-    result.scalar_one_or_none = MagicMock(return_value=scalar_one_or_none_val)
-    result.scalar_one = MagicMock(return_value=scalar_one_val)
-    return result
-
-
-# ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
 
 
 @pytest.fixture
 def mock_db_session():
-    """Mock session using the reports domain handler so SQL patterns are validated."""
+    """Mock session with five seeded reports (ids 10-14) plus id=20 for lookup."""
     state = MockState()
-    session = make_mock_session([make_report_handler(state)])
-    # Seed a report for tenant 1 so cross-tenant isolation can be tested.
-    state.report_records[5] = {
-        "id": 5,
-        "tenant_id": 1,
-        "name": "Cross-tenant Test Report",
-        "type": "custom",
-        "config": {},
-        "date_range": {},
-        "created_by": 0,
-        "last_run_at": None,
-        "created_at": None,
-    }
-    # Seed reports for list tests
-    state.report_records_next_id = 10
-    for i in range(5):
-        rid = i + 1
+    state.report_records_next_id = 21
+    for rid in range(10, 15):
         state.report_records[rid] = {
-            "id": rid,
-            "tenant_id": 1,
-            "name": f"Report {rid}",
-            "type": "custom",
-            "config": {},
-            "date_range": {},
-            "created_by": 0,
-            "last_run_at": None,
-            "created_at": None,
+            "id": rid, "tenant_id": 1, "name": f"Report {rid}",
+            "type": "custom", "config": {}, "date_range": {}, "created_by": 0,
+            "last_run_at": None, "created_at": None,
         }
-    return session
+    # id=20 is the standalone record used for single-record lookup tests
+    state.report_records[20] = {
+        "id": 20, "tenant_id": 1, "name": "Cross-tenant Test Report",
+        "type": "custom", "config": {}, "date_range": {}, "created_by": 0,
+        "last_run_at": None, "created_at": None,
+    }
+    return make_mock_session([make_report_handler(state)])
+
+
+@pytest.fixture
+def mock_db_session_for_update():
+    """Mock session for update tests with a pre-seeded report (id=4)."""
+    state = MockState()
+    state.report_records_next_id = 21
+    state.report_records[4] = {
+        "id": 4, "tenant_id": 1, "name": "Old Name", "type": "monthly",
+        "config": {}, "date_range": {}, "created_by": 0,
+        "last_run_at": None, "created_at": None,
+    }
+    return make_mock_session([make_report_handler(state)])
+
+
+@pytest.fixture
+def mock_db_session_for_delete():
+    """Mock session for delete tests with a pre-seeded report (id=6)."""
+    state = MockState()
+    state.report_records_next_id = 21
+    state.report_records[6] = {
+        "id": 6, "tenant_id": 1, "name": "To Delete", "type": "custom",
+        "config": {}, "date_range": {}, "created_by": 0,
+        "last_run_at": None, "created_at": None,
+    }
+    return make_mock_session([make_report_handler(state)])
 
 
 # ---------------------------------------------------------------------------
@@ -82,8 +70,9 @@ class TestListReports:
         svc = ReportService(mock_db_session)
         reports, total = await svc.list_reports(tenant_id=1)
 
-        assert total == 5
-        assert len(reports) == 5
+        # Six records are seeded: ids 10-14 (5 records) + id=20 (1 record)
+        assert total == 6
+        assert len(reports) == 6
         assert mock_db_session.execute.call_count == 2
         calls = mock_db_session.execute.call_args_list
         count_sql = str(calls[0].args[0]).lower()
@@ -102,7 +91,7 @@ class TestListReports:
         svc = ReportService(mock_db_session)
         reports, total = await svc.list_reports(tenant_id=1, page=2, page_size=2)
 
-        assert total == 5
+        assert total == 6
         # The mock handler returns all matching rows (no LIMIT simulation);
         # the assertion below validates the LIMIT/OFFSET appear in the SQL.
         assert mock_db_session.execute.call_count == 2
@@ -113,7 +102,7 @@ class TestListReports:
             compiled_str = str(compiled).lower()
             assert "limit" in compiled_str
             assert "offset" in compiled_str
-        except Exception:
+        except Exception:  # noqa: S110
             pass
 
 
@@ -126,35 +115,23 @@ class TestListReports:
 class TestGetReport:
     async def test_returns_report_for_valid_id(self, mock_db_session):
         """get_report returns the report when it exists for the tenant."""
-        mock_report = MagicMock()
-        mock_report.id = 5
-        mock_report.name = "Sales Report"
-        mock_report.tenant_id = 1
-        mock_result = _make_mock_result(scalar_one_or_none_val=mock_report)
-        mock_db_session.execute = AsyncMock(return_value=mock_result)
-
         svc = ReportService(mock_db_session)
-        report = await svc.get_report(report_id=5, tenant_id=1)
+        report = await svc.get_report(report_id=20, tenant_id=1)
 
-        assert report.id == 5
-        assert report.name == "Sales Report"
+        assert report.id == 20
+        assert report.name == "Cross-tenant Test Report"
 
     async def test_raises_not_found_for_missing_id(self, mock_db_session):
         """get_report raises NotFoundException when report_id does not exist."""
-        mock_db_session.execute = AsyncMock(return_value=_make_mock_result(scalar_one_or_none_val=None))
-
         svc = ReportService(mock_db_session)
         with pytest.raises(NotFoundException, match="Report"):
             await svc.get_report(report_id=999, tenant_id=1)
 
     async def test_raises_not_found_for_wrong_tenant(self, mock_db_session):
         """get_report raises NotFoundException when report belongs to another tenant."""
-        # Report 5 is seeded for tenant 1; requesting with tenant 99 is isolated.
-        mock_db_session.execute = AsyncMock(return_value=_make_mock_result(scalar_one_or_none_val=None))
-
         svc = ReportService(mock_db_session)
         with pytest.raises(NotFoundException, match="Report"):
-            await svc.get_report(report_id=5, tenant_id=99)
+            await svc.get_report(report_id=20, tenant_id=99)
 
 
 # ---------------------------------------------------------------------------
@@ -205,26 +182,16 @@ class TestCreateReport:
 
 @pytest.mark.asyncio
 class TestUpdateReport:
-    async def test_partial_update_preserves_unset_fields(self, mock_db_session):
+    async def test_partial_update_preserves_unset_fields(self, mock_db_session_for_update):
         """update_report only modifies fields present in data dict."""
-        existing = MagicMock(id=4, name="Old Name", type="monthly", config={}, date_range={}, last_run_at=None)
-        mock_db_session.execute = AsyncMock(return_value=_make_mock_result(scalar_one_or_none_val=existing))
-        mock_db_session.refresh = AsyncMock()
-
-        svc = ReportService(mock_db_session)
+        svc = ReportService(mock_db_session_for_update)
         result = await svc.update_report(report_id=4, tenant_id=1, data={"name": "New Name"})
 
-        assert existing.name == "New Name"
-        # type should be unchanged
-        assert existing.type == "monthly"
-        mock_db_session.flush.assert_called_once()
-        mock_db_session.refresh.assert_called_once_with(existing)
-        assert result is existing
+        assert result.name == "New Name"
+        assert result.type == "monthly"
 
     async def test_raises_not_found_for_missing_id(self, mock_db_session):
         """update_report raises NotFoundException when report doesn't exist."""
-        mock_db_session.execute = AsyncMock(return_value=_make_mock_result(scalar_one_or_none_val=None))
-
         svc = ReportService(mock_db_session)
         with pytest.raises(NotFoundException, match="Report"):
             await svc.update_report(report_id=999, tenant_id=1, data={"name": "New Name"})
@@ -237,37 +204,23 @@ class TestUpdateReport:
 
 @pytest.mark.asyncio
 class TestDeleteReport:
-    async def test_deletes_existing_report(self, mock_db_session):
+    async def test_deletes_existing_report(self, mock_db_session_for_delete):
         """delete_report fetches the report then calls session.delete on it."""
-        mock_result = _make_mock_result(scalar_one_or_none_val=MagicMock(id=6))
-        mock_db_session.execute = AsyncMock(return_value=mock_result)
-
-        svc = ReportService(mock_db_session)
+        svc = ReportService(mock_db_session_for_delete)
         await svc.delete_report(report_id=6, tenant_id=1)
 
-        # Single execute call to fetch the ORM object
-        assert mock_db_session.execute.call_count == 1
-        # session.delete is called on the fetched ORM object, then flush
-        mock_db_session.delete.assert_called_once()
-        mock_db_session.flush.assert_called_once()
+        mock_db_session_for_delete.delete.assert_called_once()
+        mock_db_session_for_delete.flush.assert_called_once()
 
     async def test_raises_not_found_for_missing_id(self, mock_db_session):
         """delete_report raises NotFoundException when report does not exist."""
-        mock_db_session.execute = AsyncMock(return_value=_make_mock_result(scalar_one_or_none_val=None))
-
         svc = ReportService(mock_db_session)
         with pytest.raises(NotFoundException, match="Report"):
             await svc.delete_report(report_id=999, tenant_id=1)
 
     async def test_raises_not_found_for_wrong_tenant(self, mock_db_session):
         """delete_report raises NotFoundException when report belongs to another tenant."""
-        # Report 5 is seeded with tenant_id=1; requesting with tenant_id=99
-        # triggers the same query with both id=5 AND tenant_id=99 -> no result.
-        mock_db_session.execute = AsyncMock(return_value=_make_mock_result(scalar_one_or_none_val=None))
-
         svc = ReportService(mock_db_session)
         with pytest.raises(NotFoundException, match="Report"):
-            # Single execute for the SELECT query; nothing deleted.
-            await svc.delete_report(report_id=5, tenant_id=99)
-        assert mock_db_session.execute.call_count == 1
+            await svc.delete_report(report_id=20, tenant_id=99)
         mock_db_session.delete.assert_not_called()

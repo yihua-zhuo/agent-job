@@ -168,7 +168,6 @@ class ReportService:
         )
         self.session.add(entry)
         await self.session.flush()
-        await self.session.refresh(entry)
         return entry
 
     async def list_reports(

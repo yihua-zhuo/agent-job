@@ -23,6 +23,20 @@ def _get_tenant_id(sql_text, params):
     return params.get("tenant_id", 0)
 
 
+def _get_report_id(params):
+    """Extract the report id from params, handling SQLAlchemy's name mangling.
+
+    SQLAlchemy renames duplicate param occurrences (e.g. `id` → `id_1`) when
+    the same column appears multiple times in a compiled statement.
+    """
+    if "id" in params:
+        return params["id"]
+    for key, val in params.items():
+        if key.startswith("id_") and isinstance(val, int):
+            return val
+    return None
+
+
 def make_report_handler(state: MockState):
     """Handle all report-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
     def handler(sql_text, params):
@@ -45,7 +59,7 @@ def make_report_handler(state: MockState):
             return MockResult([MockRow(record.copy())])
 
         if sql_text.startswith("update") and "reports" in sql_text:
-            report_id = params.get("id")
+            report_id = _get_report_id(params)
             rec = state.report_records.get(report_id)
             if rec is None or rec.get("tenant_id") != _get_tenant_id(sql_text, params):
                 return MockResult([])
@@ -55,7 +69,7 @@ def make_report_handler(state: MockState):
             return MockResult([MockRow(rec.copy())])
 
         if sql_text.startswith("delete") and "reports" in sql_text:
-            report_id = params.get("id")
+            report_id = _get_report_id(params)
             rec = state.report_records.get(report_id)
             if rec is None or rec.get("tenant_id") != _get_tenant_id(sql_text, params):
                 return MockResult([])
@@ -67,8 +81,8 @@ def make_report_handler(state: MockState):
             count_val = sum(1 for r in state.report_records.values() if r.get("tenant_id") == tenant_id)
             return MockResult([count_val])
 
-        if "from reports where id" in sql_text and "tenant_id" in sql_text:
-            report_id = params.get("id")
+        if "where reports.id" in sql_text and "tenant_id" in sql_text:
+            report_id = _get_report_id(params)
             rec = state.report_records.get(report_id)
             if rec is not None and rec.get("tenant_id") == _get_tenant_id(sql_text, params):
                 return MockResult([MockRow(rec.copy())])

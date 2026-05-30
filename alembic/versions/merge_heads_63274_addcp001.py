@@ -13,13 +13,19 @@ The four heads are:
 All structural DDL from the four branches is replicated here so that any
 single-head upgrade path produces the complete schema.  downgrade() drops
 everything in reverse dependency order (parent-child before parent).
+
+The automation_logs / automation_rules tables are created by e646948c549a
+(52b19ee00eaf ancestry) which is not in this migration's down_revision
+chain.  FKs to tenants are added idempotently using IF EXISTS so the
+upgrade is safe regardless of which prior head the DB came from.
 """
 
 from collections.abc import Sequence
 
-from alembic import op
 import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
+
+from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "merge_heads_63274_addcp001"
@@ -302,14 +308,20 @@ def upgrade() -> None:
     op.create_unique_constraint("uq_agent_tasks_task_id", "agent_tasks", ["task_id"])
 
     # automation FKs to tenants
-    op.create_foreign_key(
-        "fk_automation_logs_tenant_id", "automation_logs", "tenants", ["tenant_id"], ["id"]
+    # automation_logs / automation_rules are created by e646948c549a (in the
+    # 52b19ee00eaf ancestry); this is a catch-up for DBs that arrived here
+    # via a path that skips that migration.
+    op.execute(
+        "ALTER TABLE automation_logs ADD CONSTRAINT fk_automation_logs_tenant_id "
+        "FOREIGN KEY (tenant_id) REFERENCES tenants(id) IF NOT EXISTS"
     )
-    op.create_foreign_key(
-        "fk_automation_rules_tenant_id", "automation_rules", "tenants", ["tenant_id"], ["id"]
+    op.execute(
+        "ALTER TABLE automation_rules ADD CONSTRAINT fk_automation_rules_tenant_id "
+        "FOREIGN KEY (tenant_id) REFERENCES tenants(id) IF NOT EXISTS"
     )
 
     # missing tenant_id indexes on auth tables
+    # Created by db67d696b6ab; this is a catch-up for paths that bypass it.
     op.create_index(op.f("ix_device_trust_tenant_id"), "device_trust", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_refresh_tokens_tenant_id"), "refresh_tokens", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_user_credentials_tenant_id"), "user_credentials", ["tenant_id"], unique=False)
@@ -335,8 +347,8 @@ def downgrade() -> None:
     op.drop_index(op.f("ix_user_credentials_tenant_id"), table_name="user_credentials")
     op.drop_index(op.f("ix_refresh_tokens_tenant_id"), table_name="refresh_tokens")
     op.drop_index(op.f("ix_device_trust_tenant_id"), table_name="device_trust")
-    op.drop_constraint("fk_automation_rules_tenant_id", "automation_rules", type_="foreignkey")
-    op.drop_constraint("fk_automation_logs_tenant_id", "automation_logs", type_="foreignkey")
+    op.execute("ALTER TABLE automation_rules DROP CONSTRAINT IF EXISTS fk_automation_rules_tenant_id")
+    op.execute("ALTER TABLE automation_logs DROP CONSTRAINT IF EXISTS fk_automation_logs_tenant_id")
     op.drop_constraint("uq_agent_tasks_task_id", "agent_tasks", type_="unique")
     op.create_index(op.f("ix_agent_tasks_task_id"), "agent_tasks", ["task_id"], unique=True)
     op.drop_index(op.f("ix_identity_user_roles_user_id"), table_name="identity_user_roles")
