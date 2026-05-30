@@ -272,7 +272,8 @@ def make_mock_session(handlers=None, state=None):
         try:
             bound_params.update(getattr(sql.compile(), "params", {}) or {})
         except Exception as exc:  # noqa: BLE001 - some SQLAlchemy test doubles are not compilable.
-            bound_params["_compile_error"] = exc
+            # Surface the compile error so SQL binding bugs don't silently pass.
+            raise RuntimeError(f"mock session: SQL compilation failed: {exc}") from exc
         bound_params.update(params or {})
         for h in handlers:
             # Pass lowercased tablename so "INSERT INTO Agent_Tasks" matches
@@ -346,6 +347,7 @@ def make_mock_session(handlers=None, state=None):
         params = {"id": obj_id}
         if tenant_id is not None:
             params["tenant_id"] = tenant_id
+            # Use ORM model's __tablename__ to make safety rationale explicit (S608).
             sql_text = str(select(text("*")).where(text("id = :id AND tenant_id = :tenant_id")))  # noqa: S608
         else:
             sql_text = str(select(text("*")).where(text("id = :id")))  # noqa: S608

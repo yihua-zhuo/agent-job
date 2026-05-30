@@ -13,6 +13,14 @@ from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 class AgentTaskService:
+    _VALID_STATUSES = frozenset({
+        AgentTaskStatus.PENDING,
+        AgentTaskStatus.DISPATCHED,
+        AgentTaskStatus.RUNNING,
+        AgentTaskStatus.COMPLETED,
+        AgentTaskStatus.FAILED,
+    })
+
     def __init__(self, session: AsyncSession):
         self.session = session
 
@@ -58,7 +66,7 @@ class AgentTaskService:
     ) -> tuple[list[AgentTaskModel], int]:
         conditions = [AgentTaskModel.tenant_id == tenant_id]
         if status is not None:
-            if status not in (AgentTaskStatus.PENDING, AgentTaskStatus.DISPATCHED, AgentTaskStatus.RUNNING, AgentTaskStatus.COMPLETED, AgentTaskStatus.FAILED):
+            if status not in self._VALID_STATUSES:
                 raise ValidationException(f"invalid status: {status!r}")
             conditions.append(AgentTaskModel.status == status)
         if date_from is not None:

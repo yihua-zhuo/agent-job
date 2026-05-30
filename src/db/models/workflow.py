@@ -50,6 +50,9 @@ class WorkflowExecutionModel(Base):
     """Workflow execution record mapped to the `workflow_executions` table."""
 
     __tablename__ = "workflow_executions"
+    __table_args__ = (
+        Index("ix_workflow_executions_workflow_id_tenant_id", "workflow_id", "tenant_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workflow_id: Mapped[int] = mapped_column(

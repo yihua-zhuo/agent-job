@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import datetime
 
 import pytest
 
@@ -83,7 +83,7 @@ class TestListTasks:
         state.agent_tasks[other_id] = {
             "id": other_id, "task_id": f"atask_{other_id}", "tenant_id": 2,
             "description": "Tenant 2 pending task", "status": "pending",
-            "subtasks": [], "created_at": datetime.now(UTC), "updated_at": datetime.now(UTC),
+            "subtasks": [], "created_at": datetime.now(), "updated_at": datetime.now(),
         }
         state.agent_tasks_next_id += 1
         pending_tasks, total = await service.list_tasks(tenant_id=1, status="pending", page=1, page_size=20)
@@ -98,9 +98,9 @@ class TestListTasks:
         # Directly seed two tasks with distant dates into the mock state.
         # NOTE: this mirrors AgentTaskModel fields (see test_filters_by_status).
         state = mock_db_session._state
-        now = datetime.now(UTC)
-        past_date = datetime(2020, 1, 1, tzinfo=UTC)
-        future_date = datetime(2099, 1, 1, tzinfo=UTC)
+        now = datetime.now()
+        past_date = datetime(2020, 1, 1)
+        future_date = datetime(2099, 1, 1)
         id1 = state.agent_tasks_next_id
         state.agent_tasks[id1] = {
             "id": id1, "task_id": f"atask_{id1}", "tenant_id": 1,
@@ -138,7 +138,7 @@ class TestListTasks:
         # Seed two tasks with known creation times inside a precise window.
         # NOTE: this mirrors AgentTaskModel fields (see test_filters_by_status).
         state = mock_db_session._state
-        mid_date = datetime(2024, 6, 15, 12, 0, 0, tzinfo=UTC)
+        mid_date = datetime(2024, 6, 15, 12, 0, 0)
         id1 = state.agent_tasks_next_id
         state.agent_tasks[id1] = {
             "id": id1, "task_id": f"atask_{id1}", "tenant_id": 1,
@@ -155,8 +155,8 @@ class TestListTasks:
         state.agent_tasks_next_id += 1
         tasks, total = await service.list_tasks(
             tenant_id=1,
-            date_from=datetime(2024, 6, 1, tzinfo=UTC),
-            date_to=datetime(2024, 6, 30, tzinfo=UTC),
+            date_from=datetime(2024, 6, 1),
+            date_to=datetime(2024, 6, 30),
             page=1,
             page_size=20,
         )
