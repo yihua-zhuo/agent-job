@@ -134,7 +134,7 @@ class SmartCategorizationService:
         """
         import hashlib
 
-        seed = int(hashlib.md5(str(customer_id).encode()).hexdigest()[:8], 16)
+        seed = int(hashlib.md5(str(customer_id).encode()).hexdigest()[:8], 16)  # noqa: S324
 
         tags = []
 
@@ -185,9 +185,9 @@ class SmartCategorizationService:
         # 生成模拟 RFM 分数
         random.seed(42)
         for i in range(1, 501):
-            r_score = random.randint(1, 5)
-            f_score = random.randint(1, 5)
-            m_score = random.randint(1, 5)
+            r_score = random.randint(1, 5)  # noqa: S311
+            f_score = random.randint(1, 5)  # noqa: S311
+            m_score = random.randint(1, 5)  # noqa: S311
 
             rfm_total = r_score + f_score + m_score
 

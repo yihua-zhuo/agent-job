@@ -12,7 +12,7 @@ from typing import Any
 def generate_id(*parts: str) -> str:
     """生成唯一ID"""
     combined = "_".join(str(p) for p in parts)
-    return hashlib.md5(combined.encode()).hexdigest()[:12]
+    return hashlib.md5(combined.encode()).hexdigest()[:12]  # noqa: S324
 
 
 def sanitize_filename(filename: str) -> str:
