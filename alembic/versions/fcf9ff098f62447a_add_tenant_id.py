@@ -30,6 +30,7 @@ def upgrade() -> None:
         "workflow_executions",
         sa.Column("tenant_id", sa.Integer(), nullable=False, server_default="0"),
     )
+    op.alter_column("workflow_executions", "tenant_id", server_default=None)
     op.create_index(
         "ix_workflow_executions_tenant_id",
         "workflow_executions",
