@@ -22,3 +22,5 @@ uv.lock
 code-review-result.json
 .secrets
 .agent-actions
+logs/
+.playwright-mcp

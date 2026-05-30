@@ -43,7 +43,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/notification_service.py`](../../src/services/notification_service.py) L{1}-L{50}
+主入口：[`src/services/notification_service.py`](../../../src/services/notification_service.py) L{1}-L{50}
 
 ```python
 #:1-30:src/services/notification_service.py
@@ -75,12 +75,12 @@ class NotificationService:
         return notification
 ```
 
-当前 `send_notification` 只写 DB，不调用任何外部服务。Router 在 [`src/api/routers/notifications.py`](../../src/api/routers/notifications.py) L{37}-L{43} 定义了 `NotificationCreate` schema，但无 channel 分发逻辑。
+当前 `send_notification` 只写 DB，不调用任何外部服务。Router 在 [`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) L{37}-L{43} 定义了 `NotificationCreate` schema，但无 channel 分发逻辑。
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/notification_service.py`](../../src/services/notification_service.py) — 新增 `channel` 参数，路由到 EmailService / SMSService
+  - [`src/services/notification_service.py`](../../../src/services/notification_service.py) — 新增 `channel` 参数，路由到 EmailService / SMSService
 - 要建：
   - `src/services/channels/email_service.py` — SMTP 邮件发送
   - `src/services/channels/sms_service.py` — Twilio / SendGrid SMS 发送
@@ -119,8 +119,8 @@ class NotificationService:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/notification_service.py`](../../src/services/notification_service.py) | 新增 `channel: str | None = None` 参数；`channel in ("email", "sms")` 时注入对应 handler；其余 channel 仍写 DB |
-| [`src/api/routers/notifications.py`](../../src/api/routers/notifications.py) | `NotificationCreate` schema 增加 `channel: str | None = None`；传递给 service |
+| [`src/services/notification_service.py`](../../../src/services/notification_service.py) | 新增 `channel: str | None = None` 参数；`channel in ("email", "sms")` 时注入对应 handler；其余 channel 仍写 DB |
+| [`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) | `NotificationCreate` schema 增加 `channel: str | None = None`；传递给 service |
 
 ### 3.3 新增能力
 
@@ -354,7 +354,7 @@ class SMSService(ChannelHandler):
 
 ### Step 4: 更新 NotificationService 增加 channel dispatch
 
-在 [`src/services/notification_service.py`](../../src/services/notification_service.py) 的 `send_notification` 方法中新增 channel 参数和分发逻辑。
+在 [`src/services/notification_service.py`](../../../src/services/notification_service.py) 的 `send_notification` 方法中新增 channel 参数和分发逻辑。
 
 操作：
 - 在文件顶部添加 channel handler import
@@ -389,7 +389,7 @@ elif channel == "sms":
 
 ### Step 5: 更新 Notifications router
 
-在 [`src/api/routers/notifications.py`](../../src/api/routers/notifications.py) 的 `NotificationCreate` schema 中添加 `channel` 字段。
+在 [`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) 的 `NotificationCreate` schema 中添加 `channel` 字段。
 
 操作：
 - 在 `NotificationCreate` 类中增加 `channel: str | None = Field(None, description="'email' | 'sms' | 'in_app'")`
@@ -525,8 +525,8 @@ gh pr create --base master --title "feat(#637): email and SMS delivery integrati
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/notification_service.py`](../../src/services/notification_service.py) — 现有通知服务，所有新 channel handler 的调用方
-- 同类参考实现：[`src/api/routers/notifications.py`](../../src/api/routers/notifications.py) — router，serialization 规范
+- 同类参考实现：[`src/services/notification_service.py`](../../../src/services/notification_service.py) — 现有通知服务，所有新 channel handler 的调用方
+- 同类参考实现：[`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) — router，serialization 规范
 - 第三方文档：[Twilio Python SDK](https://www.twilio.com/docs/libraries/python)
 - 第三方文档：[SendGrid Python SDK](https://github.com/sendgrid/sendgrid-python)
 - 第三方文档：[aiosmtplib](https://aiosmtpd.readthedocs.io/)

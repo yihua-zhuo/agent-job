@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/db/models/notification.py`](../../src/db/models/notification.py) L{1}-L{40}
+主入口：[`src/db/models/notification.py`](../../../src/db/models/notification.py) L{1}-L{40}
 
 ```{python}:src/db/models/notification.py
 class NotificationModel(Base):
@@ -66,7 +66,7 @@ class NotificationModel(Base):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/db/models/notification.py`](../../src/db/models/notification.py) — 新增字段 + `__table_args__` 索引声明
+  - [`src/db/models/notification.py`](../../../src/db/models/notification.py) — 新增字段 + `__table_args__` 索引声明
   - `alembic/versions/<new_revision>.py` — 新建 migration（由 alembic autogenerate 生成模板后手动补全）
 - 要建：
   - `tests/unit/test_notification_model.py` — 3 个测试用例（to_dict 序列化、字段类型、Mapped 映射）
@@ -96,7 +96,7 @@ class NotificationModel(Base):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/db/models/notification.py`](../../src/db/models/notification.py) | 新增 `channel`, `template`, `params` (JSONB), `status`, `priority`, `delivered_at`, `read_at` 字段；`__table_args__` 声明复合索引和 partial 索引；更新 `to_dict()` |
+| [`src/db/models/notification.py`](../../../src/db/models/notification.py) | 新增 `channel`, `template`, `params` (JSONB), `status`, `priority`, `delivered_at`, `read_at` 字段；`__table_args__` 声明复合索引和 partial 索引；更新 `to_dict()` |
 
 ### 3.3 新增能力
 
@@ -327,9 +327,9 @@ gh pr create --base master --title "feat(#661): add NotificationModel extended f
 
 ## 9. 参考
 
-- 同类参考实现（ORM model + migration）：[`alembic/versions/9d8e7f6a5b3c_add_auth_tables.py`](../../alembic/versions/9d8e7f6a5b3c_add_auth_tables.py) — 多个表的复合索引 + FK
-- 同类参考实现（JSONB + composite index in ORM）：[`src/db/models/workflow.py`](../../src/db/models/workflow.py) — JSONB 字段声明参考
-- 同类参考实现（partial index pattern）：[`src/db/models/device_trust.py`](../../src/db/models/device_trust.py) — `__table_args__` 索引声明参考
+- 同类参考实现（ORM model + migration）：[`alembic/versions/9d8e7f6a5b3c_add_auth_tables.py`](../../../alembic/versions/9d8e7f6a5b3c_add_auth_tables.py) — 多个表的复合索引 + FK
+- 同类参考实现（JSONB + composite index in ORM）：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) — JSONB 字段声明参考
+- 同类参考实现（partial index pattern）：[`src/db/models/device_trust.py`](../../../src/db/models/device_trust.py) — `__table_args__` 索引声明参考
 - 父 issue：#646
 
 ---

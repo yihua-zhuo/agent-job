@@ -1,5 +1,6 @@
 "use client";
 import React, { useState, type FormEvent } from "react";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -49,8 +50,9 @@ export function Login({ onSubmit }: LoginProps) {
           disabled={isLoading}
         />
       </div>
-      <label className="flex items-center gap-2 text-sm">
+      <label htmlFor="remember-me" className="flex items-center gap-2 text-sm">
         <input
+          id="remember-me"
           type="checkbox"
           checked={rememberMe}
           onChange={(e) => setRememberMe(e.target.checked)}
@@ -58,12 +60,12 @@ export function Login({ onSubmit }: LoginProps) {
         />
         Remember me
       </label>
-      <a
+      <Link
         href="/forgot-password"
         className="text-sm text-muted-foreground hover:underline"
       >
         Forgot password?
-      </a>
+      </Link>
       <Button type="submit" disabled={isLoading} className="w-full">
         {isLoading ? "Signing in…" : "Sign In"}
       </Button>

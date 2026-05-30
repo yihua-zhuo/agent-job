@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
 | 依赖 | [#597](../20-sales/0597-add-recommendation-orm-model-and-risk-schema.md) |
-| 启用后赋能 | [板块名](docs/dev-plan/50-automation/0687-build-rule-execution-engine-and-trigger-dispatch.md) |
+| 启用后赋能 | TBD - 待验证：关联的 automation 板块编号 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -43,7 +43,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) L{43}-L{63}
+主入口：[`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) L{43}-L{63}
 
 ```python:src/services/sales_recommendation.py
 class SalesRecommendationService:
@@ -70,7 +70,7 @@ class SalesRecommendationService:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/__init__.py`](../../src/services/__init__.py) —导出新 `RecommendationService`
+  - [`src/services/__init__.py`](../../../src/services/__init__.py) —导出新 `RecommendationService`
 - 要建：
   - `src/services/recommendation_service.py` — 缓存封装 service
   - `tests/unit/test_recommendation_service.py` — 缓存行为单元测试
@@ -98,7 +98,7 @@ class SalesRecommendationService:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/__init__.py`](../../src/services/__init__.py) | 新增 `RecommendationService` 到模块导出 |
+| [`src/services/__init__.py`](../../../src/services/__init__.py) | 新增 `RecommendationService` 到模块导出 |
 
 ### 3.3 新增能力
 
@@ -254,7 +254,7 @@ async def test_cache_miss_populates_cache(svc, mock_db_session, monkeypatch):
     key = _cache_key(1, 1)
     assert key in _cache
     ts1, data1 = _cache[key]
-    assert data1 == result1
+    assert data1 == result1想象
 
 
 async def test_cache_hit_returns_same_object(svc, mock_db_session, monkeypatch):
@@ -306,7 +306,7 @@ async def test_not_found_raises(svc, mock_db_session):
 
 ## 6. 验收
 
-- [ ] `PYTHONPATH=src ruff check src/services.recommendation_service tests/unit/test_recommendation_service.py` → 0 errors
+- [ ] `PYTHONPATH=src ruff check src/services/recommendation_service tests/unit/test_recommendation_service.py` → 0 errors
 - [ ] `PYTHONPATH=src ruff format --check src/services/recommendation_service.py tests/unit/test_recommendation_service.py` → 全 pass- [ ] `PYTHONPATH=src pytest tests/unit/test_recommendation_service.py -v` → 5 passed
 - [ ] `PYTHONPATH=src pytest tests/unit/test_sales_router.py -v` → 全 passed（回归）
 - [ ] `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → 三次 exit 0（依赖 #597 migration 可用）
@@ -349,8 +349,8 @@ gh pr create --base master --title "feat(sales): add RecommendationService with 
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) — 现有 `SalesRecommendationService`，本板块 delegate 对象
-- 同类参考实现：[`src/services/pipeline_service.py`](../../src/services/pipeline_service.py) — `SalesService` 模式，`__init__(self, session: AsyncSession)` 构造
+- 同类参考实现：[`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) — 现有 `SalesRecommendationService`，本板块 delegate 对象
+- 同类参考实现：[`src/services/pipeline_service.py`](../../../src/services/pipeline_service.py) — `SalesService` 模式，`__init__(self, session: AsyncSession)` 构造
 - 父 issue / 关联：#46（Epic），#597（依赖 — Recommendation ORM），#687（消费方 — automation rule engine 调用 `invalidate_cache`）
 
 ---

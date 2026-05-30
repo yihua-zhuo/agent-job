@@ -6,7 +6,7 @@
 | 分类 | 20-sales |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [#667](../50-automation/0667-add-recommendation-service-and-model.md) |
+| 依赖 | [#667](./0667-implement-recommendation-scoring-and-similar-deals-logic.md) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -18,7 +18,7 @@
 
 当前 `sales/opportunities` 路由仅有基础的 CRUD 端点，缺少两个关键能力：① 机会详情的 AI 推荐结果查询；② 机会列表按业务优先级排序。这两项是销售团队日常工作流的阻塞点——客服无法快速定位高优先级机会，必须在内存中手动计算排序。
 
-[#667](../50-automation/0667-add-recommendation-service-and-model.md) 已实现 `RecommendationService.get_recommendations()` 方法，本板块将其暴露为 REST API 端点。
+[#667](./0667-implement-recommendation-scoring-and-similar-deals-logic.md) 已实现 `RecommendationService.get_recommendations()` 方法，本板块将其暴露为 REST API 端点。
 
 ### 1.2 做完后
 
@@ -28,13 +28,13 @@
 ### 1.3 不做什么（剔除）
 
 - [ ] 不实现 POST/PUT/DELETE 推荐端点（推荐结果为系统生成，只读）
-- [ ] 不在 `RecommendationService` 中新增推荐计算逻辑（[#667](../50-automation/0667-add-recommendation-service-and-model.md) 职责）
+- [ ] 不在 `RecommendationService` 中新增推荐计算逻辑（[#667](./0667-implement-recommendation-scoring-and-similar-deals-logic.md) 职责）
 - [ ] 不为推荐数据新增数据库表（本板块仅对接已建好的服务）
 
 ### 1.4 关键 KPI
 
 - `PYTHONPATH=src pytest tests/unit/test_sales_opportunities_recommendations.py -v` → ≥ 8 passed
-- `ruff check src/api/routers/sales/opportunities.py` → 0 errors
+- `ruff check src/api/routers/sales/opportunities.py` →0 errors
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → 三次 exit 0（如有 migration 变更）
 - 端到端：`curl http://localhost:8000/sales/opportunities/1/recommendations` → HTTP 200，`{"success": true, "data": {...}}`
 
@@ -44,7 +44,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/api/routers/sales/opportunities.py`](../../src/api/routers/sales/opportunities.py) L{1}-L{80}
+主入口：[TBD - 待验证：拆出 sales专属路由文件，确认 opportunities 路由位置]
 
 ```python
 from fastapi import APIRouter, Depends, Query
@@ -75,10 +75,10 @@ async def list_opportunities(
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/api/routers/sales/opportunities.py`](../../src/api/routers/sales/opportunities.py) — 新增 `GET /{opportunity_id}/recommendations` 端点；`list_opportunities` 增加 `sort` 参数与排序逻辑
-  - [`tests/unit/test_sales_opportunities_recommendations.py`](../../tests/unit/test_sales_opportunities_recommendations.py) — 新增单元测试文件
+  - [TBD - 待验证：确认 sales 路由文件路径 — 目前 opportunities路由可能在 `src/api/routers/sales.py` 或需新拆文件] — 新增 `GET /{opportunity_id}/recommendations` 端点；`list_opportunities` 增加 `sort` 参数与排序逻辑
+  - [TBD - 待验证：确认推荐服务测试文件名是否已存在] — 新增单元测试文件
 - 要建：
-  - `tests/unit/test_sales_opportunities_recommendations.py` — 两个端点的 mock session 测试
+  - [TBD - 待验证：确认测试文件名] — 两个端点的 mock session 测试
   - `alembic/versions/<id>_add_recommendation_priority_sort.sql` — 仅当排序字段需建索引时（暂定无需新建）
 
 ### 2.3 缺什么
@@ -97,14 +97,14 @@ async def list_opportunities(
 
 | 路径 | 用途 |
 |------|------|
-| `tests/unit/test_sales_opportunities_recommendations.py` | 覆盖两个新端点的单元测试（含 mock session） |
+| [TBD - 待验证：确认测试文件路径] | 覆盖两个新端点的单元测试（含 mock session） |
 
 ### 3.2 修改文件
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/sales/opportunities.py`](../../src/api/routers/sales/opportunities.py) | 新增 `GET /{opportunity_id}/recommendations` 端点；`GET /` 增加 `sort` 查询参数（值为 `recommendation_priority` 时调用排序逻辑） |
-| [`src/services/recommendation_service.py`](../../src/services/recommendation_service.py) | 确认 `get_recommendations` 方法签名（如尚未公开则改为公开） |
+| [TBD - 待验证：确认 sales 路由文件路径] | 新增 `GET /{opportunity_id}/recommendations` 端点；`GET /` 增加 `sort` 查询参数（值为 `recommendation_priority` 时调用排序逻辑） |
+| [TBD - 待验证：确认推荐服务文件路径] | 确认 `get_recommendations` 方法签名（如尚未公开则改为公开） |
 
 ### 3.3 新增能力
 
@@ -144,7 +144,7 @@ async def list_opportunities(
 
 ### Step 1: 检查 RecommendationService 方法签名
 
-读取 [`src/services/recommendation_service.py`](../../src/services/recommendation_service.py)，确认 `get_recommendations` 方法存在且返回类型为 `list[RecommendationModel]`。如方法不存在或为 private，修改为：
+读取 [TBD - 待验证：确认推荐服务文件路径]，确认 `get_recommendations` 方法存在且返回类型为 `list[RecommendationModel]`。如方法不存在或为 private，修改为：
 
 ```python
 async def get_recommendations(
@@ -165,7 +165,7 @@ async def get_recommendations(
 
 ### Step 2: 在 opportunities.py 注入 RecommendationService
 
-在 [`src/api/routers/sales/opportunities.py`](../../src/api/routers/sales/opportunities.py) 顶部添加 import：
+在 [TBD - 待验证：确认 sales 路由文件路径] 顶部添加 import：
 
 ```python
 from services.recommendation_service import RecommendationService
@@ -177,7 +177,7 @@ from services.recommendation_service import RecommendationService
 
 ### Step 3: 新增 GET /{opportunity_id}/recommendations 端点
 
-在 `opportunities.py` 文件末尾（`@router.get("/")` 之后）新增端点：
+在 [TBD - 待验证：确认 sales 路由文件路径] 文件末尾（`@router.get("/")` 之后）新增端点：
 
 ```python
 @router.get("/{opportunity_id}/recommendations")
@@ -207,7 +207,7 @@ async def get_opportunity_recommendations(
 
 ### Step 4: 为 list_opportunities 添加 sort 参数
 
-修改 `GET /` 端点的函数签名，增加 `sort` Query 参数：
+修改 [TBD - 待验证：确认 sales 路由文件路径] 的 `GET /` 端点函数签名，增加 `sort` Query 参数：
 
 ```python
 @router.get("/")
@@ -250,7 +250,7 @@ else:
 
 ### Step 5: 编写单元测试
 
-创建 [`tests/unit/test_sales_opportunities_recommendations.py`](../../tests/unit/test_sales_opportunities_recommendations.py)，包含以下测试用例：
+创建 [TBD - 待验证：确认测试文件路径]，包含以下测试用例：
 
 **Happy path — GET recommendations 返回数据**：
 ```python
@@ -286,9 +286,7 @@ async def test_sort_by_recommendation_priority_desc(mock_db_session, mock_recomm
     assert items[0].urgency_score >= items[1].urgency_score
 ```
 
-**完成判定**：`PYTHONPATH=src pytest tests/unit/test_sales_opportunities_recommendations.py -v` → ≥ 8 passed
-
----
+**完成判定**：`PYTHONPATH=src pytest tests/unit/test_sales_opportunities_recommendations.py -v` → ≥ 1 passed---
 
 ### Step 6: 运行 lint 和类型检查
 
@@ -340,7 +338,7 @@ gh pr create --base master --title "feat(sales): add recommendations endpoint fo
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/sales/opportunities.py`](../../src/api/routers/sales/opportunities.py) — 现有 `list_opportunities` 端点
+- 同类参考实现：[TBD - 待验证：确认 sales 路由文件路径] — 现有 `list_opportunities` 端点
 - 第三方文档：无
 - 父 issue / 关联：#36（父）, #667（依赖）
 
@@ -351,3 +349,5 @@ gh pr create --base master --title "feat(sales): add recommendations endpoint fo
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+-----

@@ -42,7 +42,7 @@ Issue #45 的子任务。AI 分类结果（type、priority、confidence、reason
 
 ### 2.1 现有实现
 
-参考 ORM 模型（同目录，分割良好）：[`src/db/models/ticket_reply.py`](../../src/db/models/ticket_reply.py) L{1}-L{30}
+参考 ORM 模型（同目录，分割良好）：[`src/db/models/ticket_reply.py`](../../../src/db/models/ticket_reply.py) L{1}-L{30}
 
 ```python
 class TicketReplyModel(Base):
@@ -60,7 +60,7 @@ class TicketReplyModel(Base):
         return {"id": self.id, "ticket_id": self.ticket_id, ...}
 ```
 
-参考迁移（同分支）：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L{1}-L{60}
+参考迁移（同分支）：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L{1}-L{60}
 
 ### 2.2 涉及文件清单
 
@@ -501,9 +501,9 @@ Closes #602"
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/ticket_reply.py`](../../src/db/models/ticket_reply.py) — FK + tenant_id 模式完全相同
-- 同类参考实现：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../alembic/versions/c94d682d4b03_add_ai_conversations.py) — JSONB 列 + server_default 迁移范本
-- 同类参考实现：[`tests/unit/test_ticket_model.py`](../../tests/unit/test_ticket_model.py) — 模型测试风格（不过该文件测试 Pydantic 模型；本板块测试 ORM 模型实例化）
+- 同类参考实现：[`src/db/models/ticket_reply.py`](../../../src/db/models/ticket_reply.py) — FK + tenant_id 模式完全相同
+- 同类参考实现：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../../alembic/versions/c94d682d4b03_add_ai_conversations.py) — JSONB 列 + server_default 迁移范本
+- 同类参考实现：[`tests/unit/test_ticket_model.py`](../../../tests/unit/test_ticket_model.py) — 模型测试风格（不过该文件测试 Pydantic 模型；本板块测试 ORM 模型实例化）
 - 父 issue：#45
 
 ---

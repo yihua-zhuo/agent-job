@@ -6,7 +6,7 @@
 | 分类 | [40-campaigns](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [#525](../50-automation/0525-create-whatsapp-api-wrapper.md), #71 |
+| 依赖 | [#525](../40-campaigns/0525-build-whatsapp-business-api-wrapper.md), #71 |
 | 启用后赋能 | [40-campaigns](../40-campaigns/) (WhatsApp campaign automation), [50-automation](../50-automation/) (trigger-based messaging) |
 | 状态 | 📋 待开始 |
 
@@ -281,9 +281,9 @@ git push -u origin "$(git branch --show-current)"
 gh pr create --base master --title "feat(whatsapp): add WhatsAppService class" --body "Closes #526
 
 ## Summary
-- `WhatsAppService` in `src/services/whatsapp_service.py` with `send_message`, `link_ticket`, `get_conversation_history`
-- `WhatsAppConversation` ORM model with `tenant_id` scoping and JSONB `message_metadata`
-- Alembic migration for `whatsapp_conversations` table
+- \`WhatsAppService\` in \`src/services/whatsapp_service.py\` with \`send_message\`, \`link_ticket\`, \`get_conversation_history\`
+- \`WhatsAppConversation\` ORM model with \`tenant_id\` scoping and JSONB \`message_metadata\`
+- Alembic migration for \`whatsapp_conversations\` table
 - FastAPI router exposing 3 endpoints
 - 6 unit tests (mock HTTP wrapper) + 4 integration tests (DB round-trip)
 

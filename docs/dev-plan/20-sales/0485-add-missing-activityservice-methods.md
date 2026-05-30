@@ -31,8 +31,8 @@
 
 ### 1.4 关键 KPI
 
-- [`PYTHONPATH=src pytest tests/unit/test_activity_service.py -v`](../../tests/unit/test_activity_service.py) → ≥2 passed (one per new method)
-- [`ruff check src/services/activity_service.py src/api/routers/activities.py`](../../src/services/activity_service.py) → 0 errors
+- `PYTHONPATH=src pytest tests/unit/test_activity_service.py -v` → TBD - 待验证：需先创建 tests/unit/test_activity_service.py
+- `ruff check src/services/activity_service.py src/api/routers/activities.py` → 0 errors
 - Both methods include `tenant_id` in every SQL WHERE clause (checked via grep in review)
 
 ---
@@ -50,8 +50,8 @@ TBD - 待验证：`src/db/models/` 中 activity相关的 ORM model 文件名
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/activity_service.py`](../../src/services/activity_service.py) — 新增 `get_recent_activities` 和 `get_activity_by_type` 两个 method
-  - [`src/api/routers/activities.py`](../../src/api/routers/activities.py) — 新增两个对应 router endpoints
+  - TBD - 待验证：`src/services/activity_service.py` — 新增 `get_recent_activities` 和 `get_activity_by_type` 两个 method
+  - TBD - 待验证：`src/api/routers/activities.py` — 新增两个对应 router endpoints
 - 要建：
   - `tests/unit/test_activity_service.py` — 覆盖两个新方法的 unit test（含 mock_db_session fixture）
   - `tests/integration/test_activity_service_integration.py` — 覆盖两个新方法的 integration test
@@ -80,8 +80,8 @@ TBD - 待验证：`src/db/models/` 中 activity相关的 ORM model 文件名
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/activity_service.py`](../../src/services/activity_service.py) | 新增 `get_recent_activities` 和 `get_activity_by_type` 两个 async 方法 |
-| [`src/api/routers/activities.py`](../../src/api/routers/activities.py) | 新增 `GET /activities/recent` 和 `GET /activities/by-type/{activity_type}` 两个 endpoints |
+| TBD - 待验证：`src/services/activity_service.py` | 新增 `get_recent_activities` 和 `get_activity_by_type` 两个 async 方法 |
+| TBD - 待验证：`src/api/routers/activities.py` | 新增 `GET /activities/recent` 和 `GET /activities/by-type/{activity_type}` 两个 endpoints |
 
 ### 3.3 新增能力
 
@@ -258,7 +258,7 @@ async def test_get_activity_by_type_rejects_invalid_page(mock_db_session):
 
 如 `make_activity_handler` 不存在，在 `tests/unit/conftest.py` 中新增一个（参考 `make_customer_handler` 的模式）。
 
-**完成判定**：`PYTHONPATH=src pytest tests/unit/test_activity_service.py -v` → ≥ 4 passed
+**完成判定**：`PYTHONPATH=src pytest tests/unit/test_activity_service.py -v` → TBD - 待验证：需先创建 tests/unit/test_activity_service.py
 
 ### Step 4: Write integration tests
 
@@ -293,8 +293,8 @@ class TestActivityServiceIntegration:
 ## 6. 验收
 
 - [ ] `ruff check src/services/activity_service.py src/api/routers/activities.py` → 0 errors
-- [ ] `PYTHONPATH=src pytest tests/unit/test_activity_service.py -v` → ≥ 4 passed
-- [ ] `PYTHONPATH=src pytest tests/integration/test_activity_service_integration.py -v` → ≥ 3 passed
+- [ ] `PYTHONPATH=src pytest tests/unit/test_activity_service.py -v` → TBD - 待验证：需先创建 tests/unit/test_activity_service.py
+- [ ] `PYTHONPATH=src pytest tests/integration/test_activity_service_integration.py -v` → ≥3 passed
 - [ ] `grep -r "tenant_id" src/services/activity_service.py | grep -c "ActivityModel.*tenant_id\|tenant_id.*=="` → ≥ 4（每条 SQL都有 tenant_id 过滤）
 - [ ] `PYTHONPATH=src mypy src/services/activity_service.py src/api/routers/activities.py` → 0 errors（类型检查通过）
 
@@ -329,6 +329,6 @@ gh pr create --base master --title "feat(#485): add missing ActivityService meth
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — `get_recent_*` + `get_by_type`模式参考
-- 同类参考实现：[`src/services/ticket_service.py`](../../src/services/ticket_service.py) — paginated list pattern (`tuple[list, int]` return)
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — `get_recent_*` + `get_by_type`模式参考
+- 同类参考实现：[`src/services/ticket_service.py`](../../../src/services/ticket_service.py) — paginated list pattern (`tuple[list, int]` return)
 - 父 issue /关联：#452

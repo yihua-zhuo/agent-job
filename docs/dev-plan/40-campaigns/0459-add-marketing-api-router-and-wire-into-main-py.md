@@ -45,14 +45,14 @@
 
 `src/api/routers/marketing.py` 骨架已存在（L1-L157），已包含 `list_campaigns`（GET）、`create_campaign`（POST）、`get_campaign`（GET by id）、`update_campaign_put`（PUT）、`update_campaign_patch`（PATCH）、`delete_campaign`（DELETE）六个端点，但缺失 event 相关端点。
 
-[`src/api/routers/marketing.py`](../../src/api/routers/marketing.py) L1-L16
+[`src/api/routers/marketing.py`](../../../src/api/routers/marketing.py) L1-L16
 
 ```python
 from api.routers.marketing import marketing_router
 marketing_router = APIRouter(prefix="/api/v1/marketing", tags=["marketing"])
 ```
 
-[`src/api/__init__.py`](../../src/api/__init__.py) L19-L26：router auto-discovery 通过 `iter_routers()` 实现，新建 `.py` 文件放入 `api/routers/` 即可自动被发现，无需手动 import 或修改 `main.py`。
+[`src/api/__init__.py`](../../../src/api/__init__.py) L19-L26：router auto-discovery 通过 `iter_routers()` 实现，新建 `.py` 文件放入 `api/routers/` 即可自动被发现，无需手动 import 或修改 `main.py`。
 
 `src/main.py` L86-L88：
 
@@ -66,8 +66,8 @@ for router in iter_routers():
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/api/routers/marketing.py`](../../src/api/routers/marketing.py) — 补全 event 端点（POST/GET/PATCH for events）；确认 router prefix 正确
-  - [`src/main.py`](../../src/main.py) — TBD - 待验证：确认 `iter_routers()` 是否已覆盖 `marketing_router`（若已覆盖则无需改动）
+  - [`src/api/routers/marketing.py`](../../../src/api/routers/marketing.py) — 补全 event 端点（POST/GET/PATCH for events）；确认 router prefix 正确
+  - [`src/main.py`](../../../src/main.py) — TBD - 待验证：确认 `iter_routers()` 是否已覆盖 `marketing_router`（若已覆盖则无需改动）
 - 要建：
   - `tests/unit/test_marketing.py` — router 单元测试（mock MarketingService + auth）
   - `tests/integration/test_marketing_integration.py` — 端到端集成测试
@@ -93,8 +93,8 @@ for router in iter_routers():
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/marketing.py`](../../src/api/routers/marketing.py) | 新增 event 请求 Schema（`EventCreate`/`EventUpdate`）；新增 4 个 event 端点（POST /events、GET /events、GET /events/{id}、PATCH /events/{id}） |
-| [`src/main.py`](../../src/main.py) | TBD - 待验证：若 `iter_routers()` 已覆盖 `marketing_router` 则无需修改；若未覆盖则在 L88 前添加 `from api.routers.marketing import marketing_router` 并在 for 循环后追加 `app.include_router(marketing_router)` |
+| [`src/api/routers/marketing.py`](../../../src/api/routers/marketing.py) | 新增 event 请求 Schema（`EventCreate`/`EventUpdate`）；新增 4 个 event 端点（POST /events、GET /events、GET /events/{id}、PATCH /events/{id}） |
+| [`src/main.py`](../../../src/main.py) | TBD - 待验证：若 `iter_routers()` 已覆盖 `marketing_router` 则无需修改；若未覆盖则在 L88 前添加 `from api.routers.marketing import marketing_router` 并在 for 循环后追加 `app.include_router(marketing_router)` |
 
 ### 3.3 新增能力
 
@@ -345,7 +345,7 @@ gh pr create --base master --title "feat(#459): add Marketing API router (campai
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/sales.py`](../../src/api/routers/sales.py) — POST/GET/PATCH 模式、Schema 类、`_paginated` helper、service 注入方式完全一致
+- 同类参考实现：[`src/api/routers/sales.py`](../../../src/api/routers/sales.py) — POST/GET/PATCH 模式、Schema 类、`_paginated` helper、service 注入方式完全一致
 - 父 issue / 关联：#450（营销服务父 issue，定义 MarketingService 能力）
 - 依赖 issue：#458（TBD — 为本 issue 提供前置依赖确认）
 - 被赋能 issue：#460（MarketingService integration tests，依赖活 router）

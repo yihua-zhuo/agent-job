@@ -6,7 +6,7 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [0654-implement-workflowstep-model-and-router](00-foundations/0654-implement-workflowstep-model-and-router.md) |
+| 依赖 | TBD - 待验证: `00-foundations/0654-implement-workflowstep-model-and-router.md` — 原链接指向 `00-foundations/` 子目录，但该目录在 `50-automation` 下不存在，需确认真实路径 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 

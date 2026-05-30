@@ -6,7 +6,7 @@
 | 分类 | 40-campaigns |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [0642-notification-infrastructure](../0642-notification-infrastructure.md), #662 (NotificationTemplateModel), #664 (NotificationLogModel) |
+| 依赖 | TBD - 待验证：0642 关联文档路径待确认, #662 (NotificationTemplateModel), #664 (NotificationLogModel) |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -46,7 +46,7 @@
 
 `NotificationService.send_notification` 只写 DB，不做任何渠道分发：
 
-[`src/services/notification_service.py`](../../src/services/notification_service.py) L{23}-L{47}
+[`src/services/notification_service.py`](../../../src/services/notification_service.py) L{23}-L{47}
 
 ```python
 async def send_notification(
@@ -78,7 +78,7 @@ async def send_notification(
 
 `NotificationTemplateModel`（#662 已建）：
 
-[`src/db/models/notification_template.py`](../../src/db/models/notification_template.py)
+TBD - 待验证：src/db/models/notification_template.py（路径待 #662 实施后确认）
 
 ```python
 class NotificationTemplateModel(Base):
@@ -96,9 +96,9 @@ class NotificationTemplateModel(Base):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/notification_service.py`](../../src/services/notification_service.py) — `send_notification` 增加 email channel 分发逻辑
-  - [`src/configs/settings.py`](../../src/configs/settings.py) — 增加 SMTP 配置字段
-  - [`alembic/env.py`](../../alembic/env.py) — 确认 `NotificationTemplateModel` 已在 import 列表（如未添加需补入）
+  - [`src/services/notification_service.py`](../../../src/services/notification_service.py) — `send_notification` 增加 email channel 分发逻辑
+  - [`src/configs/settings.py`](../../../src/configs/settings.py) — 增加 SMTP 配置字段
+  - [`alembic/env.py`](../../../alembic/env.py) — 确认 `NotificationTemplateModel` 已在 import 列表（如未添加需补入）
 - 要建：
   - `src/services/template_service.py` — `TemplateService`（load_template + render）
   - `src/services/email_service.py` — `EmailService`（send_email_html）
@@ -130,8 +130,8 @@ class NotificationTemplateModel(Base):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/notification_service.py`](../../src/services/notification_service.py) | `send_notification` 新增 `channel: str = "in_app"` 参数；`channel == "email"` 时调用 `EmailService.send_email_html`，异常时写 `NotificationLogModel`（status=failed） |
-| [`src/configs/settings.py`](../../src/configs/settings.py) | 新增 `smtp_host / smtp_port / smtp_user / smtp_password / smtp_from` 字段（全部 `Field(default=None)`，可选配置） |
+| [`src/services/notification_service.py`](../../../src/services/notification_service.py) | `send_notification` 新增 `channel: str = "in_app"` 参数；`channel == "email"` 时调用 `EmailService.send_email_html`，异常时写 `NotificationLogModel`（status=failed） |
+| [`src/configs/settings.py`](../../../src/configs/settings.py) | 新增 `smtp_host / smtp_port / smtp_user / smtp_password / smtp_from` 字段（全部 `Field(default=None)`，可选配置） |
 
 ### 3.3 新增能力
 
@@ -154,7 +154,7 @@ class NotificationTemplateModel(Base):
 ### 4.2 版本约束
 
 | 依赖 | 版本 | 理由 |
-|------|------|------|
+|------|------|
 | `aiosmtplib` | `>=3.0` | 项目已使用 asyncpg；aiosmtplib 3.x 是最新稳定版，支持 Python 3.10+ async context manager |
 
 ### 4.3 兼容性约束
@@ -169,7 +169,7 @@ class NotificationTemplateModel(Base):
 1. **`aiosmtplib.SMTP` 在 `finally` 块中 `await smtp.quit()` 可能抛异常** → 症状：`quit()` 在连接已断开时（如服务器强制关闭）抛 `aiosmtplib.SMTPServerDisconnected` → 规避：使用 `await smtp.aclose()`（async context manager `async with SMTP(...) as smtp:` 自动处理优雅关闭）
 2. **`str.format` 对缺失变量默认抛 `KeyError`** → 症状：`render` 时若模板有 `{missing_var}` 会崩溃 → 规避：使用 `string.Template(template_str).substitute(variables)`（缺失 key 抛 `KeyError`），或捕获并以原占位符字符串保留未填充变量
 3. **`aiosmtplib` 连接超时默认值过长（120s）** → 症状：SMTP 服务器无响应时线程卡住 → 规避：`SMTP(..., timeout=30)` 显式传 30s 超时
-4. **SMTP_PASSWORD 在 .env 明文存储** → 症状：密码泄露风险 → 规避：仅在本板块做技术实现；密码管理（vault/secrets manager）属于 future work
+4. **`SMTP_PASSWORD` 在 .env 明文存储** → 症状：密码泄露风险 → 规避：仅在本板块做技术实现；密码管理（vault/secrets manager）属于 future work
 
 ---
 
@@ -563,8 +563,8 @@ gh pr create --base master --title "feat(campaigns): add TemplateService and Ema
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/notification_service.py`](../../src/services/notification_service.py) — 本板块修改的对象
-- 同类参考实现：[`src/services/automation_rules.py`](../../src/services/automation_rules.py) — RULES 中 `email.send` action 类型定义了模板引用方式
+- 同类参考实现：[`src/services/notification_service.py`](../../../src/services/notification_service.py) — 本板块修改的对象
+- 同类参考实现：[`src/services/automation_rules.py`](../../../src/services/automation_rules.py) — RULES 中 `email.send` action 类型定义了模板引用方式
 - 第三方文档：[aiosmtplib documentation](https://aiosmtplib.readthedocs.io/) — async SMTP client
 - 第三方文档：[Python string.Template substitute](https://docs.python.org/3/library/string.html#string.Template) — 变量替换行为参考
 - 父 issue / 关联：#39 (父), #648 (依赖，当前 repo 中无对应 doc), #662 (NotificationTemplateModel), #664 (NotificationLogModel), #650 (Celery queue — future work)

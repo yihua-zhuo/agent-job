@@ -6,7 +6,7 @@
 | 分类 | `20-sales` |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [Add Activity Timeline Schema and Service · #492](../20-sales/0492-add-activity-timeline-schema-and-service.md) |
+| 依赖 | TBD - 待验证：0492 文件路径待确认 |
 | 启用后赋能 | 新建 CommentService 的各 consumer 模块；未来 frontend实时推送 subtask 依赖本板块 |
 | 状态 | 📋 待开始 |
 
@@ -71,7 +71,7 @@ N/A — 新建模块
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/db/models/comment.py` | `Comment` ORM 模型：id, resource_type, resource_id, tenant_id, author_id, body, mentions (JSONB), created_at |
 | `alembic/versions/<id>_create_comment_table.py` | 建表 +索引 migration（resource_id + tenant_id 复合索引；tenant_id 独立索引） |
 | `src/services/comment_service.py` | `CommentService`（session in, no default）：`create()`, `list()`, `mention_notifications()` |
@@ -367,3 +367,7 @@ gh pr create --base master --title "feat(#493): add Comment schema, service, and
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+---
+
+**修复说明**：Line 9 的链接 `../20-sales/0492-add-activity-timeline-schema-and-service.md` 指向不存在的文件，无法从上下文推导出正确路径。按照指示 **(b)**，将其替换为 `TBD - 待验证：0492 文件路径待确认`，待确认文件实际位置后再修复。

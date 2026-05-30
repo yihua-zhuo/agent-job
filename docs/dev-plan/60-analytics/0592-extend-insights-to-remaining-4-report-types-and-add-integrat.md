@@ -6,8 +6,8 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [Analytics Insights 基础实现](待补充-依赖594) |
-| 启用后赋能 | [Analytics完整看板](../00-foundations/00-overview.md) |
+| 依赖 | TBD - 待验证：关联 issue #594，路径待确认 |
+| 启用后赋能 | TBD - 待验证：关联 docs/dev-plan/00-foundations/00-overview.md，路径待确认 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -75,7 +75,7 @@ TBD - 待验证：`src/services/analytics_service.py` — 需要确认现有 tre
 
 |路径 | 改动要点 |
 |------|---------|
-| [`src/services/analytics_service.py`](../../src/services/analytics_service.py) | 为 `pipeline_forecast`、`customer_activity`、`team_performance`、`ticket_sla` 实现 get_trends / generate_anomaly_alert / get_recommendation 方法；确保7 种类型（含已有）均返回中文 summary |
+| [`src/services/analytics_service.py`](../../../src/services/analytics_service.py) | 为 `pipeline_forecast`、`customer_activity`、`team_performance`、`ticket_sla` 实现 get_trends / generate_anomaly_alert / get_recommendation 方法；确保7 种类型（含已有）均返回中文 summary |
 
 ### 3.3 新增能力
 
@@ -119,7 +119,7 @@ N/A — 本板块未引入新的 pip依赖。
 ### Step 1:确认已有 3 种报表的实现模式在 `analytics_service.py` 中 grep/clang，找出已有 trend / anomaly / recommendation 方法的签名、report type 常量定义、中文 summary 模板/字典。将结果记录到本板块 §2.1。
 
 操作：
-- a) 读取 [`src/services/analytics_service.py`](../../src/services/analytics_service.py)全文，确认已有 method 签名（`get_trends`、`generate_anvelope_alert`、`get_recommendation` 或类似）
+- a) 读取 [`src/services/analytics_service.py`](../../../src/services/analytics_service.py)全文，确认已有 method 签名（`get_trends`、`generate_anvelope_alert`、`get_recommendation` 或类似）
 - b) 确认 report type 常量名称（如 `PipelineType`, `REPORT_TYPES` dict 等）
 - c) 确认中文 summary 的实现方式（jinja2 / hardcoded dict / i18n 函数）
 

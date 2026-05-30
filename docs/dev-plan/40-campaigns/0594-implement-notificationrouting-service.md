@@ -6,7 +6,7 @@
 | 分类 | [50-automation](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [#593](../30-tickets/0593-implement-smart-notification-model.md) |
+| 依赖 | TBD - 待验证：`#593` 文件路径是否在 `30-tickets/` 目录下 |
 | 启用后赋能 | [通知投递服务](), [数据分析模块]() |
 | 状态 | 📋 待开始 |
 

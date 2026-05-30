@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-`ChurnPredictionService` 在 [`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) 中已实现，其 `predict_churn` 基于数据库真实数据计算流失风险。当前无任何 HTTP 端点暴露其能力，也缺少一个独立规则引擎驱动的 fallback path：在 ML 模型上线前，需要一个基于登录频率、购买近度、Support 工单数、engagement score 四维规则的打分服务，作为快速响应业务需求的临时降级方案，并可独立测试和演进。
+`ChurnPredictionService` 在 [`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) 中已实现，其 `predict_churn` 基于数据库真实数据计算流失风险。当前无任何 HTTP 端点暴露其能力，也缺少一个独立规则引擎驱动的 fallback path：在 ML 模型上线前，需要一个基于登录频率、购买近度、Support 工单数、engagement score 四维规则的打分服务，作为快速响应业务需求的临时降级方案，并可独立测试和演进。
 
 ### 1.2 做完后
 
@@ -43,7 +43,7 @@
 
 TBD - 待验证：`src/services/churn_service.py` 不存在（greenfield），需新建。已有 `ChurnPredictionService` 在 `src/services/churn_prediction.py`，其 `predict_churn` 基于 DB 指标，可作为参考结构，但不直接复用（因为本 issue 要求独立的 rule-based 逻辑）。
 
-[`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) L{49}-L{65}
+[`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) L{49}-L{65}
 
 ```python
 class ChurnPredictionService:
@@ -439,8 +439,8 @@ gh pr create --base master --title "feat(#671): add rule-based ChurnService.pred
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) — 已有 `ChurnPredictionService`，本板块 `ChurnService` 为并行 rule-based 实现
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — service 类的 `__init__(session: AsyncSession)` 签名规范
+- 同类参考实现：[`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) — 已有 `ChurnPredictionService`，本板块 `ChurnService` 为并行 rule-based 实现
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service 类的 `__init__(session: AsyncSession)` 签名规范
 - 父 issue / 关联：#35（CRM Analytics 功能集）
 - 依赖 issue / 关联：#670（新建 ChurnPredictionService） → #671（本板块） → #672（API 端点）
 

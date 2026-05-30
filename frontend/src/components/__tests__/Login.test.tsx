@@ -2,19 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { Login } from "../Login";
 
-// Mock next/navigation
-vi.mock("next/navigation", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-}));
-
-// Mock @tanstack/react-query
-vi.mock("@tanstack/react-query", () => ({
-  useMutation: vi.fn(() => ({
-    mutate: vi.fn(),
-    isPending: false,
-  })),
-}));
-
 describe("Login component", () => {
   const mockSubmit = vi.fn<[Promise<void>]>();
 
@@ -61,13 +48,16 @@ describe("Login component", () => {
     );
     render(<Login onSubmit={mockSubmit} />);
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
-    await waitFor(() => {
-      expect(
-        screen.getByRole("button", { name: /signing in…/i }).disabled
-      ).toBe(true);
-      expect(screen.getByPlaceholderText("username").disabled).toBe(true);
-      expect(screen.getByPlaceholderText("••••••••").disabled).toBe(true);
-    });
-    release!();
+    try {
+      await waitFor(() => {
+        expect(
+          screen.getByRole("button", { name: /signing in…/i }).disabled
+        ).toBe(true);
+        expect(screen.getByPlaceholderText("username").disabled).toBe(true);
+        expect(screen.getByPlaceholderText("••••••••").disabled).toBe(true);
+      });
+    } finally {
+      release!();
+    }
   });
 });

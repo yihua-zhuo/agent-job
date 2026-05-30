@@ -6,7 +6,7 @@
 | 分类 | 20-sales |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [#600](../0600-*.md) |
+| 依赖 | TBD - 待验证：关联 issue #600 文件路径 |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -42,7 +42,7 @@ The current CRM exposes opportunities through `/api/v1/sales/opportunities` but 
 
 ### 2.1 现有实现
 
-主入口：[`src/api/routers/sales.py`](../../src/api/routers/sales.py) L{1}-L{15}
+主入口：[`src/api/routers/sales.py`](../../../src/api/routers/sales.py) L{1}-L{15}
 
 ```python:src/api/routers/sales.py
 from services.sales_service import SalesService, _opp_to_dict
@@ -50,13 +50,13 @@ from services.sales_service import SalesService, _opp_to_dict
 sales_router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
 ```
 
-The sales service at [`src/services/sales_service.py`](../../src/services/sales_service.py) L{1}-L{45} shows the existing opportunity query pattern using `select(OpportunityModel).where(OpportunityModel.tenant_id == tenant_id)` — no `risk_level` filter exists yet. No dashboard router exists in `src/api/routers/`.
+The sales service at [`src/services/sales_service.py`](../../../src/services/sales_service.py) L{1}-L{45} shows the existing opportunity query pattern using `select(OpportunityModel).where(OpportunityModel.tenant_id == tenant_id)` — no `risk_level` filter exists yet. No dashboard router exists in `src/api/routers/`.
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/sales_service.py`](../../src/services/sales_service.py) — add `get_risk_alerts` method
-  - [`tests/unit/test_dashboard_router.py`](../../tests/unit/test_dashboard_router.py) — new tests (file does not exist, created here)
+  - [`src/services/sales_service.py`](../../../src/services/sales_service.py) — add `get_risk_alerts` method
+  - TBD - 待验证：`tests/unit/test_dashboard_router.py` 文件位置（board 将创建此文件）
 - 要建：
   - `src/api/routers/dashboard.py` — new router with `GET /sales/dashboard/risk-alerts`
   - `src/services/__init__.py` — add `SalesService` export if not already exported
@@ -84,8 +84,8 @@ The sales service at [`src/services/sales_service.py`](../../src/services/sales_
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/sales_service.py`](../../src/services/sales_service.py) | Add `get_risk_alerts(self, tenant_id, owner_id?)` method; SQL: `select OpportunityModel` filtered `risk_level != 'low'`, also returns `by_owner` count dict |
-| [`src/main.py`](../../src/main.py) | Register `dashboard_router` with `app.include_router(dashboard_router, prefix="/api/v1")` |
+| [`src/services/sales_service.py`](../../../src/services/sales_service.py) | Add `get_risk_alerts(self, tenant_id, owner_id?)` method; SQL: `select OpportunityModel` filtered `risk_level != 'low'`, also returns `by_owner` count dict |
+| [`src/main.py`](../../../src/main.py) | Register `dashboard_router` with `app.include_router(dashboard_router, prefix="/api/v1")` |
 
 ### 3.3 新增能力
 
@@ -340,9 +340,9 @@ gh pr create --base master --title "feat(sales): risk-alerts dashboard endpoint 
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/sales.py`](../../src/api/routers/sales.py) — existing sales router pattern (same envelope, auth, session injection)
-- 同类参考实现：[`src/services/sales_service.py`](../../src/services/sales_service.py) — `get_forecast` method as structural template for `get_risk_alerts`
-- 父 issue / 关联：#46 (parent epic), #600 (prerequisite — adds `risk_level` column to `opportunities`)
+- 同类参考实现：[`src/api/routers/sales.py`](../../../src/api/routers/sales.py) — existing sales router pattern (same envelope, auth, session injection)
+- 同类参考实现：[`src/services/sales_service.py`](../../../src/services/sales_service.py) — `get_forecast` method as structural template for `get_risk_alerts`
+- 父 issue / 关联：TBD - 待验证：#46 (parent epic), #600 (prerequisite — adds `risk_level` column to `opportunities`)
 
 ---
 

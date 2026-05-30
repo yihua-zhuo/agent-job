@@ -6,7 +6,7 @@
 | 分类 | 00-foundations |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [#642 创建 @require_permission 装饰器](../10-customers/0642-define-require-permission-decorator.md) |
+| 依赖 | [#642 创建 @require_permission 装饰器](../70-platform/0642-add-role-and-permission-management-api-endpoints.md) |
 | 启用后赋能 | [#38 (父 issue)](../../..) |
 | 状态 | 📋 待开始 |
 
@@ -43,7 +43,7 @@
 
 ### 2.1 现有实现
 
-[`src/internal/middleware/fastapi_auth.py`](../../src/internal/middleware/fastapi_auth.py) L38-L95
+[`src/internal/middleware/fastapi_auth.py`](../../../src/internal/middleware/fastapi_auth.py) L38-L95
 
 ```python
 38: class AuthContext:
@@ -54,7 +54,7 @@
 43:         self.roles = roles
 ```
 
-[`src/services/rbac_service.py`](../../src/services/rbac_service.py) L56-L72（PERMISSIONS map）
+[`src/services/rbac_service.py`](../../../src/services/rbac_service.py) L56-L72（PERMISSIONS map）
 
 ```python
 56: DEFAULT_PERMISSIONS = [
@@ -106,20 +106,20 @@
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/api/routers/customers.py`](../../src/api/routers/customers.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/sales.py`](../../src/api/routers/sales.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/reports.py`](../../src/api/routers/reports.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/users.py`](../../src/api/routers/users.py) — 非 auth 端点加 `@require_permission`
-  - [`src/api/routers/rbac.py`](../../src/api/routers/rbac.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/tenants.py`](../../src/api/routers/tenants.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/activities.py`](../../src/api/routers/activities.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/notifications.py`](../../src/api/routers/notifications.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/automation.py`](../../src/api/routers/automation.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/marketing.py`](../../src/api/routers/marketing.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/ai.py`](../../src/api/routers/ai.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/tasks.py`](../../src/api/routers/tasks.py) — 所有端点加 `@require_permission`
-  - [`src/api/routers/lead_routing.py`](../../src/api/routers/lead_routing.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/sales.py`](../../../src/api/routers/sales.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/reports.py`](../../../src/api/routers/reports.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/users.py`](../../../src/api/routers/users.py) — 非 auth 端点加 `@require_permission`
+  - [`src/api/routers/rbac.py`](../../../src/api/routers/rbac.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/tenants.py`](../../../src/api/routers/tenants.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/activities.py`](../../../src/api/routers/activities.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/automation.py`](../../../src/api/routers/automation.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/marketing.py`](../../../src/api/routers/marketing.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/ai.py`](../../../src/api/routers/ai.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/tasks.py`](../../../src/api/routers/tasks.py) — 所有端点加 `@require_permission`
+  - [`src/api/routers/lead_routing.py`](../../../src/api/routers/lead_routing.py) — 所有端点加 `@require_permission`
 - 要建：
   - `tests/unit/test_permission_denied.py` — 新建：测试所有路由的权限拒绝场景
 
@@ -144,20 +144,20 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/customers.py`](../../src/api/routers/customers.py) | 13 个端点 + `@require_permission("customer:*")`；leads/recycle 保留 admin/manager 角色检查 |
-| [`src/api/routers/sales.py`](../../src/api/routers/sales.py) | 12 个端点加 `@require_permission("opportunity:*")` 和 `"pipeline:*"` |
-| [`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) | 12 个端点 + `@require_permission("ticket:*")`；SLA endpoints + `"ticket:read"` |
-| [`src/api/routers/reports.py`](../../src/api/routers/reports.py) | 7 个端点 + `"report:read/create/delete"` |
-| [`src/api/routers/users.py`](../../src/api/routers/users.py) | 8 个非 auth 端点 + `"user:*"`；跳过 login/register |
-| [`src/api/routers/rbac.py`](../../src/api/routers/rbac.py) | 13 个端点 + `"rbac:read"` 或 `"rbac:manage"` |
-| [`src/api/routers/tenants.py`](../../src/api/routers/tenants.py) | 7 个端点 + `"tenant:read"` 或 `"tenant:manage"` |
-| [`src/api/routers/activities.py`](../../src/api/routers/activities.py) | 8 个端点 + `"activity:*"` |
-| [`src/api/routers/notifications.py`](../../src/api/routers/notifications.py) | 10 个端点 + `"notification:*"` |
-| [`src/api/routers/automation.py`](../../src/api/routers/automation.py) | 7 个端点 + `"automation:*"` |
-| [`src/api/routers/marketing.py`](../../src/api/routers/marketing.py) | 6 个端点 + `"campaign:*"` |
-| [`src/api/routers/ai.py`](../../src/api/routers/ai.py) | 3 个端点 + `"ai:access"` |
-| [`src/api/routers/tasks.py`](../../src/api/routers/tasks.py) | 5 个端点 + `"task:*"` |
-| [`src/api/routers/lead_routing.py`](../../src/api/routers/lead_routing.py) | 7 个端点；write 端点保留 admin/manager 角色检查 + `"automation:manage"` |
+| [`src/api/routers/customers.py`](../../../src/api/routers/customers.py) | 13 个端点 + `@require_permission("customer:*")`；leads/recycle 保留 admin/manager 角色检查 |
+| [`src/api/routers/sales.py`](../../../src/api/routers/sales.py) | 12 个端点加 `@require_permission("opportunity:*")` 和 `"pipeline:*"` |
+| [`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) | 12 个端点 + `@require_permission("ticket:*")`；SLA endpoints + `"ticket:read"` |
+| [`src/api/routers/reports.py`](../../../src/api/routers/reports.py) | 7 个端点 + `"report:read/create/delete"` |
+| [`src/api/routers/users.py`](../../../src/api/routers/users.py) | 8 个非 auth 端点 + `"user:*"`；跳过 login/register |
+| [`src/api/routers/rbac.py`](../../../src/api/routers/rbac.py) | 13 个端点 + `"rbac:read"` 或 `"rbac:manage"` |
+| [`src/api/routers/tenants.py`](../../../src/api/routers/tenants.py) | 7 个端点 + `"tenant:read"` 或 `"tenant:manage"` |
+| [`src/api/routers/activities.py`](../../../src/api/routers/activities.py) | 8 个端点 + `"activity:*"` |
+| [`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) | 10 个端点 + `"notification:*"` |
+| [`src/api/routers/automation.py`](../../../src/api/routers/automation.py) | 7 个端点 + `"automation:*"` |
+| [`src/api/routers/marketing.py`](../../../src/api/routers/marketing.py) | 6 个端点 + `"campaign:*"` |
+| [`src/api/routers/ai.py`](../../../src/api/routers/ai.py) | 3 个端点 + `"ai:access"` |
+| [`src/api/routers/tasks.py`](../../../src/api/routers/tasks.py) | 5 个端点 + `"task:*"` |
+| [`src/api/routers/lead_routing.py`](../../../src/api/routers/lead_routing.py) | 7 个端点；write 端点保留 admin/manager 角色检查 + `"automation:manage"` |
 
 ### 3.3 新增能力
 
@@ -490,7 +490,7 @@ gh pr create --base master --title "feat(rbac): wire @require_permission into al
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) — 当前唯一使用角色检查的端点（leads/recycle，admin/manager 角色检查）
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — 当前唯一使用角色检查的端点（leads/recycle，admin/manager 角色检查）
 - 第三方文档：[FastAPI Depends 文档](https://fastapi.tiangolo.com/tutorial/dependencies/)
 - 父 issue / 关联：#38 (父 issue), #642 (依赖项，提供 `@require_permission` 装饰器)
 

@@ -6,7 +6,7 @@
 | 分类 | 70-platform |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [#611 板块](./../70-platform/0611-add-code-review-service.md), [无（#44 为父 issue，不阻塞本板块直接工作）] |
+| 依赖 | [#611 板块](./../70-platform/0611-add-post-agents-review-and-get-agents-review-history-routers.md), [无（#44 为父 issue，不阻塞本板块直接工作）] |
 | 启用后赋能 | [#613集成测试板块]（本板块完成后方可接入真实 LLM） |
 | 状态 | 📋 待开始 |
 
@@ -52,7 +52,7 @@ TBD - 待验证：`src/api/routers/code_review_router.py` L? — 预期存在 `P
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`tests/unit/conftest.py`](../../tests/unit/conftest.py) — 新增 `make_code_review_handler(state)` 工厂函数
+  - [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — 新增 `make_code_review_handler(state)` 工厂函数
 - 要建：
   - `tests/unit/test_code_review_service.py` — CodeReviewService 单元测试（mock session + mock LLM blob）
   - `tests/unit/test_code_review_routers.py` — Router envelope + 分页测试（mock service 层）
@@ -60,7 +60,8 @@ TBD - 待验证：`src/api/routers/code_review_router.py` L? — 预期存在 `P
 ### 2.3 缺什么
 
 - [ ] 缺少 `tests/unit/test_code_review_service.py` → CodeReviewService 的 `review()` 和 `list_reviews()` 方法无回归测试
-- [ ] 缺少 `tests/unit/test_code_review_routers.py` → 两个 router endpoint 无 HTTP 层覆盖- [ ] 缺少 `conftest.py` 中的 `make_code_review_handler` → 无法为 CodeReview 表构建有状态 MockResult
+- [ ] 缺少 `tests/unit/test_code_review_routers.py` → 两个 router endpoint 无 HTTP 层覆盖
+- [ ] 缺少 `conftest.py` 中的 `make_code_review_handler` → 无法为 CodeReview 表构建有状态 MockResult
 - [ ] 缺少对 LLM 返回结构的断言 → 无法检测 Prompt 漂移导致的字段名/类型错误
 - [ ] 缺少分页逻辑测试 → `GET /code-reviews/` 的 `page / page_size` 参数边界无覆盖---
 
@@ -78,7 +79,7 @@ TBD - 待验证：`src/api/routers/code_review_router.py` L? — 预期存在 `P
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/unit/conftest.py`](../../tests/unit/conftest.py) | 在文件末尾添加 `make_code_review_handler(state)` 工厂（与现有 `make_customer_handler` 格式一致） |
+| [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) | 在文件末尾添加 `make_code_review_handler(state)` 工厂（与现有 `make_customer_handler` 格式一致） |
 
 ### 3.3 新增能力
 
@@ -186,7 +187,8 @@ def client(mock_session):
 class TestCodeReviewRouters:
     async def test_post_returns_envelope(self, client):
         response = client.post("/code-reviews/", json={"pr_url": "..."})
-        assert response.status_code == 200        data = response.json()
+        assert response.status_code == 200
+        data = response.json()
         assert data["success"] is True
         assert "data" in data
 
@@ -200,11 +202,14 @@ class TestCodeReviewRouters:
 
 **完成判定**：`PYTHONPATH=src ruff check tests/unit/test_code_review_routers.py` → 0 errors
 
-### Step 4: 运行全部单元测试套件验证```bash
+### Step 4: 运行全部单元测试套件验证
+```bash
 PYTHONPATH=src pytest tests/unit/test_code_review_service.py tests/unit/test_code_review_routers.py -v
 ```
 
-**完成判定**：输出包含 `test_code_review_service.py::... PASSED` 和 `test_code_review_routers.py::... PASSED`，全部 passed，exit 0### Step 5: Lint 全量相关文件
+**完成判定**：输出包含 `test_code_review_service.py::... PASSED` 和 `test_code_review_routers.py::... PASSED`，全部 passed，exit 0
+
+### Step 5: Lint 全量相关文件
 
 ```bash
 ruff check tests/unit/test_code_review_service.py tests/unit/test_code_review_routers.py tests/unit/conftest.py
@@ -252,8 +257,9 @@ gh pr create --base master --title "feat(platform): unit tests for CodeReviewSer
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/conftest.py`](../../tests/unit/conftest.py) — `make_customer_handler` / `make_user_handler` 模式- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — service 层 mock范式
-- 同类参考实现：[`tests/unit/`](../../tests/unit/) — router 测试文件（如有）
+- 同类参考实现：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — `make_customer_handler` / `make_user_handler` 模式
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — service 层 mock范式
+- 同类参考实现：[`tests/unit/`](../../../tests/unit/) — router 测试文件（如有）
 - 父 issue /关联：#44（平台基础设施父 issue）、#611（CodeReviewService 实现，#612 直接依赖）
 
 ---

@@ -6,8 +6,8 @@
 | 分类 | 50-automation |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [0620-implement-agenttaskmodel-and-orm](../0620-implement-agenttaskmodel-and-orm.md) |
-| 启用后赋能 | [板块名](../板块名.md), ... |
+| 依赖 | [0620-implement-agenttaskmodel-and-orm](./0620-add-agent-tasks-orm-model-and-database-migration.md) |
+| 启用后赋能 | TBD - 待验证：后续 router 板将依赖此 service |
 | 状态 | 📋 待开始 |
 
 ---
@@ -44,7 +44,7 @@ Issue #620 will define the `AgentTaskModel` ORM model. With that model in place,
 TBD - 待验证：`src/services/` 中是否已有任何 `agent_task` 相关文件（#620 尚未合并时无法确认）。若 #620 已合并，应存在 `src/db/models/agent_task.py` 定义 `AgentTaskModel`，参考同目录下的 `customer.py` 或 `pipeline.py` 的结构。
 
 同类参考实现（确认存在的服务）：
-[`src/services/customer_service.py`](../../src/services/customer_service.py) — 标准 service 模式：`__init__(self, session: AsyncSession)` + raise `NotFoundException` / `ValidationException`
+[`src/services/customer_service.py`](../../../src/services/customer_service.py) — 标准 service 模式：`__init__(self, session: AsyncSession)` + raise `NotFoundException` / `ValidationException`
 
 ### 2.2 涉及文件清单
 
@@ -413,7 +413,7 @@ gh pr create --base master --title "feat(automation): AgentTaskService CRUD (#62
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py)
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py)
 - ORM model（父 issue）：#620
 - 父 issue：#42
 - 依赖：#620

@@ -46,7 +46,7 @@ Issue #670 要求创建一个 `ChurnPrediction` ORM model 和对应的 Alembic m
 
 同类参考实现（使用 JSON 字段 + 多租户索引）：
 
-[`src/db/models/ai_conversation.py`](../../src/db/models/ai_conversation.py) L{11}-L{37}
+[`src/db/models/ai_conversation.py`](../../../src/db/models/ai_conversation.py) L{11}-L{37}
 
 ```python
 class AIConversationModel(Base):
@@ -71,13 +71,13 @@ class AIConversationModel(Base):
     )
 ```
 
-[`src/db/models/customer.py`](../../src/db/models/customer.py) L{25}
+[`src/db/models/customer.py`](../../../src/db/models/customer.py) L{25}
 
 ```python
     tags: Mapped[list[str]] = mapped_column(JSON, default=list, nullable=False)
 ```
 
-[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L{21}-L{34}
+[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L{21}-L{34}
 
 ```python
     op.create_table('ai_conversations',
@@ -386,8 +386,8 @@ gh pr create --base master --title "feat(#670): add ChurnPrediction ORM model an
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/ai_conversation.py`](../../src/db/models/ai_conversation.py) — JSONB 列 + 多租户索引的 ORM 模式
-- 同类参考实现：[`src/db/models/customer.py`](../../src/db/models/customer.py) — JSON 列的 `to_dict()` 模式（None 短路）
+- 同类参考实现：[`src/db/models/ai_conversation.py`](../../../src/db/models/ai_conversation.py) — JSONB 列 + 多租户索引的 ORM 模式
+- 同类参考实现：[`src/db/models/customer.py`](../../../src/db/models/customer.py) — JSON 列的 `to_dict()` 模式（None 短路）
 - 第三方文档：[SQLAlchemy 2.x Mapped Column](https://docs.sqlalchemy.org/en/20/orm/mapping_columns.html)
 - 父 issue / 关联：#35
 

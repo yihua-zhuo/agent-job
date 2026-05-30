@@ -45,7 +45,7 @@
 
 Router registration：`src/main.py` uses `iter_routers()` from `src/api/__init__.py` to auto-discover all `APIRouter` instances in `src/api/routers/`. Adding a new `.py` file there is sufficient — no `main.py` edits required.
 
-Router auto-discovery pattern in [`src/main.py`](../../src/main.py):
+Router auto-discovery pattern in [`src/main.py`](../../../src/main.py):
 
 ```python
 from api import iter_routers
@@ -384,7 +384,7 @@ gh pr create --base master --title "feat(analytics): wire 6 dashboard metric GET
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/sales.py`](../../src/api/routers/sales.py) — same router pattern (service injection + auth context + ApiResponse wrapper)
+- 同类参考实现：[`src/api/routers/sales.py`](../../../src/api/routers/sales.py) — same router pattern (service injection + auth context + ApiResponse wrapper)
 - 父 issue：#56
 
 ---

@@ -208,9 +208,9 @@ gh pr create --base master --title "test(#623): unit tests for AgentTaskService 
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_tasks.py`](../../tests/unit/test_tasks.py) — router-level test pattern (`monkeypatch + AsyncClient`，`client_with_service` fixture factory）
-- 同类参考实现：[`tests/unit/domain_handlers/automation.py`](../../tests/unit/domain_handlers/automation.py) — stateful domain handler pattern (`make_automation_handler(state)` / `get_handlers(state)`)
-- 同类参考实现：[`tests/unit/domain_handlers/tasks.py`](../../tests/unit/domain_handlers/tasks.py) — stateless domain handler for tasks table
+- 同类参考实现：[`tests/unit/test_tasks.py`](../../../tests/unit/test_tasks.py) — router-level test pattern (`monkeypatch + AsyncClient`，`client_with_service` fixture factory）
+- 同类参考实现：[`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py) — stateful domain handler pattern (`make_automation_handler(state)` / `get_handlers(state)`)
+- 同类参考实现：[`tests/unit/domain_handlers/tasks.py`](../../../tests/unit/domain_handlers/tasks.py) — stateless domain handler for tasks table
 - 父 issue / 关联：#42（Agent Task Router — natural language task dispatch, defines entity shape）
 - 依赖 issue：#622（Add POST and GET /agents/tasks router endpoints — creates the service and router being tested）
 

@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [060-Analytics · Analytics 数据层基础 API](30-tickets/0541-add-analytics-data-layer-api-endpoints.md) |
+| 依赖 | TBD - 待验证：`docs/dev-plan/60-analytics/0541-add-analytics-data-layer-api-endpoints.md` |
 | 启用后赋能 | 90-frontend 板块（Analytics Dashboard 页面） |
 | 状态 | 📋 待开始 |
 

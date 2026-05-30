@@ -95,7 +95,7 @@ class Customer(Base):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`alembic/env.py`](../../alembic/env.py) | 新增 `from db.models.workflow import Workflow` 导入，使 autogenerate 能识别该 model |
+| [`alembic/env.py`](../../../alembic/env.py) | 新增 `from db.models.workflow import Workflow` 导入，使 autogenerate 能识别该 model |
 
 ### 3.3 新增能力
 

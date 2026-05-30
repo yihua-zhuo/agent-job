@@ -59,8 +59,8 @@ jobs:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — add `deploy` job below `qc`; wire `needs: [qc]`
-  - [`.env.example`](../../.env.example) — document `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` placeholder keys
+  - [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) — add `deploy` job below `qc`; wire `needs: [qc]`
+  - TBD - 待验证：`.env.example` 路径待确认 — document `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` placeholder keys
 - 要建：
   - `docs/dev-plan/99-misc/0437-clarify-deploy-stage-and-add-it-to-ci-workflow.md` — this board document
 
@@ -79,21 +79,21 @@ jobs:
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `docs/dev-plan/99-misc/0437-clarify-deploy-stage-and-add-it-to-ci-workflow.md` | This board document |
 
 ### 3.2 修改文件
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | Add `deploy` job: `needs: qc`, env placeholders `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` |
-| [`.env.example`](../../.env.example) | Document deploy-related env var placeholders for developer reference |
+| [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) | Add `deploy` job: `needs: qc`, env placeholders `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` |
+| TBD - 待验证：`.env.example` 路径待确认 | Document deploy-related env var placeholders for developer reference |
 
 ### 3.3 新增能力
 
 - **CI job**：`deploy` in `.github/workflows/ci.yml`, gated behind `qc`
 - **Env vars (placeholders)**：`DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` in the `deploy` job
-- **Documentation**：`.env.example` section for deploy env vars
+- **Documentation**：TBD - 待验证：`.env.example` 路径待确认 section for deploy env vars
 
 ---
 
@@ -122,7 +122,7 @@ No new external dependencies are introduced by this issue.
 ### 4.4 已知坑
 
 1. **GitHub Actions YAML indentation errors are silent at `git push` time — only visible in the Actions UI run** → 规避：Before pushing, run `yamllint .github/workflows/ci.yml` (or `python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"` in a CI-like environment) to catch structural errors early. The pre-push hook does not run YAML validation.
-2. **If `DEPLOY_SECRET` is left unset in GitHub Actions secrets, the `deploy` job will fail at runtime with an unspecified secret error** → 规避：Document all three placeholders in `.env.example` with a comment that they must be added to GitHub Actions secrets before the job will succeed. Add a `if: false` commented-out step as a reminder until secrets are provisioned.
+2. **If `DEPLOY_SECRET` is left unset in GitHub Actions secrets, the `deploy` job will fail at runtime with an unspecified secret error** → 规避：Document all three placeholders in TBD - 待验证：`.env.example` 路径待确认 with a comment that they must be added to GitHub Actions secrets before the job will succeed. Add a `if: false` commented-out step as a reminder until secrets are provisioned.
 3. **Deploying to the wrong target by mistake (e.g., staging vs production) when `DEPLOY_TARGET` is not set** → 规避：The job should `echo "Deploying to $DEPLOY_TARGET"` in its first step so the target is visible in every run log. Fail-fast if the variable is empty.
 
 ---
@@ -139,7 +139,7 @@ Read `.github/workflows/ci.yml` to confirm:
 
 Do not guess line numbers or job names — verify before proceeding.
 
-**完成判定**：[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) has been read and job list confirmed.
+**完成判定**：[`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) has been read and job list confirmed.
 
 ---
 
@@ -173,9 +173,9 @@ Before writing the `deploy` job, check whether #436 has been resolved and the de
 
 ---
 
-### Step 3: Document placeholders in `.env.example`
+### Step 3: Document placeholders in TBD - 待验证：`.env.example` 路径待确认
 
-Open `.env.example` and append a commented deploy section:
+Open TBD - 待验证：`.env.example` 路径待确认 and append a commented deploy section:
 
 ```env
 # =============================================================================
@@ -189,7 +189,7 @@ DEPLOY_COMMAND=        # command to execute on the deploy target
 
 Verify the section was appended without altering existing entries.
 
-**完成判定**：[`.env.example`](../../.env.example) contains `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` entries under a `# Deploy (CI/CD)` header.
+**完成判定**：TBD - 待验证：`.env.example` 路径待确认 contains `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` entries under a `# Deploy (CI/CD)` header.
 
 ---
 
@@ -219,7 +219,7 @@ Fill in the `Changelog` table at the bottom of this document with today's date a
 
 - [ ] `.github/workflows/ci.yml` contains a `deploy` job with `needs: [qc]`
 - [ ] `python -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"` exits with code 0 (valid YAML)
-- [ ] `.env.example` contains `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` placeholders
+- [ ] TBD - 待验证：`.env.example` 路径待确认 contains `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` placeholders
 - [ ] `DEPLOY_TARGET` guard is present: deploy job fails fast if the secret is unset
 - [ ] No Python source files, services, models, or routers were modified
 
@@ -240,7 +240,7 @@ Fill in the `Changelog` table at the bottom of this document with today's date a
 
 ```bash
 # 1. commit + PR
-git add .github/workflows/ci.yml .env.example docs/dev-plan/99-misc/0437-clarify-deploy-stage-and-add-it-to-ci-workflow.md
+git add .github/workflows/ci.yml docs/dev-plan/99-misc/0437-clarify-deploy-stage-and-add-it-to-ci-workflow.md
 git commit -m "ci(github-actions): add deploy job stub to ci.yml
 
 Closes #437
@@ -258,11 +258,13 @@ Depends on #436 for real deploy command implementation."
 # - docs/dev-plan/README.md §1.1 AUTO-INDEX is updated by the generator on merge
 ```
 
+> **注意**：如果 `.env.example` 存在于仓库根目录，Step 3 应将其替换为正确的相对路径后再提交。路径待后续验证确认。
+
 ---
 
 ## 9. 参考
 
-- 同类参考实现：[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — existing CI workflow structure
+- 同类参考实现：[`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) — existing CI workflow structure
 - 父 issue / 关联：#198, #436
 
 ---

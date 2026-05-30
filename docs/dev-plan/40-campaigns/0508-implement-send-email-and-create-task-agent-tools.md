@@ -6,8 +6,8 @@
 | 分类 | 40-campaigns |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [Agent工具基座](40-campaigns/0507-implement-agent-tool-framework.md) |
-| 启用后赋能 | [Agent 执行引擎](40-campaigns/0507-implement-agent-tool-framework.md), [Copilot 路由](40-campaigns/0507-implement-agent-tool-framework.md) |
+| 依赖 | TBD - 待验证：Agent工具基座实现文档路径 |
+| 启用后赋能 | TBD - 待验证：Agent执行引擎文档路径, TBD - 待验证：Copilot路由文档路径 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -73,7 +73,7 @@ TBD - 待验证：邮件发送相关 infrastructure 是否存在（预期在 `sr
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/copilot_service.py`](../../src/services/copilot_service.py) | 新增 `send_email_tool` 和 `create_task_tool` 两个 async 方法 + 注册到 `tool_registry` dict |
+| [`src/services/copilot_service.py`](../../../src/services/copilot_service.py) | 新增 `send_email_tool` 和 `create_task_tool` 两个 async 方法 + 注册到 `tool_registry` dict |
 
 ### 3.3 新增能力
 
@@ -237,7 +237,7 @@ gh pr create --base master --title "feat(#508): add send_email and create_task a
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/task_service.py`](../../src/services/task_service.py) — TaskService.insert_task 参考- 同类参考实现：[`src/services/copilot_service.py`](../../src/services/copilot_service.py) — 现有 tool_registry结构和工具方法签名参考
+- 同类参考实现：[`src/services/task_service.py`](../../../src/services/task_service.py) — TaskService.insert_task 参考- 同类参考实现：[`src/services/copilot_service.py`](../../../src/services/copilot_service.py) — 现有 tool_registry结构和工具方法签名参考
 - 父 issue /关联：#76, #507---
 
 ## Changelog

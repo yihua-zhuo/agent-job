@@ -6,7 +6,7 @@
 | 分类 | 70-platform |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [0643-build-rbac-api](0621-build-rbac-api-in-settings-router.md), [0038-rbac-permission-system](0038-rbac-permission-system.md) |
+| 依赖 | [0643-build-rbac-api](../00-foundations/0643-wire-require-permission-into-all-existing-api-routers.md), [0038-rbac-permission-system](0038-rbac-permission-system.md) |
 | 启用后赋能 | [0038-rbac-permission-system](0038-rbac-permission-system.md) |
 | 状态 | 📋 待开始 |
 
@@ -21,7 +21,7 @@ Issue #38 defines the full RBAC permission system. Issue #643 exposes the backen
 ###1.2 做完后
 
 - **用户视角**：管理员在 Settings 页面看到 Roles 页签，显示角色表格（含权限摘要）、Permission Matrix（角色×资源可编辑网格）、User List 中每行有 Assign Role 下拉菜单，可实时保存调整。
-- **开发者视角**：新增 `src/frontend/settings/` 模块，包含 RoleList, PermissionMatrix, UserRoleAssignment 三个组件；组件调用 [#643 的 API endpoints](../0621-build-rbac-api-in-settings-router.md)；TypeScript 类型与后端 Pydantic schema 对齐。
+- **开发者视角**：新增 `src/frontend/settings/` 模块，包含 RoleList, PermissionMatrix, UserRoleAssignment 三个组件；组件调用 [#643 的 API endpoints](../00-foundations/0643-wire-require-permission-into-all-existing-api-routers.md)；TypeScript 类型与后端 Pydantic schema 对齐。
 
 ### 1.3 不做什么（剔除）
 
@@ -603,8 +603,8 @@ git commit -m "feat(settings): add RBAC UI — role list, permission matrix, use
 
 ## 9. 参考
 
-- Backend API依赖（#643）：[`docs/dev-plan/0621-build-rbac-api-in-settings-router.md`](../../docs/dev-plan/0621-build-rbac-api-in-settings-router.md)
-- 父 issue /关联：#38, #643-第三方文档：[React TypeScript 官方指南](https://react.dev/learn/typescript)（TypeScript + React 组件模式）
+- Backend API依赖（#643）：TBD - 待验证：确认 #643 对应文件是否位于 `00-foundations/0643-wire-require-permission-into-all-existing-api-routers.md`
+- 父 issue /关联：TBD - 待验证：确认 #38 RBAC 权限系统的规划文档路径
 
 ---
 

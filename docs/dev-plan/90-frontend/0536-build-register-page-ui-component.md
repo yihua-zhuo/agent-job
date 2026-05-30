@@ -6,11 +6,10 @@
 | 分类 | 90-frontend |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [0535-build-login-page-ui-component](../50-automation/0535-build-login-page-ui-component.md) |
-| 启用后赋能 | [0537-build-forgot-password-flow-ui](../50-automation/0537-build-forgot-password-flow-ui.md) |
+| 依赖 | TBD - 待验证：依赖 #535 登录页面的文档路径（原 `../50-automation/0535-build-login-page-ui-component.md`，需确认实际路径） |
+| 启用后赋能 | TBD - 待验证：赋能 #537 忘记密码流程的文档路径（原 `../50-automation/0537-build-forgot-password-flow-ui.md`，需确认实际路径） |
 | 状态 | 📋 待开始 |
-
----
+```
 
 ## 1. 目标与背景
 

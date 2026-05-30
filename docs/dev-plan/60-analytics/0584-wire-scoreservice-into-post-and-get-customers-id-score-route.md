@@ -6,7 +6,7 @@
 | 分类 | 60-analytics |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [0583-build-score-service-with-calculate-score-and-get-score-methods](../50-automation/0583-build-score-service-with-calculate-score-and-get-score-methods.md) |
+| 依赖 | TBD - 待验证：ScoreService 实现文档（#583） |
 | 启用后赋能 | 无 |
 | 状态 | 📋 待开始 |
 
@@ -64,7 +64,7 @@ class ScoreService:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/api/routers/customers.py`](../../src/api/routers/customers.py) — 新增 `POST /customers/{customer_id}/score` 和 `GET /customers/{customer_id}/score` 两个端点
+  - [`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — 新增 `POST /customers/{customer_id}/score` 和 `GET /customers/{customer_id}/score` 两个端点
 - 要建：
   - `tests/unit/test_customers.py` — 扩展现有单元测试，覆盖两个新端点（正常、404、auth 拒绝路径）
 
@@ -89,7 +89,7 @@ class ScoreService:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/customers.py`](../../src/api/routers/customers.py) | 新增 `POST /customers/{customer_id}/score` 和 `GET /customers/{customer_id}/score` 两个端点；import `ScoreService`；注入 `session` 和 `AuthContext` |
+| [`src/api/routers/customers.py`](../../../src/api/routers/customers.py) | 新增 `POST /customers/{customer_id}/score` 和 `GET /customers/{customer_id}/score` 两个端点；import `ScoreService`；注入 `session` 和 `AuthContext` |
 
 ### 3.3 新增能力
 
@@ -128,7 +128,7 @@ class ScoreService:
 
 ### Step 1: 在 customers.py 中添加 score 端点 import
 
-在 [`src/api/routers/customers.py`](../../src/api/routers/customers.py) 顶部添加 `ScoreService` import。
+在 [`src/api/routers/customers.py`](../../../src/api/routers/customers.py) 顶部添加 `ScoreService` import。
 
 操作：
 a) 找到文件顶部现有 import 块
@@ -280,8 +280,8 @@ gh pr create --base master --title "feat(#584): wire ScoreService into POST and 
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) — 本文件，在其中添加 score 端点
-- 同类参考实现：[`src/api/routers/churn.py`](../../src/api/routers/churn.py) — 已有类似路由模式（两个端点暴露一个 Service）
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — 本文件，在其中添加 score 端点
+- 同类参考实现：TBD - 待验证：churn router 参考实现
 - 父 issue / 关联：#49（父 epic）、#583（依赖：ScoreService 实现先完成）
 - 第三方文档：[FastAPI Router](https://fastapi.tiangolo.com/tutorial/bigger-applications/)
 

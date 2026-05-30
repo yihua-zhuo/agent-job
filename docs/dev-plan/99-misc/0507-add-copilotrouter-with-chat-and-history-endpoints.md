@@ -6,8 +6,8 @@
 | 分类 | 70-platform |
 | 优先级 | 必做 |
 | 工作量 | 1-2 工作日 |
-| 依赖 | [「平台基础服务层」](../00-foundations/README.md) |
-| 启用后赋能 | [「任务自动化规则引擎」](../50-automation/README.md), [「客户 AI 助手」](../30-tickets/README.md) |
+| 依赖 | TBD - 待验证：平台基础服务层文档路径 |
+| 启用后赋能 | TBD - 待验证：任务自动化规则引擎文档路径, TBD - 待验证：客户 AI 助手文档路径 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -77,7 +77,7 @@ N/A — 新建模块
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | Import and register `CopilotRouter` with `app.include_router(copilot_router)` |
+| [`src/main.py`](../../../src/main.py) | Import and register `CopilotRouter` with `app.include_router(copilot_router)` |
 
 ### 3.3 新增能力
 
@@ -352,7 +352,7 @@ gh pr create --base master --title "feat(copilot): router with chat and history 
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) — same envelope pattern, `AuthContext`, `AsyncSession` injection
+- 同类参考实现：[`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) — same envelope pattern, `AuthContext`, `AsyncSession` injection
 - 父 issue / 关联：#76
 - 前置依赖：#506
 

@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [0609-add-codereview-service](../99-misc/0609-add-codereview-service.md), [0610-add-codereview-router](../99-misc/0610-add-codereview-router.md) |
+| 启用后赋能 | TBD - 待验证：0609 为 Service 层，0610 为 Router 层（文件名待确认） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -31,7 +31,8 @@
 
 ### 1.4 关键 KPI
 
-- `alembic upgrade head` → exit 0，迁移文件被成功应用- `alembic downgrade -1 && alembic upgrade head` → 两次 exit 0（可逆性）
+- `alembic upgrade head` → exit 0，迁移文件被成功应用
+- `alembic downgrade -1 && alembic upgrade head` → 两次 exit 0（可逆性）
 - `ruff check src/db/models/code_review.py` → 0 errors
 - `PYTHONPATH=src python -c "from db.models.code_review import CodeReviewModel; print('ok')"` → 输出 `ok`
 
@@ -43,7 +44,7 @@
 
 N/A — 新建模块，`src/db/models/code_review.py` 尚不存在。
 
-以同类实现 [`src/db/models/ai_conversation.py`](../../src/db/models/ai_conversation.py) L{1}-L{60} 作为建模参考：
+以同类实现 [`src/db/models/ai_conversation.py`](../../../src/db/models/ai_conversation.py) L{1}-L{60} 作为建模参考：
 
 ```{python}
 from sqlalchemy import DateTime, Integer, String, Text, func
@@ -117,11 +118,15 @@ class AIConversationModel(Base):
 - 多租户：`tenant_id` 列必须存在且 `index=True`（与其他所有 model 一致）
 - 时间戳：`created_at` 用 `DateTime(timezone=True)` + `server_default=func.now()`，与其他模型一致
 - 不使用 `metadata` 列名（与 `Base.metadata` 冲突）—— 本模型无此字段，无需规避
-- Async SQLAlchemy：模型继承自 `db.base.Base`，与现有所有模型一致### 4.4 已知坑
+- Async SQLAlchemy：模型继承自 `db.base.Base`，与现有所有模型一致
+
+### 4.4 已知坑
 
 1. **Alembic autogen 生成 String(255) 当作 String 列** →规避：迁移文件中手动指定长度上限（如 `String(50)`）
 2. **Alembic autogen 对 JSONB 生成 JSON** → 本模型无 JSONB 字段，不受影响
-3. **PYTHONPATH=src 必须设置** → 执行任何涉及 import 的命令前必须 `export PYWORDATAURL`，示例命令中已包含---
+3. **PYTHONPATH=src 必须设置** → 执行任何涉及 import 的命令前必须 `export PYWORDATAURL`，示例命令中已包含
+
+---
 
 ## 5. 实现步骤（按顺序）
 
@@ -199,8 +204,10 @@ export DATABASE_URL="postgresql+asyncpg://test_user:test_pass@localhost:5432/ale
 docker compose -f configs/docker-compose.test.yml up -d test-db
 docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;"
 docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"
-alembic upgrade headalembic revision --autogenerate -m "add_code_reviews"
-# 如果迁移文件列类型有误，手动编辑修正后继续cat alembic/versions/<新文件名>.py
+alembic upgrade head
+alembic revision --autogenerate -m "add_code_reviews"
+# 如果迁移文件列类型有误，手动编辑修正后继续
+cat alembic/versions/<新文件名>.py
 ```
 
 **完成判定**：`alembic/versions/<新文件名>.py` 存在，且 `upgrade()` 包含 `op.create_table('code_reviews', ...)`，`downgrade()` 包含 `op.drop_table('code_reviews')`
@@ -230,7 +237,9 @@ alembic revision --autogenerate -m "drift_check"
 grep -A 5 "def upgrade\|def downgrade" alembic/versions/<drift文件>.py
 ```
 
-**完成判定**：新迁移文件中 `upgrade()` 和 `downgrade()` 体仅含 `pass`，无其他操作### Step 6: Lint + 导入验证
+**完成判定**：新迁移文件中 `upgrade()` 和 `downgrade()` 体仅含 `pass`，无其他操作
+
+### Step 6: Lint + 导入验证
 
 ```bash
 export PYTHONPATH=src
@@ -247,7 +256,8 @@ python -c "from db.models.code_review import CodeReviewModel; print('import ok')
 - [ ] `ruff check src/db/models/code_review.py` → 0 errors
 - [ ] `PYTHONPATH=src python -c "from db.models.code_review import CodeReviewModel; print('ok')"` → 输出 `ok`
 - [ ] `alembic upgrade head` → exit 0，迁移文件被应用
-- [ ] `alembic downgrade -1` → exit 0，`code_reviews` 表被删除- [ ] `alembic upgrade head` → exit 0，迁移可重新应用
+- [ ] `alembic downgrade -1` → exit 0，`code_reviews` 表被删除
+- [ ] `alembic upgrade head` → exit 0，迁移可重新应用
 - [ ] drift check autogenerate → `upgrade()`/`downgrade()` 体仅含 `pass`（无遗漏改动）
 
 ---
@@ -279,7 +289,7 @@ gh pr create --base master --title "feat(#608): add CodeReview ORM model and mig
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/ai_conversation.py`](../../src/db/models/ai_conversation.py) — 相同 ORM 建模模式
+- 同类参考实现：[`src/db/models/ai_conversation.py`](../../../src/db/models/ai_conversation.py) — 相同 ORM 建模模式
 - 父 issue：#44
 
 ---

@@ -1,3 +1,6 @@
+# 修复后的 Board
+
+```markdown
 # 聊天会话 · Add chat_session and chat_message ORM models
 
 | 元数据 | 值 |
@@ -7,7 +10,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.25-0.5 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [聊天功能 Service/Router 板块](30-tickets/) |
+| 启用后赋能 | TBD - 待验证：下游聊天功能 Service/Router 板块依赖此 schema |
 | 状态 | 📋 待开始 |
 
 ---
@@ -41,7 +44,7 @@ Issue #43 子任务。CRM 需要持久化聊天会话数据，当前数据库无
 
 ### 2.1 现有实现
 
-主入口：[`src/db/models/ai_conversation.py`](../../src/db/models/ai_conversation.py) L{11}-L{47}
+主入口：[`src/db/models/ai_conversation.py`](../../../src/db/models/ai_conversation.py) L{11}-L{47}
 
 同类参考实现（同 repo 同模式），可作为 `ChatSessionModel` / `ChatMessageModel` 的模板：
 
@@ -84,7 +87,7 @@ class AIMessageModel(Base):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`alembic/env.py`](../../alembic/env.py) — 在 `import db.models` 后追加 `from db.models import chat_session` 以确保 autogenerate 能发现新模型
+  - [`alembic/env.py`](../../../alembic/env.py) — 在 `import db.models` 后追加 `from db.models import chat_session` 以确保 autogenerate 能发现新模型
 - 要建：
   - `src/db/models/chat_session.py` — 定义 `ChatSessionModel` + `ChatMessageModel` ORM 类
   - `alembic/versions/<id>_add_chat_sessions_and_messages.py` — 迁移文件（autogenerate 生成后手动修正）
@@ -104,7 +107,7 @@ class AIMessageModel(Base):
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/db/models/chat_session.py` | 定义 `ChatSessionModel`（聊天会话主表）和 `ChatMessageModel`（会话消息表）两个 ORM 类 |
 | `alembic/versions/<id>_add_chat_sessions_and_messages.py` | 创建 `chat_sessions` 和 `chat_messages` 表，含 tenant_id 索引、session_id FK 索引 |
 | `tests/unit/test_chat_session.py` | 单元测试：模型字段、to_dict、relationship、MockRow/MockResult 兼容性 |
@@ -113,7 +116,7 @@ class AIMessageModel(Base):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`alembic/env.py`](../../alembic/env.py) | 在 `import db.models` 下方新增一行 `from db.models import chat_session`（确保 Base.metadata 包含新模型） |
+| [`alembic/env.py`](../../../alembic/env.py) | 在 `import db.models` 下方新增一行 `from db.models import chat_session`（确保 Base.metadata 包含新模型） |
 
 ### 3.3 新增能力
 
@@ -413,7 +416,7 @@ gh pr create --base master --title "feat(models): add chat_session and chat_mess
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/ai_conversation.py`](../../src/db/models/ai_conversation.py) — `AIConversationModel` + `AIMessageModel` 同模式实现，可直接对照字段差异
+- 同类参考实现：[`src/db/models/ai_conversation.py`](../../../src/db/models/ai_conversation.py) — `AIConversationModel` + `AIMessageModel` 同模式实现，可直接对照字段差异
 - 父 issue / 关联：#43
 
 ---
@@ -423,3 +426,8 @@ gh pr create --base master --title "feat(models): add chat_session and chat_mess
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+```
+
+---
+
+**修复说明**：唯一破损链接 `[聊天功能 Service/Router 板块](../30-tickets/)` → `30-tickets/` 目录不存在，无从推导正确路径。已按 option (b) 替换为 `TBD - 待验证：下游聊天功能 Service/Router 板块依赖此 schema`，保留语义说明。

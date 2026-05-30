@@ -6,7 +6,7 @@
 | 分类 | [70-platform](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 2-3 工作日 |
-| 依赖 | [0641-add-role-and-permission-models](40-campaigns/0641-add-role-and-permission-models.md) |
+| 依赖 | [0641-build-permission-service-and-require-permission-decorator](0641-build-permission-service-and-require-permission-decorator.md) |
 | 启用后赋能 | 自动化规则引擎, 全链路权限审计 |
 | 状态 | 📋 待开始 |
 
@@ -47,7 +47,7 @@ TBD - 待验证：确认 #641 是否已提交 Role / Permission ORM 模型至 `s
 ### 2.2 涉及文件清单
 
 - 要改：
-  - `src/api/routers/__init__.py` — 注册 rbac router 到 main app
+  - [`src/api/routers/__init__.py`](../../../src/api/routers/__init__.py) — 注册 rbac router 到 main app
   - `src/main.py` — 可选，如需在此注册新 router
 - 要建：
   - `src/services/role_service.py` — RoleService 业务逻辑
@@ -70,7 +70,7 @@ TBD - 待验证：确认 #641 是否已提交 Role / Permission ORM 模型至 `s
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/services/role_service.py` | RoleService：角色列表、创建、更新、用户-角色绑定、权限枚举 |
 | `src/api/routers/rbac.py` | 6 个 RBAC API 端点，统一返回 ApiResponse envelope |
 | `tests/unit/test_role_service.py` | RoleService 单元测试（Mock DB，覆盖正常/边界/异常路径） |
@@ -80,7 +80,7 @@ TBD - 待验证：确认 #641 是否已提交 Role / Permission ORM 模型至 `s
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/__init__.py`](../../src/api/routers/__init__.py) | 注册 RBAC router（`router.include_router(rbac_router, prefix="/rbac", tags=["RBAC"])`） |
+| [`src/api/routers/__init__.py`](../../../src/api/routers/__init__.py) | 注册 RBAC router（`router.include_router(rbac_router, prefix="/rbac", tags=["RBAC"])`） |
 
 ### 3.3 新增能力
 
@@ -444,8 +444,8 @@ gh pr create --base master --title "feat(rbac): add role and permission manageme
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — Service 层返回 ORM + raise AppException 模式参考
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) — router 层返回 `{"success": true, "data": ...}` envelope 模式参考
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — Service 层返回 ORM + raise AppException 模式参考
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — router 层返回 `{"success": true, "data": ...}` envelope 模式参考
 - 父 issue / 关联：#38（父 epic）、#641（依赖：Role/Permission ORM 模型）、#688（依赖本板块提供权限判断基础能力）
 
 ---

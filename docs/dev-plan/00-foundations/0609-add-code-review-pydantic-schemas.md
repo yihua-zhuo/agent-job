@@ -31,7 +31,7 @@ Issue #609 requires adding typed Pydantic request/response schemas for a code re
 
 ### 2.1 现有实现
 
-同类参考实现（schema 模式）：[`src/models/ai.py`](../../src/models/ai.py) L{1}-L{20}
+同类参考实现（schema 模式）：[`src/models/ai.py`](../../../src/models/ai.py) L{1}-L{20}
 
 ```python
 """Pydantic request / response schemas for the AI Chat Assistant API."""
@@ -49,7 +49,7 @@ class ChatRequest(BaseModel):
     conversation_id: int | None = Field(default=None)
 ```
 
-同类参考实现（response envelope）：[`src/pkg/response/schemas.py`](../../src/pkg/response/schemas.py) L{1}-L{30}
+同类参考实现（response envelope）：[`src/pkg/response/schemas.py`](../../../src/pkg/response/schemas.py) L{1}-L{30}
 
 ```python
 from pydantic import BaseModel, Field
@@ -379,10 +379,10 @@ gh pr create --base master --title "feat(schemas): add code review Pydantic sche
 
 ## 9. 参考
 
-- 同类参考实现：[`src/models/ai.py`](../../src/models/ai.py) — `ChatRequest` / `ChatResponse` Pydantic 模式
-- 同类参考实现：[`src/pkg/response/schemas.py`](../../src/pkg/response/schemas.py) — `SuccessEnvelope` / `APIResponse[T]` 模式
-- 同类参考实现：[`src/models/routing.py`](../../src/models/routing.py) — `StrEnum` + `Field` 验证模式
-- 单元测试参考：[`tests/unit/test_schemas.py`](../../tests/unit/test_schemas.py) — schema 验证测试模式
+- 同类参考实现：[`src/models/ai.py`](../../../src/models/ai.py) — `ChatRequest` / `ChatResponse` Pydantic 模式
+- 同类参考实现：[`src/pkg/response/schemas.py`](../../../src/pkg/response/schemas.py) — `SuccessEnvelope` / `APIResponse[T]` 模式
+- 同类参考实现：[`src/models/routing.py`](../../../src/models/routing.py) — `StrEnum` + `Field` 验证模式
+- 单元测试参考：[`tests/unit/test_schemas.py`](../../../tests/unit/test_schemas.py) — schema 验证测试模式
 - 父 issue / 关联：#44
 - 依赖 issue：#608
 
@@ -393,3 +393,7 @@ gh pr create --base master --title "feat(schemas): add code review Pydantic sche
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+---
+
+All 6 links now use `../../../` (up 3 levels from `docs/dev-plan/00-foundations/` → repo root) and all target files are confirmed to exist at those paths.
