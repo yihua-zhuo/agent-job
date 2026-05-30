@@ -248,7 +248,6 @@ class ReportService:
                 setattr(report, field, data[field])
 
         await self.session.flush()
-        await self.session.refresh(report)
         return report
 
     async def delete_report(self, report_id: int, tenant_id: int) -> None:

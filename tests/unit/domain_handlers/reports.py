@@ -63,6 +63,30 @@ def _get_report_id(params):
     return _REPORT_ID_NOT_FOUND
 
 
+def _get_schedule_id(params):
+    """Extract the schedule (report_schedules.id) from params, handling SQLAlchemy's name mangling."""
+    if "id" in params:
+        return params["id"]
+    for key, val in params.items():
+        if key.startswith("id_") and isinstance(val, int):
+            return val
+    return None
+
+
+def _get_mangled(params, base: str):
+    """Return the first value in params whose key equals base or base_<number>.
+
+    Used to retrieve SQLAlchemy-mangled params (e.g. updated_at_1) without
+    requiring callers to know the suffix in advance.
+    """
+    if base in params:
+        return params[base]
+    for key, val in params.items():
+        if key.startswith(base + "_") and key[len(base) + 1:].isdigit():
+            return val
+    return None
+
+
 def make_report_handler(state: MockState):
     """Handle all report-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
     # Domain-owned state stored via the opaque slot so conftest.py stays agnostic.
@@ -160,8 +184,8 @@ def make_schedule_handler(state: MockState):
     def handler(sql_text, params):
         # INSERT: upsert a schedule record keyed on (tenant_id, report_id).
         if "insert into report_schedules" in sql_text:
-            tenant_id = params.get("tenant_id")
-            report_id = params.get("report_id")
+            tenant_id = _get_mangled(params, "tenant_id")
+            report_id = _get_mangled(params, "report_id")
             existing = next(
                 (
                     rec
@@ -173,9 +197,9 @@ def make_schedule_handler(state: MockState):
             if existing is not None:
                 existing.update(
                     {
-                        "schedule": params.get("schedule", existing.get("schedule", {})),
-                        "active": params.get("active", existing.get("active", True)),
-                        "updated_at": params.get("updated_at"),
+                        "schedule": _get_mangled(params, "schedule") or existing.get("schedule", {}),
+                        "active": _get_mangled(params, "active") or existing.get("active", True),
+                        "updated_at": _get_mangled(params, "updated_at"),
                     }
                 )
                 return MockResult([MockRow(existing.copy())])
@@ -186,21 +210,24 @@ def make_schedule_handler(state: MockState):
                 "id": sched_id,
                 "tenant_id": tenant_id,
                 "report_id": report_id,
-                "schedule": params.get("schedule", {}),
-                "active": params.get("active", True),
-                "created_at": params.get("created_at"),
-                "updated_at": params.get("updated_at"),
+                "schedule": _get_mangled(params, "schedule") or {},
+                "active": _get_mangled(params, "active") or True,
+                "created_at": _get_mangled(params, "created_at"),
+                "updated_at": _get_mangled(params, "updated_at"),
             }
             _schedules["records"][sched_id] = record
             return MockResult([MockRow(record.copy())])
 
         # UPDATE: update schedule by id + tenant_id.
         if sql_text.startswith("update") and "report_schedules" in sql_text:
-            sched_id = params.get("id")
+            sched_id = _get_schedule_id(params)
             if sched_id is None:
                 return MockResult([])
             rec = _schedules["records"].get(sched_id)
-            tenant_id = params.get("tenant_id")
+            try:
+                tenant_id = _get_tenant_id(params)
+            except _MissingTenantIdError:
+                return MockResult([])
             if rec is None or rec.get("tenant_id") != tenant_id:
                 return MockResult([])
             for k, v in params.items():
@@ -210,8 +237,11 @@ def make_schedule_handler(state: MockState):
 
         # SELECT: list schedules for a tenant (covers schedule_report's existing-record check).
         if "select" in sql_text and "from report_schedules" in sql_text:
-            tenant_id = params.get("tenant_id")
-            report_id = params.get("report_id")
+            try:
+                tenant_id = _get_tenant_id(params)
+            except _MissingTenantIdError:
+                return MockResult([])
+            report_id = _get_mangled(params, "report_id")
             rows = [
                 MockRow(rec.copy())
                 for rec in _schedules["records"].values()

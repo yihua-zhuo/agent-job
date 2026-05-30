@@ -1,6 +1,4 @@
-[Resolved] `ReportModel` now has `updated_at`; Step 5 omits the assignment as planned.
-
-# Implementation Plan — Issue #631
+# Implementation Plan — Issue #631 (In Progress)
 
 ## Goal
 Add five CRUD methods (`list_reports`, `get_report`, `create_report`, `update_report`, `delete_report`) to the existing `ReportService` class in `src/services/report_service.py`, enabling the service layer to manage `ReportModel` rows with full multi-tenant isolation. This unblocks the API router built in issue #632 and all downstream analytics consumers.
@@ -78,5 +76,5 @@ Reading order followed:
 - `PYTHONPATH=src pytest tests/unit/test_report_service.py -v` passes all cases
 
 ## Risks / Open Questions
-- **`ReportModel` has no `updated_at` column**: The dev-plan Step 5 code sets `report.updated_at = datetime.now(UTC)` but `ReportModel` only has `created_at`. This assignment must be removed. The `flush()` + `refresh()` calls still correctly persist changes without it.
+- **`ReportModel` has no `updated_at` column**: `update_report` does not assign `updated_at` (the column does not exist on `ReportModel`). Adding the column requires a separate Alembic migration scoped to the model definition, which is tracked separately.
 - **`make_mock_session` uses lowercase SQL text matching**: The `reports` SQL handler in `tests/unit/domain_handlers/reports.py` must match on `"select from reports"`, `"insert into reports"`, `"update reports"`, `"delete from reports"` (lowercase, as per `_execute_side_effect` in `conftest.py`).

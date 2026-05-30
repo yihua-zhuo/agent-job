@@ -39,13 +39,16 @@ def upgrade() -> None:
     # automation_logs / automation_rules are created by e646948c549a (in the
     # 52b19ee00eaf ancestry); this is a catch-up for DBs that arrived here
     # via a path that skips that migration.
-    # PostgreSQL does not support IF NOT EXISTS for ADD CONSTRAINT, so we
-    # use a DO block to catch and suppress the "already exists" error.
+    # Wrapped in a DO block that checks table existence before adding the
+    # constraint so DBs that already added the constraint (or skipped the
+    # table entirely) are not broken.
     op.execute(
         sa.text(
             "DO $$ BEGIN "
+            "IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'automation_logs') THEN "
             "ALTER TABLE automation_logs ADD CONSTRAINT fk_automation_logs_tenant_id "
             "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "END IF; "
             "EXCEPTION WHEN duplicate_object THEN NULL; "
             "END $$"
         )
@@ -53,8 +56,10 @@ def upgrade() -> None:
     op.execute(
         sa.text(
             "DO $$ BEGIN "
+            "IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'automation_rules') THEN "
             "ALTER TABLE automation_rules ADD CONSTRAINT fk_automation_rules_tenant_id "
             "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "END IF; "
             "EXCEPTION WHEN duplicate_object THEN NULL; "
             "END $$"
         )
@@ -62,10 +67,11 @@ def upgrade() -> None:
 
     # missing tenant_id indexes on auth tables
     # Created by db67d696b6ab; this is a catch-up for paths that bypassed it.
-    op.create_index(op.f("ix_device_trust_tenant_id"), "device_trust", ["tenant_id"], unique=False)
-    op.create_index(op.f("ix_refresh_tokens_tenant_id"), "refresh_tokens", ["tenant_id"], unique=False)
-    op.create_index(op.f("ix_user_credentials_tenant_id"), "user_credentials", ["tenant_id"], unique=False)
-    op.create_index(op.f("ix_webauthn_challenges_tenant_id"), "webauthn_challenges", ["tenant_id"], unique=False)
+    # if_not_exists=True prevents DuplicateIndex errors if db67d696b6ab ran first.
+    op.create_index(op.f("ix_device_trust_tenant_id"), "device_trust", ["tenant_id"], unique=False, if_not_exists=True)
+    op.create_index(op.f("ix_refresh_tokens_tenant_id"), "refresh_tokens", ["tenant_id"], unique=False, if_not_exists=True)
+    op.create_index(op.f("ix_user_credentials_tenant_id"), "user_credentials", ["tenant_id"], unique=False, if_not_exists=True)
+    op.create_index(op.f("ix_webauthn_challenges_tenant_id"), "webauthn_challenges", ["tenant_id"], unique=False, if_not_exists=True)
 
 
 def downgrade() -> None:

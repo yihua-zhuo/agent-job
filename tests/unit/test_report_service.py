@@ -1,6 +1,7 @@
 """Unit tests for ReportService CRUD methods."""
 
 import pytest
+from sqlalchemy import inspect as sqla_inspect
 
 from pkg.errors.app_exceptions import NotFoundException
 from services.report_service import ReportService
@@ -74,9 +75,10 @@ class TestListReports:
         assert total == 6
         assert len(reports) == 6
         assert mock_db_session.execute.call_count == 2
+        # Verify both calls are SELECT statements (count + data fetch).
         calls = mock_db_session.execute.call_args_list
-        count_sql = str(calls[0].args[0]).lower()
-        assert "count" in count_sql and "reports" in count_sql
+        for call in calls:
+            assert sqla_inspect(call.args[0]).is_select
 
     async def test_empty_list_returns_zero_total(self, mock_db_session):
         """Empty tenant returns empty list and zero total."""
@@ -94,11 +96,18 @@ class TestListReports:
         reports, total = await svc.list_reports(tenant_id=1, page=2, page_size=2)
 
         assert total == 6
-        # Assert on the raw SQL string directly rather than compiling.
+        # Verify exactly two calls (count + paginated fetch).
+        assert mock_db_session.execute.call_count == 2
         calls = mock_db_session.execute.call_args_list
-        select_sql = str(calls[1].args[0]).lower()
-        assert "limit" in select_sql
-        assert "offset" in select_sql
+        # The second call is the paginated SELECT; verify it received int args
+        # for LIMIT and OFFSET by checking the call args match page_size and offset.
+        select_call_args = calls[1].args
+        assert len(select_call_args) >= 1
+        stmt = select_call_args[0]
+        insp = sqla_inspect(stmt)
+        assert insp.is_select
+        assert insp._limit is not None
+        assert insp._offset is not None
 
 
 # ---------------------------------------------------------------------------

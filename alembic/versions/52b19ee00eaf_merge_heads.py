@@ -55,6 +55,8 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
     op.create_index(op.f("ix_import_jobs_tenant_id"), "import_jobs", ["tenant_id"], unique=False)
+    op.create_index(op.f("ix_import_jobs_entity_type"), "import_jobs", ["entity_type"], unique=False)
+    op.create_index(op.f("ix_import_jobs_user_id"), "import_jobs", ["user_id"], unique=False)
     op.create_table(
         "export_jobs",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
@@ -88,6 +90,7 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_automation_rules_tenant_id"), "automation_rules", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_automation_rules_trigger_event"), "automation_rules", ["trigger_event"], unique=False)
+    op.create_index(op.f("ix_automation_rules_created_by"), "automation_rules", ["created_by"], unique=False)
 
     op.create_table(
         "automation_logs",
@@ -209,9 +212,20 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.ForeignKeyConstraint(["customer_id"], ["customers.id"], ondelete="CASCADE"),
-        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
         sa.PrimaryKeyConstraint("id"),
     )
+    # tenant_id FK uses a DO block so DBs that already have the constraint
+    # (arriving via a path that added it already) are not broken.
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE customer_enrichments ADD CONSTRAINT fk_customer_enrichments_tenant_id "
+            "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "EXCEPTION WHEN duplicate_object THEN NULL; "
+            "END $$"
+        )
+    )
+    op.create_index(op.f("ix_customer_enrichments_tenant_id"), "customer_enrichments", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_customer_enrichments_customer_id"), "customer_enrichments", ["customer_id"], unique=False)
     op.create_index(op.f("ix_customer_enrichments_next_refresh_at"), "customer_enrichments", ["next_refresh_at"], unique=False)
 
@@ -220,6 +234,7 @@ def downgrade() -> None:
     # Drop all nine tables in reverse dependency order (child before parent).
     op.drop_index(op.f("ix_customer_enrichments_next_refresh_at"), table_name="customer_enrichments")
     op.drop_index(op.f("ix_customer_enrichments_customer_id"), table_name="customer_enrichments")
+    op.drop_index(op.f("ix_customer_enrichments_tenant_id"), table_name="customer_enrichments")
     op.drop_table("customer_enrichments")
     op.drop_index(op.f("ix_opportunity_activities_opportunity_id"), table_name="opportunity_activities")
     op.drop_index(op.f("ix_opportunity_activities_tenant_id"), table_name="opportunity_activities")
@@ -241,6 +256,7 @@ def downgrade() -> None:
     op.drop_table("automation_logs")
     op.drop_index(op.f("ix_automation_rules_trigger_event"), table_name="automation_rules")
     op.drop_index(op.f("ix_automation_rules_tenant_id"), table_name="automation_rules")
+    op.drop_index(op.f("ix_automation_rules_created_by"), table_name="automation_rules")
     op.drop_table("automation_rules")
     op.drop_table("agent_tasks")
     op.drop_index(op.f("ix_export_jobs_tenant_id"), table_name="export_jobs")
