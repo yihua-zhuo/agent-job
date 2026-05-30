@@ -9,13 +9,10 @@ ORDER = 10
 
 def make_report_handler(state: MockState):
     """Handle all report-related SQL (INSERT, UPDATE, DELETE, SELECT, COUNT)."""
-    if not hasattr(state, "report_records"):
-        state.report_records: dict[int, dict] = {}
-
     def handler(sql_text, params):
         if "insert into reports" in sql_text:
-            rid = state.activities_next_id
-            state.activities_next_id += 1
+            rid = state.report_records_next_id
+            state.report_records_next_id += 1
             record = {
                 "id": rid,
                 "tenant_id": params.get("tenant_id", 0),
@@ -59,6 +56,11 @@ def make_report_handler(state: MockState):
             if rec is not None and rec.get("tenant_id") == params.get("tenant_id"):
                 return MockResult([MockRow(rec.copy())])
             return MockResult([])
+
+        if "select" in sql_text and "from reports" in sql_text and "order by" in sql_text:
+            tenant_id = params.get("tenant_id", 0)
+            rows = [MockRow(rec.copy()) for rec in state.report_records.values() if rec.get("tenant_id") == tenant_id]
+            return MockResult(rows)
 
         if "select" in sql_text and "from reports" in sql_text and "order by" not in sql_text:
             tenant_id = params.get("tenant_id", 0)

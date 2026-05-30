@@ -72,7 +72,7 @@ class TestListReports:
         assert total == 0
         assert reports == []
 
-    async def test_pagination_offset(self, mock_db_session):
+    async def test_applies_limit_and_offset(self, mock_db_session):
         """list_reports applies LIMIT/OFFSET based on page and page_size."""
         mock_result = _make_mock_result(rows=[MagicMock(id=3)], scalar_one_val=5)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
