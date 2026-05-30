@@ -7,17 +7,9 @@ from datetime import datetime
 import pytest
 
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
-from src.services.agent_task_service import AgentTaskService
+from src.services.agent_task_service import AgentTaskService, AgentTaskStatus
 from tests.unit.conftest import MockState, make_mock_session
 from tests.unit.domain_handlers.agent_tasks import make_agent_task_handler
-
-
-class AgentTaskStatus:
-    PENDING = "pending"
-    DISPATCHED = "dispatched"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    FAILED = "failed"
 
 
 def _seed_agent_task(state: MockState, tenant_id: int, description: str, status: str, created_at: datetime) -> int:
@@ -73,6 +65,12 @@ class TestCreateTask:
     async def test_raises_validation_for_whitespace_only(self, service):
         with pytest.raises(ValidationException):
             await service.create_task("   ", tenant_id=1)
+
+    async def test_raises_validation_for_non_positive_tenant_id(self, service):
+        with pytest.raises(ValidationException):
+            await service.create_task("Task", tenant_id=0)
+        with pytest.raises(ValidationException):
+            await service.create_task("Task", tenant_id=-1)
 
 
 class TestGetTask:
@@ -141,6 +139,7 @@ class TestListTasks:
         )
         assert total == 0  # COUNT path also respects tenant isolation
         assert tasks == []
+        assert all(t.tenant_id == 1 for t in tasks)
 
     async def test_filters_by_date_range_returns_matching_tasks(self, service, mock_db_session):
         # Seed two tasks with known creation times inside a precise window.
@@ -148,6 +147,8 @@ class TestListTasks:
         mid_date = datetime(2024, 6, 15, 12, 0, 0)
         _seed_agent_task(state, tenant_id=1, description="June task", status="pending", created_at=mid_date)
         _seed_agent_task(state, tenant_id=1, description="Another June task", status="pending", created_at=mid_date)
+        # Seed a tenant-2 task inside the same window to verify cross-tenant SELECT exclusion.
+        _seed_agent_task(state, tenant_id=2, description="Tenant 2 June task", status="pending", created_at=mid_date)
         tasks, total = await service.list_tasks(
             tenant_id=1,
             date_from=datetime(2024, 6, 1),
@@ -160,6 +161,8 @@ class TestListTasks:
         assert len(tasks) == 2
         descriptions = {t.description for t in tasks}
         assert descriptions == {"June task", "Another June task"}
+        # Tenant-2 task must not appear in SELECT results.
+        assert "Tenant 2 June task" not in descriptions
 
     async def test_respects_pagination(self, service):
         ids = []

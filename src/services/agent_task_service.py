@@ -93,4 +93,4 @@ class AgentTaskService:
         return list(result.scalars().all()), total
 
 
-__all__ = ["AgentTaskService"]
+__all__ = ["AgentTaskService", "AgentTaskStatus"]

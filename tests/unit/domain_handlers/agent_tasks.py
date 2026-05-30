@@ -142,19 +142,14 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
             limit_match = _LIMIT_RE.search(sql_text)
             if offset_match is not None:
                 offset_key = offset_match.group(1)
-                # NOTE: params must preserve SQLAlchemy's raw numbered keys (e.g.
-                # "offset_1") so the regex-extracted key matches exactly. Do not
-                # pre-normalize params to strip the _<digit> suffix — the assertion
-                # below guards against that.
                 assert offset_key in params, f"offset bind param '{offset_key}' not found in params"
-                offset_val = params.get(offset_key) or normalized.get("offset")
+                offset_val = params[offset_key]
                 if offset_val is not None:
                     rows = rows[int(offset_val):]
             if limit_match is not None:
                 limit_key = limit_match.group(1)
-                # NOTE: same raw-key requirement as offset above.
                 assert limit_key in params, f"limit bind param '{limit_key}' not found in params"
-                limit_val = params.get(limit_key) or normalized.get("limit")
+                limit_val = params[limit_key]
                 if limit_val is not None:
                     rows = rows[: int(limit_val)]
             return MockResult(rows)
