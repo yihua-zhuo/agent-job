@@ -110,7 +110,7 @@
 
 ### 4.4 已知坑
 
-1. **Alembic autogenerate 把 `JSONB` 写成 `JSON`，把 `TIMESTAMPTZ`/`DateTime(timezone=True)` 写成 `DateTime`** → 规避：autogenerate 后人工将 `JSON` 改回 `JSONB`，将 `DateTime` 改回 `DateTime(timezone=True)`；参考 [`src/db/models/workflow.py`](../../src/db/models/workflow.py) L14 `result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)` 的写法。
+1. **Alembic autogenerate 把 `JSONB` 写成 `JSON`，把 `TIMESTAMPTZ`/`DateTime(timezone=True)` 写成 `DateTime`** → 规避：autogenerate 后人工将 `JSON` 改回 `JSONB`，将 `DateTime` 改回 `DateTime(timezone=True)`；参考 [`src/db/models/workflow.py`](../../../src/db/models/workflow.py) L14 `result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)` 的写法。
 2. **SQLAlchemy Base 子类列名不能用 `metadata`（与 Base.metadata 冲突）** → 规避：DB 列名用 `metadata`，ORM 属性名用 `log_metadata`，映射为 `column_name="metadata"`。
 
 ---
@@ -364,8 +364,8 @@ gh pr create --base master --title "feat(automation): add workflow_logs ORM mode
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/workflow.py`](../../src/db/models/workflow.py) — WorkflowExecutionModel 的 to_dict + FK 风格
-- 同类参考实现：[`src/db/models/rbac.py`](../../src/db/models/rbac.py) L99-123 — tenant_id + FK + to_dict 组合
+- 同类参考实现：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) — WorkflowExecutionModel 的 to_dict + FK 风格
+- 同类参考实现：[`src/db/models/rbac.py`](../../../src/db/models/rbac.py) L99-123 — tenant_id + FK + to_dict 组合
 - 父 issue / 关联：#651（workflow 可观测性父 issue）、#658（WorkflowExecutionModel 依赖）
 
 ---

@@ -74,7 +74,7 @@ class TestTenantModel:
         # ... 测试体        pass
 ```
 
-主入口：[`tests/unit/test_user_model.py`](../../tests/unit/test_user_model.py) L{1}
+主入口：[`tests/unit/test_user_model.py`](../../../tests/unit/test_user_model.py) L{1}
 
 ```{python}:{示例结构}:
 # tests/unit/test_user_model.py 结构（参考）
@@ -99,7 +99,7 @@ class TestUserModel:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`tests/unit/conftest.py`](../../tests/unit/conftest.py) — 新增 `make_organization_handler`、`make_department_handler`、`make_role_permission_handler`、`make_user_role_handler`（如果 Issue #428 已在 conftest.py 中预置，跳过此步）
+  - [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — 新增 `make_organization_handler`、`make_department_handler`、`make_role_permission_handler`、`make_user_role_handler`（如果 Issue #428 已在 conftest.py 中预置，跳过此步）
 - 要建：
   - `tests/unit/test_identity_model.py` — OrganizationModel + DepartmentModel 单元测试
   - `tests/unit/test_rbac_model.py` — RolePermissionModel + UserRoleModel + cascade 行为测试
@@ -131,7 +131,7 @@ class TestUserModel:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/unit/conftest.py`](../../tests/unit/conftest.py) | 新增 `make_organization_handler`、`make_department_handler`、`make_role_permission_handler`、`make_user_role_handler` 四个 mock SQL handler（如 Issue #428 已提供则跳过） |
+| [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) | 新增 `make_organization_handler`、`make_department_handler`、`make_role_permission_handler`、`make_user_role_handler` 四个 mock SQL handler（如 Issue #428 已提供则跳过） |
 
 ### 3.3 新增能力
 
@@ -353,7 +353,7 @@ gh pr create --base master --title "test(#429): unit tests for identity & RBAC m
 ## 9. 参考
 
 - 同类参考实现：[`tests/unit/test_tenant_model.py`](../../tests/unit/test_tenant_model.py)
-- 同类参考实现：[`tests/unit/test_user_model.py`](../../tests/unit/test_user_model.py)
+- 同类参考实现：[`tests/unit/test_user_model.py`](../../../tests/unit/test_user_model.py)
 - 依赖 Issue /关联：#428（板① —补充 Identity 系列 ORM 模型与关系定义）、#270（父 issue）
 
 ---

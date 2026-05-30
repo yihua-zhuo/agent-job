@@ -402,7 +402,7 @@ gh pr create --base master --title "feat(notifications): implement NotificationS
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — service 层模式参考
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service 层模式参考
 - 第三方文档：[FastAPI Dependency Injection](https://fastapi.tiangolo.com/tutorial/dependencies/)
 - 父 issue / 关联：#39, #646
 

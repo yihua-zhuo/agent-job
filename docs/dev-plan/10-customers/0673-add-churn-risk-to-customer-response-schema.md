@@ -6,8 +6,8 @@
 | 分类 | [10-customers](../README.md#12-分类总览) |
 | 优先级 | 推荐 |
 | 工作量 | 0.25 工作日 |
-| 依赖 | [TBD — issue #672 未创建](TBD) |
-| 启用后赋能 | [TBD — 下游消费方待定](TBD) |
+| 依赖 | TBD - 待验证：issue #672 未创建，依赖链路待确认后补充链接 |
+| 启用后赋能 | TBD - 待验证：下游消费方（analytics dashboard / automated workflow）待定 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-The existing `Customer` dataclass in [`src/models/customer.py`](../../src/models/customer.py) L22-L93 and the `CustomerModel` ORM in [`src/db/models/customer.py`](../../src/db/models/customer.py) L40-L56 expose the core customer fields (`id`, `name`, `email`, `status`, `owner_id`, `tags`, etc.) but have no representation for churn risk data. An upstream analytics/ML pipeline (driven by issue #672) will compute a churn risk score per customer; the GET endpoints must be able to surface it without schema changes on the service/router layer.
+The existing `Customer` dataclass in [`src/models/customer.py`](../../../src/models/customer.py) L22-L93 and the `CustomerModel` ORM in [`src/db/models/customer.py`](../../../src/db/models/customer.py) L40-L56 expose the core customer fields (`id`, `name`, `email`, `status`, `owner_id`, `tags`, etc.) but have no representation for churn risk data. An upstream analytics/ML pipeline (driven by issue #672) will compute a churn risk score per customer; the GET endpoints must be able to surface it without schema changes on the service/router layer.
 
 ### 1.2 做完后
 
@@ -41,7 +41,7 @@ The existing `Customer` dataclass in [`src/models/customer.py`](../../src/models
 
 ### 2.1 现有实现
 
-主入口：[`src/models/customer.py`](../../src/models/customer.py) L22-L50
+主入口：[`src/models/customer.py`](../../../src/models/customer.py) L22-L50
 
 ```python:src/models/customer.py
 @dataclass
@@ -72,15 +72,15 @@ class Customer:
         }
 ```
 
-[`src/db/models/customer.py`](../../src/db/models/customer.py) L40-L56 — `CustomerModel.to_dict()` currently returns 12 fields, no churn risk fields.
+[`src/db/models/customer.py`](../../../src/db/models/customer.py) L40-L56 — `CustomerModel.to_dict()` currently returns 12 fields, no churn risk fields.
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/models/customer.py`](../../src/models/customer.py) — add `churn_risk: float | None` and `churn_risk_tier: str | None` fields to `Customer` dataclass; update `to_dict()`
-  - [`src/db/models/customer.py`](../../src/db/models/customer.py) — add `churn_risk` and `churn_risk_tier` to `CustomerModel.to_dict()`
-  - [`tests/unit/test_customer_model.py`](../../tests/unit/test_customer_model.py) — add tests for new fields
-  - [`tests/unit/test_customers_router.py`](../../tests/unit/test_customers_router.py) — add test coverage for `churn_risk` in GET response
+  - [`src/models/customer.py`](../../../src/models/customer.py) — add `churn_risk: float | None` and `churn_risk_tier: str | None` fields to `Customer` dataclass; update `to_dict()`
+  - [`src/db/models/customer.py`](../../../src/db/models/customer.py) — add `churn_risk` and `churn_risk_tier` to `CustomerModel.to_dict()`
+  - [`tests/unit/test_customer_model.py`](../../../tests/unit/test_customer_model.py) — add tests for new fields
+  - [`tests/unit/test_customers_router.py`](../../../tests/unit/test_customers_router.py) — add test coverage for `churn_risk` in GET response
 - 要建：
   - 无
 
@@ -104,10 +104,10 @@ class Customer:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/models/customer.py`](../../src/models/customer.py) | dataclass 新增 `churn_risk: float | None = None` 和 `churn_risk_tier: str | None = None`；更新 `to_dict()` 输出这两字段 |
-| [`src/db/models/customer.py`](../../src/db/models/customer.py) | `to_dict()` 返回值追加 `churn_risk` 和 `churn_risk_tier` 字段（如值为 `None` 则不出现，或显式返回 `None`） |
-| [`tests/unit/test_customer_model.py`](../../tests/unit/test_customer_model.py) | 新增 `TestChurnRiskFields` 测试类：验证字段存在、to_dict 输出正确、边界值（0.0 / 1.0 / None） |
-| [`tests/unit/test_customers_router.py`](../../tests/unit/test_customers_router.py) | 在 `TestGetCustomer` 中验证响应 JSON 包含 `churn_risk` 和 `churn_risk_tier` 键 |
+| [`src/models/customer.py`](../../../src/models/customer.py) | dataclass 新增 `churn_risk: float | None = None` 和 `churn_risk_tier: str | None = None`；更新 `to_dict()` 输出这两字段 |
+| [`src/db/models/customer.py`](../../../src/db/models/customer.py) | `to_dict()` 返回值追加 `churn_risk` 和 `churn_risk_tier` 字段（如值为 `None` 则不出现，或显式返回 `None`） |
+| [`tests/unit/test_customer_model.py`](../../../tests/unit/test_customer_model.py) | 新增 `TestChurnRiskFields` 测试类：验证字段存在、to_dict 输出正确、边界值（0.0 / 1.0 / None） |
+| [`tests/unit/test_customers_router.py`](../../../tests/unit/test_customers_router.py) | 在 `TestGetCustomer` 中验证响应 JSON 包含 `churn_risk` 和 `churn_risk_tier` 键 |
 
 ### 3.3 新增能力
 
@@ -147,7 +147,7 @@ class Customer:
 ### Step 1: Add churn_risk fields to `Customer` dataclass
 
 操作：
-- a) 在 [`src/models/customer.py`](../../src/models/customer.py) 的 `Customer` dataclass 中，`updated_at` 字段声明后追加：
+- a) 在 [`src/models/customer.py`](../../../src/models/customer.py) 的 `Customer` dataclass 中，`updated_at` 字段声明后追加：
 
 ```python
     churn_risk: float | None = None
@@ -180,7 +180,7 @@ class Customer:
 ### Step 2: Add churn_risk fields to `CustomerModel.to_dict()`
 
 操作：
-- a) 在 [`src/db/models/customer.py`](../../src/db/models/customer.py) 的 `to_dict()` 方法中，`"updated_at": ...` 条目后追加：
+- a) 在 [`src/db/models/customer.py`](../../../src/db/models/customer.py) 的 `to_dict()` 方法中，`"updated_at": ...` 条目后追加：
 
 ```python
             "churn_risk": getattr(self, "churn_risk", None),
@@ -196,7 +196,7 @@ class Customer:
 ### Step 3: Add unit tests for churn_risk in `test_customer_model.py`
 
 操作：
-- a) 在 [`tests/unit/test_customer_model.py`](../../tests/unit/test_customer_model.py) 新增测试类：
+- a) 在 [`tests/unit/test_customer_model.py`](../../../tests/unit/test_customer_model.py) 新增测试类：
 
 ```python
 from models.customer import Customer, CustomerStatus
@@ -250,7 +250,7 @@ class TestChurnRiskFields:
 ### Step 4: Add router tests for churn_risk in GET response
 
 操作：
-- a) 在 [`tests/unit/test_customers_router.py`](../../tests/unit/test_customers_router.py) 的 `TestGetCustomer` 类中添加：
+- a) 在 [`tests/unit/test_customers_router.py`](../../../tests/unit/test_customers_router.py) 的 `TestGetCustomer` 类中添加：
 
 ```python
     def test_get_customer_response_includes_churn_risk_fields(self):
@@ -336,10 +336,10 @@ gh pr create --base master --title "feat(#673): add churn_risk fields to custome
 
 ## 9. 参考
 
-- Dataclass pattern（已有）：[`src/models/customer.py`](../../src/models/customer.py) L22-L93
-- ORM to_dict pattern（已有）：[`src/db/models/customer.py`](../../src/db/models/customer.py) L40-L56
-- Unit test for dataclass：[`tests/unit/test_customer_model.py`](../../tests/unit/test_customer_model.py)
-- Router test for GET endpoint：[`tests/unit/test_customers_router.py`](../../tests/unit/test_customers_router.py) L168-L176
+- Dataclass pattern（已有）：[`src/models/customer.py`](../../../src/models/customer.py) L22-L93
+- ORM to_dict pattern（已有）：[`src/db/models/customer.py`](../../../src/db/models/customer.py) L40-L56
+- Unit test for dataclass：[`tests/unit/test_customer_model.py`](../../../tests/unit/test_customer_model.py)
+- Router test for GET endpoint：[`tests/unit/test_customers_router.py`](../../../tests/unit/test_customers_router.py) L168-L176
 - Parent issue / subtask：#35（父 issue）
 - 依赖 issue：#672（churn risk computation — storage side）
 

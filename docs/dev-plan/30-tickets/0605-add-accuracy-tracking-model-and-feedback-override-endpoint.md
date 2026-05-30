@@ -6,8 +6,8 @@
 | 分类 | [30-tickets](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [0604-构建工单分类数据模型](../0604-构建工单分类数据模型-and-migration.md)（TBD - 待确认该板块文件路径） |
-| 启用后赋能 | [0606-构建工单分类准确率指标](../0606-add-accuracy-metrics-endpoint-and-basic-reporting.md) — 依赖 `TicketCategorizationModel` 上的 override 标记字段 |
+| 依赖 | [0604-构建工单分类数据模型](../30-tickets/0604-add-post-tickets-ticket-id-categorize-router-endpoint.md)（TBD - 待确认该板块文件路径） |
+| 启用后赋能 | [0606-构建工单分类准确率指标](../30-tickets/0606-add-accuracy-metrics-endpoint-and-basic-reporting.md) — 依赖 `TicketCategorizationModel` 上的 override 标记字段 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -45,7 +45,7 @@ Issue #604 creates `TicketCategorizationModel` in `src/db/models/ticket_categori
 
 > TBD - 待验证：#604 生成 `src/db/models/ticket_categorization.py` 中的 `TicketCategorizationModel` 是否存在；若无此文件，本板块无法实施。
 
-参考同类 ORM 模型定义（reply 模式）：[`src/db/models/ticket_reply.py`](../../src/db/models/ticket_reply.py) L{11}-L{35}
+参考同类 ORM 模型定义（reply 模式）：[`src/db/models/ticket_reply.py`](../../../src/db/models/ticket_reply.py) L{11}-L{35}
 
 ```python:src/db/models/ticket_reply.py
 class TicketReplyModel(Base):
@@ -59,7 +59,7 @@ class TicketReplyModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 ```
 
-参考 PATCH 端点模式：[`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) L{196}-L{213}
+参考 PATCH 端点模式：[`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) L{196}-L{213}
 
 ```python:src/api/routers/tickets.py
 @tickets_router.put("/{ticket_id}", ...)
@@ -73,10 +73,10 @@ async def update_ticket(ticket_id: int, ...):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/ticket_service.py`](../../src/services/ticket_service.py) — 新增 `submit_categorization_feedback()` 方法，更新 `TicketCategorizationModel.overridden` 字段并写入 `CategorizationFeedbackModel`
-  - [`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) — 新增 `PATCH /api/v1/tickets/{ticket_id}/categorization/feedback` 端点
-  - [`tests/unit/test_ticket_service.py`](../../tests/unit/test_ticket_service.py) — 新增 feedback submit 测试用例
-  - [`tests/unit/test_tickets_router.py`](../../tests/unit/test_tickets_router.py) — 新增 router feedback 端点测试用例
+  - [`src/services/ticket_service.py`](../../../src/services/ticket_service.py) — 新增 `submit_categorization_feedback()` 方法，更新 `TicketCategorizationModel.overridden` 字段并写入 `CategorizationFeedbackModel`
+  - [`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) — 新增 `PATCH /api/v1/tickets/{ticket_id}/categorization/feedback` 端点
+  - [`tests/unit/test_ticket_service.py`](../../../tests/unit/test_ticket_service.py) — 新增 feedback submit 测试用例
+  - [`tests/unit/test_tickets_router.py`](../../../tests/unit/test_tickets_router.py) — 新增 router feedback 端点测试用例
   - `alembic/env.py` — 如需注册新模型（确认 `db.models` 已导入所有 model 模块）
 - 要建：
   - `src/db/models/ticket_categorization.py` — `CategorizationFeedbackModel`（issue #604 会先创建 `TicketCategorizationModel`，本板块在其文件中追加 `CategorizationFeedbackModel`）
@@ -107,10 +107,10 @@ async def update_ticket(ticket_id: int, ...):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/ticket_service.py`](../../src/services/ticket_service.py) | 新增 `submit_categorization_feedback(ticket_id, tenant_id, user_id, category?, priority?)` 方法 |
-| [`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) | 新增 `PATCH /tickets/{ticket_id}/categorization/feedback` 端点 |
-| [`tests/unit/test_ticket_service.py`](../../tests/unit/test_ticket_service.py) | 新增 `test_submit_categorization_feedback_*` 测试用例 |
-| [`tests/unit/test_tickets_router.py`](../../tests/unit/test_tickets_router.py) | 新增 `test_patch_categorization_feedback_*` 测试用例 |
+| [`src/services/ticket_service.py`](../../../src/services/ticket_service.py) | 新增 `submit_categorization_feedback(ticket_id, tenant_id, user_id, category?, priority?)` 方法 |
+| [`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) | 新增 `PATCH /tickets/{ticket_id}/categorization/feedback` 端点 |
+| [`tests/unit/test_ticket_service.py`](../../../tests/unit/test_ticket_service.py) | 新增 `test_submit_categorization_feedback_*` 测试用例 |
+| [`tests/unit/test_tickets_router.py`](../../../tests/unit/test_tickets_router.py) | 新增 `test_patch_categorization_feedback_*` 测试用例 |
 
 ### 3.3 新增能力
 
@@ -213,7 +213,7 @@ class CategorizationFeedbackModel(Base):
 
 操作：
 - a) 确保 `docker compose -f configs/docker-compose.test.yml up -d test-db` 运行中
-- b) `docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;" && docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"`
+- b) `docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;" && docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembicem;"`
 - c) `alembic upgrade head`
 - d) `alembic revision --autogenerate -m "add categorization feedback table"`
 - e) 打开生成的 `alembic/versions/<id>_add_categorization_feedback_table.py`，检查：
@@ -530,10 +530,10 @@ gh pr create --base master --title "feat(tickets): add CategorizationFeedback mo
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/ticket_reply.py`](../../src/db/models/ticket_reply.py) — append-only audit-style ORM model pattern
-- 同类参考实现：[`src/services/ticket_service.py`](../../src/services/ticket_service.py) — `submit_categorization_feedback` 参考同文件的 `add_reply` / `change_status` 等写操作模式
-- 同类参考实现：[`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) — `PATCH /{ticket_id}/status` endpoint pattern for partial-update semantics
-- Migration 参考：[`alembic/versions/3ea69d66514e_sync_models_with_db.py`](../../alembic/versions/3ea69d66514e_sync_models_with_db.py) — `DateTime(timezone=True)` + `server_default=sa.text('now()')` pattern
+- 同类参考实现：[`src/db/models/ticket_reply.py`](../../../src/db/models/ticket_reply.py) — append-only audit-style ORM model pattern
+- 同类参考实现：[`src/services/ticket_service.py`](../../../src/services/ticket_service.py) — `submit_categorization_feedback` 参考同文件的 `add_reply` / `change_status` 等写操作模式
+- 同类参考实现：[`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) — `PATCH /{ticket_id}/status` endpoint pattern for partial-update semantics
+- Migration 参考：[`alembic/versions/3ea69d66514e_sync_models_with_db.py`](../../../alembic/versions/3ea69d66514e_sync_models_with_db.py) — `DateTime(timezone=True)` + `server_default=sa.text('now()')` pattern
 - 父 issue / 关联：#45
 - 依赖 issue / 关联：#604（工单分类数据模型，为本板块提供 `TicketCategorizationModel`）
 - 下游 issue / 关联：#606（准确率指标，依赖 `TicketCategorizationModel.overridden` 字段）
@@ -545,3 +545,5 @@ gh pr create --base master --title "feat(tickets): add CategorizationFeedback mo
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+-----

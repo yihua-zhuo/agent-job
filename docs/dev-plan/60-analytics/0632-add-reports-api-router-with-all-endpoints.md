@@ -48,7 +48,7 @@ TBD - 待验证：确认 `src/services/reports_service.py` exists from issue #63
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/main.py`](../../src/main.py) — register `reports` router
+  - [`src/main.py`](../../../src/main.py) — register `reports` router
 - 要建：
   - `src/api/routers/reports.py` — Reports CRUD + generate/download + schedule router
   - `tests/unit/test_reports_router.py` — unit tests for all 7 endpoints
@@ -74,7 +74,7 @@ TBD - 待验证：确认 `src/services/reports_service.py` exists from issue #63
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | Import and mount `reports` router at `/reports` prefix |
+| [`src/main.py`](../../../src/main.py) | Import and mount `reports` router at `/reports` prefix |
 
 ### 3.3 新增能力
 
@@ -303,7 +303,7 @@ gh pr create --base master --title "feat(reports): add API router with all 7 end
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py)
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py)
 - 同类参考实现：[`src/api/routers/campaigns.py`](../../src/api/routers/campaigns.py)
 - 父 issue / 关联：#40
 - 前置依赖：#631

@@ -312,7 +312,7 @@ gh pr create --base master --title "test(#579): unit tests for AiDraftService an
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — mock_db_session fixture 模式和 AppException assert 写法
-- 同类参考实现：[`tests/unit/conftest.py`](../../tests/unit/conftest.py) — MockState、make_mock_session、mock_auth fixture
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — mock_db_session fixture 模式和 AppException assert 写法
+- 同类参考实现：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — MockState、make_mock_session、mock_auth fixture
 - 父 issue：#50
 - 依赖 issue：#578

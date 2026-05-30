@@ -46,7 +46,7 @@ For upstream context, `ImportJob` and `ExportJob` ORM models do not yet exist in
 
 ### 2.1 现有实现
 
-主入口：[`src/services/import_export_service.py`](../../src/services/import_export_service.py) L16-L423
+主入口：[`src/services/import_export_service.py`](../../../src/services/import_export_service.py) L16-L423
 
 ```startLine:16:endLine:41:src/services/import_export_service.py
 class ImportExportService:
@@ -96,7 +96,7 @@ class ImportExportService:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/import_export_service.py`](../../src/services/import_export_service.py) - 新增 4 个核心方法；增强构造器签名检查 file size > 50MB
+  - [`src/services/import_export_service.py`](../../../src/services/import_export_service.py) - 新增 4 个核心方法；增强构造器签名检查 file size > 50MB
 - 要建：
   - `src/db/models/import_job.py` - ImportJob ORM model（带 error_log JSON 列，供 execute_import 使用）
   - `src/db/models/export_job.py` - ExportJob ORM model（供 create_export 使用）
@@ -127,8 +127,8 @@ class ImportExportService:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/import_export_service.py`](../../src/services/import_export_service.py) | 新增 `validate_file()`, `parse_and_preview()`, `execute_import()`, `create_export()`4 个方法；增强 `__init__` 或独立 helper 检查文件大小 >50MB 时抛 ValidationException |
-| [`src/db/models/__init__.py`](../../src/db/models/__init__.py) | import 并注册 `import_job` 和 `export_job` 新模型 |
+| [`src/services/import_export_service.py`](../../../src/services/import_export_service.py) | 新增 `validate_file()`, `parse_and_preview()`, `execute_import()`, `create_export()`4 个方法；增强 `__init__` 或独立 helper 检查文件大小 >50MB 时抛 ValidationException |
+| [`src/db/models/__init__.py`](../../../src/db/models/__init__.py) | import 并注册 `import_job` 和 `export_job` 新模型 |
 | `alembic/env.py` | import `import_job` 和 `export_job` 模型，使其对 autogenerate 可见 |
 
 ### 3.3 新增能力
@@ -803,8 +803,8 @@ git push
 
 - 上游 dependency board: [`0678-add-import-history-and-error-reporting`](../70-platform/0678-add-import-history-and-error-reporting.md) — uses `ImportJob` model from this board
 - 父 issue: #34 — 总览 issue
-- 项目内：`ImportExportService` 实现参考 [`src/services/import_export_service.py`](../../src/services/import_export_service.py) L16-L423
-- 项目内：`FileHelper` - 文件解析参考 [`src/utils/file_helper.py`](../../src/utils/file_helper.py)
+- 项目内：`ImportExportService` 实现参考 [`src/services/import_export_service.py`](../../../src/services/import_export_service.py) L16-L423
+- 项目内：`FileHelper` - 文件解析参考 [`src/utils/file_helper.py`](../../../src/utils/file_helper.py)
 - 项目内：Error handling 规范 [`pkg/errors/app_exceptions.py`](../../pkg/errors/app_exceptions.py)
 - CLAUDE.md §「Service Pattern」：service returns ORM + raises AppException
 - CLAUDE.md §「Unit Test SQL Mocks」：MockState / make_mock_session 使用规范

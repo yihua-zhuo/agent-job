@@ -44,12 +44,12 @@ The upstream board #677 provides the `ImportJob` ORM model with an `error_log` J
 
 ### 2.1 现有实现
 
-N/A — 新建模块。`ImportExportService` in [`src/services/import_export_service.py`](../../src/services/import_export_service.py) L16-L423 handles parse/validate/write but has no `ImportJob` concept, no `list_jobs`, and no error-log storage. The `ImportJob` ORM model with `error_log` JSON column is assumed to be delivered by the upstream board #677.
+N/A — 新建模块。`ImportExportService` in [`src/services/import_export_service.py`](../../../src/services/import_export_service.py) L16-L423 handles parse/validate/write but has no `ImportJob` concept, no `list_jobs`, and no error-log storage. The `ImportJob` ORM model with `error_log` JSON column is assumed to be delivered by the upstream board #677.
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/import_export_service.py`](../../src/services/import_export_service.py) - 新增 `list_jobs()` 方法；`execute_import` 中写入 `error_log`
+  - [`src/services/import_export_service.py`](../../../src/services/import_export_service.py) - 新增 `list_jobs()` 方法；`execute_import` 中写入 `error_log`
 - 要建：
   - `src/api/routers/import_jobs.py` - 新建 import jobs router，定义 `GET /import/jobs` 和 `GET /import/jobs/{job_id}/errors` 端点
   - `tests/unit/test_import_export_service.py` - 追加 `list_jobs` + `get_job_errors` 测试用例
@@ -79,7 +79,7 @@ N/A — 新建模块。`ImportExportService` in [`src/services/import_export_ser
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/import_export_service.py`](../../src/services/import_export_service.py) | 新增 `list_jobs(tenant_id, page, page_size)` 方法；确认 `execute_import` 调用处写入 `error_log` 到 `ImportJob.error_log` JSON 列 |
+| [`src/services/import_export_service.py`](../../../src/services/import_export_service.py) | 新增 `list_jobs(tenant_id, page, page_size)` 方法；确认 `execute_import` 调用处写入 `error_log` 到 `ImportJob.error_log` JSON 列 |
 
 ### 3.3 新增能力
 
@@ -472,8 +472,8 @@ git push
 
 - 上游 dependency board: [`0677-add-import-jobs-crud-and-file-storage`](../50-automation/0677-add-import-jobs-crud-and-file-storage.md) — provides `ImportJob` ORM model with `error_log` JSON column
 - 父 issue: [#34](https://github.com/...) — 总览 issue
-- 项目内：`ImportExportService` 实现参考 [`src/services/import_export_service.py`](../../src/services/import_export_service.py) L16-L423
-- 项目内：Router 模式参考 [`src/api/routers/sales.py`](../../src/api/routers/sales.py) L1-L235
+- 项目内：`ImportExportService` 实现参考 [`src/services/import_export_service.py`](../../../src/services/import_export_service.py) L16-L423
+- 项目内：Router 模式参考 [`src/api/routers/sales.py`](../../../src/api/routers/sales.py) L1-L235
 - 项目内：Error handling 规范 [`pkg/errors/app_exceptions.py`](../../pkg/errors/app_exceptions.py)
 - CLAUDE.md §「Service Pattern」：service returns ORM + raises AppException
 

@@ -77,7 +77,7 @@ TBD - 待补充：检查 `src/db/models/` 目录下已有的 ORM 模型文件结
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`alembic/env.py`](../../alembic/env.py) | 添加 `from db.models.agent_tasks import AgentTask`（autogenerate 扫描用） |
+| [`alembic/env.py`](../../../alembic/env.py) | 添加 `from db.models.agent_tasks import AgentTask`（autogenerate 扫描用） |
 
 ### 3.3 新增能力
 

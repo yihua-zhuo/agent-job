@@ -264,7 +264,7 @@ gh pr create --base master --title "feat(#622): add POST and GET /agents/tasks r
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) — Router Pattern 范本（POST/GET list/GET {id} 三件套）
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — Router Pattern 范本（POST/GET list/GET {id} 三件套）
 - 父 issue / 关联：#42（父 epic）、#621（依赖：Service + Model 层先完成）
 - 第三方文档：[FastAPI Router](https://fastapi.tiangolo.com/tutorial/bigger-applications/) — Router 注册模式
 

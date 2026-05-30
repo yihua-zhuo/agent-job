@@ -559,7 +559,7 @@ gh pr create --base master --title "feat(automation): add AutomationRules API ro
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — service 模式参考（constructor + raise 风格）
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service 模式参考（constructor + raise 风格）
 - 同类参考实现：[`src/api/routers/customer_router.py`](../../src/api/routers/customer_router.py) — router 模式参考（router 注册 + 响应封装）
 - 父 issue / 关联：#65（前端 Automation 页面依赖本后端 API）
 

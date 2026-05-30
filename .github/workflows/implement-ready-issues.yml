@@ -39,6 +39,8 @@ jobs:
           token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Checkout agent-actions (CI scripts)
+        # Skip when .agent-actions/ already exists (local act --bind path).
+        if: hashFiles('.agent-actions/scripts/*.py') == ''
         uses: actions/checkout@v4
         with:
           repository: yihua-zhuo/agent-actions

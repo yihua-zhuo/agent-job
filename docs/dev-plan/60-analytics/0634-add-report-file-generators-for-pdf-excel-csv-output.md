@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-`ReportService`（[`src/services/report_service.py`](../../src/services/report_service.py) L31-L61）当前 `generate_pdf_report` 只返回占位符 `%PDF-1.4\n…%%EOF\n`，`generate_excel_report` 只返回 `"PK\x03\x04" + text` 字节串。两者都不是真正的多工作簿/多sheet内容，也没有超时保护。`export_to_csv` 虽用了 Python stdlib `csv` 模块，但也没有超时保护或生成器抽象。当系统需要生成可分发的业务报表（给客户/管理层发送 PDF/Excel/CSV）时，现有 stub 无法满足需求。
+`ReportService`（[`src/services/report_service.py`](../../../src/services/report_service.py) L31-L61）当前 `generate_pdf_report` 只返回占位符 `%PDF-1.4\n…%%EOF\n`，`generate_excel_report` 只返回 `"PK\x03\x04" + text` 字节串。两者都不是真正的多工作簿/多sheet内容，也没有超时保护。`export_to_csv` 虽用了 Python stdlib `csv` 模块，但也没有超时保护或生成器抽象。当系统需要生成可分发的业务报表（给客户/管理层发送 PDF/Excel/CSV）时，现有 stub 无法满足需求。
 
 ### 1.2 做完后
 
@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/report_service.py`](../../src/services/report_service.py) L31-L61
+主入口：[`src/services/report_service.py`](../../../src/services/report_service.py) L31-L61
 
 ```{python}:31-61:src/services/report_service.py
     async def generate_pdf_report(
@@ -80,8 +80,8 @@
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/report_service.py`](../../src/services/report_service.py) — `generate_pdf_report`、`generate_excel_report`、`export_to_csv` 内部替换为生成器调用
-  - [`src/api/routers/reports.py`](../../src/api/routers/reports.py) — 端点保持不变（路由逻辑不变）
+  - [`src/services/report_service.py`](../../../src/services/report_service.py) — `generate_pdf_report`、`generate_excel_report`、`export_to_csv` 内部替换为生成器调用
+  - [`src/api/routers/reports.py`](../../../src/api/routers/reports.py) — 端点保持不变（路由逻辑不变）
 - 要建：
   - `src/services/report_generation/generators/base.py` — `BaseGenerator` 抽象基类 + `GeneratorTimeoutError`
   - `src/services/report_generation/generators/pdf_generator.py` — ReportLab PDF 生成器
@@ -119,8 +119,8 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/report_service.py`](../../src/services/report_service.py) | `generate_pdf_report`/`generate_excel_report`/`export_to_csv` 内部调用 `get_generator(format).generate(data)`；保留接口签名不变 |
-| [`src/api/routers/reports.py`](../../src/api/routers/reports.py) | 无改动（路由不变，生成器替换在 service 层） |
+| [`src/services/report_service.py`](../../../src/services/report_service.py) | `generate_pdf_report`/`generate_excel_report`/`export_to_csv` 内部调用 `get_generator(format).generate(data)`；保留接口签名不变 |
+| [`src/api/routers/reports.py`](../../../src/api/routers/reports.py) | 无改动（路由不变，生成器替换在 service 层） |
 
 ### 3.3 新增能力
 
@@ -531,8 +531,8 @@ gh pr create --base master --title "feat(reports): add file generators for pdf/e
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/report_service.py`](../../src/services/report_service.py) — 当前 stub 实现
-- 同类参考实现：[`src/api/routers/reports.py`](../../src/api/routers/reports.py) — router 调用 service 的模式
+- 同类参考实现：[`src/services/report_service.py`](../../../src/services/report_service.py) — 当前 stub 实现
+- 同类参考实现：[`src/api/routers/reports.py`](../../../src/api/routers/reports.py) — router 调用 service 的模式
 - 第三方文档：[ReportLab User Guide](https://docs.reportlab.com/) — PDF 生成
 - 第三方文档：[openpyxl documentation](https://openpyxl.readthedocs.io/) — Excel 生成
 - 父 issue / 关联：#40

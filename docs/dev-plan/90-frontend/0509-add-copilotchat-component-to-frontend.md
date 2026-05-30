@@ -42,12 +42,12 @@ The CRM currently lacks a unified AI chat interface for users to query copilot c
 
 ### 2.1 现有实现
 
-N/A — 新建模块。No `CopilotChat` component exists yet. The closest existing pattern is the `BulkActionsBar` at [`frontend/src/components/tickets/bulk-actions-bar.tsx`](../../frontend/src/components/tickets/bulk-actions-bar.tsx), which demonstrates how this project structures collapsible UI panels and uses the API client.
+N/A — 新建模块。No `CopilotChat` component exists yet. The closest existing pattern is the `BulkActionsBar` at [`frontend/src/components/tickets/bulk-actions-bar.tsx`](../../../frontend/src/components/tickets/bulk-actions-bar.tsx), which demonstrates how this project structures collapsible UI panels and uses the API client.
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) — add `sendCopilotMessage` query hook (if not already added by #508)
+  - [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) — add `sendCopilotMessage` query hook (if not already added by #508)
 - 要建：
   - `frontend/src/components/CopilotChat.tsx` — floating button + collapsible chat window + context bar + message list + input + send
   - `frontend/src/app/(app)/layout.tsx` — import and mount `<CopilotChat />` in the root app layout (or a specific layout that has page-store context)
@@ -75,7 +75,7 @@ N/A — 新建模块。No `CopilotChat` component exists yet. The closest existi
 | 路径 | 改动要点 |
 |------|---------|
 | [`frontend/src/app/(app)/layout.tsx`](../../frontend/src/app/(app)/layout.tsx) | Import and mount `<CopilotChat />` in the root app layout |
-| [`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) | Add `useSendCopilotMessage` mutation hook calling `POST /copilot/chat` |
+| [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) | Add `useSendCopilotMessage` mutation hook calling `POST /copilot/chat` |
 
 ### 3.3 新增能力
 

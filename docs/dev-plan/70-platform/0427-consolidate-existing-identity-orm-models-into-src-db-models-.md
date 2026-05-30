@@ -87,7 +87,7 @@ class TenantModel(Base):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/db/models/__init__.py`](../../src/db/models/__init__.py) | 新增 6 个模型的 re-export（TenantModel, UserModel, RoleModel, PermissionModel, RolePermissionModel, UserRoleModel）；已包含 #426 的 OrganizationModel/DepartmentModel |
+| [`src/db/models/__init__.py`](../../../src/db/models/__init__.py) | 新增 6 个模型的 re-export（TenantModel, UserModel, RoleModel, PermissionModel, RolePermissionModel, UserRoleModel）；已包含 #426 的 OrganizationModel/DepartmentModel |
 
 ### 3.3 新增能力
 

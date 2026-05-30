@@ -6,8 +6,8 @@
 | 分类 | 90-frontend |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [Tickets 看板基础视图](./0553-add-kanban-board-to-tickets-page.md) |
-| 启用后赋能 | [看板自动化规则](./TODO-kanban-automation.md), [商机看板拖拽](./TODO-opportunity-kanban-dnd.md) |
+| 依赖 | [Tickets 看板基础视图](../90-frontend/0553-build-kanban-board-frontend-page-with-static-columns-and-car.md) |
+| 启用后赋能 | TBD - 待验证：看板自动化规则文档路径, TBD - 待验证：商机看板拖拽文档路径 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -44,7 +44,7 @@
 
 ### 2.1 现有实现
 
-入口：[`frontend/src/components/tickets/kanban-board.tsx`](../../frontend/src/components/tickets/kanban-board.tsx) L{1}-L{80}
+入口：[`frontend/src/components/tickets/kanban-board.tsx`](../../../frontend/src/components/tickets/kanban-board.tsx) L{1}-L{80}
 
 ```tsx:frontend/src/components/tickets/kanban-board.tsx
 export function KanbanBoard({ tickets, groupBy = "status" }: KanbanBoardProps) {
@@ -79,13 +79,13 @@ export function KanbanBoard({ tickets, groupBy = "status" }: KanbanBoardProps) {
 }
 ```
 
-引用方：[`frontend/src/app/(app)/tickets/page.tsx`](../../frontend/src/app/(app)/tickets/page.tsx) — `viewMode === "kanban"` 时渲染 `<KanbanBoard>`。
+引用方：[`frontend/src/app/(app)/tickets/page.tsx`](../../app/(app)/tickets/page.tsx) — `viewMode === "kanban"` 时渲染 `<KanbanBoard>`。
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`frontend/src/components/tickets/kanban-board.tsx`](../../frontend/src/components/tickets/kanban-board.tsx) — 接入 `@dnd-kit`，增加 `onDrop` 乐观更新逻辑
-  - [`frontend/src/app/(app)/tickets/page.tsx`](../../frontend/src/app/(app)/tickets/page.tsx) — 将 tickets 数据注入 `KanbanBoard`，管理 optimistic state
+  - [`frontend/src/components/tickets/kanban-board.tsx`](../../../frontend/src/components/tickets/kanban-board.tsx) — 接入 `@dnd-kit`，增加 `onDrop` 乐观更新逻辑
+  - [`frontend/src/app/(app)/tickets/page.tsx`](../../app/(app)/tickets/page.tsx) — 将 tickets 数据注入 `KanbanBoard`，管理 optimistic state
 - 要建：
   - `frontend/src/components/tickets/draggable-ticket-card.tsx` — 封装 `useSortable` 的可拖拽卡片组件
   - `frontend/src/app/(app)/tickets/kanban-board-dnd.test.tsx` — Vitest 单元测试（拖拽交互 + rollback）
@@ -113,8 +113,8 @@ export function KanbanBoard({ tickets, groupBy = "status" }: KanbanBoardProps) {
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`frontend/src/components/tickets/kanban-board.tsx`](../../frontend/src/components/tickets/kanban-board.tsx) | 导出 `KanbanBoard` 增加 `DndContext` + `SortableContext` + `DragOverlay`；每列改用 `<SortableContext>` 包裹；`onDragEnd` 调用 props `onCardDrop` |
-| [`frontend/src/app/(app)/tickets/page.tsx`](../../frontend/src/app/(app)/tickets/page.tsx) | 管理本地 optimistic `tickets` 状态；`onCardDrop` 乐观更新 + API 调用 + rollback on error |
+| [`frontend/src/components/tickets/kanban-board.tsx`](../../../frontend/src/components/tickets/kanban-board.tsx) | 导出 `KanbanBoard` 增加 `DndContext` + `SortableContext` + `DragOverlay`；每列改用 `<SortableContext>` 包裹；`onDragEnd` 调用 props `onCardDrop` |
+| [`frontend/src/app/(app)/tickets/page.tsx`](../../app/(app)/tickets/page.tsx) | 管理本地 optimistic `tickets` 状态；`onCardDrop` 乐观更新 + API 调用 + rollback on error |
 
 ### 3.3 新增能力
 
@@ -399,9 +399,9 @@ gh pr create --base master --title "feat(tickets): kanban drag-and-drop with opt
 
 ## 9. 参考
 
-- 同类参考实现（拖拽+乐观更新模式）：[`frontend/src/app/(app)/tasks/page.tsx`](../../frontend/src/app/(app)/tasks/page.tsx)
-- 静态看板入口：[`frontend/src/components/tickets/kanban-board.tsx`](../../frontend/src/components/tickets/kanban-board.tsx)
-- 已有 PATCH 端点（后端无需改动）：[`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) — `PUT /tickets/{ticket_id}/status`
+- 同类参考实现（拖拽+乐观更新模式）：[`frontend/src/app/(app)/tasks/page.tsx`](../../app/(app)/tasks/page.tsx)
+- 静态看板入口：[`frontend/src/components/tickets/kanban-board.tsx`](../../../frontend/src/components/tickets/kanban-board.tsx)
+- 已有 PATCH 端点（后端无需改动）：[`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) — `PUT /tickets/{ticket_id}/status`
 - 父 issue：#54
 - 依赖板块：#553
 

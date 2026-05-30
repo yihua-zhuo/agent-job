@@ -43,7 +43,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/workflow_service.py`](../../src/services/workflow_service.py) L189-L211
+主入口：[`src/services/workflow_service.py`](../../../src/services/workflow_service.py) L189-L211
 
 ```{python}
 # src/services/workflow_service.py
@@ -68,8 +68,8 @@ def _execute_actions(workflow: WorkflowModel) -> dict:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/workflow_service.py`](../../src/services/workflow_service.py) — 在 `_execute_actions` 中追加 node dispatch 逻辑（向后兼容，原有 hardcoded 分支保留）
-  - [`tests/unit/conftest.py`](../../tests/unit/conftest.py) — 新增 `make_workflow_handler`（如果 `tests/unit/domain_handlers/workflow.py` 尚不存在则先建它）
+  - [`src/services/workflow_service.py`](../../../src/services/workflow_service.py) — 在 `_execute_actions` 中追加 node dispatch 逻辑（向后兼容，原有 hardcoded 分支保留）
+  - [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — 新增 `make_workflow_handler`（如果 `tests/unit/domain_handlers/workflow.py` 尚不存在则先建它）
 - 要建：
   - `src/workflow/nodes/base.py` — `NodeProtocol`（interface）+ `NodeResult` dataclass）
   - `src/workflow/nodes/loop.py` — `LoopNode` 实现
@@ -105,7 +105,7 @@ def _execute_actions(workflow: WorkflowModel) -> dict:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/workflow_service.py`](../../src/services/workflow_service.py) | 在 `_execute_actions` 末尾追加 node dispatch：检测 `"type"` 为 `"loop"` / `"transform"` 时，调用对应 node 类 |
+| [`src/services/workflow_service.py`](../../../src/services/workflow_service.py) | 在 `_execute_actions` 末尾追加 node dispatch：检测 `"type"` 为 `"loop"` / `"transform"` 时，调用对应 node 类 |
 
 ### 3.3 新增能力
 
@@ -678,8 +678,8 @@ gh pr create --base master --title "feat(automation): implement LoopNode and Tra
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/automation_service.py`](../../src/services/automation_service.py) — `_eval_condition` / `_match_conditions` 结构（条件求值模式类似）
-- 同类参考实现：[`src/services/workflow_service.py`](../../src/services/workflow_service.py) L189-L211 — `_execute_actions` 当前实现
+- 同类参考实现：[`src/services/automation_service.py`](../../../src/services/automation_service.py) — `_eval_condition` / `_match_conditions` 结构（条件求值模式类似）
+- 同类参考实现：[`src/services/workflow_service.py`](../../../src/services/workflow_service.py) L189-L211 — `_execute_actions` 当前实现
 - 父 issue：#73
 - 关联依赖：#519（TBD — 是否已有节点接口板块）
 

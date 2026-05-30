@@ -63,7 +63,7 @@ jobs:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — 新增 `qc` job（依赖 `code-review`，执行 `ruff format --check` 和 `mypy`，上传 artifacts）
+  - [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) — 新增 `qc` job（依赖 `code-review`，执行 `ruff format --check` 和 `mypy`，上传 artifacts）
 
 ### 2.3 缺什么
 
@@ -85,7 +85,7 @@ jobs:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | 新增 `qc` job（`needs: code-review`），包含 `ruff format --check` 和 `mypy` 两个步骤，并上传 artifacts；保持 gateway URL 和 token placeholder 与其他 job 一致 |
+| [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) | 新增 `qc` job（`needs: code-review`），包含 `ruff format --check` 和 `mypy` 两个步骤，并上传 artifacts；保持 gateway URL 和 token placeholder 与其他 job 一致 |
 
 ### 3.3 新增能力
 
@@ -128,7 +128,7 @@ jobs:
 ### Step 1: 读取现有 CI workflow 结构
 
 操作：
-- a) 读取 [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) 全文
+- a) 读取 [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) 全文
 - b) 记录现有 job 列表、`code-review` job 的声明方式、artifact 上传模式（`actions/upload-artifact` 版本和命名约定）、gateway URL placeholder 格式
 
 完成判定：`cat .github/workflows/ci.yml | grep -E "^  [a-z]+:"` 列出所有 job 名称
@@ -213,7 +213,7 @@ gh pr create --base master --title "ci: add qc stage job to CI workflow (#435)" 
 
 ## 9. 参考
 
-- 同类参考实现：[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — 当前 CI workflow（需验证）
+- 同类参考实现：[`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) — 当前 CI workflow（需验证）
 - 父 issue / 关联：#198, #434
 
 ---

@@ -392,8 +392,8 @@ gh pr create --base master --title "feat(chat): ChatService with intent classifi
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — Service 层规范（session 必传、raise AppException、ORM 返回）
-- 同类参考实现：[`src/services/ticket_service.py`](../../src/services/ticket_service.py) — `list_tickets` + `get_customer_tickets` 参考，tenant_id 过滤模式相同
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — Service 层规范（session 必传、raise AppException、ORM 返回）
+- 同类参考实现：[`src/services/ticket_service.py`](../../../src/services/ticket_service.py) — `list_tickets` + `get_customer_tickets` 参考，tenant_id 过滤模式相同
 - 父 issue / 关联：#43（父）, #613（下游 — 依赖本板块完成）
 
 ---

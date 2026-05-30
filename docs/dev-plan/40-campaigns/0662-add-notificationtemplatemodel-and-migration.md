@@ -45,7 +45,7 @@ Issue #646 需要一套完整的通知系统基础设施。通知模板（Notifi
 
 现有 Notification 模型（`notification.py`）定义了通知记录结构，是本板块的最近参考：
 
-[`src/db/models/notification.py`](../../src/db/models/notification.py) L{1}-L{35}
+[`src/db/models/notification.py`](../../../src/db/models/notification.py) L{1}-L{35}
 
 ```python
 class NotificationModel(Base):
@@ -344,8 +344,8 @@ gh pr create --base master --title "feat(40-campaigns): add NotificationTemplate
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/notification.py`](../../src/db/models/notification.py) — 最近的 Notification 模型，本板块直接参考字段声明风格
-- 同类参考实现：[`src/db/models/ticket.py`](../../src/db/models/ticket.py) — to_dict 序列化风格参考
+- 同类参考实现：[`src/db/models/notification.py`](../../../src/db/models/notification.py) — 最近的 Notification 模型，本板块直接参考字段声明风格
+- 同类参考实现：[`src/db/models/ticket.py`](../../../src/db/models/ticket.py) — to_dict 序列化风格参考
 - 父 issue / 关联：#646 (完整通知系统), #661 (依赖的前置迁移), #664 (NotificationLogModel，并行板块)
 
 ---

@@ -6,7 +6,7 @@
 | 分类 | 20-sales |
 | 优先级 | 必做 |
 | 工作量 | 2 工作日 |
-| 依赖 | [0665-add-opportunity-activity-detection-service](0655-add-opportunity-activity-detection-service.md) |
+| 依赖 | TBD - 待验证：确认 activity detection service 文档编号（0655 或 0665） |
 | 启用后赋能 | [0667-implement-recommendation-scoring-and-similar-deals-logic](0667-implement-recommendation-scoring-and-similar-deals-logic.md), [0668-add-get-sales-opportunities-id-recommendations-endpoint](0668-add-get-sales-opportunities-id-recommendations-endpoint.md) |
 | 状态 | 📋 待开始 |
 
@@ -68,7 +68,7 @@ N/A — 新建模块
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/services/recommendation_service.py` | Risk-indicator detection service (4 detect_* methods) |
 | `tests/unit/test_recommendation_service.py` | Unit tests for all 4 detect_* methods with mock DB |
 
@@ -546,9 +546,9 @@ gh pr create --base master --title "feat(recommendation): risk-indicator detecti
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/sales_service.py`](../../src/services/sales_service.py) — service constructor pattern, session usage, multi-tenancy SQL filter
-- 同类参考实现：[`src/db/models/activity.py`](../../src/db/models/activity.py) — `ActivityModel` column layout used for engagement and competitor search
-- 同类参考实现：[`src/db/models/opportunity.py`](../../src/db/models/opportunity.py) — `OpportunityModel` column layout including `expected_close_date`
+- 同类参考实现：[`src/services/sales_service.py`](../../../src/services/sales_service.py) — service constructor pattern, session usage, multi-tenancy SQL filter
+- 同类参考实现：[`src/db/models/activity.py`](../../../src/db/models/activity.py) — `ActivityModel` column layout used for engagement and competitor search
+- 同类参考实现：[`src/db/models/opportunity.py`](../../../src/db/models/opportunity.py) — `OpportunityModel` column layout including `expected_close_date`
 - 父 issue / 关联：#36
 - 依赖 issue / 关联：#665
 

@@ -84,8 +84,8 @@ N/A — 新建模块。本 issue 为纯前端页面搭建，后端 API 由 #498 
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`frontend/src/components/layout/app-sidebar.tsx`](../../frontend/src/components/layout/app-sidebar.tsx) | 在 `systemItems` 后新增 `{ href: "/marketplace", label: "Marketplace", icon: Store }`；在 Settings 区域新增 `href: "/settings/webhooks"` 和 `href: "/settings/api"` 子项 |
-| [`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) | 新增 `qk.marketplaceApps / qk.webhooks / qk.apiKeys`；新增 `useMarketplaceApps / useInstallApp / useWebhooks / useCreateWebhook / useDeleteWebhook / useApiKeys / useCreateApiKey / useRevokeApiKey` |
+| [`frontend/src/components/layout/app-sidebar.tsx`](../../../frontend/src/components/layout/app-sidebar.tsx) | 在 `systemItems` 后新增 `{ href: "/marketplace", label: "Marketplace", icon: Store }`；在 Settings 区域新增 `href: "/settings/webhooks"` 和 `href: "/settings/api"` 子项 |
+| [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) | 新增 `qk.marketplaceApps / qk.webhooks / qk.apiKeys`；新增 `useMarketplaceApps / useInstallApp / useWebhooks / useCreateWebhook / useDeleteWebhook / useApiKeys / useCreateApiKey / useRevokeApiKey` |
 
 ### 3.3 新增能力
 

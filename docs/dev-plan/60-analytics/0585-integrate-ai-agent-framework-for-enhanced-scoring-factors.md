@@ -260,7 +260,7 @@ gh pr create --base master --title "feat(#585): integrate AI agent framework for
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — service pattern with graceful degradation on external call
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service pattern with graceful degradation on external call
 - 第三方文档：[AI Agent Framework — issue #41](../00-foundations/0041-ai-agent-framework.md)
 - 父 issue / 关联：#49, #41, #584
 

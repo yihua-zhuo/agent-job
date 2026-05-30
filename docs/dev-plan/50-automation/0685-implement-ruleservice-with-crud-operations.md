@@ -68,7 +68,7 @@ class AutomationRuleModel(Base):
     )
 ```
 
-现有测试 handler：[`tests/unit/domain_handlers/automation.py`](../../tests/unit/domain_handlers/automation.py) L1-L93
+现有测试 handler：[`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py) L1-L93
 
 ```startLine:1:tests/unit/domain_handlers/automation.py
 def make_automation_handler(state: MockState):
@@ -91,7 +91,7 @@ def make_automation_handler(state: MockState):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/automation_service.py`](../../src/services/automation_service.py) — 确认 `AutomationService` 已有的 CRUD 方法签名，供本板块参考；本板块不修改该文件
+  - [`src/services/automation_service.py`](../../../src/services/automation_service.py) — 确认 `AutomationService` 已有的 CRUD 方法签名，供本板块参考；本板块不修改该文件
 - 要建：
   - `src/services/automation_rule_service.py` — 新建 `AutomationRuleService`，实现7 个 CRUD/activate/deactivate 方法
   - `tests/unit/test_automation_rule_service.py` —单元测试，覆盖 7 个方法的成功路径 + 边界 + 错误路径### 2.3 缺什么
@@ -434,9 +434,9 @@ git push
 ## 9. 参考
 
 - 上游 ORM 模型：[`src/db/models/automation.py`](../../src/db/models/automation.py) L12-L44
-- 上游测试 handler：[`tests/unit/domain_handlers/automation.py`](../../tests/unit/domain_handlers/automation.py) L1-L101
-- 姊妹服务参考：[`src/services/customer_service.py`](../../src/services/customer_service.py) L1-L162（完整 CRUD模式，含 paginated list + tenant_id过滤）
-- 异常定义：[`src/pkg/errors/app_exceptions.py`](../../src/pkg/errors/app_exceptions.py)
+- 上游测试 handler：[`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py) L1-L101
+- 姊妹服务参考：[`src/services/customer_service.py`](../../../src/services/customer_service.py) L1-L162（完整 CRUD模式，含 paginated list + tenant_id过滤）
+- 异常定义：[`src/pkg/errors/app_exceptions.py`](../../../src/pkg/errors/app_exceptions.py)
 - Issue #686 router：[`docs/dev-plan/issues/0686-add-post-get-put-delete-automation-rules-router-endpoints.md`](../issues/0686-add-post-get-put-delete-automation-rules-router-endpoints.md)
 - Issue #687 执行引擎：[`docs/dev-plan/issues/0687-build-rule-execution-engine-and-trigger-dispatch.md`](../issues/0687-build-rule-execution-engine-and-trigger-dispatch.md)
 

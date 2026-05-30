@@ -44,8 +44,8 @@ The MULTI_AGENT_DESIGN.md defines an Orchestrator/Coordinator that parses natura
 
 N/A — 新建模块。`src/agents/` does not exist; no `BaseAgent` or `AgentRegistry` exists in the codebase. The only related artifacts are design documents:
 
-- [`docs/agents/coordinator/coordinator_agent.py`](../../docs/agents/coordinator/coordinator_agent.py) — a rough script-style placeholder (not production code), ~80 lines, defines a `CoordinatorAgent` class with `parse_task`, `dispatch_to_agent`, and `run_workflow` methods using hard-coded dict returns and `subprocess.run` for dispatch.
-- [`scripts/coordinator.py`](../../scripts/coordinator.py) — a standalone CLI parse helper, also not part of the `src/` tree.
+- [`docs/agents/coordinator/coordinator_agent.py`](../../../docs/agents/coordinator/coordinator_agent.py) — a rough script-style placeholder (not production code), ~80 lines, defines a `CoordinatorAgent` class with `parse_task`, `dispatch_to_agent`, and `run_workflow` methods using hard-coded dict returns and `subprocess.run` for dispatch.
+- [`scripts/coordinator.py`](../../../scripts/coordinator.py) — a standalone CLI parse helper, also not part of the `src/` tree.
 
 Neither file provides the structured `BaseAgent` / `AgentRegistry` abstraction required by issue #626.
 
@@ -417,7 +417,7 @@ gh pr create --base master --title "feat(agents): add CoordinatorAgent (#626)" -
 
 ## 9. 参考
 
-- 同类参考实现：[`docs/agents/coordinator/coordinator_agent.py`](../../docs/agents/coordinator/coordinator_agent.py) — design doc / placeholder this production module replaces
-- 同类参考实现：[`scripts/coordinator.py`](../../scripts/coordinator.py) — existing CLI parse helper (not part of `src/agents/`)
+- 同类参考实现：[`docs/agents/coordinator/coordinator_agent.py`](../../../docs/agents/coordinator/coordinator_agent.py) — design doc / placeholder this production module replaces
+- 同类参考实现：[`scripts/coordinator.py`](../../../scripts/coordinator.py) — existing CLI parse helper (not part of `src/agents/`)
 - 父 issue / 关联：#41
 - 依赖 issue / 关联：#625

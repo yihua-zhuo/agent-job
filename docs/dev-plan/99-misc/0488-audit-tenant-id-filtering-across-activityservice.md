@@ -83,8 +83,8 @@ Router：`src/api/routers/activities.py`
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/activity_service.py`](../../src/services/activity_service.py) | 8 个方法中缺失 tenant_id 过滤的补上；不改签名 |
-| [`src/api/routers/activities.py`](../../src/api/routers/activities.py) | 确认每个 handler 传 `tenant_id=ctx.tenant_id` |
+| [`src/services/activity_service.py`](../../../src/services/activity_service.py) | 8 个方法中缺失 tenant_id 过滤的补上；不改签名 |
+| [`src/api/routers/activities.py`](../../../src/api/routers/activities.py) | 确认每个 handler 传 `tenant_id=ctx.tenant_id` |
 
 ### 3.3 新增能力
 

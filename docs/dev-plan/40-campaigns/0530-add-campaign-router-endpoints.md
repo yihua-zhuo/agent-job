@@ -6,7 +6,7 @@
 | 分类 | 40-campaigns |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [Campaign ORM + Service](40-campaigns/0529-campaign-orm-service-model.md) |
+| 依赖 | TBD - 待验证：Campaign ORM + Service (#529) |
 | 启用后赋能 | N/A — 本身为叶子板块 |
 | 状态 | 📋 待开始 |
 
@@ -34,8 +34,11 @@ Issue #529 establishes the `CampaignService` and ORM model for campaigns. The ap
 ### 1.4 关键 KPI
 
 - [ ] `ruff check src/api/routers/marketing.py` → 0 errors (0 warnings)
-- [ ] `PYTHONPATH=src pytest tests/unit/test_marketing_router.py -v` → all passed- [ ] `PYTHONPATH=src pytest tests/integration/test_marketing_router_integration.py -v` → all passed
-- [ ] All five endpoints respond with `{"success": true, "data": {...}}` (or correct error shape) for their happy-path inputs---
+- [ ] `PYTHONPATH=src pytest tests/unit/test_marketing_router.py -v` → all passed
+- [ ] `PYTHONPATH=src pytest tests/integration/test_marketing_router_integration.py -v` → all passed
+- [ ] All five endpoints respond with `{"success": true, "data": {...}}` (or correct error shape) for their happy-path inputs
+
+---
 
 ## 2. 当前现状（起点）
 
@@ -67,7 +70,7 @@ TBD - 待验证：`src/api/routers/marketing.py` — issue #529 creates it along
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `tests/unit/test_marketing_router.py` | Unit tests for all five `marketing.py` endpoints with mocked `CampaignService` |
 | `tests/integration/test_marketing_router_integration.py` | Integration tests exercising real DB + real service (deferred to #531 / #688) |
 
@@ -75,7 +78,7 @@ TBD - 待验证：`src/api/routers/marketing.py` — issue #529 creates it along
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/marketing.py`](../../src/api/routers/marketing.py) | Add five endpoints: list (filter/sort/pagination), get_one, create, update, stats |
+| [`src/api/routers/marketing.py`](../../../src/api/routers/marketing.py) | Add five endpoints: list (filter/sort/pagination), get_one, create, update, stats |
 
 ### 3.3 新增能力
 
@@ -147,7 +150,8 @@ Read the existing `marketing.py` stub (or confirm it does not exist) and add the
 
 ```python
 # src/api/routers/marketing.py
-from fastapi import APIRouter, Dependsfrom sqlalchemy.ext异步 import AsyncSession
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from services.campaign_service import CampaignService
@@ -253,7 +257,8 @@ import pytest
 from unittest.mock import AsyncMock, MagicMock
 from fastapi.testclient import TestClient
 from fastapi import FastAPI
-from api.routers.marketing import routerfrom internal.middleware.fastapi_auth import AuthContext
+from api.routers.marketing import router
+from internal.middleware.fastapi_auth import AuthContext
 
 @pytest.fixture
 def app():
@@ -282,7 +287,7 @@ def test_list_campaigns(app, mock_service, mock_auth, mocker):
     ...
 ```
 
-**完成判定**：`PYTHONPATH=src pytest tests单元/test_marketing_router.py -v` → all passed.
+**完成判定**：`PYTHONPATH=src pytest tests/unit/test_marketing_router.py -v` → all passed.
 
 ---
 
@@ -340,9 +345,10 @@ gh pr create --base master --title "feat(campaigns): add /marketing/campaigns CR
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) — serves as the canonical router-pattern reference in this repo
-- 同类参考实现：[`src/api/routers/sales.py`](../../src/api/routers/sales.py) — list + get + create + update pattern with filter/sort/pagination
-- 父 issue / 关联：#62- 依赖的前置板块：#529
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — serves as the canonical router-pattern reference in this repo
+- 同类参考实现：[`src/api/routers/sales.py`](../../../src/api/routers/sales.py) — list + get + create + update pattern with filter/sort/pagination
+- 父 issue / 关联：#62
+- 依赖的前置板块：#529
 
 ---
 

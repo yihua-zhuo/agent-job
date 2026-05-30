@@ -416,7 +416,7 @@ gh pr create --base master --title "feat(#475): implement DataIsolationService a
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — 现有 service 模式参考（`__init__` 接受 `session: AsyncSession`，方法接受 `tenant_id: int`，抛 `AppException` 子类）
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — 现有 service 模式参考（`__init__` 接受 `session: AsyncSession`，方法接受 `tenant_id: int`，抛 `AppException` 子类）
 - 父 issue / 关联：#447（多租户隔离平台层）
 - 依赖 issue：#474（CustomerModel 和 UserModel 必须先存在）
 

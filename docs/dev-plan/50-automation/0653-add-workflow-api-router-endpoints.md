@@ -54,7 +54,7 @@ N/A — 新建模块：`src/api/routers/workflow.py` 不存在。
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/main.py`](../../src/main.py) — 新增 `app.include_router(workflow_router, prefix="/workflows")` 注册语句
+  - [`src/main.py`](../../../src/main.py) — 新增 `app.include_router(workflow_router, prefix="/workflows")` 注册语句
 - 要建：
   - `src/api/routers/workflow.py` —6 个 endpoint 的 router，inject session + AuthContext，call WorkflowService，序列化为 `.to_dict()`
   - `tests/unit/test_workflow_router.py` — 6 个 endpoint 的单元测试，用 MockState + mock session（mock WorkflowService 而非真实 DB）
@@ -81,7 +81,7 @@ N/A — 新建模块：`src/api/routers/workflow.py` 不存在。
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | 新增 `workflow_router` import 及 `include_router` 注册（prefix `/workflows`） |
+| [`src/main.py`](../../../src/main.py) | 新增 `workflow_router` import 及 `include_router` 注册（prefix `/workflows`） |
 
 ### 3.3 新增能力
 
@@ -248,7 +248,7 @@ gh pr create --base master --title "feat(automation): add Workflow API router (#
 ## 9. 参考
 
 - 同类参考实现（existing router pattern）：[`src/api/routers/ticket_router.py`](../../src/api/routers/ticket_router.py) — `require_auth` + `Depends(get_db)` + `WorkflowService` 调用模式参照
-- 同类参考实现（service layer）：[`src/services/workflow_service.py`](../../src/services/workflow_service.py) — 由 #652 提供，本板块调用其方法- 父 issue / 关联：#37（Automation Rules System 顶层）、#652（WorkflowService 实现）
+- 同类参考实现（service layer）：[`src/services/workflow_service.py`](../../../src/services/workflow_service.py) — 由 #652 提供，本板块调用其方法- 父 issue / 关联：#37（Automation Rules System 顶层）、#652（WorkflowService 实现）
 - 依赖 issue：#652
 
 ---

@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-[`src/services/report_service.py`](../../src/services/report_service.py) L{1}-L{178}
+[`src/services/report_service.py`](../../../src/services/report_service.py) L{1}-L{178}
 
 The file already exists. Constructor takes `AsyncSession` and stores it as `self.session`. Current public methods: `generate_pdf_report`, `generate_excel_report`, `export_to_csv`, `schedule_report`. No CRUD methods for `reports` table.
 
@@ -63,7 +63,7 @@ class ReportService:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/report_service.py`](../../src/services/report_service.py) — add five CRUD methods + exception imports
+  - [`src/services/report_service.py`](../../../src/services/report_service.py) — add five CRUD methods + exception imports
   - [`tests/unit/test_report_service.py`](../../tests/unit/test_report_service.py) — add unit tests for CRUD methods
 - 要建：
   - 无
@@ -92,7 +92,7 @@ class ReportService:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/report_service.py`](../../src/services/report_service.py) | 新增 `list_reports`, `get_report`, `create_report`, `update_report`, `delete_report` 五个 async 方法；更新 import 添加 `NotFoundException`, `ForbiddenException`, `ReportModel`, `and_`, `select`, `update`, `delete` |
+| [`src/services/report_service.py`](../../../src/services/report_service.py) | 新增 `list_reports`, `get_report`, `create_report`, `update_report`, `delete_report` 五个 async 方法；更新 import 添加 `NotFoundException`, `ForbiddenException`, `ReportModel`, `and_`, `select`, `update`, `delete` |
 | [`tests/unit/test_report_service.py`](../../tests/unit/test_report_service.py) | 新增 CRUD 方法的单元测试：正常路径、report 不存在、tenant 隔离 |
 
 ### 3.3 新增能力
@@ -136,7 +136,7 @@ N/A — no new dependencies introduced.
 
 ### Step 1: Add imports to report_service.py
 
-在 [`src/services/report_service.py`](../../src/services/report_service.py) 文件顶部，更新 import 块：
+在 [`src/services/report_service.py`](../../../src/services/report_service.py) 文件顶部，更新 import 块：
 
 ```python
 from datetime import UTC, datetime
@@ -422,9 +422,9 @@ gh pr create --base master --title "feat(reports): add ReportService CRUD with O
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — `list_customers`, `get_customer`, `create_customer`, `update_customer` pattern
-- 同类参考实现：[`src/services/sales_service.py`](../../src/services/sales_service.py) — pagination + count pattern
-- ORM model：[`src/db/models/analytics.py`](../../src/db/models/analytics.py) — `ReportModel` definition
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — `list_customers`, `get_customer`, `create_customer`, `update_customer` pattern
+- 同类参考实现：[`src/services/sales_service.py`](../../../src/services/sales_service.py) — pagination + count pattern
+- ORM model：[`src/db/models/analytics.py`](../../../src/db/models/analytics.py) — `ReportModel` definition
 - 父 issue / 关联：#40
 - 下游依赖：#632
 

@@ -43,7 +43,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/ai_service.py`](../../src/services/ai_service.py) L115-L163
+主入口：[`src/services/ai_service.py`](../../../src/services/ai_service.py) L115-L163
 
 ```python
 115:    async def send_message(
@@ -68,7 +68,7 @@
 134:        return reply_response
 ```
 
-现有 Rate Limiter（进程内 in-memory）：[`src/api/routers/ai.py`](../../src/api/routers/ai.py) L28-L46
+现有 Rate Limiter（进程内 in-memory）：[`src/api/routers/ai.py`](../../../src/api/routers/ai.py) L28-L46
 
 ```python
 28: _rate_limit_store: defaultdict[tuple[int, int], list[float]] = defaultdict(list)
@@ -87,11 +87,11 @@
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/ai_service.py`](../../src/services/ai_service.py) — 将 `gateway.chat()` 替换为调用 `LLMService`，注入 `CoordinatorAgent` 用于 agent 任务分发
-  - [`src/internal/ai_gateway.py`](../../src/internal/ai_gateway.py) — 重构为 `LLMGateway`，调用 `LLMService.chat()` 而非 stub
-  - [`src/api/routers/ai.py`](../../src/api/routers/ai.py) — 替换 in-memory rate limit 为 `RateLimitService`（Redis-backed），新增 agent 端点
-  - [`tests/unit/test_ai_service.py`](../../tests/unit/test_ai_service.py) — 新增 WiredAgent 测试用例
-  - [`tests/unit/test_ai_router.py`](../../tests/unit/test_ai_router.py) — 新增 Redis rate limit 测试用例
+  - [`src/services/ai_service.py`](../../../src/services/ai_service.py) — 将 `gateway.chat()` 替换为调用 `LLMService`，注入 `CoordinatorAgent` 用于 agent 任务分发
+  - [`src/internal/ai_gateway.py`](../../../src/internal/ai_gateway.py) — 重构为 `LLMGateway`，调用 `LLMService.chat()` 而非 stub
+  - [`src/api/routers/ai.py`](../../../src/api/routers/ai.py) — 替换 in-memory rate limit 为 `RateLimitService`（Redis-backed），新增 agent 端点
+  - [`tests/unit/test_ai_service.py`](../../../tests/unit/test_ai_service.py) — 新增 WiredAgent 测试用例
+  - [`tests/unit/test_ai_router.py`](../../../tests/unit/test_ai_router.py) — 新增 Redis rate limit 测试用例
 - 要建：
   - `src/services/rate_limit_service.py` — Redis-backed 速率限制 service
   - `tests/unit/test_rate_limit_service.py` — 单元测试
@@ -120,11 +120,11 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/ai_service.py`](../../src/services/ai_service.py) | `__init__` 新增 `agent_registry: AgentRegistry | None` 参数；`send_message` 调用 `LLMGateway`（重构自 `AIChatGateway`），注入 CRM context；新增 `run_agent_task(task_type, params)` 方法 |
-| [`src/internal/ai_gateway.py`](../../src/internal/ai_gateway.py) | 重构成 `LLMGateway`：持有 `LLMService` 实例（延迟初始化），`chat()` 方法调用 `llm_service.chat(messages, tenant_id, model?)`；保留 `AIResponse` dataclass |
-| [`src/api/routers/ai.py`](../../src/api/routers/ai.py) | 替换 `_check_rate_limit` + `_rate_limit_store` 为 `RateLimitService` 实例；新增 `POST /api/v1/ai/agent` 端点（调度 CoordinatorAgent）；保留现有 `/chat`、`/conversation` 端点 |
-| [`tests/unit/test_ai_service.py`](../../tests/unit/test_ai_service.py) | 新增 `TestWiredAgent` 测试类：mock `AgentRegistry`，验证 `run_agent_task` 正确 dispatch |
-| [`tests/unit/test_ai_router.py`](../../tests/unit/test_ai_router.py) | 更新 rate limit 测试：mock `RateLimitService`；新增 `TestAgentEndpoint` 测试类 |
+| [`src/services/ai_service.py`](../../../src/services/ai_service.py) | `__init__` 新增 `agent_registry: AgentRegistry | None` 参数；`send_message` 调用 `LLMGateway`（重构自 `AIChatGateway`），注入 CRM context；新增 `run_agent_task(task_type, params)` 方法 |
+| [`src/internal/ai_gateway.py`](../../../src/internal/ai_gateway.py) | 重构成 `LLMGateway`：持有 `LLMService` 实例（延迟初始化），`chat()` 方法调用 `llm_service.chat(messages, tenant_id, model?)`；保留 `AIResponse` dataclass |
+| [`src/api/routers/ai.py`](../../../src/api/routers/ai.py) | 替换 `_check_rate_limit` + `_rate_limit_store` 为 `RateLimitService` 实例；新增 `POST /api/v1/ai/agent` 端点（调度 CoordinatorAgent）；保留现有 `/chat`、`/conversation` 端点 |
+| [`tests/unit/test_ai_service.py`](../../../tests/unit/test_ai_service.py) | 新增 `TestWiredAgent` 测试类：mock `AgentRegistry`，验证 `run_agent_task` 正确 dispatch |
+| [`tests/unit/test_ai_router.py`](../../../tests/unit/test_ai_router.py) | 更新 rate limit 测试：mock `RateLimitService`；新增 `TestAgentEndpoint` 测试类 |
 
 ### 3.3 新增能力
 
@@ -482,8 +482,8 @@ gh pr create --base master --title "#617 feat: wire AIService to Agent Framework
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/ai_service.py`](../../src/services/ai_service.py) — AIService 现有实现，Step 2 扩展它
-- 同类参考实现：[`src/api/routers/ai.py`](../../src/api/routers/ai.py) — 现有 in-memory rate limit，Step 4 替换它
+- 同类参考实现：[`src/services/ai_service.py`](../../../src/services/ai_service.py) — AIService 现有实现，Step 2 扩展它
+- 同类参考实现：[`src/api/routers/ai.py`](../../../src/api/routers/ai.py) — 现有 in-memory rate limit，Step 4 替换它
 - 同类参考实现：[`src/agents/coordinator.py`](../../src/agents/coordinator.py) — #626 的产物，`run_agent_task` 通过 `AgentRegistry` 调度它
 - 同类参考实现：[`src/services/llm_service.py`](../../src/services/llm_service.py) — #627 的产物，Step 3 接入它（fallback 设计保证顺序无关）
 - 依赖 issue / 关联：#625（BaseAgent + AgentRegistry）, #627（LLMService）

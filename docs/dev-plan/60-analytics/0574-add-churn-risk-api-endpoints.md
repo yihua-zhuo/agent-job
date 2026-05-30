@@ -79,7 +79,7 @@ TBD - 待验证：`src/db/models/churn_prediction.py` — 需确认 `ChurnPredic
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | 将 `ChurnRiskRouter`（或 `CustomerRouter` 中的子路由）挂载到 FastAPI app |
+| [`src/main.py`](../../../src/main.py) | 将 `ChurnRiskRouter`（或 `CustomerRouter` 中的子路由）挂载到 FastAPI app |
 
 ### 3.3 新增能力
 

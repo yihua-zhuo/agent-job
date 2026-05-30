@@ -14,7 +14,7 @@
 
 ### 1.1 为什么做
 
-The existing [`AIChatGateway`](../../src/internal/ai_gateway.py) in this repo is a single-provider stub hardcoded to a fictional MiniMax-like backend. The CRM needs to call different LLM providers (OpenAI, Anthropic, MiniMax, etc.) across tenants and use-cases, with unified `.chat()` and `.embed()` semantics, built-in retry/backoff, and per-tenant cost tracking. No such abstraction exists today.
+The existing [`AIChatGateway`](../../../src/internal/ai_gateway.py) in this repo is a single-provider stub hardcoded to a fictional MiniMax-like backend. The CRM needs to call different LLM providers (OpenAI, Anthropic, MiniMax, etc.) across tenants and use-cases, with unified `.chat()` and `.embed()` semantics, built-in retry/backoff, and per-tenant cost tracking. No such abstraction exists today.
 
 ### 1.2 做完后
 
@@ -294,8 +294,8 @@ gh pr create --base master --title "#627 feat: LLMService with multi-provider su
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/ai_service.py`](../../src/services/ai_service.py) — follows the same service pattern (`__init__(session)`, raises `AppException` subclasses)
-- 同类参考实现：[`src/internal/ai_gateway.py`](../../src/internal/ai_gateway.py) — the current stub LLM adapter; `LLMService` replaces its role for non-conversation use-cases
+- 同类参考实现：[`src/services/ai_service.py`](../../../src/services/ai_service.py) — follows the same service pattern (`__init__(session)`, raises `AppException` subclasses)
+- 同类参考实现：[`src/internal/ai_gateway.py`](../../../src/internal/ai_gateway.py) — the current stub LLM adapter; `LLMService` replaces its role for non-conversation use-cases
 - 父 issue：#41
 - 关联 issue：#626（LLMService 是 #626 的依赖）, #627（本 issue 本身）
 

@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
 | 依赖 | 无 |
-| 启用后赋能 | [50-automation/0687-build-rule-execution-engine-and-trigger-dispatch](../50-automation/0687-build-rule-execution-engine-and-trigger-dispatch.md) |
+| 启用后赋能 | TBD - 待验证：规则引擎触发调度系统（issue #687） |
 | 状态 | 📋 待开始 |
 
 ---
@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/db/models/notification.py`](../../src/db/models/notification.py) L{1}-L{39}
+主入口：[`src/db/models/notification.py`](../../../src/db/models/notification.py) L{1}-L{39}
 
 ```{1}:39:src/db/models/notification.py
 class NotificationModel(Base):
@@ -62,8 +62,8 @@ class NotificationModel(Base):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/db/models/notification.py`](../../src/db/models/notification.py) — 扩展 NotificationModel 新增字段，新增 NotificationPreferenceModel
-  - [`alembic/versions/b2c3dce4b714_create_all_tables.py`](../../alembic/versions/b2c3dce4b714_create_all_tables.py) — 不直接改，由 autogenerate 产出新 migration
+  - [`src/db/models/notification.py`](../../../src/db/models/notification.py) — 扩展 NotificationModel 新增字段，新增 NotificationPreferenceModel
+  - [`alembic/versions/b2c3dce4b714_create_all_tables.py`](../../../alembic/versions/b2c3dce4b714_create_all_tables.py) — 不直接改，由 autogenerate 产出新 migration
 - 要建：
   - `alembic/versions/<id>_add_notification_preferences.py` — notifications 表新增列 + notification_preferences 表
   - `tests/unit/test_notification.py` — NotificationModel + NotificationPreferenceModel 单元测试
@@ -90,7 +90,7 @@ class NotificationModel(Base):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/db/models/notification.py`](../../src/db/models/notification.py) | NotificationModel 新增 8 个字段；新增 NotificationPreferenceModel；更新 to_dict() |
+| [`src/db/models/notification.py`](../../../src/db/models/notification.py) | NotificationModel 新增 8 个字段；新增 NotificationPreferenceModel；更新 to_dict() |
 
 ### 3.3 新增能力
 
@@ -182,7 +182,7 @@ class NotificationPreferenceModel(Base):
 
 docker compose -f configs/docker-compose.test.yml up -d test-db
 docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;"
-docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"
+docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alemembic_dev;"
 export PYTHONPATH=src
 export DATABASE_URL="postgresql+asyncpg://test_user:test_pass@localhost:5432/alembic_dev"
 alembic upgrade head
@@ -260,8 +260,8 @@ gh pr create --base master --title "feat(#635): add NotificationModel fields and
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/ticket.py`](../../src/db/models/ticket.py) — TicketModel 字段声明模式（String/DateTime/Boolean）
-- 同类参考实现：[`src/db/models/notification.py`](../../src/db/models/notification.py) — 现有 NotificationModel（修改起点）
+- 同类参考实现：[`src/db/models/ticket.py`](../../../src/db/models/ticket.py#L1)-L{50} — TicketModel 字段声明模式（String/DateTime/Boolean）
+- 同类参考实现：[`src/db/models/notification.py`](../../../src/db/models/notification.py) — 现有 NotificationModel（修改起点）
 - 父 issue / 关联：#39
 
 ---
@@ -271,3 +271,5 @@ gh pr create --base master --title "feat(#635): add NotificationModel fields and
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+
+----- END CORRECTED BOARD -----

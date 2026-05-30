@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-[`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) L62-L64（空缓存字段）：
+[`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) L62-L64（空缓存字段）：
 
 ```python
 62:    def __init__(self):
@@ -50,7 +50,7 @@
 64:        self._customer_cache: dict[int, dict] = {}
 ```
 
-[`src/services/sales_service.py`](../../src/services/sales_service.py) L281-L294（stage 变更无后效）：
+[`src/services/sales_service.py`](../../../src/services/sales_service.py) L281-L294（stage 变更无后效）：
 
 ```python
 281:  async def change_stage(self, tenant_id: int = 0, opp_id: int = 0, stage: str = "") -> OpportunityModel:
@@ -69,7 +69,7 @@
 294:      return refreshed
 ```
 
-[`src/services/activity_service.py`](../../src/services/activity_service.py) L41-L68（activity 创建无后效）：
+[`src/services/activity_service.py`](../../../src/services/activity_service.py) L41-L68（activity 创建无后效）：
 
 ```python
 41:  async def create_activity(
@@ -104,12 +104,12 @@
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) — 实现 `invalidate_cache` 方法和 TTL 缓存逻辑
-  - [`src/services/sales_service.py`](../../src/services/sales_service.py) — `change_stage` 方法末尾调用 `SalesRecommendationService.invalidate_cache`
-  - [`src/services/activity_service.py`](../../src/services/activity_service.py) — `create_activity` 方法末尾调用 `SalesRecommendationService.invalidate_cache`（当 `opportunity_id` 存在时）
+  - [`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) — 实现 `invalidate_cache` 方法和 TTL 缓存逻辑
+  - [`src/services/sales_service.py`](../../../src/services/sales_service.py) — `change_stage` 方法末尾调用 `SalesRecommendationService.invalidate_cache`
+  - [`src/services/activity_service.py`](../../../src/services/activity_service.py) — `create_activity` 方法末尾调用 `SalesRecommendationService.invalidate_cache`（当 `opportunity_id` 存在时）
   - [`tests/unit/test_sales_recommendation.py`](../../tests/unit/test_sales_recommendation.py) — 新增缓存失效单元测试
   - [`tests/unit/test_sales.py`](../../tests/unit/test_sales.py) — `change_stage` 单元测试覆盖缓存失效调用
-  - [`tests/unit/test_activity_service.py`](../../tests/unit/test_activity_service.py) — activity 创建触发失效的单元测试
+  - [`tests/unit/test_activity_service.py`](../../../tests/unit/test_activity_service.py) — activity 创建触发失效的单元测试
 - 要建：
   - `tests/unit/test_sales_recommendation.py`（若文件不存在）— 缓存失效 + TTL 验证
 
@@ -134,12 +134,12 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py) | 新增 `_recommendation_cache: dict[str, tuple[float, Any]]`（key = `f"{tenant_id}:{opportunity_id}"`，value = `(expires_at, result)`）；新增 `invalidate_cache(opportunity_id, tenant_id)` 方法；各推荐方法优先从缓存读取 |
-| [`src/services/sales_service.py`](../../src/services/sales_service.py) | `change_stage` 方法末尾注入 `SalesRecommendationService(session).invalidate_cache(opp_id, tenant_id)` |
-| [`src/services/activity_service.py`](../../src/services/activity_service.py) | `create_activity` 方法末尾当 `opportunity_id is not None` 时调用 `SalesRecommendationService().invalidate_cache(opportunity_id, tenant_id)` |
+| [`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py) | 新增 `_recommendation_cache: dict[str, tuple[float, Any]]`（key = `f"{tenant_id}:{opportunity_id}"`，value = `(expires_at, result)`）；新增 `invalidate_cache(opportunity_id, tenant_id)` 方法；各推荐方法优先从缓存读取 |
+| [`src/services/sales_service.py`](../../../src/services/sales_service.py) | `change_stage` 方法末尾注入 `SalesRecommendationService(session).invalidate_cache(opp_id, tenant_id)` |
+| [`src/services/activity_service.py`](../../../src/services/activity_service.py) | `create_activity` 方法末尾当 `opportunity_id is not None` 时调用 `SalesRecommendationService().invalidate_cache(opportunity_id, tenant_id)` |
 | [`tests/unit/test_sales_recommendation.py`](../../tests/unit/test_sales_recommendation.py) | 新增 `test_invalidate_cache_clears_entry`、`test_invalidate_cache_tenant_isolation`、`test_cache_ttl_1_hour` 测试用例 |
 | [`tests/unit/test_sales.py`](../../tests/unit/test_sales.py) | `change_stage` 测试断言 mock session 中 `invalidate_cache` 被调用一次 |
-| [`tests/unit/test_activity_service.py`](../../tests/unit/test_activity_service.py) | activity 测试断言创建含 `opportunity_id` 的 activity 时 `invalidate_cache` 被调用一次 |
+| [`tests/unit/test_activity_service.py`](../../../tests/unit/test_activity_service.py) | activity 测试断言创建含 `opportunity_id` 的 activity 时 `invalidate_cache` 被调用一次 |
 
 ### 3.3 新增能力
 
@@ -407,7 +407,7 @@ gh pr create --base master --title "feat(analytics): cache invalidation on stage
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/sales_recommendation.py`](../../src/services/sales_recommendation.py)（现有 `SalesRecommendationService`，`_customer_cache` 字段为历史遗留）
+- 同类参考实现：[`src/services/sales_recommendation.py`](../../../src/services/sales_recommendation.py)（现有 `SalesRecommendationService`，`_customer_cache` 字段为历史遗留）
 - 父 issue / 关联：#36（父 issue）
 - 关联 issue：#668（依赖项，RecommendationService 基础）
 

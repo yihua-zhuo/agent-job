@@ -41,7 +41,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/workflow_service.py`](../../src/services/workflow_service.py) L1-L227
+主入口：[`src/services/workflow_service.py`](../../../src/services/workflow_service.py) L1-L227
 
 ```python
 # src/services/workflow_service.py
@@ -59,7 +59,7 @@ class WorkflowService:
         # INSERT workflow_executions, evaluate conditions, execute actions
 ```
 
-模型文件：[`src/db/models/workflow.py`](../../src/db/models/workflow.py) L1-L76 — `WorkflowModel` + `WorkflowExecutionModel`，各有 `to_dict()`
+模型文件：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) L1-L76 — `WorkflowModel` + `WorkflowExecutionModel`，各有 `to_dict()`
 
 ### 2.2 涉及文件清单
 
@@ -417,8 +417,8 @@ gh pr create --base master --title "test(#654): add unit tests for WorkflowServi
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py)
-- 同类参考实现：[`tests/unit/domain_handlers/automation.py`](../../tests/unit/domain_handlers/automation.py)
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py)
+- 同类参考实现：[`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py)
 - 父 issue：#37
 - 依赖 issue：#653
 

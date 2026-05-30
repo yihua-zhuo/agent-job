@@ -45,7 +45,7 @@ The CRM currently stores customer attributes (company_size, industry, engagement
 
 N/A — 新建模块
 
-TBD - 待验证：`src/db/models/customer.py` — 现有 CustomerModel 的字段清单（company_size, industry, engagement_level, budget 等是否存在）；[`src/services/customer_service.py`](../../src/services/customer_service.py) — get_customer / fetch logic
+TBD - 待验证：`src/db/models/customer.py` — 现有 CustomerModel 的字段清单（company_size, industry, engagement_level, budget 等是否存在）；[`src/services/customer_service.py`](../../../src/services/customer_service.py) — get_customer / fetch logic
 
 ### 2.2 涉及文件清单
 
@@ -402,7 +402,7 @@ gh pr create --base master --title "feat(#583): implement ScoreService with stat
 
 ## 9. 参考
 
-- 同类参考实现：TBD - 待验证：[`src/services/customer_service.py`](../../src/services/customer_service.py) — existing service pattern to follow
+- 同类参考实现：TBD - 待验证：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — existing service pattern to follow
 - 第三方文档：[Pydantic docs](https://docs.pydantic.dev/) — ScoreResult schema
 - 父 issue / 关联：#49 (parent epic), #582 (ScoreResult model — dependency), #584 (score API router), #585 (auto-recalculation trigger)
 

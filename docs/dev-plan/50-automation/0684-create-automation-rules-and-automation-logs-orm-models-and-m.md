@@ -98,7 +98,7 @@ class AutomationLogModel(Base):
 
 - [ ] No Alembic migration for `automation_rules` and `automation_logs` tables.
 - [ ] `alembic/env.py` imports all models via `import db.models` — already correct, no change needed.
-- [ ] `make_automation_handler` in [`tests/unit/domain_handlers/automation.py`](../../tests/unit/domain_handlers/automation.py) exists but has no test coverage for the model layer itself.
+- [ ] `make_automation_handler` in [`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py) exists but has no test coverage for the model layer itself.
 - [ ] No unit tests that directly instantiate `AutomationRuleModel` / `AutomationLogModel` and call `.to_dict()` to verify serialization.
 
 ---
@@ -420,9 +420,9 @@ git push
 ## 9. 参考
 
 - ORM models：[`src/db/models/automation.py`](../../src/db/models/automation.py) L1-L77
-- Test handlers：[`tests/unit/domain_handlers/automation.py`](../../tests/unit/domain_handlers/automation.py) L1-L101
-- Alembic env（already imports models）：[`alembic/env.py`](../../alembic/env.py) L14
-- Example migration：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L1-L59
+- Test handlers：[`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py) L1-L101
+- Alembic env（already imports models）：[`alembic/env.py`](../../../alembic/env.py) L14
+- Example migration：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L1-L59
 - Downstream board (service)：[`0685-implement-automationrule-service.md`](./0685-implement-automationrule-service.md)
 
 ---

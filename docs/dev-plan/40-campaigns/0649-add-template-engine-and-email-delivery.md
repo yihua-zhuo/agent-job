@@ -46,7 +46,7 @@
 
 `NotificationService.send_notification` 只写 DB，不做任何渠道分发：
 
-[`src/services/notification_service.py`](../../src/services/notification_service.py) L{23}-L{47}
+[`src/services/notification_service.py`](../../../src/services/notification_service.py) L{23}-L{47}
 
 ```python
 async def send_notification(
@@ -96,9 +96,9 @@ class NotificationTemplateModel(Base):
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/notification_service.py`](../../src/services/notification_service.py) — `send_notification` 增加 email channel 分发逻辑
-  - [`src/configs/settings.py`](../../src/configs/settings.py) — 增加 SMTP 配置字段
-  - [`alembic/env.py`](../../alembic/env.py) — 确认 `NotificationTemplateModel` 已在 import 列表（如未添加需补入）
+  - [`src/services/notification_service.py`](../../../src/services/notification_service.py) — `send_notification` 增加 email channel 分发逻辑
+  - [`src/configs/settings.py`](../../../src/configs/settings.py) — 增加 SMTP 配置字段
+  - [`alembic/env.py`](../../../alembic/env.py) — 确认 `NotificationTemplateModel` 已在 import 列表（如未添加需补入）
 - 要建：
   - `src/services/template_service.py` — `TemplateService`（load_template + render）
   - `src/services/email_service.py` — `EmailService`（send_email_html）
@@ -130,8 +130,8 @@ class NotificationTemplateModel(Base):
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/notification_service.py`](../../src/services/notification_service.py) | `send_notification` 新增 `channel: str = "in_app"` 参数；`channel == "email"` 时调用 `EmailService.send_email_html`，异常时写 `NotificationLogModel`（status=failed） |
-| [`src/configs/settings.py`](../../src/configs/settings.py) | 新增 `smtp_host / smtp_port / smtp_user / smtp_password / smtp_from` 字段（全部 `Field(default=None)`，可选配置） |
+| [`src/services/notification_service.py`](../../../src/services/notification_service.py) | `send_notification` 新增 `channel: str = "in_app"` 参数；`channel == "email"` 时调用 `EmailService.send_email_html`，异常时写 `NotificationLogModel`（status=failed） |
+| [`src/configs/settings.py`](../../../src/configs/settings.py) | 新增 `smtp_host / smtp_port / smtp_user / smtp_password / smtp_from` 字段（全部 `Field(default=None)`，可选配置） |
 
 ### 3.3 新增能力
 
@@ -563,8 +563,8 @@ gh pr create --base master --title "feat(campaigns): add TemplateService and Ema
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/notification_service.py`](../../src/services/notification_service.py) — 本板块修改的对象
-- 同类参考实现：[`src/services/automation_rules.py`](../../src/services/automation_rules.py) — RULES 中 `email.send` action 类型定义了模板引用方式
+- 同类参考实现：[`src/services/notification_service.py`](../../../src/services/notification_service.py) — 本板块修改的对象
+- 同类参考实现：[`src/services/automation_rules.py`](../../../src/services/automation_rules.py) — RULES 中 `email.send` action 类型定义了模板引用方式
 - 第三方文档：[aiosmtplib documentation](https://aiosmtplib.readthedocs.io/) — async SMTP client
 - 第三方文档：[Python string.Template substitute](https://docs.python.org/3/library/string.html#string.Template) — 变量替换行为参考
 - 父 issue / 关联：#39 (父), #648 (依赖，当前 repo 中无对应 doc), #662 (NotificationTemplateModel), #664 (NotificationLogModel), #650 (Celery queue — future work)

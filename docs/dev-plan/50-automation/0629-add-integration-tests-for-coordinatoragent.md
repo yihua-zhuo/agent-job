@@ -41,7 +41,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`docs/agents/coordinator/coordinator_agent.py`](../../docs/agents/coordinator/coordinator_agent.py) L{60}-L{72}
+主入口：[`docs/agents/coordinator/coordinator_agent.py`](../../../docs/agents/coordinator/coordinator_agent.py) L{60}-L{72}
 
 ```python
 60:    def run_workflow(self, tasks: List[Dict]) -> Dict:
@@ -250,7 +250,7 @@ gh pr create --base master --title "test(#629): integration tests for Coordinato
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/integration/test_auth_integration.py`](../../tests/integration/test_auth_integration.py) — 同为集成测试，使用 `async_session` fixture，结构可对照
-- 同类参考实现：[`tests/integration/test_rules_integration.py`](../../tests/integration/test_rules_integration.py) — integration test 典型结构
+- 同类参考实现：[`tests/integration/test_auth_integration.py`](../../../tests/integration/test_auth_integration.py) — 同为集成测试，使用 `async_session` fixture，结构可对照
+- 同类参考实现：[`tests/integration/test_rules_integration.py`](../../../tests/integration/test_rules_integration.py) — integration test 典型结构
 - 父 issue / 关联：#41
 - 前瞻参考（实现前可先阅读）：#628（CoordinatorAgent 主体实现）

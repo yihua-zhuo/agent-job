@@ -444,8 +444,8 @@ gh pr create --base master --title "feat(rbac): add role and permission manageme
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — Service 层返回 ORM + raise AppException 模式参考
-- 同类参考实现：[`src/api/routers/customers.py`](../../src/api/routers/customers.py) — router 层返回 `{"success": true, "data": ...}` envelope 模式参考
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — Service 层返回 ORM + raise AppException 模式参考
+- 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — router 层返回 `{"success": true, "data": ...}` envelope 模式参考
 - 父 issue / 关联：#38（父 epic）、#641（依赖：Role/Permission ORM 模型）、#688（依赖本板块提供权限判断基础能力）
 
 ---

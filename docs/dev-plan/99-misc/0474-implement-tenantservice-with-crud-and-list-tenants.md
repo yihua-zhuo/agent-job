@@ -139,7 +139,7 @@ N/A — 无新依赖引入，使用项目已有包（SQLAlchemy 2.x async、pyte
 
 ### Step 1:确认 Tenant ORM 模型并设计 tenant_handler mock
 
-确认 #473 已创建的 `Tenant` ORM 模型的字段名（`id`, `tenant_uuid`, `name`, `status`, `plan`, `quota`, `usage` 等），读取 [`src/db/models/tenant.py`](../../src/db/models/tenant.py) 确认 schema。参考 `make_customer_handler` 工厂模式，在 `tests/unit/conftest.py` 新增 `make_tenant_handler(state)`，支持 SELECT / INSERT / UPDATE / DELETE 四类操作的 mock拦截。
+确认 #473 已创建的 `Tenant` ORM 模型的字段名（`id`, `tenant_uuid`, `name`, `status`, `plan`, `quota`, `usage` 等），读取 [`src/db/models/tenant.py`](../../../src/db/models/tenant.py) 确认 schema。参考 `make_customer_handler` 工厂模式，在 `tests/unit/conftest.py` 新增 `make_tenant_handler(state)`，支持 SELECT / INSERT / UPDATE / DELETE 四类操作的 mock拦截。
 
 操作：
 - a) 读取 `src/db/models/tenant.py`，确认字段名和 `__tablename__`
@@ -317,8 +317,8 @@ gh pr create --base master --title "feat: implement TenantService (#474)" --body
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — 参照其结构（session / raise / return ORM）
-- 同类测试实现：[`tests/unit/conftest.py`](../../tests/unit/conftest.py) — `make_customer_handler` / `make_user_handler` 工厂函数提供 mock handler 模式参考
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — 参照其结构（session / raise / return ORM）
+- 同类测试实现：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — `make_customer_handler` / `make_user_handler` 工厂函数提供 mock handler 模式参考
 - 父 issue /关联：#447（父 issue，多租户 CRM整体规划）、#473（Tenant ORM 模型，先决条件）
 
 ---

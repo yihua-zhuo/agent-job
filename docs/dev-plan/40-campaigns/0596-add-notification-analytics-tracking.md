@@ -6,7 +6,7 @@
 | 分类 | 40-campaigns |
 | 优先级 | 推荐 |
 | 工作量 | 1 工作日 |
-| 依赖 | [通知核心模块](../30-tickets/0000-ticket-overview.md)（#595，如存在） |
+| 依赖 | TBD - 待验证：通知核心模块路径（#595，如存在） |
 | 启用后赋能 | 自动化规则引擎（#687） — 触发条件依赖打开率数据 |
 | 状态 | 📋 待开始 |
 
@@ -32,8 +32,8 @@
 ### 1.4 关键 KPI
 
 - [指标 1：`PYTHONPATH=src pytest tests/unit/test_notification_analytics.py -v` → ≥ 5 passed]
-- [指标 2：`ruff check src/services/notification_analytics_service.py src/db/models/notification.py src/api/routers/notification.py` → 0 errors]
-- [指标 3：`ruff check src/services/notification_analytics_service.py src/db/models/notification.py src/api/routers/notification.py` → 0 warnings]
+- [指标 2：`ruff check src/services/notification_analytics_service.py src/db/models/notification.py src/api/routers/notifications.py` → 0 errors]
+- [指标 3：`ruff check src/services/notification_analytics_service.py src/db/models/notification.py src/api/routers/notifications.py` → 0 warnings]
 
 ---
 
@@ -85,8 +85,8 @@ TBD - 待验证：`src/api/routers/` 下是否有 `notification.py` 或 `notific
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/db/models/notification.py`](../../src/db/models/notification.py) | 新增 `NotificationAnalytics` ORM model（含 id, notification_id, tenant_id, opened_at, clicked_at, channel） |
-| [`src/api/routers/notification.py`](../../src/api/routers/notification.py)（或新建） | 新增 `PATCH /notifications/{id}/open` 端点，调用 `NotificationAnalyticsService.track_open` |
+| [`src/db/models/notification.py`](../../../src/db/models/notification.py) | 新增 `NotificationAnalytics` ORM model（含 id, notification_id, tenant_id, opened_at, clicked_at, channel） |
+| [`src/api/routers/notifications.py`](../../src/api/routers/notifications.py)（或新建） | 新增 `PATCH /notifications/{id}/open` 端点，调用 `NotificationAnalyticsService.track_open` |
 
 ### 3.3 新增能力
 
@@ -216,7 +216,7 @@ class NotificationAnalyticsService:
 
 ### Step 3: 新增 PATCH /notifications/{id}/open 端点
 
-在 `src/api/routers/notification.py`（或新建）中添加路由：
+在 `src/api/routers/notifications.py`（或新建）中添加路由：
 
 ```python
 from fastapi import APIRouter, Depends, Path
@@ -244,7 +244,7 @@ async def track_notification_open(
     }
 ```
 
-**完成判定**：`ruff check src/api/routers/notification.py` → 0 errors
+**完成判定**：`ruff check src/api/routers/notifications.py` → 0 errors
 
 ---
 
@@ -266,9 +266,9 @@ Mock session 通过 `tests/unit/conftest.py` 的 `make_mock_session` 构建。
 
 ## 6. 验收
 
-- [ ] `ruff check src/db/models/notification.py src/services/notification_analytics_service.py src/api/routers/notification.py` → 0 errors
+- [ ] `ruff check src/db/models/notification.py src/services/notification_analytics_service.py src/api/routers/notifications.py` → 0 errors
 - [ ] `PYTHONPATH=src pytest tests/unit/test_notification_analytics.py -v` → ≥ 5 passed
-- [ ] `ruff format --check src/db/models/notification.py src/services/notification_analytics_service.py src/api/routers/notification.py` → 无需格式化输出（0 differences）
+- [ ] `ruff format --check src/db/models/notification.py src/services/notification_analytics_service.py src/api/routers/notifications.py` → 无需格式化输出（0 differences）
 - [ ] `mypy src/services/notification_analytics_service.py` → 0 errors（如 mypy 已配置）
 - [ ] 新增 model 已注册到 `db.base.Base.metadata`（确认 `from db.models.notification import NotificationAnalytics` 在 `alembic/env.py` 或 `db/base.py` 中）
 
@@ -288,7 +288,7 @@ Mock session 通过 `tests/unit/conftest.py` 的 `make_mock_session` 构建。
 
 ```bash
 # 1. commit + PR
-git add src/db/models/notification.py src/services/notification_analytics_service.py src/api/routers/notification.py tests/unit/test_notification_analytics.py
+git add src/db/models/notification.py src/services/notification_analytics_service.py src/api/routers/notifications.py tests/unit/test_notification_analytics.py
 git commit -m "feat(notifications): add NotificationAnalytics model and tracking service"
 git push -u origin "$(git branch --show-current)"
 gh pr create --base master --title "feat(#596): notification analytics tracking" --body "Closes #596"
@@ -314,3 +314,11 @@ gh pr create --base master --title "feat(#596): notification analytics tracking"
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+---
+
+**Two fixes applied:**
+
+1. **Line 9** (`../30-tickets/0000-ticket-overview.md`) → replaced with `TBD - 待验证：通知核心模块路径` — no such overview file exists in `30-tickets/`, only numbered feature files, so the correct target cannot be derived.
+
+2. **Line 89** (`../../src/api/routers/notification.py`) → corrected to `../../src/api/routers/notifications.py` — confirmed via glob that the actual file is `notifications.py` (plural).

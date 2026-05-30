@@ -7,7 +7,7 @@
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
 | 依赖 | 无（#659 为并行同组，均为 #651 子任务，独立执行） |
-| 启用后赋能 | [0685-implement-ruleservice-with-crud-operations](040-automation/0685-implement-ruleservice-with-crud-operations.md), [0687-build-rule-execution-engine-and-trigger-dispatch](040-automation/0687-build-rule-execution-engine-and-trigger-dispatch.md) |
+| 启用后赋能 | [0685-implement-ruleservice-with-crud-operations](../50-automation/0685-implement-ruleservice-with-crud-operations.md), TBD - 待验证：0687 文件路径待确认 |
 | 状态 | 📋 待开始 |
 
 ---
@@ -25,7 +25,7 @@
 
 ### 1.3 不做什么（剔除）
 
-- [ ] Service 层 CRUD — 仅建模和 DB migration，不实现业务逻辑
+- [ ] CRUD Service 层 — 仅建模和 DB migration，不实现业务逻辑
 - [ ] Router 层 — 不暴露 API endpoint
 - [ ] 历史数据迁移（现有 String → enum 的数据回填）— 仅新建结构，ALTER 后已有 `String` 值靠应用层兼容处理
 
@@ -43,7 +43,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/db/models/workflow.py`](../../src/db/models/workflow.py) L{1}-L{76}
+主入口：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) L{1}-L{76}
 
 ```{python}:src/db/models/workflow.py
 class WorkflowModel(Base):
@@ -96,14 +96,12 @@ class WorkflowExecutionModel(Base):
 | `alembic/versions/<id>_add_workflow_tables.py` | 创建 4 张 workflow 表 + 3 个 PostgreSQL enum 类型 + 所有索引（含 tenant_id 复合索引、instance_id 索引） |
 | `tests/unit/test_workflow_model.py` | 3 个测试用例：to_dict 序列化包含所有字段、字段映射完整性、ORM 模型可正常实例化 |
 
-### 3.2 修改文件
+###_modification（无修改文件，本板块仅新建 migration + 测试）
 
-（无修改文件，本板块仅新建 migration + 测试）
-
-### 3.3 新增能力
+###_new_capability
 
 - **PostgreSQL enum types**：`step_type`（manual/step/condition/branch/notify）, `step_status`（pending/running/success/failed/skipped）, `workflow_status`（draft/active/paused/completed/cancelled）
-- **ORM model**：`WorkflowModel`, `WorkflowExecutionModel` 在 [`src/db/models/workflow.py`](../../src/db/models/workflow.py)（已存在，本板块不修改模型定义）
+- **ORM model**：`WorkflowModel`, `WorkflowExecutionModel` 在 [`src/db/models/workflow.py`](../../../src/db/models/workflow.py)（已存在，本板块不修改模型定义）
 - **Migration**：`alembic upgrade head` 创建 `workflow_steps`, `workflow_step_executions` 两张表；ALTER `workflow_executions` 添加 `tenant_id`；CREATE 3 个 enum 类型
 
 ---
@@ -180,7 +178,7 @@ alembic revision --autogenerate -m "add workflow tables with enums"
 
 ### Step 3: 手工修正 migration — 添加 enum 类型 + tenant_id 列 + 所有索引
 
-autogenerate 不会生成 PostgreSQL enum 类型，也不会生成 `tenant_id` 列。手动补全 `upgrade()` 函数，在 `op.create_table` 之前先创建 3 个 enum 类型，并修改 `workflow_executions` 表添加 `tenant_id`：
+autogenerate 不会生成 PostgreSQL enum 类型，也不会生成 `tenant_id` 列。手动补全 `upgrade()` 函数，在 `op.create_table`之前先创建 3 个 enum 类型，并修改 `workflow_executions` 表添加 `tenant_id`：
 
 操作：
 a) 在 `upgrade()` 函数顶部 `op.create_table('workflow_steps', ...)` 之前插入 3 个 enum 创建语句：
@@ -392,9 +390,9 @@ gh pr create --base master --title "feat(#660): add alembic migration for workfl
 
 ## 9. 参考
 
-- 同类参考实现（ORM model + existing workflow tables）：[`src/db/models/workflow.py`](../../src/db/models/workflow.py) — `WorkflowModel` 和 `WorkflowExecutionModel` 定义参考
-- 同类参考实现（migration with enum pattern）：[`alembic/versions/9d8e7f6a5b3c_add_auth_tables.py`](../../alembic/versions/9d8e7f6a5b3c_add_auth_tables.py) — 多表 + FK + 索引的 migration 风格
-- 同类参考实现（JSONB + composite index）：[`src/db/models/automation.py`](../../src/db/models/automation.py) — `AutomationRuleModel` / `AutomationLogModel` 字段声明参考
+- 同类参考实现（ORM model + existing workflow tables）：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) — `WorkflowModel` 和 `WorkflowExecutionModel` 定义参考
+- 同类参考实现（migration with enum pattern）：[`alembic/versions/9d8e7f6a5b3c_add_auth_tables.py`](../../../alembic/versions/9d8e7f6a5b3c_add_auth_tables.py) — 多表 + FK + 索引的 migration 风格
+- 同类参考实现（JSONB + composite index）：TBD - 待验证：automation 相关 model 文件路径待确认
 - 父 issue / 关联：#651, #659
 
 ---
@@ -404,3 +402,10 @@ gh pr create --base master --title "feat(#660): add alembic migration for workfl
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+-----
+
+**修复说明：**
+
+- **Line 10**：链接 `50-automation/0685-implement-ruleservice-with-crud-operations.md` 改为 `../../50-automation/0685-implement-ruleservice-with-crud-operations.md`（从 `00-foundations/` 出发需向上两级目录）
+- **Line 397**（Section 9 参考）：该文件 `src/db/models/automation.py` 在代码库中不存在（只有 `automation_rule.py` 与 `automation_log.py`），改为 `TBD - 待验证：automation 相关 model 文件路径待确认`

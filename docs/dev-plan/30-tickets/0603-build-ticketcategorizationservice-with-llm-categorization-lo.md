@@ -6,7 +6,7 @@
 | 分类 | [30-tickets](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [#602 AI Agent Framework](../30-tickets/0602-build-ticketcategorizationmodel-and-migration.md), [Parent #45](../30-tickets/0045-xxx.md) |
+| 依赖 | [#602 AI Agent Framework](../30-tickets/0602-add-ticket-categorization-sqlalchemy-orm-model-and-db-migrat.md), TBD - 待验证：parent epic #45 |
 | 启用后赋能 | Router for ticket categorization endpoint (future issue, TBD) |
 | 状态 | 📋 待开始 |
 
@@ -42,7 +42,7 @@ The ticket domain currently has no mechanism to automatically classify tickets b
 
 ### 2.1 现有实现
 
-N/A — 新建模块. `TicketCategorizationService` does not exist yet; the `TicketModel` at [`src/db/models/ticket.py`](../../src/db/models/ticket.py) L11-L59 holds ticket data but has no categorization field. The `AIChatGateway` stub at [`src/internal/ai_gateway.py`](../../src/internal/ai_gateway.py) L1-L87 is the AI call interface. Existing `TicketService` at [`src/services/ticket_service.py`](../../src/services/ticket_service.py) L1-L459 shows the service pattern to follow.
+N/A — 新建模块. `TicketCategorizationService` does not exist yet; the `TicketModel` at [`src/db/models/ticket.py`](../../../src/db/models/ticket.py) L11-L59 holds ticket data but has no categorization field. The `AIChatGateway` stub at [`src/internal/ai_gateway.py`](../../../src/internal/ai_gateway.py) L1-L87 is the AI call interface. Existing `TicketService` at [`src/services/ticket_service.py`](../../../src/services/ticket_service.py) L1-L459 shows the service pattern to follow.
 
 ### 2.2 涉及文件清单
 
@@ -76,9 +76,9 @@ N/A — 新建模块. `TicketCategorizationService` does not exist yet; the `Tic
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/unit/conftest.py`](../../tests/unit/conftest.py) | Add `ticket_categorization_handler(state)` factory + `make_ticket_categorization_handler(state)` |
-| [`src/db/models/ticket.py`](../../src/db/models/ticket.py) | No changes — model already exists; this doc verifies it is the right base |
-| [`src/services/ticket_service.py`](../../src/services/ticket_service.py) | No changes — categorization is a separate service |
+| [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) | Add `ticket_categorization_handler(state)` factory + `make_ticket_categorization_handler(state)` |
+| [`src/db/models/ticket.py`](../../../src/db/models/ticket.py) | No changes — model already exists; this doc verifies it is the right base |
+| [`src/services/ticket_service.py`](../../../src/services/ticket_service.py) | No changes — categorization is a separate service |
 
 ### 3.3 新增能力
 
@@ -435,11 +435,11 @@ gh pr create --base master --title "feat(tickets): TicketCategorizationService (
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/ticket_service.py`](../../src/services/ticket_service.py) — service pattern (constructor with `AsyncSession`, `_fetch` helper, returns ORM object, raises `NotFoundException`)
-- 同类参考实现：[`src/services/ai_service.py`](../../src/services/ai_service.py) — `AIChatGateway` injection pattern
-- 同类参考实现：[`src/internal/ai_gateway.py`](../../src/internal/ai_gateway.py) — `AIResponse` dataclass and `AIChatGateway.chat()` interface
+- 同类参考实现：[`src/services/ticket_service.py`](../../../src/services/ticket_service.py) — service pattern (constructor with `AsyncSession`, `_fetch` helper, returns ORM object, raises `NotFoundException`)
+- 同类参考实现：[`src/services/ai_service.py`](../../../src/services/ai_service.py) — `AIChatGateway` injection pattern
+- 同类参考实现：[`src/internal/ai_gateway.py`](../../../src/internal/ai_gateway.py) — `AIResponse` dataclass and `AIChatGateway.chat()` interface
 - 第三方文档：[AIChatGateway stub pattern](https://docs.sqlalchemy.org/en/20/orm/quickstart.html) — SQLAlchemy async ORM patterns
-- 父 issue / 关联：#45 (parent epic), #602 (predecessor — `TicketCategorizationModel`)
+- 父 issue / 关联：TBD - 待验证：parent epic #45 (predecessor), #602 (predecessor — `TicketCategorizationModel`)
 
 ---
 

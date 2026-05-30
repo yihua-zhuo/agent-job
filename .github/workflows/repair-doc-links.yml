@@ -38,6 +38,8 @@ jobs:
           token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Checkout agent-actions (CI scripts)
+        # Skip when .agent-actions/ already exists (local act --bind path).
+        if: hashFiles('.agent-actions/scripts/*.py') == ''
         uses: actions/checkout@v4
         with:
           repository: yihua-zhuo/agent-actions
@@ -74,5 +76,5 @@ jobs:
           GH_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           # Workflow input wins over the default. Empty string falls back to
           # the script's own MAX_REPAIR_PER_RUN default (5).
-          MAX_REPAIR_PER_RUN: ${{ inputs.max_repair || '5' }}
+          MAX_REPAIR_PER_RUN: ${{ inputs.max_repair || '300' }}
         run: python3 .agent-actions/scripts/repair_doc_links.py

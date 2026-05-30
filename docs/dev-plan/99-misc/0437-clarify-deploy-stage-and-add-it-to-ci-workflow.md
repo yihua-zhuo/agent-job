@@ -59,7 +59,7 @@ jobs:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — add `deploy` job below `qc`; wire `needs: [qc]`
+  - [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) — add `deploy` job below `qc`; wire `needs: [qc]`
   - [`.env.example`](../../.env.example) — document `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` placeholder keys
 - 要建：
   - `docs/dev-plan/99-misc/0437-clarify-deploy-stage-and-add-it-to-ci-workflow.md` — this board document
@@ -86,7 +86,7 @@ jobs:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) | Add `deploy` job: `needs: qc`, env placeholders `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` |
+| [`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) | Add `deploy` job: `needs: qc`, env placeholders `DEPLOY_TARGET`, `DEPLOY_SECRET`, `DEPLOY_COMMAND` |
 | [`.env.example`](../../.env.example) | Document deploy-related env var placeholders for developer reference |
 
 ### 3.3 新增能力
@@ -139,7 +139,7 @@ Read `.github/workflows/ci.yml` to confirm:
 
 Do not guess line numbers or job names — verify before proceeding.
 
-**完成判定**：[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) has been read and job list confirmed.
+**完成判定**：[`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) has been read and job list confirmed.
 
 ---
 
@@ -262,7 +262,7 @@ Depends on #436 for real deploy command implementation."
 
 ## 9. 参考
 
-- 同类参考实现：[`.github/workflows/ci.yml`](../../.github/workflows/ci.yml) — existing CI workflow structure
+- 同类参考实现：[`.github/workflows/ci.yml`](../../../.github/workflows/ci.yml) — existing CI workflow structure
 - 父 issue / 关联：#198, #436
 
 ---

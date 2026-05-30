@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-`ChurnPredictionService`（[`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) L{49}-L{312}）已实现 DB-backed 流失预测，包含 `calculate_churn_score` 和 `predict_churn` 等方法。但该服务依赖 `ChurnPredictionModel` 数据库表存储结果，在 ML 模型未上线阶段需要一个独立于 DB 表的纯内存 scoring逻辑：`calculate_score` 方法接受四维客户属性（login_frequency、purchase_recency、support_ticket_count、engagement_score），实时计算 0-100 流失分，直接返回域对象，无需依赖 `churn_predictions` 表。#572 已建立 rule-based `ChurnService`，#573 需要在此基础上补充完整评分返回结构（score + tier + top_3_factors + recommended_actions）。
+`ChurnPredictionService`（[`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) L{49}-L{312}）已实现 DB-backed 流失预测，包含 `calculate_churn_score` 和 `predict_churn` 等方法。但该服务依赖 `ChurnPredictionModel` 数据库表存储结果，在 ML 模型未上线阶段需要一个独立于 DB 表的纯内存 scoring逻辑：`calculate_score` 方法接受四维客户属性（login_frequency、purchase_recency、support_ticket_count、engagement_score），实时计算 0-100 流失分，直接返回域对象，无需依赖 `churn_predictions` 表。#572 已建立 rule-based `ChurnService`，#573 需要在此基础上补充完整评分返回结构（score + tier + top_3_factors + recommended_actions）。
 
 ### 1.2 做完后
 
@@ -43,7 +43,7 @@
 
 ### 2.1 现有实现
 
-[`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) L{49}-L{80}
+[`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) L{49}-L{80}
 
 ```python
 class ChurnPredictionService:
@@ -510,8 +510,8 @@ gh pr create --base master --title "feat(#573): implement ChurnPredictionService
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) — 已有 `ChurnPredictionService`（DB-backed），本板块 `calculate_score` 为并行 rule-based 入口
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — service类的 `__init__(session: AsyncSession)`签名规范
+- 同类参考实现：[`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) — 已有 `ChurnPredictionService`（DB-backed），本板块 `calculate_score` 为并行 rule-based 入口
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — service类的 `__init__(session: AsyncSession)`签名规范
 - 父 issue / 关联：#51（CRM Analytics 功能集）
 - 依赖板块：[0671](0671-build-rule-based-churn-scoring-service-as-fallback.md)（rule-based scoring service 结构参考）、[0670](0670-add-churnprediction-orm-model-and-migration.md)（ORM model 参考）
 - 启用后赋能：[0672](0672-add-churn-prediction-api-endpoints.md)（API router 依赖本板块 service）、[0673](0673-add-churn-risk-to-customer-response-schema.md)、[0674](0674-wire-early-warning-alert-on-score-threshold.md)

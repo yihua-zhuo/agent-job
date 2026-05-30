@@ -44,7 +44,7 @@ WebhookService and WebhookDeliveryService are currently covered by zero unit tes
 
 Pattern reference (customer service, confirmed existing):
 
-[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) L{1}-L{50}
+[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) L{1}-L{50}
 
 ```{python}
 # Mock session pattern from test_customer_service.py
@@ -380,8 +380,8 @@ gh pr create --base master --title "test(#722): unit tests for WebhookService an
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py)
-- Mock session helpers：[`tests/unit/conftest.py`](../../tests/unit/conftest.py)
+- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py)
+- Mock session helpers：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py)
 - Integration test counterpart：[`tests/integration/test_webhook_delivery_service_integration.py`](../../tests/integration/test_webhook_delivery_service_integration.py) (covered by #721)
 - 父 issue：#496
 - 前置依赖：#721

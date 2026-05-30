@@ -52,7 +52,7 @@ TBD - 待验证：`src/api/routers/code_review_router.py` L? — 预期存在 `P
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`tests/unit/conftest.py`](../../tests/unit/conftest.py) — 新增 `make_code_review_handler(state)` 工厂函数
+  - [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — 新增 `make_code_review_handler(state)` 工厂函数
 - 要建：
   - `tests/unit/test_code_review_service.py` — CodeReviewService 单元测试（mock session + mock LLM blob）
   - `tests/unit/test_code_review_routers.py` — Router envelope + 分页测试（mock service 层）
@@ -78,7 +78,7 @@ TBD - 待验证：`src/api/routers/code_review_router.py` L? — 预期存在 `P
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/unit/conftest.py`](../../tests/unit/conftest.py) | 在文件末尾添加 `make_code_review_handler(state)` 工厂（与现有 `make_customer_handler` 格式一致） |
+| [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) | 在文件末尾添加 `make_code_review_handler(state)` 工厂（与现有 `make_customer_handler` 格式一致） |
 
 ### 3.3 新增能力
 
@@ -252,8 +252,8 @@ gh pr create --base master --title "feat(platform): unit tests for CodeReviewSer
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/unit/conftest.py`](../../tests/unit/conftest.py) — `make_customer_handler` / `make_user_handler` 模式- 同类参考实现：[`tests/unit/test_customer_service.py`](../../tests/unit/test_customer_service.py) — service 层 mock范式
-- 同类参考实现：[`tests/unit/`](../../tests/unit/) — router 测试文件（如有）
+- 同类参考实现：[`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — `make_customer_handler` / `make_user_handler` 模式- 同类参考实现：[`tests/unit/test_customer_service.py`](../../../tests/unit/test_customer_service.py) — service 层 mock范式
+- 同类参考实现：[`tests/unit/`](../../../tests/unit/) — router 测试文件（如有）
 - 父 issue /关联：#44（平台基础设施父 issue）、#611（CodeReviewService 实现，#612 直接依赖）
 
 ---

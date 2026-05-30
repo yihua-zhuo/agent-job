@@ -109,9 +109,9 @@ gh pr create --base master --title "feat(rbac): add PermissionService and @requi
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/rbac_service.py`](../../src/services/rbac_service.py) —现有 DB-backed RBAC，`DEFAULT_ROLE_PERMISSIONS` 和 `has_permission` 的原始出处
-- 同类参考实现：[`src/dependencies/auth.py`](../../src/dependencies/auth.py) —现有 FastAPI `require_role` 装饰器实现（参考其 Depends工厂模式）
-- 同类参考实现：[`src/internal/middleware/fastapi_auth.py`](../../src/internal/middleware/fastapi_auth.py) — `AuthContext` 定义
+- 同类参考实现：[`src/services/rbac_service.py`](../../../src/services/rbac_service.py) —现有 DB-backed RBAC，`DEFAULT_ROLE_PERMISSIONS` 和 `has_permission` 的原始出处
+- 同类参考实现：[`src/dependencies/auth.py`](../../../src/dependencies/auth.py) —现有 FastAPI `require_role` 装饰器实现（参考其 Depends工厂模式）
+- 同类参考实现：[`src/internal/middleware/fastapi_auth.py`](../../../src/internal/middleware/fastapi_auth.py) — `AuthContext` 定义
 - 父 issue / 关联：#38（父 issue权限管控体系）、#640（依赖项，ORM + migrations先行）、#643（启用后赋能，装饰器接入所有 router）、#642（装饰器定义 — 与本板块并列，实际由本板块实现）
 
 ---

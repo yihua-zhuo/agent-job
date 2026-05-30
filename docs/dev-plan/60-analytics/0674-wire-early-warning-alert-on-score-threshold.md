@@ -48,7 +48,7 @@ N/A — 新建模块。`src/services/churn_service.py` 和 `src/db/models/churn_
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/main.py`](../../src/main.py) — 在 `ensure_engine()` 后注册 `ChurnService` 的调度初始化钩子（可选，按需）
+  - [`src/main.py`](../../../src/main.py) — 在 `ensure_engine()` 后注册 `ChurnService` 的调度初始化钩子（可选，按需）
 - 要建：
   - `src/db/models/churn_alert.py` — `ChurnAlertModel` ORM 模型，对应 `churn_alerts` 表
   - `src/services/churn_service.py` — `ChurnService`：查询高风险客户 → 创建预警记录 → 调用 NotificationService stub
@@ -79,7 +79,7 @@ N/A — 新建模块。`src/services/churn_service.py` 和 `src/db/models/churn_
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | 可选：若要自动触发预警，可在 lifespan add startup hook 里调用 `ChurnService.check_all_customers`；暂无需改 |
+| [`src/main.py`](../../../src/main.py) | 可选：若要自动触发预警，可在 lifespan add startup hook 里调用 `ChurnService.check_all_customers`；暂无需改 |
 
 ### 3.3 新增能力
 
@@ -426,9 +426,9 @@ gh pr create --base master --title "feat(#674): wire early warning alert on scor
 
 ## 9. 参考
 
-- `ChurnPredictionService`（现有）：[`src/services/churn_prediction.py`](../../src/services/churn_prediction.py) L49-L268
-- `NotificationService`（复用）：[`src/services/notification_service.py`](../../src/services/notification_service.py) L23-L47
-- ORM 参考模型：[`src/db/models/notification.py`](../../src/db/models/notification.py) L11-L40
+- `ChurnPredictionService`（现有）：[`src/services/churn_prediction.py`](../../../src/services/churn_prediction.py) L49-L268
+- `NotificationService`（复用）：[`src/services/notification_service.py`](../../../src/services/notification_service.py) L23-L47
+- ORM 参考模型：[`src/db/models/notification.py`](../../../src/db/models/notification.py) L11-L40
 -依赖板块（#673）：尚无板块文档，需后续下游 #673 创建 router 后方可暴露 REST endpoint
 - 父 issue：#35
 

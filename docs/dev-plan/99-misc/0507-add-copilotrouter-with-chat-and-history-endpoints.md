@@ -77,7 +77,7 @@ N/A — 新建模块
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/main.py`](../../src/main.py) | Import and register `CopilotRouter` with `app.include_router(copilot_router)` |
+| [`src/main.py`](../../../src/main.py) | Import and register `CopilotRouter` with `app.include_router(copilot_router)` |
 
 ### 3.3 新增能力
 
@@ -352,7 +352,7 @@ gh pr create --base master --title "feat(copilot): router with chat and history 
 
 ## 9. 参考
 
-- 同类参考实现：[`src/api/routers/tickets.py`](../../src/api/routers/tickets.py) — same envelope pattern, `AuthContext`, `AsyncSession` injection
+- 同类参考实现：[`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) — same envelope pattern, `AuthContext`, `AsyncSession` injection
 - 父 issue / 关联：#76
 - 前置依赖：#506
 

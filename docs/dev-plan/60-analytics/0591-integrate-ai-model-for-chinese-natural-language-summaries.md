@@ -41,7 +41,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/analytics_service.py`](../../src/services/analytics_service.py) L1-L157
+主入口：[`src/services/analytics_service.py`](../../../src/services/analytics_service.py) L1-L157
 
 ```python
 1:1:src/services/analytics_service.py
@@ -63,7 +63,7 @@ class AnalyticsService:
         self.session = session
 ```
 
-`AIChatGateway` 已存在且可注入：[`src/internal/ai_gateway.py`](../../src/internal/ai_gateway.py) L17-L35
+`AIChatGateway` 已存在且可注入：[`src/internal/ai_gateway.py`](../../../src/internal/ai_gateway.py) L17-L35
 
 ```python
 17:35:src/internal/ai_gateway.py
@@ -80,8 +80,8 @@ class AIChatGateway:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/analytics_service.py`](../../src/services/analytics_service.py) — 新增 `generate_chinese_summary` 方法，构造函数注入 `AIChatGateway`
-  - [`tests/unit/conftest.py`](../../tests/unit/conftest.py) — 如需新增 mock handler 则扩展；否则各测试文件自建 fixture
+  - [`src/services/analytics_service.py`](../../../src/services/analytics_service.py) — 新增 `generate_chinese_summary` 方法，构造函数注入 `AIChatGateway`
+  - [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) — 如需新增 mock handler 则扩展；否则各测试文件自建 fixture
 - 要建：
   - `tests/unit/test_analytics_service.py` — 单元测试，mock `AIChatGateway`，断言摘要为中文且 ≤2 句
 
@@ -106,7 +106,7 @@ class AIChatGateway:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/analytics_service.py`](../../src/services/analytics_service.py) | 构造函数增加可选 `gateway: AIChatGateway` 参数；新增 `generate_chinese_summary` 方法调用 gateway；`run_report` 结果中注入 `summary` 字段 |
+| [`src/services/analytics_service.py`](../../../src/services/analytics_service.py) | 构造函数增加可选 `gateway: AIChatGateway` 参数；新增 `generate_chinese_summary` 方法调用 gateway；`run_report` 结果中注入 `summary` 字段 |
 
 ### 3.3 新增能力
 
@@ -434,7 +434,7 @@ gh pr create --base master --title "feat(analytics): integrate AI gateway for Ch
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/ai_service.py`](../../src/services/ai_service.py) — `AIService` 如何注入和使用 `AIChatGateway` 的模式
+- 同类参考实现：[`src/services/ai_service.py`](../../../src/services/ai_service.py) — `AIService` 如何注入和使用 `AIChatGateway` 的模式
 - 第三方文档：[AIChatGateway class](https://github.com/your-org/agent-job/blob/master/src/internal/ai_gateway.py)（`src/internal/ai_gateway.py` L17-L35）
 - 父 issue / 关联：#48（父 issue），#41（`AIChatGateway` 提供者，被本板块依赖）
 

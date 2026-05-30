@@ -50,8 +50,8 @@ N/A — 新建模块 (`src/workflow/editor/` is net-new; this is the first front
 
 - 要改：
   - [`frontend/src/app/(app)/automation/rules/page.tsx`](../../frontend/src/app/(app)/automation/rules/page.tsx) — embed the new editor at the rules list page or as a sub-route
-  - [`frontend/src/components/layout/app-sidebar.tsx`](../../frontend/src/components/layout/app-sidebar.tsx) — add nav link to `/automation/rules`
-  - [`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) — add RTK Query endpoints for rule fetch/create/update
+  - [`frontend/src/components/layout/app-sidebar.tsx`](../../../frontend/src/components/layout/app-sidebar.tsx) — add nav link to `/automation/rules`
+  - [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) — add RTK Query endpoints for rule fetch/create/update
 - 要建：
   - `frontend/src/workflow/editor/Canvas.tsx` — root React Flow canvas with pan/zoom/grid
   - `frontend/src/workflow/editor/NodePalette.tsx` — draggable node type sidebar
@@ -103,8 +103,8 @@ N/A — 新建模块 (`src/workflow/editor/` is net-new; this is the first front
 | 路径 | 改动要点 |
 |------|---------|
 | [`frontend/src/app/(app)/automation/rules/page.tsx`](../../frontend/src/app/(app)/automation/rules/page.tsx) | Replace static rule list or inject `<WorkflowEditor ruleId={id}>` on the editor route |
-| [`frontend/src/components/layout/app-sidebar.tsx`](../../frontend/src/components/layout/app-sidebar.tsx) | Add `<Link href="/automation/rules/new">` entry to Automation section |
-| [`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) | Add `useGetRule`, `useUpdateRule` RTK Query endpoints wired to `/automation/rules/:id` |
+| [`frontend/src/components/layout/app-sidebar.tsx`](../../../frontend/src/components/layout/app-sidebar.tsx) | Add `<Link href="/automation/rules/new">` entry to Automation section |
+| [`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) | Add `useGetRule`, `useUpdateRule` RTK Query endpoints wired to `/automation/rules/:id` |
 
 ### 3.3 新增能力
 
@@ -331,7 +331,7 @@ gh pr create --base master --title "feat(frontend): workflow editor React fronte
 
 ## 9. 参考
 
-- 同类参考实现：[`frontend/src/app/(app)/automation/rules/page.tsx`](../../frontend/src/app/(app)/automation/rules/page.tsx) — existing rules page structure to extend- 同类参考实现：[`frontend/src/lib/api/queries.ts`](../../frontend/src/lib/api/queries.ts) — existing RTK Query definition pattern to follow
+- 同类参考实现：[`frontend/src/app/(app)/automation/rules/page.tsx`](../../frontend/src/app/(app)/automation/rules/page.tsx) — existing rules page structure to extend- 同类参考实现：[`frontend/src/lib/api/queries.ts`](../../../frontend/src/lib/api/queries.ts) — existing RTK Query definition pattern to follow
 - `@xyflow/react` docs：[Getting Started](https://reactflow.dev/docs/learn/getting-started/introduction/) — custom nodes, connection line, drag-and-drop from external source- 父 issue：#73
 - 依赖 issue / 关联：#521---
 

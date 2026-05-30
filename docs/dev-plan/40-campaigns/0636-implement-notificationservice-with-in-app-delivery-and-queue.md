@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/services/notification_service.py`](../../src/services/notification_service.py) L23-L47
+主入口：[`src/services/notification_service.py`](../../../src/services/notification_service.py) L23-L47
 
 ```23:47:src/services/notification_service.py
     async def send_notification(
@@ -74,7 +74,7 @@
 
 `NotificationModel` 当前字段（缺 `delivery_status`）：
 
-主入口：[`src/db/models/notification.py`](../../src/db/models/notification.py) L11-L25
+主入口：[`src/db/models/notification.py`](../../../src/db/models/notification.py) L11-L25
 
 ```11:25:src/db/models/notification.py
 class NotificationModel(Base):
@@ -94,15 +94,15 @@ class NotificationModel(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 ```
 
-Router 已存在：[`src/api/routers/notifications.py`](../../src/api/routers/notifications.py)
+Router 已存在：[`src/api/routers/notifications.py`](../../../src/api/routers/notifications.py)
 
-单元测试仅覆盖 router，不覆盖 service： [`tests/unit/test_notifications_router.py`](../../tests/unit/test_notifications_router.py)
+单元测试仅覆盖 router，不覆盖 service： [`tests/unit/test_notifications_router.py`](../../../tests/unit/test_notifications_router.py)
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/notification_service.py`](../../src/services/notification_service.py) — 增加 channel 分发逻辑、队列钩子、投递状态机
-  - [`src/db/models/notification.py`](../../src/db/models/notification.py) — 增加 `delivery_status` 列、`sent_at`/`delivered_at` 时间戳列
+  - [`src/services/notification_service.py`](../../../src/services/notification_service.py) — 增加 channel 分发逻辑、队列钩子、投递状态机
+  - [`src/db/models/notification.py`](../../../src/db/models/notification.py) — 增加 `delivery_status` 列、`sent_at`/`delivered_at` 时间戳列
 - 要建：
   - `tests/unit/test_notification_service.py` — 针对 NotificationService 各方法的单元测试（mock DB）
   - `alembic/versions/<id>_add_notification_delivery_status.py` — 增加 `delivery_status`/`sent_at`/`delivered_at` 列
@@ -130,8 +130,8 @@ Router 已存在：[`src/api/routers/notifications.py`](../../src/api/routers/no
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/notification_service.py`](../../src/services/notification_service.py) | 新增 `DeliveryStatus` 枚举；新增 `dispatch_notification()` 通道分发入口；新增 `enqueue_task()` Celery stub；`send_notification()` 改为通过 dispatcher 路由；新增 `update_delivery_status()` 方法 |
-| [`src/db/models/notification.py`](../../src/db/models/notification.py) | 新增 `delivery_status: Mapped[str]` 列（default="queued"）；新增 `sent_at`、`delivered_at: Mapped[datetime | None]` 列；更新 `to_dict()` 包含新字段 |
+| [`src/services/notification_service.py`](../../../src/services/notification_service.py) | 新增 `DeliveryStatus` 枚举；新增 `dispatch_notification()` 通道分发入口；新增 `enqueue_task()` Celery stub；`send_notification()` 改为通过 dispatcher 路由；新增 `update_delivery_status()` 方法 |
+| [`src/db/models/notification.py`](../../../src/db/models/notification.py) | 新增 `delivery_status: Mapped[str]` 列（default="queued"）；新增 `sent_at`、`delivered_at: Mapped[datetime | None]` 列；更新 `to_dict()` 包含新字段 |
 
 ### 3.3 新增能力
 
@@ -611,7 +611,7 @@ gh pr create --base master --title "feat(#636): NotificationService multi-channe
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/automation_service.py`](../../src/services/automation_service.py) — service 层 channel/action 分发模式参考
+- 同类参考实现：[`src/services/automation_service.py`](../../../src/services/automation_service.py) — service 层 channel/action 分发模式参考
 - 父 issue / 关联：#39（父 Epic），#635（前序板块）
 
 ---

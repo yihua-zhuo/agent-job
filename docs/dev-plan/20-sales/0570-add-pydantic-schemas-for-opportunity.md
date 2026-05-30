@@ -6,7 +6,7 @@
 | 分类 | 20-sales |
 | 优先级 | 必做 |
 | 工作量 | 0.5 工作日 |
-| 依赖 | [069-搭建 Opportunity Service 与 Router](069-build-opportunity-service-and-router.md) |
+| 依赖 | [069-搭建 Opportunity Service 与 Router](0569-add-opportunity-api-router-with-crud-endpoints.md) |
 | 启用后赋能 | 30-tickets (工单可能关联 Opportunity) |
 | 状态 | 📋 待开始 |
 

@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review act-monitor act-repair
+.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review act-monitor act-repair seed-user dev-up
 
 # Create a local virtualenv on demand and use it by default.
 VENV_DIR := .venv
@@ -21,7 +21,7 @@ COMPOSE := docker compose -f configs/docker-compose.test.yml
 # it. The POSIX `VAR=value command` inline form does NOT work in Windows
 # cmd.exe (Make's default shell on Windows), so use Make's per-target export
 # directive — works on Linux, macOS, and Windows without forcing a shell.
-test-integration test-web migrate migrate-new: export DATABASE_URL = $(TEST_DB_URL)
+test-integration test-web migrate migrate-new seed-user dev-up: export DATABASE_URL = $(TEST_DB_URL)
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -97,6 +97,38 @@ migrate-new: ## Autogenerate a new migration: make migrate-new MSG="..."
 migrate-new: venv
 	@if [ -z "$(MSG)" ]; then echo "Usage: make migrate-new MSG=\"describe change\""; exit 1; fi
 	$(PYTHON) -m alembic revision --autogenerate -m "$(MSG)"
+
+# ── Dev seeds + one-shot bring-up ──────────────────────────────────────────
+# Idempotent: re-running is safe (the script no-ops when the user exists).
+# Defaults: admin / admin@example.com / admin12345 / role=admin / tenant_id=0.
+# Override via env: SEED_USERNAME=... SEED_PASSWORD=... make seed-user
+seed-user: ## Seed a login-capable admin user (idempotent)
+seed-user: venv
+	$(PYTHON) scripts/dev/seed_admin_user.py
+
+# Bring the dev stack from zero to "ready to start the backend" in one go:
+#   1. start docker compose test-db
+#   2. wait until Postgres accepts connections (alembic upgrade is the gate)
+#   3. apply migrations to head
+#   4. seed the default admin user
+# After this, run the backend (e.g. uvicorn src.main:app --reload) and you
+# can immediately POST /api/v1/auth/login with the printed credentials.
+dev-up: ## Start db, apply migrations, seed admin user (idempotent)
+dev-up: db-up
+	@echo "── waiting for postgres ──"
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+		if $(COMPOSE) exec -T test-db pg_isready -U test_user >/dev/null 2>&1; then \
+			echo "test-db ready"; break; \
+		fi; \
+		sleep 1; \
+		if [ "$$i" = "15" ]; then echo "test-db did not become ready in 15s" >&2; exit 1; fi; \
+	done
+	@$(MAKE) migrate
+	@$(MAKE) seed-user
+	@echo
+	@echo "── dev stack ready ──"
+	@echo "DATABASE_URL=$(TEST_DB_URL)"
+	@echo "next: PYTHONPATH=src $(PYTHON) -m uvicorn main:app --reload"
 
 trigger-fix: venv
 	@if [ -z "$(ISSUE)" ]; then echo "Usage: make trigger-fix ISSUE=123"; exit 1; fi

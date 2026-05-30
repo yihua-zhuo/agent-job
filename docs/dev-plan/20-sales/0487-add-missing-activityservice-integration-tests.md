@@ -47,7 +47,7 @@ TBD - 待验证：`tests/integration/test_services_integration.py` — 现有 `T
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`tests/integration/test_services_integration.py`](../../tests/integration/test_services_integration.py) — 向 `TestActivityIntegration` 添加 5 个新测试方法
+  - [`tests/integration/test_services_integration.py`](../../../tests/integration/test_services_integration.py) — 向 `TestActivityIntegration` 添加 5 个新测试方法
 - 要建：
   - `tests/integration/test_activity_integration.py` — 独立文件（如选择拆出而非改现有文件）
 
@@ -75,7 +75,7 @@ TBD - 待验证：`tests/integration/test_services_integration.py` — 现有 `T
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`tests/integration/test_services_integration.py`](../../tests/integration/test_services_integration.py) | 新增 5 个测试方法到 `TestActivityIntegration` 类 |
+| [`tests/integration/test_services_integration.py`](../../../tests/integration/test_services_integration.py) | 新增 5 个测试方法到 `TestActivityIntegration` 类 |
 
 ### 3.3 新增能力
 
@@ -244,8 +244,8 @@ gh pr create --base master --title "test(integration): add missing ActivityServi
 
 ## 9. 参考
 
-- 同类参考实现：[`tests/integration/test_marketing_integration.py`](../../tests/integration/test_marketing_integration.py) — existing service integration test pattern in same directory
-- 同类参考实现：[`tests/integration/test_opportunity_activity_integration.py`](../../tests/integration/test_opportunity_activity_integration.py) — existing opportunity-activity integration tests (verify if already exists)
+- 同类参考实现：[`tests/integration/test_marketing_integration.py`](../../../tests/integration/test_marketing_integration.py) — existing service integration test pattern in same directory
+- 同类参考实现：[`tests/integration/test_opportunity_activity_integration.py`](../../../tests/integration/test_opportunity_activity_integration.py) — existing opportunity-activity integration tests (verify if already exists)
 - 父 issue：#452
 - 关联：#486
 
@@ -256,3 +256,7 @@ gh pr create --base master --title "test(integration): add missing ActivityServi
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+
+---
+
+All 4 broken links were fixed with the same correction: `../../tests/integration/` → `../../../tests/integration/`. The board lives 3 directory levels deep under the repo root (`docs/dev-plan/00-foundations/`), so relative paths to `tests/` need three `../` traversals to reach the repo root, not two.

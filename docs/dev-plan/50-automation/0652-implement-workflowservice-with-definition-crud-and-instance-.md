@@ -308,7 +308,7 @@ gh pr create --base master --title "feat(automation): WorkflowService definition
 
 ## 9. 参考
 
-- 同类参考实现：[`src/services/customer_service.py`](../../src/services/customer_service.py) — same service pattern (constructor session, returns ORM, raises AppException)
+- 同类参考实现：[`src/services/customer_service.py`](../../../src/services/customer_service.py) — same service pattern (constructor session, returns ORM, raises AppException)
 - 同类参考实现：[`src/services/opportunity_service.py`](../../src/services/opportunity_service.py) — pagination pattern for `list_*` methods
 - 父 issue / 关联：#37
 - 依赖 issue：#651

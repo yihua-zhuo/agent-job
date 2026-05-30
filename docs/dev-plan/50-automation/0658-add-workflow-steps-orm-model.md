@@ -40,15 +40,15 @@
 
 ### 2.1 现有实现
 
-主入口：[`src/db/models/workflow.py`](../../src/db/models/workflow.py) L{1}-L{76}
+主入口：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) L{1}-L{76}
 
 现有文件仅包含 `WorkflowModel` 和 `WorkflowExecutionModel`。`WorkflowExecutionModel` 的 `workflow_id` FK指向 `workflows.id`，但两个模型均不持有 step 相关字段或关联。
 
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/db/models/workflow.py`](../../src/db/models/workflow.py) — 新增 `WorkflowStepModel` 类 及 `to_dict()`
-  - [`alembic/env.py`](../../alembic/env.py) —确认 `import db.models` 已覆盖（需验证 `workflow.py` 在 `db/models/__init__.py` 导入链中）
+  - [`src/db/models/workflow.py`](../../../src/db/models/workflow.py) — 新增 `WorkflowStepModel` 类 及 `to_dict()`
+  - [`alembic/env.py`](../../../alembic/env.py) —确认 `import db.models` 已覆盖（需验证 `workflow.py` 在 `db/models/__init__.py` 导入链中）
 - 要建：
   - `alembic/versions/<id>_add_workflow_steps_table.py` — 迁移文件### 2.3 缺什么
 
@@ -70,8 +70,8 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/db/models/workflow.py`](../../src/db/models/workflow.py) | 新增 `WorkflowStepModel` 类，含全部字段定义和 `to_dict()` |
-| [`alembic/env.py`](../../alembic/env.py) | 无需改动（`import db.models` 已覆盖 `workflow.py`） |
+| [`src/db/models/workflow.py`](../../../src/db/models/workflow.py) | 新增 `WorkflowStepModel` 类，含全部字段定义和 `to_dict()` |
+| [`alembic/env.py`](../../../alembic/env.py) | 无需改动（`import db.models` 已覆盖 `workflow.py`） |
 
 ### 3.3 新增能力
 
@@ -247,6 +247,6 @@ gh pr create --base master --title "feat(#658): add workflow_steps ORM model" --
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/workflow.py`](../../src/db/models/workflow.py)
+- 同类参考实现：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py)
 - 同类参考实现：[`src/db/models/automation.py`](../../src/db/models/automation.py)
 - 父 issue / 关联：#651- 依赖：#657
