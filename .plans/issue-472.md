@@ -10,7 +10,7 @@ Create `src/internal/middleware/tenant_context.py` — a pure-stdlib, async-safe
 
 ## Source Contract
 
-Dev-plan target: `/home/runner/work/agent-job/agent-job/docs/dev-plan/00-foundations/0472-implement-tenantcontext-utility-module.md`
+Dev-plan target: `docs/dev-plan/00-foundations/0472-implement-tenantcontext-utility-module.md`
 Template depth: `deep`
 Reading order followed:
 1. `/home/runner/work/agent-job/agent-job/docs/dev-plan/README.md`
@@ -117,8 +117,8 @@ class TestTenantContext:
 Run both ruff check and format check on the two new files, then on the whole `src/` tree to confirm nothing regressed:
 
 ```
-ruff check src/internal/middleware/tenant_context.py src/internal/middleware/__init__.py tests/unit/test_tenant_context.py
-ruff format --check src/internal/middleware/tenant_context.py tests/unit/test_tenant_context.py
+ruff check src/internal/middleware/tenant_context.py src/internal/middleware/__init__.py
+ruff format --check src/internal/middleware/tenant_context.py src/internal/middleware/__init__.py
 ruff check src/
 ```
 
@@ -142,6 +142,6 @@ Fix any reported issues.
 - `src/internal/middleware/tenant_context.py` exists with `set_tenant_id(tenant_id: int)`, `get_tenant_id() -> int | None`, and `clear()` — all backed by a single `ContextVar`
 - `src/internal/middleware/__init__.py` re-exports the three functions
 - `tests/unit/test_tenant_context.py` exists and its 3 tests pass
-- `ruff check src/ && ruff format --check src/internal/middleware/` both exit 0
+- `ruff check src/ && ruff format --check src/internal/middleware/tenant_context.py src/internal/middleware/__init__.py` both exit 0
 - No FastAPI, Starlette, or SQLAlchemy imports in `tenant_context.py`
 - `TenantMiddleware` and `TenantService` are not touched

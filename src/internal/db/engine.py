@@ -216,3 +216,18 @@ async def async_session_scope():
         raise
     finally:
         await session.close()
+
+
+def dispose_async_engine():
+    """Dispose the async engine pool and reset the singleton."""
+    global _async_engine, _async_session_factory
+    if _async_engine is not None:
+        import asyncio
+
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.new_event_loop()
+        loop.run_until_complete(_async_engine.dispose())
+    _async_engine = None
+    _async_session_factory = None
