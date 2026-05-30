@@ -50,8 +50,6 @@ class TenantService:
         return self._to_dict(tenant)
 
     async def _fetch_tenant(self, target_tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
-        if requesting_tenant_id and target_tenant_id != requesting_tenant_id:
-            raise NotFoundException(f"Tenant {target_tenant_id}")
         result = await self.session.execute(select(TenantModel).where(TenantModel.id == target_tenant_id))
         tenant = result.scalar_one_or_none()
         if tenant is None or tenant.status == "deleted":
@@ -59,7 +57,12 @@ class TenantService:
         return tenant
 
     async def get_tenant(self, tenant_id: int, requesting_tenant_id: int = 0) -> dict:
-        tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
+        result = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if tenant is None or tenant.status == "deleted":
+            raise NotFoundException(f"Tenant {tenant_id}")
+        if requesting_tenant_id and tenant_id != requesting_tenant_id:
+            raise ForbiddenException(f"Tenant {tenant_id}")
         return self._to_dict(tenant)
 
     async def update_tenant(self, tenant_id: int, requesting_tenant_id: int = 0, **kwargs) -> dict:
@@ -99,14 +102,18 @@ class TenantService:
         return await self.update_tenant(tenant_id, requesting_tenant_id=requesting_tenant_id, status="suspended")
 
     async def delete_tenant(self, tenant_id: int, requesting_tenant_id: int = 0) -> dict:
-        tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
+        result = await self.session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
+        tenant = result.scalar_one_or_none()
+        if tenant is None or tenant.status == "deleted":
+            raise NotFoundException(f"Tenant {tenant_id}")
+        if requesting_tenant_id and tenant_id != requesting_tenant_id:
+            raise ForbiddenException(f"Tenant {tenant_id}")
         now = datetime.now(UTC)
         new_settings = dict(tenant.settings or {})
         new_settings["deleted_at"] = now.isoformat()
-        conditions = [TenantModel.id == tenant_id]
-        await self.session.execute(
-            update(TenantModel).where(and_(*conditions)).values(status="deleted", settings=new_settings, updated_at=now)
-        )
+        tenant.status = "deleted"
+        tenant.settings = new_settings
+        tenant.updated_at = now
         await self.session.flush()
         return self._to_dict(tenant)
 

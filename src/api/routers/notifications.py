@@ -130,7 +130,7 @@ async def mark_notification_read(
 
     svc = NotificationService(session)
     data = await svc.mark_as_read(notification_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data, "message": "通知已标记为已读"}
+    return {"success": True, "data": data.to_dict(), "message": "通知已标记为已读"}
 
 
 @notifications_router.post(
@@ -225,7 +225,7 @@ async def create_reminder(
         related_type=body.related_type,
         related_id=body.related_id,
     )
-    return {"success": True, "data": data, "message": "提醒创建成功"}
+    return {"success": True, "data": data.to_dict(), "message": "提醒创建成功"}
 
 
 @notifications_router.get(

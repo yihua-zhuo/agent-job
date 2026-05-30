@@ -63,7 +63,6 @@ class NotificationService:
         )
         self.session.add(notification)
         await self.session.flush()
-        await self.session.refresh(notification)
         return notification
 
     async def get_user_notifications(
@@ -75,6 +74,11 @@ class NotificationService:
         page_size: int = 20,
     ) -> tuple[list[NotificationModel], int]:
         """获取用户通知列表"""
+        user_check = await self.session.execute(
+            select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
+        )
+        if user_check.scalar_one_or_none() is None:
+            raise NotFoundException("User")
         conditions = [
             NotificationModel.tenant_id == tenant_id,
             NotificationModel.user_id == user_id,
@@ -115,6 +119,11 @@ class NotificationService:
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int) -> dict:
         """标记所有通知已读"""
+        user_check = await self.session.execute(
+            select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
+        )
+        if user_check.scalar_one_or_none() is None:
+            raise NotFoundException("User")
         now = datetime.now(UTC)
         result = await self.session.execute(
             update(NotificationModel)
@@ -199,7 +208,6 @@ class NotificationService:
         )
         self.session.add(reminder)
         await self.session.flush()
-        await self.session.refresh(reminder)
         return reminder
 
     async def cancel_reminder(self, reminder_id: int, tenant_id: int) -> dict:
@@ -224,6 +232,11 @@ class NotificationService:
         upcoming_only: bool = True,
     ) -> tuple[list[ReminderModel], int]:
         """获取用户的提醒列表"""
+        user_check = await self.session.execute(
+            select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
+        )
+        if user_check.scalar_one_or_none() is None:
+            raise NotFoundException("User")
         conditions = [
             ReminderModel.tenant_id == tenant_id,
             ReminderModel.user_id == user_id,

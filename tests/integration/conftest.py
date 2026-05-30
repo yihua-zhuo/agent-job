@@ -492,13 +492,23 @@ async def api_client(
 async def api_client_tenant_2(
     fastapi_app,
     auth_headers_tenant_2: dict[str, str],
+    async_session: AsyncSession,
 ) -> AsyncGenerator[AsyncClient, None]:
     """HTTP client authenticated as tenant 2.
 
     Uses its own AsyncClient so headers don't leak across tenant boundaries —
     sharing the `client` fixture would mutate the headers on `api_client` too.
+    Shares the same async_session as auth_headers_tenant_2 so that user-records
+    created during auth fixture setup are visible to request handlers.
     """
+    from db.connection import get_db
+
+    async def _override_get_db():
+        yield async_session
+
+    fastapi_app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=fastapi_app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         ac.headers.update(auth_headers_tenant_2)
         yield ac
+    fastapi_app.dependency_overrides.pop(get_db, None)

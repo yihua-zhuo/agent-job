@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
@@ -271,9 +272,8 @@ class TestMarkAllRead:
 
 class TestPreferences:
     # notification_preferences table not yet implemented — storage is hardcoded in-router
-    # responses with no service involvement. These are placeholder tests documenting
-    # the hardcoded behavior; they pass for any tenant_id (tenant_id=0 has no real DB
-    # enforcement). Replace with real service tests once the preferences table is added.
+    # responses with no service involvement. Add the table to remove this skip, see issue #661.
+    @pytest.mark.skip(reason="notification_preferences table not yet implemented — see issue #661")
 
     def test_get_preferences_ok(self):
         client = _app()
@@ -379,7 +379,7 @@ class TestDeleteNotificationEndpoint:
 
 
 # ---------------------------------------------------------------------------
-# DELETE /notifications/{id}
+# DELETE /reminders/{id}
 # ---------------------------------------------------------------------------
 
 

@@ -75,7 +75,7 @@ async def get_tenant_stats(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    data = await service.get_tenant_stats(tenant_id=ctx.tenant_id)
+    data = await service.get_tenant_stats(tenant_id=ctx.tenant_id, requesting_tenant_id=ctx.tenant_id)
     return {"success": True, "data": data}
 
 
@@ -85,7 +85,7 @@ async def get_tenant_usage(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    data = await service.get_tenant_usage(ctx.tenant_id)
+    data = await service.get_tenant_usage(tenant_id=ctx.tenant_id, requesting_tenant_id=ctx.tenant_id)
     return {"success": True, "data": data}
 
 
