@@ -293,7 +293,17 @@ class TestCreateOpportunityEndpoint:
 class TestListOpportunitiesEndpoint:
     def test_success(self, client_with_service):
         client, svc = client_with_service
-        svc.list_opportunities = AsyncMock(return_value=[OPPORTUNITY_ROW])
+        svc.list_opportunities = AsyncMock(
+            return_value={
+                "page": 1,
+                "page_size": 20,
+                "total": 1,
+                "total_pages": 1,
+                "has_next": False,
+                "has_prev": False,
+                "items": [OPPORTUNITY_ROW],
+            }
+        )
         resp = client.get("/api/v1/sales/opportunities")
         assert resp.status_code == 200
         body = resp.json()
@@ -301,7 +311,17 @@ class TestListOpportunitiesEndpoint:
 
     def test_with_filters(self, client_with_service):
         client, svc = client_with_service
-        svc.list_opportunities = AsyncMock(return_value=[OPPORTUNITY_ROW])
+        svc.list_opportunities = AsyncMock(
+            return_value={
+                "page": 1,
+                "page_size": 20,
+                "total": 1,
+                "total_pages": 1,
+                "has_next": False,
+                "has_prev": False,
+                "items": [OPPORTUNITY_ROW],
+            }
+        )
         resp = client.get("/api/v1/sales/opportunities?pipeline_id=1&stage=lead&owner_id=1")
         assert resp.status_code == 200
 
