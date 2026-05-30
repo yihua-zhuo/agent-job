@@ -86,9 +86,11 @@ class TestListReports:
         reports, total = await svc.list_reports(tenant_id=999)
 
         assert total == 0
+        # Explicitly assert zero records — the 'all' assertion below is
+        # vacuously true on empty lists, so split into two assertions.
+        # Tenant isolation is implicitly verified: a non-zero total would
+        # mean records leaked across tenant scope.
         assert reports == []
-        # Explicitly verify tenant isolation: no tenant_id=1 records leaked.
-        assert all(r.tenant_id == 999 for r in reports)
 
     async def test_applies_limit_and_offset(self, mock_db_session):
         """list_reports applies LIMIT/OFFSET based on page and page_size."""

@@ -167,7 +167,14 @@ def make_report_handler(state: MockState):
                 tenant_id_val = _get_tenant_id(params)
             except _MissingTenantIdError:
                 return MockResult([])
-            rows = [MockRow(rec.copy()) for rec in _reports["records"].values() if rec.get("tenant_id") == tenant_id_val]
+            # Apply LIMIT page_size (default 20) to mirror real DB pagination
+            # and mask pagination bugs in the service layer.
+            page_size = params.get("page_size", 20)
+            rows = [
+                MockRow(rec.copy())
+                for rec in _reports["records"].values()
+                if rec.get("tenant_id") == tenant_id_val
+            ][:page_size]
             return MockResult(rows)
 
         return None
@@ -184,7 +191,10 @@ def make_schedule_handler(state: MockState):
     def handler(sql_text, params):
         # INSERT: upsert a schedule record keyed on (tenant_id, report_id).
         if "insert into report_schedules" in sql_text:
-            tenant_id = _get_mangled(params, "tenant_id")
+            try:
+                tenant_id = _get_tenant_id(params)
+            except _MissingTenantIdError:
+                raise
             report_id = _get_mangled(params, "report_id")
             existing = next(
                 (

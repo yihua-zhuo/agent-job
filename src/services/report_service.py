@@ -39,9 +39,10 @@ class ReportService:
         config: dict | None = None,
         date_range: dict | None = None,
     ) -> dict:
-        """生成PDF报表 — sync, no DB needed."""
+        """Generate a PDF report (stub — valid PDF format, no actual content)."""
         report_data = report_data or {"config": config or {}, "date_range": date_range or {}}
         title = title or f"{report_type or 'report'} report"
+        # Minimal valid PDF: header + comment + EOF marker.
         content = (f"%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n% {title}\n%%EOF\n").encode()
         filename = f"{report_type or 'report'}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}.pdf"
         return {
@@ -56,6 +57,7 @@ class ReportService:
                 "labels_count": len(report_data.get("labels", [])),
                 "datasets_count": len(report_data.get("datasets", [])),
             },
+            "_is_stub": True,
         }
 
     async def generate_excel_report(
@@ -67,7 +69,7 @@ class ReportService:
         config: dict | None = None,
         date_range: dict | None = None,
     ) -> dict:
-        """生成Excel报表 — sync, no DB needed."""
+        """Generate an Excel report (stub placeholder — no actual xlsx content)."""
         report_data = report_data or {"config": config or {}, "date_range": date_range or {}}
         title = title or f"{report_type or 'report'} report"
         content = (f"PK\x03\x04Generated Excel placeholder for {title}\n").encode()
@@ -139,7 +141,7 @@ class ReportService:
         schedule: dict,
         tenant_id: int = 0,
     ) -> ReportScheduleModel:
-        """定时生成报表 — upserts the schedule row for (tenant_id, report_id)."""
+        """Schedule a report: upserts the schedule row for (tenant_id, report_id)."""
         result = await self.session.execute(
             select(ReportScheduleModel).where(
                 ReportScheduleModel.tenant_id == tenant_id,
