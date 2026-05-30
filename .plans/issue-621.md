@@ -122,7 +122,7 @@ class AgentTaskService:
 Add the export so callers can import `AgentTaskService` from the `services` package:
 
 ```python
-from src.services.agent_task_service import AgentTaskService
+from services.agent_task_service import AgentTaskService
 ```
 
 **完成判定**: `PYTHONPATH=src ruff check src/services/__init__.py` → 0 errors

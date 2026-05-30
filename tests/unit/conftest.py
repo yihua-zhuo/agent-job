@@ -55,11 +55,11 @@ class MockRow:
         self._mapping = mapping
         self._is_sequence = isinstance(mapping, (list, tuple))
         if not self._is_sequence:
-            for json_key in ("tags", "conditions", "actions"):
+            for json_key in ("tags", "conditions", "actions", "settings", "usage_limits"):
                 if json_key in self._mapping and isinstance(self._mapping[json_key], str):
                     try:
                         self._mapping[json_key] = _json.loads(self._mapping[json_key])
-                    except (AttributeError, TypeError):  # noqa: S110
+                    except (AttributeError, TypeError, ValueError):
                         pass
 
     def __getitem__(self, key):
@@ -161,7 +161,7 @@ class MockResult:
 
 
 class MockState:
-    """Per-test mutable state consumed by customer & user handlers."""
+    """Per-test mutable state consumed by customer, user, tenant & activity handlers."""
 
     def __init__(self):
         self.customers: dict[int, dict] = {}
@@ -169,6 +169,8 @@ class MockState:
         self.users: dict[int, dict] = {}
         self.users_next_id: int = 1
         self.deleted_user_ids: set[int] = set()
+        self.tenants: dict[int, dict] = {}
+        self.tenants_next_id: int = 1
         self.activities: dict[int, dict] = {}
         self.activities_next_id: int = 1
 

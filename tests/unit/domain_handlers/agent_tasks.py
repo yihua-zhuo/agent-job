@@ -146,14 +146,16 @@ def make_agent_task_handler(state: MockState) -> Callable[[str, dict], MockResul
             limit_match = _LIMIT_RE.search(sql_text)
             if offset_match is not None:
                 offset_key = offset_match.group(1)
-                # Check both original params (with numbered suffixes) and
-                # the normalized dict so SQLAlchemy's positional suffix
-                # numbering cannot silently skip the offset.
+                # Fail fast if the extracted bind param key is missing from params —
+                # a mismatch between the regex-extracted key and SQLAlchemy's numbered
+                # suffix means pagination would silently be skipped.
+                assert offset_key in params, f"offset bind param '{offset_key}' not found in params"
                 offset_val = params.get(offset_key) or normalized.get("offset")
                 if offset_val is not None:
                     rows = rows[int(offset_val):]
             if limit_match is not None:
                 limit_key = limit_match.group(1)
+                assert limit_key in params, f"limit bind param '{limit_key}' not found in params"
                 limit_val = params.get(limit_key) or normalized.get("limit")
                 if limit_val is not None:
                     rows = rows[: int(limit_val)]
