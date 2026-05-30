@@ -20,6 +20,15 @@ export interface UseTableStateOptions<TData> {
   searchableKeys?: string[];
 }
 
+/**
+ * Manages global filter and sorting state for a TanStack Table instance.
+ *
+ * @param data - The row data to display in the table.
+ * @param columns - TanStack column definitions.
+ * @param searchableKeys - Optional list of column ids to restrict global filtering to.
+ *                         When empty, all columns are included in the filter.
+ * @returns A table instance and state setters.
+ */
 export function useTableState<TData>({
   data,
   columns,
@@ -40,7 +49,7 @@ export function useTableState<TData>({
     getCoreRowModel: getCoreRowModel(),
     getColumnCanGlobalFilter: (column) => {
       if (searchableKeys.length === 0) return true;
-return searchableKeys.includes(column.id);
+      return searchableKeys.includes(column.id);
     },
   });
 
