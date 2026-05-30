@@ -29,6 +29,4 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    raise NotImplementedError("Reversing this merge revision is not supported — "
-                              "the customers_schema_drift changes are now part "
-                              "of the linearised migration chain under db67d696b6ab.")
+    pass

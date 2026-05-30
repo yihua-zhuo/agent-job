@@ -13,7 +13,10 @@ import {
 export interface UseTableStateOptions<TData> {
   data: TData[];
   columns: ColumnDef<TData, unknown>[];
-  /** Column ids that the globalFilter applies to; all string columns if empty/undefined */
+  /**
+   * Restricts global filtering to the given column ids.
+   * When empty (the default), all columns are included in filtering.
+   */
   searchableKeys?: string[];
 }
 

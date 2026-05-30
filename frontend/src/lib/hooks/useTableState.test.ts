@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { renderHook, act, waitFor } from "@testing-library/react";
+import { renderHook, act } from "@testing-library/react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useTableState } from "./useTableState";
 
@@ -82,35 +82,29 @@ describe("useTableState", () => {
     expect(result.current.table.getRowModel().rows.length).toBe(0);
   });
 
-  it("updates globalFilter state when setGlobalFilter is called", async () => {
+  it("updates globalFilter state when setGlobalFilter is called", () => {
     const rows = makeRows(["Alice", "Bob", "Charlie"]);
     const { result } = renderHook(() =>
       useTableState({ data: rows, columns: [nameCol, emailCol], searchableKeys: ["name", "email"] })
     );
     expect(result.current.globalFilter).toBe("");
     act(() => { result.current.setGlobalFilter("test"); });
-    await waitFor(() => {
-      expect(result.current.globalFilter).toBe("test");
-    });
+    expect(result.current.globalFilter).toBe("test");
   });
 
-  it("adds and removes sorting state on toggleSorting", async () => {
+  it("adds and removes sorting state on toggleSorting", () => {
     const rows = makeRows(["Charlie", "Alice", "Bob"]);
     const { result } = renderHook(() =>
       useTableState({ data: rows, columns: [nameCol] })
     );
     expect(result.current.sorting).toEqual([]);
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); });
-    await waitFor(() => {
-      expect(result.current.sorting).toEqual([{ desc: false, id: "name" }]);
-    });
+    expect(result.current.sorting).toEqual([{ desc: false, id: "name" }]);
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); });
-    await waitFor(() => {
-      expect(result.current.sorting).toEqual([{ desc: true, id: "name" }]);
-    });
+    expect(result.current.sorting).toEqual([{ desc: true, id: "name" }]);
   });
 
-  it("third toggleSorting clears the sort", async () => {
+  it("third toggleSorting clears the sort", () => {
     const rows = makeRows(["Charlie", "Alice"]);
     const { result } = renderHook(() =>
       useTableState({ data: rows, columns: [nameCol] })
@@ -118,27 +112,21 @@ describe("useTableState", () => {
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // asc
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // desc
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // clear
-    await waitFor(() => {
-      expect(result.current.sorting).toEqual([]);
-    });
+    expect(result.current.sorting).toEqual([]);
   });
 
-  it("sorting order: first click = asc (Alice first), second click = desc (Charlie first)", async () => {
+  it("sorting order: first click = asc (Alice first), second click = desc (Charlie first)", () => {
     const rows = makeRows(["Charlie", "Alice", "Bob"]);
     const { result } = renderHook(() =>
       useTableState({ data: rows, columns: [nameCol] })
     );
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); });
-    await waitFor(() => {
-      expect(result.current.table.getRowModel().rows[0].original.name).toBe("Alice");
-    });
+    expect(result.current.table.getRowModel().rows[0].original.name).toBe("Alice");
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); });
-    await waitFor(() => {
-      expect(result.current.table.getRowModel().rows[0].original.name).toBe("Charlie");
-    });
+    expect(result.current.table.getRowModel().rows[0].original.name).toBe("Charlie");
   });
 
-  it("sorting clears when column's toggleSorting is called a third time", async () => {
+  it("sorting clears when column's toggleSorting is called a third time", () => {
     const rows = makeRows(["Charlie", "Alice"]);
     const { result } = renderHook(() =>
       useTableState({ data: rows, columns: [nameCol] })
@@ -146,8 +134,6 @@ describe("useTableState", () => {
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // asc
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // desc
     act(() => { result.current.table.getColumn("name")?.toggleSorting(); }); // clear
-    await waitFor(() => {
-      expect(result.current.table.getColumn("name")?.getIsSorted()).toBe(false);
-    });
+    expect(result.current.table.getColumn("name")?.getIsSorted()).toBe(false);
   });
 });

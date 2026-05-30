@@ -47,6 +47,8 @@ const STATUS_COLORS: Record<string, string> = {
   blocked: "bg-red-100 text-red-800",
 };
 
+// SortKey is kept for SavedView schema compatibility; sorting is now driven by
+// TanStack Table state via useTableState.
 type SortKey = "name" | "email" | "phone" | "status" | "company" | "created_at";
 
 interface SavedView {
