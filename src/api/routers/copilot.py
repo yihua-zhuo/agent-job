@@ -27,7 +27,9 @@ async def chat(
         "success": True,
         "data": {
             "response": ai_response.reply,
-            "tool_calls": [],
+            # tool_calls populated once the tool-calling loop is wired;
+            # get_tool_registry()['deferred'] gates availability.
+            "tool_calls": getattr(ai_response, "tool_calls", []) or [],
         },
     }
 
@@ -38,7 +40,7 @@ async def history(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    """Return the most recent 20 messages for a conversation."""
+    """Return all messages for a conversation (service enforces its 20-message cap server-side)."""
     svc = CopilotService(session)
     # Verify the conversation exists and belongs to the tenant before returning history.
     await svc.get_conversation(conversation_id, tenant_id=ctx.tenant_id)

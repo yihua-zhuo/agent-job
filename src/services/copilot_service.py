@@ -1,5 +1,7 @@
 """Copilot service — builds system prompts from CRM context and exposes a tool registry."""
 
+import asyncio
+
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -164,7 +166,7 @@ class CopilotService:
                     ConversationMessageModel.tenant_id == tenant_id,
                 )
             )
-            .order_by(ConversationMessageModel.created_at.desc())
+            .order_by(ConversationMessageModel.created_at.desc(), ConversationMessageModel.id.desc())
             .limit(20)
         )
         messages = list(result.scalars().all())
@@ -266,7 +268,5 @@ class CopilotService:
         Returns:
             AIResponse with reply, optional suggestions, and optional actions.
         """
-        import asyncio
-
         gateway = AIChatGateway()
         return await asyncio.wait_for(gateway.chat(messages), timeout=30)

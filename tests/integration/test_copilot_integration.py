@@ -67,8 +67,10 @@ async def _seed_user(async_session, tenant_id: int, user_id: int):
 
 
 # Stable user IDs used for copilot integration tests.
-_TENANT_1_USER_ID = 999   # matches the mock auth override in unit tests
-_TENANT_2_USER_ID = 998   # distinct from _TENANT_1_USER_ID to avoid PK collision
+# _TENANT_1_USER_ID = 999 — matches JWT user_id hard-coded in auth_headers_web fixture.
+# _TENANT_2_USER_ID = 998 — matches JWT user_id hard-coded in auth_headers_tenant_2 fixture.
+_TENANT_1_USER_ID = 999
+_TENANT_2_USER_ID = 998
 
 
 class TestCopilotIntegration:
@@ -117,6 +119,9 @@ class TestCopilotIntegration:
         assert isinstance(data["data"]["messages"], list)
         assert data["data"]["total"] == 2
         assert len(data["data"]["messages"]) == 2
+        # Verify newest-first ordering (service sorts by created_at desc).
+        assert data["data"]["messages"][0]["role"] == "assistant"
+        assert data["data"]["messages"][1]["role"] == "user"
 
     async def test_history_caps_at_20(self, db_schema, async_session, api_client, tenant_id_web: int):
         """History endpoint returns at most 20 messages even when more are seeded."""

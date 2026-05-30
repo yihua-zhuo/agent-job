@@ -18,6 +18,7 @@ from pkg.errors.app_exceptions import NotFoundException
 # Module-scoped auth/DB override fixture
 # ------------------------------------------------------------------
 
+
 @pytest.fixture
 def mock_auth():
     """Return an AuthContext for tenant 100, user 999."""
@@ -28,9 +29,8 @@ def mock_auth():
     return _mock_require_auth
 
 
-@pytest.fixture
-def mock_session():
-    """Return a minimal mock AsyncSession."""
+def _make_mock_session():
+    """Build a fresh mock AsyncSession."""
     session = MagicMock()
     session.execute = AsyncMock()
     session.flush = AsyncMock()
@@ -39,13 +39,14 @@ def mock_session():
 
 
 @pytest.fixture
-def mock_get_db(mock_session):
-    """Return a get_db override that yields the mock session."""
+def mock_get_db():
+    """Return a sync factory that yields a fresh mock session per call.
 
-    async def _mock_get_db():
-        return mock_session
-
-    return _mock_get_db
+    FastAPI calls ``solve_dependencies`` which iterates the async generator
+    returned by the override via ``enter_async_context`` — the factory itself
+    is called once per request scope, so a fresh session is returned each time.
+    """
+    return _make_mock_session
 
 
 @pytest.fixture(autouse=True)
@@ -62,22 +63,18 @@ def setup_and_teardown_overrides(mock_auth, mock_get_db):
 # Tests
 # ------------------------------------------------------------------
 
+
 class TestCopilotRouter:
     """Tests for copilot router endpoints."""
 
     @pytest.mark.asyncio
-    async def test_chat_returns_envelope(self, mock_session):
+    async def test_chat_returns_envelope(self):
         """POST /copilot/chat returns {"success": True, "data": {"response": ..., "tool_calls": []}}."""
         from services.copilot_service import CopilotService
 
-        mock_conv = MagicMock()
-        mock_conv.id = 42
-
         ai_response = AIResponse(reply="Hello! How can I help?")
 
-        with (
-            patch.object(CopilotService, "chat", new_callable=AsyncMock) as mock_chat,
-        ):
+        with patch.object(CopilotService, "chat", new_callable=AsyncMock) as mock_chat:
             mock_chat.return_value = ai_response
 
             transport = ASGITransport(app=app)
@@ -104,14 +101,10 @@ class TestCopilotRouter:
         assert "detail" in body or "message" in body
 
     @pytest.mark.asyncio
-    async def test_chat_invoke_ai_error_propagates(self, mock_session):
+    async def test_chat_invoke_ai_error_propagates(self):
         """CopilotService.chat raising an exception is not caught by the router."""
         from services.copilot_service import CopilotService
 
-        # FastAPI's generic exception handler is wired in main.py, but httpx's
-        # ASGITransport propagates unhandled exceptions as-is (unlike Starlette's
-        # TestClient which suppresses them).  Verify the exception propagates so
-        # the global handler in main.py is the only way to get a 500 response.
         with patch.object(CopilotService, "chat", new_callable=AsyncMock) as mock_chat:
             mock_chat.side_effect = RuntimeError("AI gateway unavailable")
 
@@ -121,7 +114,7 @@ class TestCopilotRouter:
                     await ac.post("/copilot/chat?message=hello")
 
     @pytest.mark.asyncio
-    async def test_chat_missing_auth_returns_401(self, mock_session):
+    async def test_chat_missing_auth_returns_401(self):
         """A request without auth override returns 401."""
         app.dependency_overrides.pop(require_auth, None)
 
@@ -130,13 +123,8 @@ class TestCopilotRouter:
             response = await ac.post("/copilot/chat?message=token")
         assert response.status_code == 401
 
-        # Restore override so other tests are unaffected
-        app.dependency_overrides[require_auth] = lambda: AuthContext(
-            user_id=999, tenant_id=100, roles=["admin"]
-        )
-
     @pytest.mark.asyncio
-    async def test_history_returns_envelope(self, mock_session):
+    async def test_history_returns_envelope(self):
         """GET /copilot/1/history returns {"success": True, "data": {"messages": [], "total": 0}}."""
         from services.copilot_service import CopilotService
 
@@ -175,7 +163,7 @@ class TestCopilotRouter:
         mock_get_history.assert_called_once_with(conversation_id=1, tenant_id=100)
 
     @pytest.mark.asyncio
-    async def test_history_caps_at_20(self, mock_session):
+    async def test_history_caps_at_20(self):
         """History endpoint serializes up to 20 messages (service enforces the cap server-side)."""
         from services.copilot_service import CopilotService
 
@@ -213,7 +201,7 @@ class TestCopilotRouter:
         assert data["data"]["messages"][0]["role"] == "user"
 
     @pytest.mark.asyncio
-    async def test_history_passes_required_args(self, mock_session):
+    async def test_history_passes_required_args(self):
         """The router passes conversation_id and tenant_id to service.get_history."""
         from services.copilot_service import CopilotService
 
@@ -234,7 +222,7 @@ class TestCopilotRouter:
         assert call_kwargs.get("tenant_id") == 100
 
     @pytest.mark.asyncio
-    async def test_history_unknown_conversation_returns_404(self, mock_session):
+    async def test_history_unknown_conversation_returns_404(self):
         """GET /copilot/999/history returns 404 when the conversation does not exist."""
         from pkg.errors.app_exceptions import NotFoundException
         from services.copilot_service import CopilotService
@@ -249,24 +237,27 @@ class TestCopilotRouter:
         assert response.status_code == 404
 
     @pytest.mark.asyncio
-    async def test_history_cross_tenant_isolation(self, mock_session):
+    async def test_history_cross_tenant_isolation(self):
         """Tenant A cannot read tenant B's conversation — returns 404."""
         from services.copilot_service import CopilotService
 
         # Simulate: tenant 200 calls history for conversation 1 (created under tenant 100).
         # get_conversation is called with tenant_id=200; since the conversation belongs
         # to tenant 100, it raises NotFoundException → 404.
-        with patch.object(CopilotService, "get_conversation", new_callable=AsyncMock) as mock_get_conv:
-            mock_get_conv.side_effect = NotFoundException("Conversation")
+        async def mock_tenant_200():
+            return AuthContext(user_id=888, tenant_id=200, roles=["admin"])
 
-            # Override auth to simulate tenant 200
-            async def mock_tenant_200():
-                return AuthContext(user_id=888, tenant_id=200, roles=["admin"])
+        original = app.dependency_overrides.get(require_auth)
+        app.dependency_overrides[require_auth] = mock_tenant_200
 
-            app.dependency_overrides[require_auth] = mock_tenant_200
+        try:
+            with patch.object(CopilotService, "get_conversation", new_callable=AsyncMock) as mock_get_conv:
+                mock_get_conv.side_effect = NotFoundException("Conversation")
 
-            transport = ASGITransport(app=app)
-            async with AsyncClient(transport=transport, base_url="http://test") as ac:
-                response = await ac.get("/copilot/1/history")
+                transport = ASGITransport(app=app)
+                async with AsyncClient(transport=transport, base_url="http://test") as ac:
+                    response = await ac.get("/copilot/1/history")
 
-        assert response.status_code == 404
+            assert response.status_code == 404
+        finally:
+            app.dependency_overrides[require_auth] = original
