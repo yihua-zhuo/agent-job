@@ -18,31 +18,11 @@ async def chat(
 ):
     """Accept a user message, persist it, and return a copilot response with tool_calls."""
     svc = CopilotService(session)
-    conversation = await svc.get_or_create_conversation(
+    ai_response = await svc.chat(
         tenant_id=ctx.tenant_id,
         user_id=ctx.user_id,
-        channel="copilot",
+        message=message,
     )
-    await svc.persist_message(
-        conversation_id=conversation.id,
-        tenant_id=ctx.tenant_id,
-        role="user",
-        content=message,
-    )
-
-    # Build assistant turn: fetch history, build system prompt, invoke AI.
-    messages_history, _ = await svc.get_history(conversation.id, tenant_id=ctx.tenant_id)
-    history_msgs = [{"role": m.role, "content": m.content} for m in reversed(messages_history)]
-    history_msgs.append({"role": "user", "content": message})
-    ai_response = await svc.invoke_ai(history_msgs)
-
-    await svc.persist_message(
-        conversation_id=conversation.id,
-        tenant_id=ctx.tenant_id,
-        role="assistant",
-        content=ai_response.reply,
-    )
-
     return {
         "success": True,
         "data": {

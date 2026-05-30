@@ -43,18 +43,17 @@ async def _seed_message(
 
 
 async def _seed_user(async_session, tenant_id: int, user_id: int):
-    """Seed a user record so chat endpoint does not violate FK constraints."""
-    from sqlalchemy import and_, select
+    """Seed a user record so chat endpoint does not violate FK constraints.
+
+    Uses INSERT ... ON CONFLICT DO NOTHING so that users created by earlier
+    fixtures (e.g. auth_headers_tenant_2, which runs in the same test function
+    before _seed_user) do not cause a unique-violation error on flush().
+    """
+    from sqlalchemy.dialects.postgresql import insert
 
     from db.models.user import UserModel
 
-    async_session.expire_all()
-    result = await async_session.execute(
-        select(UserModel).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
-    )
-    if result.scalar_one_or_none() is not None:
-        return  # already seeded
-    user = UserModel(
+    stmt = insert(UserModel).values(
         id=user_id,
         tenant_id=tenant_id,
         username=f"testuser_{user_id}",
@@ -62,10 +61,9 @@ async def _seed_user(async_session, tenant_id: int, user_id: int):
         password_hash="dummy_hash",
         role="admin",
         status="active",
-    )
-    async_session.add(user)
+    ).on_conflict_do_nothing(index_elements=["id"])
+    await async_session.execute(stmt)
     await async_session.flush()
-    return user
 
 
 # Stable user IDs used for copilot integration tests.
@@ -146,7 +144,7 @@ class TestCopilotIntegration:
         """A second tenant gets its own conversation, not the first tenant's."""
         # Seed distinct user IDs per tenant to avoid primary-key collision.
         await _seed_user(async_session, tenant_id_web, _TENANT_1_USER_ID)
-        await _seed_user(async_session, tenant_id_2_web, _TENANT_2_USER_ID)
+        await _seed_user(async_session, tenant_id_2_web, 999)  # matches JWT user_id in auth_headers_tenant_2
         await async_session.commit()
 
         # Create a conversation in tenant 1 so there IS something to find.
@@ -169,10 +167,6 @@ class TestCopilotIntegration:
 
         from db.models.conversation import ConversationModel
         from db.models.conversation_message import ConversationMessageModel
-
-        # Expire all to force a fresh DB round-trip (router's get_db session may hold
-        # a different connection from NullPool that committed data our session can't see).
-        async_session.expire_all()
 
         # Query conversation ID using tenant_id and user_id (bypasses stale ORM object).
         result = await async_session.execute(

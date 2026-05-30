@@ -218,14 +218,55 @@ class CopilotService:
             },
         }
 
-    async def invoke_ai(self, messages: list[dict[str, str]]) -> AIResponse:
+    async def chat(
+        self,
+        tenant_id: int,
+        user_id: int,
+        message: str,
+    ) -> AIResponse:
+        """Persist user message, invoke AI, persist assistant reply, return AI response.
+
+        This is the single entry point for the copilot chat flow. The router calls
+        no other service methods for this workflow.
+        """
+        conversation = await self.get_or_create_conversation(
+            tenant_id=tenant_id,
+            user_id=user_id,
+            channel="copilot",
+        )
+        await self.persist_message(
+            conversation_id=conversation.id,
+            tenant_id=tenant_id,
+            role="user",
+            content=message,
+        )
+        messages_history, _ = await self.get_history(conversation.id, tenant_id=tenant_id)
+        history_msgs = [{"role": m.role, "content": m.content} for m in reversed(messages_history)]
+        history_msgs.append({"role": "user", "content": message})
+        ai_response = await self.invoke_ai(history_msgs, tenant_id=tenant_id)
+        await self.persist_message(
+            conversation_id=conversation.id,
+            tenant_id=tenant_id,
+            role="assistant",
+            content=ai_response.reply,
+        )
+        return ai_response
+
+    async def invoke_ai(self, messages: list[dict[str, str]], tenant_id: int | None = None) -> AIResponse:
         """Invoke the AI chat gateway with the given message history.
+
+        A 30-second timeout is applied so slow/hung AI responses do not block
+        the request event loop indefinitely (Rule 44 / Rule 131).
 
         Args:
             messages: List of ``{"role": "user"|"assistant", "content": "..."}`` entries.
+            tenant_id: Tenant owning this conversation (reserved for future context injection;
+                not currently used by the gateway stub).
 
         Returns:
             AIResponse with reply, optional suggestions, and optional actions.
         """
+        import asyncio
+
         gateway = AIChatGateway()
-        return await gateway.chat(messages)
+        return await asyncio.wait_for(gateway.chat(messages), timeout=30)
