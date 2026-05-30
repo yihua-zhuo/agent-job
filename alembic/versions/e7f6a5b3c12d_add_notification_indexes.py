@@ -66,7 +66,11 @@ def upgrade() -> None:
         "notifications",
         column_names=["user_id", "tenant_id", "status"],
     )
-    # Partial index for efficient lookup of unread in-app notifications
+    # Partial index for efficient lookup of unread in-app notifications.
+    # PostgreSQL partial indexes include all rows matching the WHERE clause; the two
+    # leading columns (user_id, tenant_id) are included so that queries filtering by
+    # those columns + channel + read_at benefit from the index. They are not redundant
+    # with the WHERE clause — the clause filters rows, the columns serve the query.
     op.create_index(
         "ix_notifications_in_app_unread",
         "notifications",

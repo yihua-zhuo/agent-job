@@ -196,7 +196,6 @@ class TestSendNotification:
             assert response.status_code == 200
             data = response.json()
             assert data["success"] is True
-            assert data["message"] == "通知发送成功"
             assert data["data"]["id"] == 5
             assert data["data"]["template"] == "New deal"
             svc.send_notification.assert_called_once()

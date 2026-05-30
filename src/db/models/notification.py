@@ -14,7 +14,13 @@ logger = logging.getLogger(__name__)
 
 
 class NotificationModel(Base):
-    """Notification entity mapped to the `notifications` table."""
+    """Notification entity mapped to the `notifications` table.
+
+    No soft-delete column: notifications are hard-deleted via the API rather than
+    archived. This is a deliberate choice — notifications are low-stakes, ephemeral
+    events where retention/compliance requirements don't apply. Use archived status
+    (status='archived') or add a deleted_at column if that requirement emerges.
+    """
 
     __tablename__ = "notifications"
     __table_args__ = (
@@ -45,8 +51,11 @@ class NotificationModel(Base):
     status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     priority: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    # Populated by the service layer when the notification is sent; intentionally
-    # nullable here so legacy rows (pre-migration) remain valid.
+    # Populated by the service layer when the notification is delivered.
+    # Nullable for legacy rows (pre-migration); service layer enforces it when
+    # status transitions to 'delivered'. No DB-level NOT NULL constraint because
+    # the service cannot run a NOT NULL fill during the same transaction as the
+    # status UPDATE atomically.
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 

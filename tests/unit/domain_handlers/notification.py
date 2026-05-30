@@ -214,8 +214,13 @@ def make_reminder_handler(state):
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             # is_completed_filter comes from params (set by the service).
-            # When upcoming_only=True (default), the service binds is_completed=False.
-            # When upcoming_only=False, no is_completed bind is added.
+            # Contract: upcoming_only=True → service binds is_completed=False explicitly.
+            #           upcoming_only=False → service binds no is_completed at all (None).
+            # This means upcoming_only=True produces is_completed=False and upcoming_only=False
+            # produces is_completed=None. Deriving upcoming_only via `is False` is therefore
+            # correct but fragile — it breaks if the service ever passes is_completed=False
+            # in a non-upcoming-only query. A dedicated _upcoming_only bool param would be
+            # cleaner and is worth considering if the service signature is refactored.
             is_completed_filter = params.get("is_completed")
             now = params.get("_now", datetime.now(UTC))
             upcoming_only = is_completed_filter is False
