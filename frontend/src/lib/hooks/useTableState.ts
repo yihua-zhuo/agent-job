@@ -38,6 +38,14 @@ export function useTableState<TData>({
   const [globalFilter, setGlobalFilter] = useState("");
   const [sorting, setSorting] = useState<SortingState>([]);
 
+  const getColumnCanGlobalFilter = useMemo(
+    () => (column: { id: string | null }) => {
+      if (searchableKeys.length === 0) return true;
+      return column.id !== null && (searchableKeys as string[]).includes(column.id);
+    },
+    [searchableKeys]
+  );
+
   const table = useReactTable<TData>({
     data,
     columns,
@@ -48,10 +56,7 @@ export function useTableState<TData>({
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getCoreRowModel: getCoreRowModel(),
-    getColumnCanGlobalFilter: (column) => {
-      if (searchableKeys.length === 0) return true;
-      return column.id !== null && (searchableKeys as string[]).includes(column.id);
-    },
+    getColumnCanGlobalFilter,
   });
 
   return useMemo(

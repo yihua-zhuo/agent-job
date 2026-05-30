@@ -45,7 +45,7 @@ export function Login({ onSubmit, isLoading: externalLoading }: LoginProps) {
           type="email"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="username"
+          placeholder="name@example.com"
           disabled={isLoading}
         />
       </div>

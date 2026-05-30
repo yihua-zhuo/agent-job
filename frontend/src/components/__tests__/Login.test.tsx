@@ -13,7 +13,7 @@ describe("Login component", () => {
 
   it("renders all required form fields", () => {
     render(<Login onSubmit={mockSubmit} />);
-    expect(screen.getByPlaceholderText("username")).toBeTruthy();
+    expect(screen.getByPlaceholderText("name@example.com")).toBeTruthy();
     expect(screen.getByPlaceholderText("••••••••")).toBeTruthy();
     expect(
       screen.getByRole("checkbox", { name: /remember me/i })
@@ -24,7 +24,7 @@ describe("Login component", () => {
 
   it("calls onSubmit with correct data on form submit", async () => {
     render(<Login onSubmit={mockSubmit} />);
-    fireEvent.change(screen.getByPlaceholderText("username"), {
+    fireEvent.change(screen.getByPlaceholderText("name@example.com"), {
       target: { value: "test@example.com" },
     });
     fireEvent.change(screen.getByPlaceholderText("••••••••"), {
@@ -41,6 +41,25 @@ describe("Login component", () => {
     );
   });
 
+  it("calls onSubmit with rememberMe: false when checkbox is not checked", async () => {
+    render(<Login onSubmit={mockSubmit} />);
+    fireEvent.change(screen.getByPlaceholderText("name@example.com"), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("••••••••"), {
+      target: { value: "secret123" },
+    });
+    // intentionally do NOT click the "remember me" checkbox
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await waitFor(() =>
+      expect(mockSubmit).toHaveBeenCalledWith({
+        email: "test@example.com",
+        password: "secret123",
+        rememberMe: false,
+      })
+    );
+  });
+
   it("shows loading indicator and disables fields while submitting", async () => {
     let release: () => void = () => {};
     mockSubmit.mockImplementation(
@@ -53,7 +72,7 @@ describe("Login component", () => {
         expect(
           screen.getByRole("button", { name: /signing in…/i }).disabled
         ).toBe(true);
-        expect(screen.getByPlaceholderText("username").disabled).toBe(true);
+        expect(screen.getByPlaceholderText("name@example.com").disabled).toBe(true);
         expect(screen.getByPlaceholderText("••••••••").disabled).toBe(true);
       });
     } finally {
@@ -63,9 +82,9 @@ describe("Login component", () => {
 
   it("disables fields and shows loading when external isLoading is true", async () => {
     render(<Login onSubmit={mockSubmit} isLoading={true} />);
-    expect(screen.getByRole("button", { name: /signing in…/i })).toBeDisabled();
-    expect(screen.getByPlaceholderText("username")).toBeDisabled();
-    expect(screen.getByPlaceholderText("••••••••")).toBeDisabled();
+    expect(screen.getByRole("button", { name: /signing in…/i }).disabled).toBe(true);
+    expect(screen.getByPlaceholderText("name@example.com").disabled).toBe(true);
+    expect(screen.getByPlaceholderText("••••••••").disabled).toBe(true);
     expect(mockSubmit).not.toHaveBeenCalled();
   });
 });
