@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -81,12 +81,15 @@ class WorkflowNodeModel(Base):
     """Workflow node record mapped to the `workflow_nodes` table."""
 
     __tablename__ = "workflow_nodes"
+    __table_args__ = (
+        Index("ix_workflow_nodes_tenant_id_workflow_id", "tenant_id", "workflow_id", unique=False),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workflow_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, default=0, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), default=0, nullable=False, index=True)
     node_type: Mapped[str] = mapped_column(String(50), default="action", nullable=False)
     definition_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     input: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)

@@ -9,6 +9,7 @@ from __future__ import annotations
 import importlib
 import json as _json
 import pkgutil
+import re
 import sys
 import warnings
 from contextlib import asynccontextmanager
@@ -17,6 +18,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from dotenv import load_dotenv
+from sqlalchemy import insert, select, table, text
 from sqlalchemy.exc import MultipleResultsFound
 
 # Load .env so DATABASE_URL is available in test environment.
@@ -53,11 +55,11 @@ class MockRow:
         self._mapping = mapping
         self._is_sequence = isinstance(mapping, (list, tuple))
         if not self._is_sequence:
-            for json_key in ("tags", "settings", "usage_limits"):
+            for json_key in ("tags", "conditions", "actions", "settings", "usage_limits"):
                 if json_key in self._mapping and isinstance(self._mapping[json_key], str):
                     try:
                         self._mapping[json_key] = _json.loads(self._mapping[json_key])
-                    except ValueError:  # json.loads raises ValueError on invalid JSON
+                    except ValueError:
                         pass
 
     def __getitem__(self, key):
@@ -271,27 +273,94 @@ def make_mock_session(handlers=None, state=None):
             bound_params.update(getattr(sql.compile(), "params", {}) or {})
         except Exception as exc:  # noqa: BLE001 - some SQLAlchemy test doubles are not compilable.
             bound_params["_compile_error"] = exc
-            pass
         bound_params.update(params or {})
         for h in handlers:
+            # Pass lowercased tablename so "INSERT INTO Agent_Tasks" matches
+            # "insert into agent_tasks" in handlers.
             result = h(sql_text, bound_params)
             if result is not None:
                 return result
         return MockResult([])
 
     session.execute = AsyncMock(side_effect=_execute_side_effect)
-    session.add = MagicMock()
     session.delete = MagicMock()
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
     session.close = AsyncMock()
-    session.flush = AsyncMock()
-    session.refresh = AsyncMock()
     session.get = AsyncMock(return_value=None)
     session.scalars = MagicMock()
     session.scalar_one_or_none = MagicMock()
     session.scalar_one = MagicMock()
     session.result = MagicMock()
+
+    # Capture ORM objects added via session.add() so flush() can persist them.
+    _pending: list = []
+
+    def _mock_add(obj):
+        _pending.append(obj)
+
+    session.add = MagicMock(side_effect=_mock_add)
+
+    async def _mock_flush():
+        # Persist each pending ORM object by calling the appropriate INSERT handler.
+        for obj in _pending:
+            tablename = getattr(obj, "__tablename__", None)
+            if tablename is None:
+                continue
+            # Guard: tablename must be a valid SQL identifier (alphanumeric + underscore).
+            # This prevents arbitrary SQL injection through a malicious __tablename__.
+            if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", tablename):
+                continue
+            params = {}
+            # Extract every public attribute from the ORM object so handlers
+            # receive all column values regardless of which model is used.
+            for key in list(obj.__dict__.keys()):
+                if key.startswith("_") or key == "metadata":
+                    continue
+                val = getattr(obj, key, None)
+                if val is not None:
+                    params[key] = val
+            # Build INSERT via SQLAlchemy Core to avoid raw string concat.
+            # Lowercase the SQL text so handlers that match "insert into <table>"
+            # (lowercased by _execute_side_effect) also work here.
+            sql_text = str(insert(table(tablename))).lower()
+            for h in handlers:
+                result = h(sql_text, params)
+                if result is not None:
+                    row = result.fetchone()
+                    if row is not None:
+                        for k in row.keys():
+                            setattr(obj, k, getattr(row, k))
+                    break
+        _pending.clear()
+
+    async def _mock_refresh(obj):
+        tablename = getattr(obj, "__tablename__", None)
+        obj_id = getattr(obj, "id", None)
+        if tablename is None or obj_id is None:
+            return
+        # Guard: tablename must be a valid SQL identifier.
+        if not re.match(r"^[a-zA-Z_][a-zA-Z0-9_]*$", tablename):
+            return
+        tenant_id = getattr(obj, "tenant_id", None)
+        params = {"id": obj_id}
+        if tenant_id is not None:
+            params["tenant_id"] = tenant_id
+            sql_text = str(select(text("*")).where(text("id = :id AND tenant_id = :tenant_id")))  # noqa: S608
+        else:
+            sql_text = str(select(text("*")).where(text("id = :id")))  # noqa: S608
+        for h in handlers:
+            result = h(sql_text, params)
+            if result is not None:
+                row = result.fetchone()
+                if row is not None:
+                    for key in row.keys():
+                        setattr(obj, key, getattr(row, key))
+                break
+
+    session.flush = AsyncMock(side_effect=_mock_flush)
+    session.refresh = AsyncMock(side_effect=_mock_refresh)
+    session._state = state  # allow tests to seed state directly
 
     @asynccontextmanager
     async def _mock_aenter():
