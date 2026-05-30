@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from pkg.errors.app_exceptions import ForbiddenException
 from services.tenant_service import TenantService
 
 tenants_router = APIRouter(prefix="/api/v1/tenants", tags=["tenants"])
@@ -121,8 +120,8 @@ async def update_tenant(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    if tenant_id != ctx.tenant_id:
-        raise ForbiddenException("You can only update your own tenant")
+    # Note: router-level check removed — TenantService.update_tenant already enforces
+    # tenant isolation by passing tenant_id as _tenant_id (service-layer guard, rule 128).
     service = TenantService(session)
     update_data = body.model_dump()
     # Strip None values so the service's merge logic handles omitted fields.

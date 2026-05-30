@@ -68,6 +68,37 @@ class _MockNotificationModel:
         yield from self.to_dict().items()
 
 
+class _MockReminderModel:
+    """Minimal mock that behaves like ReminderModel for Pydantic serialization.
+
+    Rule 127: service returns ORM objects, not dicts; this mock exercises
+    the router's .to_dict() serialization branch rather than the dict fallback.
+    """
+
+    def __init__(self, id: int, title: str, remind_at: str, tenant_id: int = 1, user_id: int = 99):
+        self.id = id
+        self.title = title
+        self.content = ""
+        self.remind_at = remind_at
+        self.tenant_id = tenant_id
+        self.user_id = user_id
+        self.is_completed = False
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "tenant_id": self.tenant_id,
+            "user_id": self.user_id,
+            "title": self.title,
+            "content": self.content,
+            "remind_at": self.remind_at,
+            "is_completed": self.is_completed,
+        }
+
+    def __iter__(self):
+        yield from self.to_dict().items()
+
+
 def _make_auth_override(tenant_id: int = 1, user_id: int = 99):
     """Mimics real JWT-based AuthContext creation: raises 401 for invalid tenants."""
     if not isinstance(tenant_id, int) or tenant_id <= 0:
@@ -267,28 +298,14 @@ class TestCreateReminder:
     def test_create_reminder_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            mock_reminder = _MockNotificationModel(
-                {
-                    "id": 1,
-                    "tenant_id": 1,
-                    "user_id": 99,
-                    "channel": "in_app",
-                    "template": "Standup",
-                    "status": "pending",
-                    "priority": "normal",
-                }
+            mock_reminder = _MockReminderModel(
+                id=1,
+                title="Standup",
+                remind_at="2026-12-31T09:00:00",
+                tenant_id=1,
+                user_id=99,
             )
-            mock_reminder.title = "Standup"
             mock_reminder.content = "Daily meeting"
-            mock_reminder.remind_at = "2026-12-31T09:00:00"
-            mock_reminder.to_dict = lambda: {
-                "id": 1,
-                "tenant_id": 1,
-                "user_id": 99,
-                "title": "Standup",
-                "content": "Daily meeting",
-                "remind_at": "2026-12-31T09:00:00",
-            }
             svc.create_reminder = AsyncMock(return_value=mock_reminder)
             client = _app()
             response = client.post(
@@ -329,18 +346,8 @@ class TestListReminders:
     def test_list_reminders_with_items(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.get_reminders = AsyncMock(
-                return_value=(
-                    [
-                        {
-                            "id": 1,
-                            "title": "Standup",
-                            "remind_at": "2026-12-31T09:00:00",
-                        }
-                    ],
-                    1,
-                )
-            )
+            mock_reminder = _MockReminderModel(id=1, title="Standup", remind_at="2026-12-31T09:00:00")
+            svc.get_reminders = AsyncMock(return_value=([mock_reminder], 1))
             client = _app()
             response = client.get("/api/v1/reminders")
             assert response.status_code == 200

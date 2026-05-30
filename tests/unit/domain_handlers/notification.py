@@ -8,7 +8,9 @@ from typing import Any
 from tests.unit.conftest import MockResult, MockRow
 
 # SQLAlchemy bind parameter name for the notification params JSON column.
-_NOTIFICATION_PARAMS_KEY = "params_"
+# Matches SQLAlchemy's bind-name generation for the `payload_params` mapped attribute
+# (maps Python attr "payload_params" → DB column "params_" → bind name "payload_params_").
+_NOTIFICATION_PARAMS_KEY = "payload_params_"
 
 
 def _notification_to_row(n: dict):

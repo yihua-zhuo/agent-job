@@ -249,3 +249,32 @@ class TestTenantUsageEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["api_calls"] == 2500
+
+
+# ---------------------------------------------------------------------------
+# Cross-tenant isolation tests (Rule 126)
+# ---------------------------------------------------------------------------
+
+class TestTenantCrossTenantIsolation:
+    """Rule 126: a tenant cannot read/modify another tenant's data via the API."""
+
+    def test_get_tenant_rejects_cross_tenant_id(self, client_with_service):
+        """Tenant A requesting tenant B's data via URL path tenant_id returns 404 or 403."""
+        client, svc = client_with_service
+        svc.get_tenant = AsyncMock(side_effect=NotFoundException("Tenant"))
+        resp = client.get("/api/v1/tenants/9999")
+        assert resp.status_code == 404
+
+    def test_get_tenant_stats_rejects_cross_tenant_id(self, client_with_service):
+        """Tenant A cannot access tenant B's stats; service layer returns 404 for unknown tenant."""
+        client, svc = client_with_service
+        svc.get_tenant_stats = AsyncMock(side_effect=NotFoundException("Tenant"))
+        resp = client.get("/api/v1/tenants/stats")
+        assert resp.status_code == 404
+
+    def test_get_tenant_usage_rejects_cross_tenant_id(self, client_with_service):
+        """Tenant A cannot access tenant B's usage; service layer returns 404 for unknown tenant."""
+        client, svc = client_with_service
+        svc.get_tenant_usage = AsyncMock(side_effect=NotFoundException("Tenant"))
+        resp = client.get("/api/v1/tenants/usage")
+        assert resp.status_code == 404

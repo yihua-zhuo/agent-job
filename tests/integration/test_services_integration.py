@@ -508,18 +508,21 @@ class TestNotificationIntegration:
     async def test_notification_cross_tenant_isolation(
         self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant, _seed_tenant_2
     ):
-        """Notification under tenant A is invisible to tenant B (Rule 126)."""
+        """Notification under tenant A is invisible to tenant B (Rule 126).
+
+        Negative assertion: tenant A cannot retrieve tenant B's notification by ID.
+        """
         svc = NotificationService(async_session)
 
         # Create user and notification under tenant 1
         uid1 = await self._seed_user(tenant_id, async_session)
-        await svc.send_notification(
+        notif1 = await svc.send_notification(
             user_id=uid1, notification_type="in_app", title="T1", content="m", tenant_id=tenant_id
         )
 
         # Create user under tenant 2 and send a notification to them
         uid2 = await self._seed_user(tenant_id_2, async_session)
-        await svc.send_notification(
+        notif2 = await svc.send_notification(
             user_id=uid2, notification_type="in_app", title="T2", content="m", tenant_id=tenant_id_2
         )
 
@@ -534,6 +537,16 @@ class TestNotificationIntegration:
         assert total1 == 1
         assert len(items1) == 1
         assert items1[0].template == "T1"
+
+        # Negative assertion: tenant A cannot read tenant B's notification by ID.
+        from pkg.errors.app_exceptions import NotFoundException
+
+        with pytest.raises(NotFoundException):
+            # Use tenant 1's context to fetch tenant 2's notification ID.
+            await svc.mark_as_read(notif2.id, tenant_id=tenant_id)
+        with pytest.raises(NotFoundException):
+            # Use tenant 2's context to fetch tenant 1's notification ID.
+            await svc.mark_as_read(notif1.id, tenant_id=tenant_id_2)
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

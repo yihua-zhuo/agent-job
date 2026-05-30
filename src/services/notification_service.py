@@ -24,11 +24,11 @@ class NotificationService:
 
     async def send_notification(
         self,
-        tenant_id: int,
         user_id: int,
         notification_type: str,
         title: str,
         content: str,
+        tenant_id: int,
         **kwargs,
     ) -> NotificationModel:
         """Send a notification.
@@ -149,9 +149,7 @@ class NotificationService:
         was validated before calling this method.
         """
         user_check = await self.session.execute(
-            select(UserModel.id).where(
-                and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id)
-            )
+            select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
         if user_check.scalar_one_or_none() is None:
             return 0

@@ -251,9 +251,10 @@ async def list_reminders(
 
 
 def _reminder_to_api(r):
+    # Standardize on ORM objects (ReminderModel/to_dict) — the duck-typing fallback
+    # for dict is a safety net for edge-case payloads that bypass the service layer.
     if hasattr(r, "to_dict"):
         return r.to_dict()
-    # Fallback for dict/dict-like payloads (e.g. direct service dict returns).
     if isinstance(r, dict):
         return r
     return r

@@ -1,5 +1,6 @@
 """Automation rules service — DB-backed rule engine with execution logging."""
 
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
@@ -10,6 +11,8 @@ from db.models.automation_rule import AutomationRuleModel
 from pkg.errors.app_exceptions import NotFoundException
 from services.notification_service import NotificationService
 from services.task_service import TaskService
+
+logger = logging.getLogger(__name__)
 
 # Supported trigger events
 TRIGGER_EVENTS: tuple[str, ...] = (
@@ -111,8 +114,10 @@ class AutomationService:
             return {"type": action_type, "status": "created" if task_result is not None else "failed"}
 
         elif action_type == "email.send":
+            logger.warning("email.send action is not implemented: template=%s", params.get("template"))
             return {"type": action_type, "status": "not_implemented", "template": params.get("template")}
         elif action_type == "webhook.call":
+            logger.warning("webhook.call action is not implemented: url=%s", params.get("url"))
             return {"type": action_type, "status": "not_implemented", "url": params.get("url")}
         elif action_type == "tag.add":
             return {"type": action_type, "status": "added", "tag": params.get("tag")}

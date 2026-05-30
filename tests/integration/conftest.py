@@ -388,13 +388,13 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
     """Return a valid JWT Authorization header for the test tenant."""
     os.environ["JWT_SECRET"] = TEST_JWT_SECRET
     os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
-    from db.models.tenant import TenantModel
-    from services.auth_service import AuthService
-    from services.user_service import UserService
-
     # Seed tenant only if it doesn't already exist (idempotent — prevents
     # duplicate-key errors when another fixture already created it).
     from sqlalchemy import select
+
+    from db.models.tenant import TenantModel
+    from services.auth_service import AuthService
+    from services.user_service import UserService
     result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_web))
     if result.scalar_one_or_none() is None:
         tenant = TenantModel(id=tenant_id_web, name="Web Test Tenant", plan="free", status="active")
@@ -432,21 +432,39 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
     """Return a valid JWT Authorization header for tenant 2."""
     os.environ["JWT_SECRET"] = TEST_JWT_SECRET
     os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
+    from sqlalchemy import select
+
+    from db.models.tenant import TenantModel
     from services.auth_service import AuthService
+    from services.user_service import UserService
 
     # Seed tenant only if it doesn't already exist (idempotent — prevents
     # duplicate-key errors when another fixture already created it).
-    from db.models.tenant import TenantModel
-    from sqlalchemy import select
     result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_2_web))
     if result.scalar_one_or_none() is None:
         tenant = TenantModel(id=tenant_id_2_web, name=f"Tenant {tenant_id_2_web}", plan="free", status="active")
         async_session.add(tenant)
         await async_session.flush()
 
+    # Create the test user in tenant 2 so /users/me resolves correctly (Rule 126).
+    user_svc = UserService(async_session)
+    try:
+        user = await user_svc.create_user(
+            username="webtest2",
+            email="webtest2@example.com",
+            password="TestPass123!",
+            role="admin",
+            tenant_id=tenant_id_2_web,
+        )
+        actual_user_id = user.id
+    except Exception:
+        existing = await user_svc.get_user_by_username(tenant_id_2_web, "webtest2")
+        assert existing is not None, "auth_headers_tenant_2 failed to seed the test user"
+        actual_user_id = existing.id
+
     auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
     token = auth_svc.generate_token(
-        user_id=999,
+        user_id=actual_user_id,
         username="webtest2",
         role="admin",
         tenant_id=tenant_id_2_web,

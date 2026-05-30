@@ -7,6 +7,7 @@ from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
+from pkg.constants.notification_constants import PAYLOAD_PARAMS_ALLOWED_KEYS
 
 
 class NotificationModel(Base):
@@ -31,6 +32,7 @@ class NotificationModel(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
     # No index=True here — the __table_args__ Index handles it to avoid duplication.
+    # Cascades on tenant delete. Represents the owning tenant, not a cross-reference.
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     channel: Mapped[str | None] = mapped_column(String(50), nullable=True)
     template: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -46,15 +48,20 @@ class NotificationModel(Base):
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     def to_dict(self) -> dict:
-        # payload_params contains only safe context values (content, related_type, related_id).
-        # If credential-class values are ever stored here, add redaction before serializing.
+        # payload_params validated against PAYLOAD_PARAMS_ALLOWED_KEYS so credential-class
+        # fields are structurally rejected rather than silently passed through.
+        params = self.payload_params
+        if params:
+            unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
+            if unknown:
+                params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,
             "user_id": self.user_id,
             "channel": self.channel,
             "template": self.template,
-            "params": self.payload_params,
+            "params": params,
             "status": self.status,
             "priority": self.priority,
             "created_at": self.created_at.isoformat() if self.created_at else None,
