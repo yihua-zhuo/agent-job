@@ -135,6 +135,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     id: "name",
     accessorKey: "name",
     header: "Name",
+    enableSorting: true,
     cell: ({ getValue }) => (
       <span className="font-medium truncate block">{getValue() as string || "—"}</span>
     ),
@@ -144,6 +145,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     id: "email",
     accessorKey: "email",
     header: "Email",
+    enableSorting: true,
     cell: ({ getValue }) => <CopyCell value={getValue() as string} type="email" />,
     size: 200,
   },
@@ -151,6 +153,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     id: "phone",
     accessorKey: "phone",
     header: "Phone",
+    enableSorting: true,
     cell: ({ getValue }) => <CopyCell value={getValue() as string} type="phone" />,
     size: 140,
   },
@@ -158,6 +161,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     id: "status",
     accessorKey: "status",
     header: "Status",
+    enableSorting: true,
     cell: ({ getValue }) => {
       const status = getValue() as string;
       return (
@@ -172,6 +176,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     id: "company",
     accessorKey: "company",
     header: "Company",
+    enableSorting: true,
     cell: ({ getValue }) => (
       <span className="truncate block">{getValue() as string || "—"}</span>
     ),
@@ -181,6 +186,7 @@ const customerColumns: ColumnDef<CustomerRowData, unknown>[] = [
     id: "created_at",
     accessorKey: "created_at",
     header: "Created",
+    enableSorting: true,
     cell: ({ getValue }) => {
       const dateStr = getValue() as string;
       return <span>{formatDate(dateStr)}</span>;

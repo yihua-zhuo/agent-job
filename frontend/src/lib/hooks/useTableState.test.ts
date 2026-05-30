@@ -40,6 +40,15 @@ describe("useTableState", () => {
     expect(result.current.table.getRowModel().rows.length).toBe(3);
   });
 
+  it("filters across multiple searchableKeys (email)", () => {
+    const rows = makeRows(["Alice", "Bob", "Charlie"]);
+    const { result } = renderHook(() =>
+      useTableState({ data: rows, columns: [] })
+    );
+    act(() => { result.current.setGlobalFilter("test.com"); });
+    expect(result.current.table.getRowModel().rows.length).toBe(3);
+  });
+
   it("updates globalFilter state when setGlobalFilter is called", async () => {
     const rows = makeRows(["Alice", "Bob", "Charlie"]);
     const { result } = renderHook(() =>
