@@ -1,7 +1,7 @@
 """add_notification_indexes
 
 Revision ID: e7f6a5b3c12d
-Revises: 9d8e7f6a5b3c
+Revises: 82ecf4a34e34
 Create Date: 2026-05-23
 
 Transforms the notifications table from the old schema (type, title, content,
@@ -125,8 +125,7 @@ def downgrade() -> None:
     op.execute(text("ALTER TABLE notifications ALTER COLUMN is_read DROP NOT NULL"))
     op.execute(text("ALTER TABLE notifications ALTER COLUMN is_read SET NOT NULL"))
 
-    # Phase 2 (reversed): drop data-restoration columns first, then the old columns
-    # that depend on them last (is_read must survive until after the UPDATE).
+    # Phase 2 (reversed): drop new columns added in the upgrade (channel, template, etc.)
     op.drop_column("notifications", "read_at")
     op.drop_column("notifications", "delivered_at")
     op.drop_column("notifications", "priority")
@@ -135,7 +134,8 @@ def downgrade() -> None:
     op.drop_column("notifications", "template")
     op.drop_column("notifications", "channel")
 
-    # Old columns dropped last, after the backward data-restoration UPDATEs complete.
+    # Phase 3 (reversed, final): drop the restored old columns after the data-restoration
+    # UPDATEs complete. These were re-added and backfilled in the first half of downgrade.
     op.drop_column("notifications", "related_id")
     op.drop_column("notifications", "related_type")
     op.drop_column("notifications", "is_read")

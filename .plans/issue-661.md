@@ -27,14 +27,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 
 4. **Update `tests/unit/test_notifications_router.py`** — `_MockNotificationModel.to_dict()` at line ~51 now outputs `"params"` (not `"params_"`) to match `NotificationModel.to_dict()`.
 
-5. **Generate the migration** (follow CLAUDE.md exactly): Already complete — the migration at `alembic/versions/e7f6a5b3c12d_add_notification_indexes.py` already contains the manually written partial index (lines 70-78).
-   - `docker compose -f configs/docker-compose.test.yml up -d test-db`
-   - `docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;" && docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"`
-   - `alembic upgrade head`
-   - `alembic revision --autogenerate -m "add_notification_indexes"`
-   - Review `alembic/versions/<new>.py`: autogen will add a bare `op.create_index(...)` for the composite index but will NOT produce the partial index (autogenerate never handles partial/WHERE clauses). Manually add `op.create_index("ix_notifications_in_app_unread", "notifications", ["user_id", "tenant_id"], postgresql_where=and_(column("channel") == "in_app", column("read_at").is_(None)))`.
-   - Run `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` to verify.
-   - Run a second `alembic revision --autogenerate -m "drift_check"` to confirm an empty diff; delete the empty migration if both up/down are `pass`.
+5. **Generate the migration** (follow CLAUDE.md exactly): COMPLETE — the migration at `alembic/versions/e7f6a5b3c12d_add_notification_indexes.py` already contains the manually written partial index (lines 70-78) and chains from base revision `82ecf4a34e34`. No autogenerate needed.
 
 6. **Write data transformation logic in the migration**:
    - In `upgrade()`: add new nullable columns → backfill via SQL UPDATE → drop old columns → add indexes

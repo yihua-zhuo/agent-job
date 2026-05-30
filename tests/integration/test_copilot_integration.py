@@ -95,7 +95,6 @@ class TestCopilotIntegration:
         # creates the user automatically with an auto-increment ID.
         # Seed a user in tenant 1 to anchor the tenant-1 conversation.
         await seed_user(async_session, tenant_id_web, _TENANT_1_USER_ID)
-        await async_session.commit()
 
         # Create a conversation in tenant 1 so there IS something to find.
         conv_tenant_1 = await seed_conversation(async_session, tenant_id_web, _TENANT_1_USER_ID)
