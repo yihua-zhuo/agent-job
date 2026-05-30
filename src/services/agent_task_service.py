@@ -27,6 +27,8 @@ class AgentTaskService:
     async def create_task(self, description: str, tenant_id: int) -> AgentTaskModel:
         if not description or not description.strip():
             raise ValidationException("description cannot be empty")
+        if tenant_id <= 0:
+            raise ValidationException("tenant_id must be a positive integer")
         task = AgentTaskModel(
             task_id=f"atask_{uuid.uuid4().hex[:16]}",
             tenant_id=tenant_id,
@@ -35,8 +37,7 @@ class AgentTaskService:
             subtasks=[],
         )
         self.session.add(task)
-        # flush() persists and populates the auto-increment id.
-        # refresh() fetches any DB-side defaults so the returned object is complete.
+        # Flush to get auto-increment id; refresh() fetches DB-side defaults so the returned object is complete.
         await self.session.flush()
         await self.session.refresh(task)
         return task

@@ -11,14 +11,9 @@ Three migration heads are present:
 
 This revision merges all three into a single head so that 'alembic upgrade head'
 succeeds without ambiguity on a fresh database.
-
-NOTE: This is a merge-only revision — no schema changes are made by this file
-itself; all tables/indexes/FKs are created in the sub-revisions it depends on.
 """
 
 from collections.abc import Sequence
-
-from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "merge_heads_four"
@@ -28,8 +23,8 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
-    pass
+    pass  # Merge-only marker — no schema changes; all DDL is in sub-revisions.
 
 
 def downgrade() -> None:
-    pass
+    pass  # No-op: reverting any parent to its own prior head is handled by that parent's downgrade.

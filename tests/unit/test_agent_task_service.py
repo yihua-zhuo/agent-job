@@ -12,6 +12,29 @@ from tests.unit.conftest import MockState, make_mock_session
 from tests.unit.domain_handlers.agent_tasks import make_agent_task_handler
 
 
+def _seed_agent_task(state: MockState, tenant_id: int, description: str, status: str, created_at: datetime) -> int:
+    """Seed an agent task directly into mock state, bypassing the ORM.
+
+    Used for tests that need to control initial state (e.g., fixed created_at
+    timestamps) where the service's flush() path does not emit a created_at
+    param.  This is the recommended seeding pattern for this file — direct
+    dict writes into state.agent_tasks must mirror AgentTaskModel fields.
+    """
+    task_id = state.agent_tasks_next_id
+    state.agent_tasks_next_id += 1
+    state.agent_tasks[task_id] = {
+        "id": task_id,
+        "task_id": f"atask_{task_id}",
+        "tenant_id": tenant_id,
+        "description": description,
+        "status": status,
+        "subtasks": [],
+        "created_at": created_at,
+        "updated_at": created_at,
+    }
+    return task_id
+
+
 @pytest.fixture
 def mock_db_session():
     state = MockState()
@@ -73,19 +96,13 @@ class TestListTasks:
         # Create two tasks with distinct statuses under tenant 1.
         task_a = await service.create_task("Task A", tenant_id=1)
         task_b = await service.create_task("Task B", tenant_id=1)
-        # Directly update stored state to simulate completed status.
         state = mock_db_session._state
+        # Directly update stored state to simulate completed status — bypasses
+        # the handler's UPDATE path but mirrors the ORM field write so the
+        # SELECT path sees the updated status.
         state.agent_tasks[task_a.id]["status"] = "completed"
-        # NOTE: direct state write below mirrors what AgentTaskModel fields
-        # (id, task_id, tenant_id, description, status, subtasks, created_at,
-        # updated_at) the service would write so it stays in sync with the ORM.
-        other_id = state.agent_tasks_next_id
-        state.agent_tasks[other_id] = {
-            "id": other_id, "task_id": f"atask_{other_id}", "tenant_id": 2,
-            "description": "Tenant 2 pending task", "status": "pending",
-            "subtasks": [], "created_at": datetime.now(), "updated_at": datetime.now(),
-        }
-        state.agent_tasks_next_id += 1
+        # Seed a tenant-2 task that must be excluded from all results.
+        _seed_agent_task(state, tenant_id=2, description="Tenant 2 pending task", status="pending", created_at=datetime.now())
         pending_tasks, total = await service.list_tasks(tenant_id=1, status="pending", page=1, page_size=20)
         # Assert COUNT path (total must exclude the tenant-2 task).
         assert total == 1
@@ -95,34 +112,15 @@ class TestListTasks:
         assert "Tenant 2 pending task" not in descriptions
 
     async def test_filters_by_date_range(self, service, mock_db_session):
-        # Directly seed two tasks with distant dates into the mock state.
-        # NOTE: this mirrors AgentTaskModel fields (see test_filters_by_status).
+        # Seed two tasks with distant dates into the mock state.
         state = mock_db_session._state
         now = datetime.now()
         past_date = datetime(2020, 1, 1)
         future_date = datetime(2099, 1, 1)
-        id1 = state.agent_tasks_next_id
-        state.agent_tasks[id1] = {
-            "id": id1, "task_id": f"atask_{id1}", "tenant_id": 1,
-            "description": "Old task", "status": "pending",
-            "subtasks": [], "created_at": past_date, "updated_at": past_date,
-        }
-        state.agent_tasks_next_id += 1
-        id2 = state.agent_tasks_next_id
-        state.agent_tasks[id2] = {
-            "id": id2, "task_id": f"atask_{id2}", "tenant_id": 1,
-            "description": "Future task", "status": "pending",
-            "subtasks": [], "created_at": future_date, "updated_at": future_date,
-        }
-        state.agent_tasks_next_id += 1
+        _seed_agent_task(state, tenant_id=1, description="Old task", status="pending", created_at=past_date)
+        _seed_agent_task(state, tenant_id=1, description="Future task", status="pending", created_at=future_date)
         # Seed a third task under tenant 2 so cross-tenant COUNT exclusion can be verified.
-        id3 = state.agent_tasks_next_id
-        state.agent_tasks[id3] = {
-            "id": id3, "task_id": f"atask_{id3}", "tenant_id": 2,
-            "description": "Tenant 2 past task", "status": "pending",
-            "subtasks": [], "created_at": past_date, "updated_at": past_date,
-        }
-        state.agent_tasks_next_id += 1
+        _seed_agent_task(state, tenant_id=2, description="Tenant 2 past task", status="pending", created_at=past_date)
         # Query with a narrow window around now — neither seed task falls inside it.
         tasks, total = await service.list_tasks(
             tenant_id=1,
@@ -136,23 +134,10 @@ class TestListTasks:
 
     async def test_filters_by_date_range_returns_matching_tasks(self, service, mock_db_session):
         # Seed two tasks with known creation times inside a precise window.
-        # NOTE: this mirrors AgentTaskModel fields (see test_filters_by_status).
         state = mock_db_session._state
         mid_date = datetime(2024, 6, 15, 12, 0, 0)
-        id1 = state.agent_tasks_next_id
-        state.agent_tasks[id1] = {
-            "id": id1, "task_id": f"atask_{id1}", "tenant_id": 1,
-            "description": "June task", "status": "pending",
-            "subtasks": [], "created_at": mid_date, "updated_at": mid_date,
-        }
-        state.agent_tasks_next_id += 1
-        id2 = state.agent_tasks_next_id
-        state.agent_tasks[id2] = {
-            "id": id2, "task_id": f"atask_{id2}", "tenant_id": 1,
-            "description": "Another June task", "status": "pending",
-            "subtasks": [], "created_at": mid_date, "updated_at": mid_date,
-        }
-        state.agent_tasks_next_id += 1
+        _seed_agent_task(state, tenant_id=1, description="June task", status="pending", created_at=mid_date)
+        _seed_agent_task(state, tenant_id=1, description="Another June task", status="pending", created_at=mid_date)
         tasks, total = await service.list_tasks(
             tenant_id=1,
             date_from=datetime(2024, 6, 1),

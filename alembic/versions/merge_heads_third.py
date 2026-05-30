@@ -12,8 +12,11 @@ Three migration heads are present:
 This revision merges all three into a single head so that
 'alembic upgrade head' succeeds without ambiguity.
 
-NOTE: This is a merge-only revision — no schema changes are made by this file
-itself; all tables/indexes/FKs are created in the sub-revisions it depends on.
+upgrade() applies the following schema changes (sub-revisions' DDL):
+  - db67d696b6ab: drops ix_agent_tasks_task_id, creates uq_agent_tasks_task_id,
+    creates routing_rules table + index, automation FKs, auth-table tenant indexes
+  - 185055a0d4f0: creates workflow_nodes table + indexes + FKs
+  - addcp001: creates churn_predictions table + indexes
 """
 
 from collections.abc import Sequence
@@ -64,6 +67,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
     )
     op.create_index(op.f("ix_routing_rules_tenant_id"), "routing_rules", ["tenant_id"], unique=False)
 
@@ -104,6 +108,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"]),
     )
     op.create_index(op.f("ix_churn_predictions_tenant_id"), "churn_predictions", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_churn_predictions_customer_id"), "churn_predictions", ["customer_id"], unique=False)
@@ -142,32 +147,3 @@ def downgrade() -> None:
     # ── reverse db67d696b6ab: agent_tasks constraint → index ──────────────
     op.drop_constraint("uq_agent_tasks_task_id", "agent_tasks", type_="unique")
     op.create_index(op.f("ix_agent_tasks_task_id"), "agent_tasks", ["task_id"], unique=True)
-
-    # ── reverse db67d696b6ab: identity subsystem ─────────────────────────
-    op.drop_index(op.f("ix_identity_user_roles_user_id"), table_name="identity_user_roles")
-    op.drop_index(op.f("ix_identity_user_roles_tenant_id"), table_name="identity_user_roles")
-    op.drop_index(op.f("ix_identity_user_roles_role_id"), table_name="identity_user_roles")
-    op.drop_table("identity_user_roles")
-
-    op.drop_index(op.f("ix_identity_role_permissions_role_id"), table_name="identity_role_permissions")
-    op.drop_index(op.f("ix_identity_role_permissions_permission_id"), table_name="identity_role_permissions")
-    op.drop_table("identity_role_permissions")
-
-    op.drop_index(op.f("ix_identity_departments_tenant_id"), table_name="identity_departments")
-    op.drop_index(op.f("ix_identity_departments_parent_id"), table_name="identity_departments")
-    op.drop_index(op.f("ix_identity_departments_organization_id"), table_name="identity_departments")
-    op.drop_table("identity_departments")
-
-    op.drop_index(op.f("ix_identity_users_tenant_id"), table_name="identity_users")
-    op.drop_table("identity_users")
-
-    op.drop_index(op.f("ix_identity_roles_tenant_id"), table_name="identity_roles")
-    op.drop_table("identity_roles")
-
-    op.drop_index(op.f("ix_identity_organizations_tenant_id"), table_name="identity_organizations")
-    op.drop_table("identity_organizations")
-
-    op.drop_table("identity_tenants")
-
-    op.drop_index(op.f("ix_identity_permissions_name"), table_name="identity_permissions")
-    op.drop_table("identity_permissions")
