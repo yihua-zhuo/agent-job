@@ -22,10 +22,29 @@ jobs:
     name: Validate open issues
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      # write contents because validate_open_issues.py now commits dev-plan
+      # boards to docs/dev-plan/issues/ for every ready issue.
+      contents: write
       issues: write
     steps:
       - uses: actions/checkout@v4
+        with:
+          # PAT so the board commit fires downstream CI (Dev Agent CI).
+          # Falls back to GITHUB_TOKEN, which doesn't trigger workflows on
+          # push events — fine for the master push itself, just no chained CI.
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - name: Checkout agent-actions (CI scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: yihua-zhuo/agent-actions
+          ref: main
+          path: .agent-actions
+          # PAT required for private agent-actions repo. Same secret used
+          # for the main checkout / commit pushes. Falls back to GITHUB_TOKEN
+          # so local act runs (where COMMIT_GITHUB_TOKEN may not be set)
+          # don't crash the checkout with "Input required and not supplied".
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
       - uses: actions/setup-python@v5
         with:
@@ -41,10 +60,21 @@ jobs:
             npm install -g @anthropic-ai/claude-code
           fi
 
+      - name: Configure git
+        # Needed because validate_open_issues.py shells out to `git commit`
+        # when it writes a board. Use the github-actions[bot] identity so
+        # the commit shows up consistently in the history.
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
       - name: Validate open issues
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           MAX_ISSUES_PER_RUN: '5'
-        run: python3 scripts/ci/validate_open_issues.py
+          # Set to '1' to write boards to /tmp instead of committing them.
+          # Useful for safe end-to-end smoke tests via act.
+          DEV_PLAN_DRY_RUN: ${{ vars.DEV_PLAN_DRY_RUN || '' }}
+        run: python3 .agent-actions/scripts/validate_open_issues.py

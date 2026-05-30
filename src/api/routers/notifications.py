@@ -251,7 +251,12 @@ async def list_reminders(
 
 
 def _reminder_to_api(r):
-    return r.to_dict() if hasattr(r, "to_dict") else r
+    if hasattr(r, "to_dict"):
+        return r.to_dict()
+    # Fallback for dict/dict-like payloads (e.g. direct service dict returns).
+    if isinstance(r, dict):
+        return r
+    return r
 
 
 @notifications_router.delete(

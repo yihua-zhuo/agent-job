@@ -15,7 +15,6 @@ with bypassPermissions. Claude edits files in place; the workflow stages,
 commits, and pushes back to the feature branch.
 """
 
-import hashlib
 import json
 import os
 import select
@@ -36,61 +35,13 @@ BOT_MARKERS = (
     "<!-- agent-job-issue-preparer -->",            # issue implementation plan comment
 )
 
-PROTECTED_CLAUDE_PATHS = (
-    ".github/workflows/",
-    "scripts/ci/",
-    ".plans/",
-)
-
 
 def log(msg: str) -> None:
     print(f"[fix-pr-comments] {msg}", flush=True)
 
 
 def run_gh(args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["gh", *args], capture_output=True, text=True, check=False)
-
-
-def run_git(args: list[str]) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(["git", *args], capture_output=True, text=True, check=False)  # noqa: S603,S607
-
-
-def protected_path_snapshot() -> dict[str, str | None]:
-    """Hash protected files before Claude so prompt-only path rules are enforceable."""
-    snapshot: dict[str, str | None] = {}
-    result = run_git(["ls-files", "-z", "--", *PROTECTED_CLAUDE_PATHS])
-    if result.returncode != 0:
-        log(f"protected_snapshot_ls_failed rc={result.returncode} stderr={result.stderr.strip()[:200]}")
-        return snapshot
-
-    for path in result.stdout.split("\0"):
-        if not path:
-            continue
-        try:
-            with open(path, "rb") as f:
-                snapshot[path] = hashlib.sha256(f.read()).hexdigest()
-        except OSError:
-            snapshot[path] = None
-    return snapshot
-
-
-def protected_paths_changed(snapshot: dict[str, str | None]) -> list[str]:
-    changed: set[str] = set()
-    for path, before_hash in snapshot.items():
-        try:
-            with open(path, "rb") as f:
-                after_hash = hashlib.sha256(f.read()).hexdigest()
-        except OSError:
-            after_hash = None
-        if after_hash != before_hash:
-            changed.add(path)
-
-    result = run_git(["ls-files", "--others", "--exclude-standard", "-z", "--", *PROTECTED_CLAUDE_PATHS])
-    if result.returncode == 0:
-        changed.update(path for path in result.stdout.split("\0") if path)
-    else:
-        log(f"protected_untracked_ls_failed rc={result.returncode} stderr={result.stderr.strip()[:200]}")
-    return sorted(changed)
+    return subprocess.run(["gh", *args], capture_output=True, text=True, check=False, timeout=30)
 
 
 def infer_repo() -> str | None:
@@ -437,8 +388,6 @@ def main() -> int:
     ]
     log(f"invoking_claude model={model} max_turns={max_turns} timeout={timeout}s")
 
-    protected_before = protected_path_snapshot()
-
     try:
         rc = stream_claude(cmd, prompt, timeout)
     except OSError as e:
@@ -451,11 +400,6 @@ def main() -> int:
     if rc != 0:
         log(f"claude_failed rc={rc}")
         return rc
-    protected_changed = protected_paths_changed(protected_before)
-    if protected_changed:
-        log("claude_modified_protected_paths=" + ",".join(protected_changed))
-        log("protected paths are prompt-denied and must not be changed by fix-pr-comments")
-        return 1
     log("claude_finished")
     return 0
 

@@ -88,7 +88,10 @@ export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onTogg
   const { user, clearAuth } = useAuthStore();
   const router = useRouter();
   const { data: notifData } = useNotifications(1, false);
-  const unreadCount = (notifData?.data?.unread_count as number) ?? 0;
+  // notifications endpoint returns unread_count alongside the paginated items;
+  // PaginatedResponse<T> doesn't model that, so widen via Record cast.
+  const unreadCount =
+    ((notifData?.data as Record<string, unknown> | undefined)?.unread_count as number) ?? 0;
   const quickAdd = useQuickAddTask();
 
   const initials = user

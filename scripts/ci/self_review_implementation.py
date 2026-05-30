@@ -31,6 +31,9 @@ Your task — execute in order:
 1. Read the plan at `{plan_path}` end-to-end. Internalise three sections in
    particular: **Affected Files**, **Implementation Steps**, and
    **Acceptance Criteria**.
+   If the plan has a **Source Contract** or references a dev-plan board, also
+   read the referenced README/template/target board documents before judging
+   coverage.
 
 2. Inspect your own changes:
        git diff --stat origin/master..HEAD
@@ -48,6 +51,9 @@ Your task — execute in order:
    - For each criterion in **Acceptance Criteria**: is there evidence
      (production code + tests) that the criterion will hold? Acceptance
      criteria without test coverage are a real gap.
+   - For dev-plan issues: does the diff stay within the target board's
+     declared file scope, and is there evidence that each implemented Step's
+     machine-checkable verification was run?
    - Did you add files OUTSIDE the plan's Affected Files? That's usually a
      scope creep — but acceptable if the new file is a necessary dependency
      the plan missed (e.g. an Alembic migration, an `__init__.py`). Note

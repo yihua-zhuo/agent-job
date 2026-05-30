@@ -38,6 +38,16 @@ jobs:
           # (Dev Agent CI, code review). GITHUB_TOKEN-triggered events don't.
           token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
 
+      - name: Checkout agent-actions (CI scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: yihua-zhuo/agent-actions
+          ref: main
+          path: .agent-actions
+          # Fall back to GITHUB_TOKEN so local act runs (where
+          # COMMIT_GITHUB_TOKEN may not be in .secrets) still authenticate.
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -66,7 +76,7 @@ jobs:
           # Empty for scheduled runs; set by workflow_dispatch to target a
           # specific issue picked from the local CLI.
           ISSUE_NUMBER: ${{ inputs.issue_number }}
-        run: python3 scripts/ci/claim_and_plan_issue.py
+        run: python3 .agent-actions/scripts/claim_and_plan_issue.py
 
       - name: Skip if no issue claimed
         if: steps.plan.outputs.issue_number == ''
@@ -125,7 +135,7 @@ jobs:
           # (~2 min), docker + deps setup (~10 min), Stage 3 self-review,
           # and the commit/PR step.
           CLAUDE_TIMEOUT_SECONDS: '7200'
-        run: python3 scripts/ci/execute_implementation.py
+        run: python3 .agent-actions/scripts/execute_implementation.py
 
       - name: Stage 3 — self-review & fix
         if: steps.plan.outputs.issue_number != ''
@@ -136,7 +146,7 @@ jobs:
           PLAN_PATH: ${{ steps.plan.outputs.plan_path }}
           DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db
           PYTHONPATH: src
-        run: python3 scripts/ci/self_review_implementation.py
+        run: python3 .agent-actions/scripts/self_review_implementation.py
 
       - name: Post-Stage-2 diagnostics (working tree + branch state)
         if: steps.plan.outputs.issue_number != ''

@@ -23,6 +23,16 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Checkout agent-actions (CI scripts)
+        uses: actions/checkout@v4
+        with:
+          repository: yihua-zhuo/agent-actions
+          ref: main
+          path: .agent-actions
+          # Fall back to GITHUB_TOKEN so local act runs (where
+          # COMMIT_GITHUB_TOKEN may not be in .secrets) still authenticate.
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ env.PYTHON_VERSION }}
@@ -52,7 +62,7 @@ jobs:
           DIFF_BASE_REF: ${{ github.event_name == 'pull_request' && github.base_ref || github.event.before }}
           DIFF_HEAD_REF: ${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
         run: |
-          python3 scripts/ci/run_claude_code_review.py
+          python3 .agent-actions/scripts/run_claude_code_review.py
 
       - name: Post PR line comments
         if: github.event_name == 'pull_request'
@@ -65,7 +75,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
           CODE_REVIEW_RESULT_PATH: shared-memory/results/code-review-result.json
         run: |
-          python3 scripts/ci/post_pr_line_comments.py
+          python3 .agent-actions/scripts/post_pr_line_comments.py
 
       - name: Trigger automatic PR fix for critical findings
         env:
@@ -127,7 +137,7 @@ jobs:
           fi
 
           echo "Critical findings detected; dispatching fix-pr-comments.yml for issue #${ISSUE_ID}."
-          python3 scripts/ci/trigger_fix_for_issue.py "${ISSUE_ID}"
+          python3 .agent-actions/scripts/trigger_fix_for_issue.py "${ISSUE_ID}"
 
 #      - name: Push shared-memory
 #        if: always()

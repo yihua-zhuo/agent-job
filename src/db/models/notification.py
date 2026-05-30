@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Column, DateTime, ForeignKey, Index, Integer, String, and_, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -14,15 +14,18 @@ class NotificationModel(Base):
 
     __tablename__ = "notifications"
     __table_args__ = (
-        # Partial index for the unread in-app notifications query.
+        # Composite index for user + tenant + status queries.
+        Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status"),
+        # Partial index for unread in-app notifications lookup.
         Index(
-            "ix_notifications_unread_in_app",
+            "ix_notifications_in_app_unread",
             "user_id",
             "tenant_id",
-            postgresql_where=(Column("status") == "unread"),
+            postgresql_where=and_(
+                Column("channel") == "in_app",
+                Column("read_at").is_(None),
+            ),
         ),
-        # Covering index for per-tenant listing / counting queries.
-        Index("ix_notifications_tenant_id", "tenant_id"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)

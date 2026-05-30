@@ -76,9 +76,9 @@ def _make_auth_override(tenant_id: int = 1, user_id: int = 99):
 
 
 def _app(tenant_id: int = 1) -> TestClient:
-    # AsyncSession is not needed here — the router under test patches
-    # NotificationService entirely, so the DB session is never accessed.
-    # get_db override is present for completeness but unused due to full patching.
+    # get_db must be overridden so FastAPI can construct the router's session dependency.
+    # NotificationService is fully patched in these tests, so the real session is not used,
+    # but FastAPI checks the dependency signature at startup — the override satisfies it.
     app = FastAPI()
     app.include_router(notifications_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_override(tenant_id=tenant_id)
@@ -267,16 +267,29 @@ class TestCreateReminder:
     def test_create_reminder_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.create_reminder = AsyncMock(
-                return_value={
+            mock_reminder = _MockNotificationModel(
+                {
                     "id": 1,
                     "tenant_id": 1,
                     "user_id": 99,
-                    "title": "Standup",
-                    "content": "Daily meeting",
-                    "remind_at": "2026-12-31T09:00:00",
+                    "channel": "in_app",
+                    "template": "Standup",
+                    "status": "pending",
+                    "priority": "normal",
                 }
             )
+            mock_reminder.title = "Standup"
+            mock_reminder.content = "Daily meeting"
+            mock_reminder.remind_at = "2026-12-31T09:00:00"
+            mock_reminder.to_dict = lambda: {
+                "id": 1,
+                "tenant_id": 1,
+                "user_id": 99,
+                "title": "Standup",
+                "content": "Daily meeting",
+                "remind_at": "2026-12-31T09:00:00",
+            }
+            svc.create_reminder = AsyncMock(return_value=mock_reminder)
             client = _app()
             response = client.post(
                 "/api/v1/reminders",

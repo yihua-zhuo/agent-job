@@ -46,6 +46,39 @@ def _reminder_to_row(r: dict):
     )
 
 
+def _reminder_matches_filter(
+    r: dict,
+    *,
+    tenant_id: int,
+    user_id: int,
+    is_completed_filter: bool | None,
+    upcoming_only: bool,
+    now: datetime,
+) -> bool:
+    """Determine whether a reminder row matches the list-reminders filter criteria.
+
+    Composition semantics:
+    - Tenant/user identity are always required.
+    - is_completed_filter=None means "no filter on completion status" (include both).
+    - When upcoming_only=True (default), completed reminders are excluded, and
+      reminders whose remind_at time has already passed are also excluded.
+    - When upcoming_only=False, only the is_completed filter applies.
+    """
+    if r.get("tenant_id") != tenant_id:
+        return False
+    if r.get("user_id") != user_id:
+        return False
+    if is_completed_filter is not None and r.get("is_completed") != is_completed_filter:
+        return False
+    if upcoming_only:
+        if r.get("is_completed"):
+            return False
+        remind_at = r.get("remind_at")
+        if remind_at and remind_at < now:
+            return False
+    return True
+
+
 def make_notification_handler(state):
     """Return a handler that manages an in-memory notification store in state."""
 
@@ -87,7 +120,7 @@ def make_notification_handler(state):
         if "count(" in sql_text_lower and "from notifications" in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = "read_at is null" in sql_text_lower
+            unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
             count = sum(
                 1
                 for n in state._notifications.values()
@@ -100,7 +133,7 @@ def make_notification_handler(state):
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = "read_at is null" in sql_text_lower
+            unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = []
@@ -204,13 +237,14 @@ def make_reminder_handler(state):
             rows = [
                 r
                 for r in state._reminders.values()
-                if r.get("tenant_id") == tenant_id
-                and r.get("user_id") == user_id
-                and (
-                    is_completed_filter is None
-                    or r.get("is_completed") == is_completed_filter
+                if _reminder_matches_filter(
+                    r,
+                    tenant_id=tenant_id,
+                    user_id=user_id,
+                    is_completed_filter=is_completed_filter,
+                    upcoming_only=upcoming_only,
+                    now=now,
                 )
-                and not (upcoming_only and (r.get("is_completed") or (r.get("remind_at") and r.get("remind_at") < now)))
             ]
             return MockResult([_reminder_to_row(r) for r in rows[offset : offset + page_size]])
 

@@ -18,6 +18,9 @@ import sys
 from json import JSONDecoder
 from typing import Any
 
+from dev_plan_context import find_dev_plan_ref, resolve_dev_plan_context
+from generate_dev_plan_board import board_ref_for, commit_pending_boards, generate_board
+
 
 LABEL_READY = "ready"
 LABEL_NEEDS_INFO = "needs-clarification"
@@ -129,12 +132,23 @@ def open_blockers(deps: list[int]) -> list[int]:
 def build_prompt(issue: dict[str, Any], budget: int) -> str:
     title = issue.get("title") or "(no title)"
     body = (issue.get("body") or "(no body)").strip()
+    dev_plan_ref = find_dev_plan_ref(issue)
+    dev_plan_note = ""
+    if dev_plan_ref:
+        dev_plan_note = f"""
+This issue references a dev-plan board: `{dev_plan_ref}`.
+For dev-plan issues, prefer "ready" when the referenced board document exists
+and is independently executable. The board's own README/template/§5 steps/§6
+verification define the implementation scope, so do not split merely because
+the issue body is short.
+"""
     return f"""You are triaging a GitHub issue and deciding what should happen to it.
 
 Title: {title}
 
 Body:
 {body}
+{dev_plan_note}
 
 Pick ONE of three verdicts:
 
@@ -280,6 +294,26 @@ def call_claude(prompt: str) -> tuple[dict[str, Any] | None, str]:
     return None, last_err
 
 
+def _append_dev_plan_ref_to_issue(number: int, current_body: str, ref_line: str) -> bool:
+    """Append `Dev-Plan: ...` to the issue body if it's not already there.
+
+    Used after generating a board so the issue carries the canonical
+    reference that `dev_plan_context.find_dev_plan_ref` looks for.
+    """
+    if ref_line in (current_body or ""):
+        return True
+    new_body = (current_body or "").rstrip() + f"\n\n{ref_line}\n"
+    # gh issue edit reads --body-file - from stdin to avoid ARG_MAX on long bodies.
+    r = subprocess.run(
+        ["gh", "issue", "edit", str(number), "--body-file", "-"],
+        input=new_body, capture_output=True, text=True, check=False,
+    )
+    if r.returncode != 0:
+        log(f"issue_body_edit_failed issue=#{number} stderr={r.stderr.strip()[:200]}")
+        return False
+    return True
+
+
 def comment_and_label(number: int, body: str, label: str) -> bool:
     # Apply the skip-label BEFORE commenting. If the label step fails (rate
     # limit, transient error), we abort without commenting — that way the next
@@ -350,6 +384,22 @@ def process_issue(issue: dict[str, Any]) -> bool:
     title = issue.get("title") or ""
     log(f"validating issue=#{number} title={title!r}")
 
+    dev_plan_ctx, dev_plan_err = resolve_dev_plan_context(issue)
+    if dev_plan_err:
+        body = (
+            "**Needs clarification** ⚠️\n\n"
+            "This issue declares a dev-plan board, but the referenced document "
+            f"could not be resolved in the workflow checkout: `{dev_plan_err}`.\n\n"
+            "Use a `Dev-Plan: docs/dev-plan/<domain>/<board>.md` line and make "
+            "sure `docs/dev-plan/README.md`, the matching template, and the "
+            "target board file are present."
+        )
+        ok = comment_and_label(number, body, LABEL_NEEDS_INFO)
+        log(f"marked_needs_info issue=#{number} ok={ok} reason=bad_dev_plan_ref")
+        return True
+    if dev_plan_ctx:
+        log(f"dev_plan_detected issue=#{number} target={dev_plan_ctx.target_display} depth={dev_plan_ctx.depth}")
+
     deps = parse_dependencies(issue.get("body"))
     was_blocked = has_any_label(issue, {LABEL_BLOCKED})
     if deps:
@@ -397,9 +447,28 @@ def process_issue(issue: dict[str, Any]) -> bool:
     subtasks = [s for s in subtasks if isinstance(s, dict)]
 
     if raw_verdict == "ready":
+        # Author a dev-plan board UNLESS the issue already references one
+        # (the dev-plan-first flow described in dev_plan_context.py). For
+        # autogen boards we add a Dev-Plan ref to the issue body so the
+        # downstream implementor reads the board as its source of truth.
+        board_note = ""
+        if not find_dev_plan_ref(issue):
+            board, gen_err = generate_board(issue)
+            if gen_err:
+                log(f"board_generation_skipped issue=#{number} err={gen_err}")
+            elif board is not None:
+                ref = board_ref_for(board.path)
+                board_note = f"\n\n📋 Generated dev-plan board: [`{ref.split(': ', 1)[1]}`]({ref.split(': ', 1)[1]})"
+                # Append the canonical reference to the issue body so the
+                # next monitor tick — and the implement workflow's
+                # dev_plan_context — can find it.
+                _append_dev_plan_ref_to_issue(number, issue.get("body") or "", ref)
+                log(f"board_generated issue=#{number} path={board.path} committed={board.committed} pushed={board.pushed}")
+
         body = "**Ready to implement** ✅"
         if reason:
             body += f"\n\n{reason}"
+        body += board_note
         ok = comment_and_label(number, body, LABEL_READY)
         log(f"marked_ready issue=#{number} ok={ok}")
         return True
@@ -452,13 +521,92 @@ def process_issue(issue: dict[str, Any]) -> bool:
     return True
 
 
+# Labels whose presence DISQUALIFIES an issue from backfill — boards for
+# these would be wasted Claude work:
+#   - needs-clarification: the issue isn't actionable yet
+#   - split: parent tracking issue, subtasks get their own boards
+#   - doc-sync / code-review / pipeline: auto-generated bookkeeping issues
+BACKFILL_SKIP_LABELS = {LABEL_NEEDS_INFO, LABEL_SPLIT, "doc-sync", "code-review", "pipeline"}
+
+
+def list_issues_needing_board() -> list[dict[str, Any]]:
+    """Open issues that should have a dev-plan board but don't yet.
+
+    Includes ready, blocked, AND untriaged issues — anything that's a real
+    work-item. Excludes needs-clarification / split / pipeline-bookkeeping
+    issues. An issue is "covered" if it already carries a `Dev-Plan: ...`
+    ref in its body OR a board file with the matching number prefix exists
+    on disk.
+    """
+    from generate_dev_plan_board import board_already_exists  # local: avoid cycle at import time
+
+    result = run_gh([
+        "issue", "list",
+        "--state", "open",
+        "--json", "number,title,body,labels",
+        "--limit", "1000",
+    ])
+    if result.returncode != 0:
+        log(f"list_issues_failed rc={result.returncode} stderr={result.stderr.strip()}")
+        return []
+    try:
+        issues = json.loads(result.stdout or "[]")
+    except json.JSONDecodeError:
+        return []
+
+    pending: list[dict[str, Any]] = []
+    for issue in issues:
+        if has_any_label(issue, BACKFILL_SKIP_LABELS):
+            continue
+        if find_dev_plan_ref(issue):
+            continue
+        if board_already_exists(int(issue["number"])) is not None:
+            continue
+        pending.append(issue)
+    return pending
+
+
+def backfill_dev_plan_board(issue: dict[str, Any]) -> bool:
+    """Generate + persist a dev-plan board for an issue that is already `ready`.
+
+    Returns True on success (board produced, ref appended to issue body),
+    False on any failure — caller logs and continues.
+    """
+    number = int(issue["number"])
+    title = issue.get("title") or ""
+    log(f"backfilling issue=#{number} title={title!r}")
+    board, gen_err = generate_board(issue)
+    if gen_err or board is None:
+        log(f"backfill_failed issue=#{number} err={gen_err or 'no_board_returned'}")
+        return False
+    ref = board_ref_for(board.path)
+    _append_dev_plan_ref_to_issue(number, issue.get("body") or "", ref)
+    log(f"backfilled issue=#{number} path={board.path} committed={board.committed} pushed={board.pushed}")
+    return True
+
+
 def main() -> int:
     ensure_labels()
 
+    # 1. Backfill: generate boards for any open work-item (ready, blocked, or
+    # untriaged) that doesn't have one yet. Excludes needs-clarification +
+    # split + pipeline-bookkeeping labels — see BACKFILL_SKIP_LABELS.
+    # Bounded by MAX_BACKFILL_PER_RUN so a large historical backlog can't
+    # blow the per-tick time budget. Runs FIRST so blocked-but-mapped issues
+    # have a board ready when their deps close.
+    max_backfill = int(os.environ.get("MAX_BACKFILL_PER_RUN", "100"))
+    pending_backfill = list_issues_needing_board()
+    log(f"backfill_pending={len(pending_backfill)} cap={max_backfill}")
+    backfilled = 0
+    for issue in pending_backfill[:max_backfill]:
+        if backfill_dev_plan_board(issue):
+            backfilled += 1
+
+    # 2. Normal triage pass — unchanged behaviour.
     candidates = list_candidate_issues()
     log(f"candidates_total={len(candidates)} search_excludes={sorted(SKIP_LABELS)}")
 
-    if not candidates:
+    if not candidates and not pending_backfill:
         log("nothing_to_do")
         return 0
 
@@ -472,9 +620,18 @@ def main() -> int:
         if process_issue(issue):
             processed += 1
 
+    # 3. End-of-tick batch commit. Every board written this tick is staged
+    # together into a single commit on a fresh `auto/dev-plan-batch-<ts>`
+    # branch and one PR is opened. No-op when nothing was generated.
+    n_committed, status, pr_url = commit_pending_boards()
+    log(f"batch_commit count={n_committed} status={status} pr_url={pr_url or '-'}")
+
     log(
         f"done processed={processed} checked={checked} cap={max_per_run} "
-        f"remaining_candidates={max(0, len(candidates) - checked)}"
+        f"backfilled={backfilled} backfill_cap={max_backfill} "
+        f"remaining_candidates={max(0, len(candidates) - checked)} "
+        f"remaining_backfill={max(0, len(pending_backfill) - max_backfill)} "
+        f"boards_committed={n_committed} batch_status={status}"
     )
     return 0
 

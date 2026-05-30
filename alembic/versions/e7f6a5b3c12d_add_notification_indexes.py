@@ -113,7 +113,7 @@ def downgrade() -> None:
         )
     )
     op.execute(text("UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL"))
-    op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL"))
+    op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL AND status IS NOT NULL"))
 
     # Phase 4 (reversed): apply NOT NULL constraint — use DROP IF EXISTS + SET NOT NULL
     # to make this block idempotent on replay (plain op.alter_column would raise an

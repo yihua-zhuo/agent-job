@@ -392,26 +392,30 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
     from services.auth_service import AuthService
     from services.user_service import UserService
 
-    # Seed the tenant so notification FK constraints are satisfied.
-    tenant = TenantModel(id=tenant_id_web, name="Web Test Tenant", plan="free", status="active")
-    async_session.add(tenant)
-    await async_session.flush()
-
-    # Use the function-scoped session directly so user creation and test operations
-    # share the same transaction.
+    # Seed tenant only if it doesn't already exist (idempotent — prevents
+    # duplicate-key errors when another fixture already created it).
+    from sqlalchemy import select
+    result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_web))
+    if result.scalar_one_or_none() is None:
+        tenant = TenantModel(id=tenant_id_web, name="Web Test Tenant", plan="free", status="active")
+        async_session.add(tenant)
+        await async_session.flush()
+    # Create the test user in the DB so /users/me resolves correctly.
     user_svc = UserService(async_session)
-    await user_svc.create_user(
-        username="webtest",
-        email="webtest@example.com",
-        password="TestPass123!",
-        role="admin",
-        tenant_id=tenant_id_web,
-    )
-    await async_session.flush()
-    # Retrieve the actual DB-assigned user id (not hardcoded 999).
-    created_user = await user_svc.get_user_by_username(tenant_id_web, "webtest")
-    assert created_user is not None, "auth_headers_web failed to seed the test user"
-    actual_user_id = created_user.id
+    try:
+        user = await user_svc.create_user(
+            username="webtest",
+            email="webtest@example.com",
+            password="TestPass123!",
+            role="admin",
+            tenant_id=tenant_id_web,
+        )
+        actual_user_id = user.id
+    except Exception:
+        # Already exists from a prior fixture run; look up the real id.
+        existing = await user_svc.get_user_by_username(tenant_id_web, "webtest")
+        assert existing is not None, "auth_headers_web failed to seed the test user"
+        actual_user_id = existing.id
 
     auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
     token = auth_svc.generate_token(
@@ -429,6 +433,16 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
     os.environ["JWT_SECRET"] = TEST_JWT_SECRET
     os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
     from services.auth_service import AuthService
+
+    # Seed tenant only if it doesn't already exist (idempotent — prevents
+    # duplicate-key errors when another fixture already created it).
+    from db.models.tenant import TenantModel
+    from sqlalchemy import select
+    result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_2_web))
+    if result.scalar_one_or_none() is None:
+        tenant = TenantModel(id=tenant_id_2_web, name=f"Tenant {tenant_id_2_web}", plan="free", status="active")
+        async_session.add(tenant)
+        await async_session.flush()
 
     auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
     token = auth_svc.generate_token(
