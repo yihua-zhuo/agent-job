@@ -25,7 +25,7 @@ class EnrichmentService:
         domain: str | None = None,
         company_name: str | None = None,
         *,
-        tenant_id: int | None = None,
+        tenant_id: int,
         customer_id: int | None = None,
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Look up company enrichment data from a third-party provider.

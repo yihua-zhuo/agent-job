@@ -85,6 +85,7 @@ async def refresh_enrichment(
         domain=domain_param,
         company_name=company_name_param,
     )
+    # _raw_data not needed in response — only normalised data is returned
 
     # Fetch the written record to include derived enrichment_status fields
     enrich_result = await session.execute(

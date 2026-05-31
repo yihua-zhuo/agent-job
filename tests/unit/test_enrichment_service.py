@@ -34,28 +34,28 @@ def service(mock_db_session):
 class TestLookupArgumentValidation:
     async def test_neither_domain_nor_name_raises(self, service):
         with pytest.raises(ValidationException) as exc_info:
-            await service.lookup(domain=None, company_name=None, customer_id=1)
+            await service.lookup(domain=None, company_name=None, customer_id=1, tenant_id=1)
         assert "exactly one" in exc_info.value.detail
 
     async def test_both_domain_and_name_raises(self, service):
         with pytest.raises(ValidationException) as exc_info:
-            await service.lookup(domain="stripe.com", company_name="Stripe", customer_id=1)
+            await service.lookup(domain="stripe.com", company_name="Stripe", customer_id=1, tenant_id=1)
         assert "exactly one" in exc_info.value.detail
 
     async def test_missing_customer_id_raises(self, service):
         with pytest.raises(ValidationException) as exc_info:
-            await service.lookup(domain="stripe.com", customer_id=None)
+            await service.lookup(domain="stripe.com", customer_id=None, tenant_id=1)
         assert "customer_id" in exc_info.value.detail
 
     async def test_blank_domain_treated_as_absent(self, service):
         """domain='' should fall through to company_name check."""
         with pytest.raises(ValidationException) as exc_info:
-            await service.lookup(domain="", company_name=None, customer_id=1)
+            await service.lookup(domain="", company_name=None, customer_id=1, tenant_id=1)
         assert "exactly one" in exc_info.value.detail
 
     async def test_whitespace_only_domain_treated_as_absent(self, service):
         with pytest.raises(ValidationException) as exc_info:
-            await service.lookup(domain="   ", company_name=None, customer_id=1)
+            await service.lookup(domain="   ", company_name=None, customer_id=1, tenant_id=1)
         assert "exactly one" in exc_info.value.detail
 
 
@@ -153,9 +153,10 @@ class TestLookupDomainSuccess:
             mock_settings.clearbit_api_key = "test-key"
             normalised, raw = await service.lookup(domain="acme.com", customer_id=1, tenant_id=1)
 
-        # Service returns normalised + raw data; router owns persistence
+        # Service persists via execute(pg_insert) — verify execute was called at least twice
         assert normalised["name"] == "Acme"
         assert raw == {"name": "Acme", "domain": "acme.com"}
+        assert mock_db_session.execute.call_count >= 2
         mock_db_session.add.assert_not_called()
         mock_db_session.flush.assert_not_called()
 
@@ -188,8 +189,8 @@ class TestLookupCompanyNameSuccess:
             mock_settings.clearbit_api_key = "test-key"
             normalised, raw = await service.lookup(company_name="Acme Corp", customer_id=1, tenant_id=1)
 
-        call_kwargs = mock_client.get.call_args
-        assert call_kwargs.kwargs["params"]["name"] == "Acme Corp"
+        call_kwargs = mock_client.get.call_args.kwargs
+        assert call_kwargs["params"]["name"] == "Acme Corp"
         assert normalised["name"] == "Acme Corp"
 
 
@@ -308,7 +309,7 @@ class TestLookupHttpErrors:
             mock_settings.clearbit_api_key = None
 
             with pytest.raises(ValidationException) as exc_info:
-                await service.lookup(domain="stripe.com", customer_id=1)
+                await service.lookup(domain="stripe.com", customer_id=1, tenant_id=1)
             assert "not configured" in exc_info.value.detail
 
 

@@ -100,13 +100,13 @@ async def _enrichment_status(
         .order_by(CustomerEnrichmentModel.enriched_at.desc())
     )
     status_map: dict[int, dict] = {}
-    for row in result.all():
-        last_enriched = row.enriched_at.isoformat() if row.enriched_at else None
-        if row.next_refresh_at is not None and row.next_refresh_at <= now:
+    for enrichment in result.scalars().all():
+        last_enriched = enrichment.enriched_at.isoformat() if enrichment.enriched_at else None
+        if enrichment.next_refresh_at is not None and enrichment.next_refresh_at <= now:
             status = "stale"
         else:
             status = "enriched"
-        status_map[row.customer_id] = {"enrichment_status": status, "last_enriched_at": last_enriched}
+        status_map[enrichment.customer_id] = {"enrichment_status": status, "last_enriched_at": last_enriched}
 
     # Mark customers with no enrichment record
     for cid in customer_ids:
