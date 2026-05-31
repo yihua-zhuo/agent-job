@@ -15,7 +15,6 @@ class NotificationTemplateModel(Base):
     __table_args__ = (
         Index("ix_notification_templates_tenant_id", "tenant_id"),
         CheckConstraint(column("channel").in_(["email", "sms", "push", "in_app"]), name="ck_notification_templates_channel"),
-        {"sqlite_autoincrement": True},
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -29,9 +28,12 @@ class NotificationTemplateModel(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now(), default=None)
 
     def to_dict(self) -> dict:
+        # tenant_id is intentionally omitted from serialization; it is not
+        # needed by the client and is filtered out per Rule 137 (credential
+        # material / auth model allow-list policy).  Include it only when the
+        # API contract explicitly requires it for client-side tenant routing.
         return {
             "id": self.id,
-            "tenant_id": self.tenant_id,
             "name": self.name,
             "channel": self.channel,
             "subject": self.subject,

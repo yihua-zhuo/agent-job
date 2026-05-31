@@ -36,6 +36,8 @@ def downgrade() -> None:
     pass
     # Alembic downgrades through a merge revision via the first parent only:
     # from merge_nt_662 -> 52b19ee00eaf -> ... -> base.
+    # where "..." represents the first-parent revision chain from 52b19ee00eaf
+    # back to the migration base.
     # The DDL spawned by 5d575a161b5d (the second parent) is torn down by
     # that revision's own downgrade() when the migration chain reaches it.
     # No additional cleanup is needed at the merge point.

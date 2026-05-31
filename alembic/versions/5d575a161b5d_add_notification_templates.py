@@ -25,7 +25,7 @@ def upgrade() -> None:
     op.create_table(
         "notification_templates",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("tenant_id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), server_default=sa.text("0"), nullable=False),
         sa.Column("name", sa.String(length=100), nullable=False),
         sa.Column("channel", sa.String(length=20), nullable=False),
         sa.Column("subject", sa.String(length=255), nullable=True),
@@ -58,7 +58,6 @@ def upgrade() -> None:
         unique=False,
         if_not_exists=True,
     )
-    # tenant_id FK is added via ForeignKeyConstraint in create_table above.
 
 
 def downgrade() -> None:

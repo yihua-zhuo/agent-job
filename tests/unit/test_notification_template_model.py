@@ -31,7 +31,6 @@ class TestNotificationTemplateModel:
         )
         d = model.to_dict()
         assert d["id"] == 1
-        assert d["tenant_id"] == 42
         assert d["name"] == "Welcome Email"
         assert d["channel"] == "email"
         assert d["subject"] == "Welcome!"
@@ -56,7 +55,6 @@ class TestNotificationTemplateModel:
         )
         d = model.to_dict()
         assert d["id"] == 5
-        assert d["tenant_id"] == 7
         assert d["name"] == "SMS Reminder"
         assert d["channel"] == "sms"
         assert d["subject"] is None
