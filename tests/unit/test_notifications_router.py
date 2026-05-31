@@ -148,6 +148,12 @@ class TestListNotifications:
             client = _app()
             response = client.get("/api/v1/notifications?page=1&page_size=20")
             assert response.status_code == 200
+            body = response.json()
+            assert body["success"] is True
+            assert "items" in body["data"]
+            assert "total" in body["data"]
+            assert "page" in body["data"]
+            assert "page_size" in body["data"]
             # Explicitly assert unread_only=False for the absent-param default contract.
             svc.get_user_notifications.assert_called_once_with(
                 user_id=99, tenant_id=1, unread_only=False, page=1, page_size=20
@@ -160,6 +166,9 @@ class TestListNotifications:
             client = _app()
             response = client.get("/api/v1/notifications?unread_only=true")
             assert response.status_code == 200
+            body = response.json()
+            assert body["success"] is True
+            assert "items" in body["data"]
             svc.get_user_notifications.assert_called_once_with(
                 user_id=99, tenant_id=1, unread_only=True, page=1, page_size=20
             )
@@ -171,6 +180,10 @@ class TestListNotifications:
             client = _app()
             response = client.get("/api/v1/notifications?page=2&page_size=10")
             assert response.status_code == 200
+            body = response.json()
+            assert body["success"] is True
+            assert body["data"]["page"] == 2
+            assert body["data"]["page_size"] == 10
             svc.get_user_notifications.assert_called_once_with(
                 user_id=99, tenant_id=1, unread_only=False, page=2, page_size=10
             )
@@ -335,17 +348,25 @@ class TestMarkAllRead:
 # ---------------------------------------------------------------------------
 
 
-class TestNotificationPreferencesUnimplemented:
-    """Stub coverage for notification_preferences endpoints — not yet implemented.
-
-    These tests verify the router returns501 stub responses until the
-    notification_preferences table and service are wired up.
-    """
+class TestUpdatePreferencesUnimplemented:
+    """Stub coverage for PUT /notifications/preferences — returns 501 until implemented."""
 
     def test_update_preferences_returns_501(self):
         """PUT /notifications/preferences returns 501 until the feature is implemented."""
         client = _app()
         response = client.put("/api/v1/notifications/preferences", json={"email": False})
+        assert response.status_code == 501
+        assert response.json().get("detail") == "notification_preferences table not yet implemented"
+
+    def test_preferences_returns_501_for_any_valid_auth_context(self):
+        """Non-integer tenant_id bypasses the integer guard; preferences stub returns 501 regardless."""
+        app = FastAPI()
+        app.include_router(notifications_router)
+        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(user_id=99, tenant_id="acme")
+        app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/api/v1/notifications/preferences")
+        # tenant_id="acme" is not None/0, so auth check passes; preferences endpoint returns 501.
         assert response.status_code == 501
         assert response.json().get("detail") == "notification_preferences table not yet implemented"
 
@@ -558,18 +579,6 @@ class TestInvalidTenant:
         response = client.get("/api/v1/notifications")
         assert response.status_code == 401
 
-    def test_list_notifications_invalid_tenant_type(self):
-        """Non-integer tenant_id bypasses the integer tenant_id guard; preferences endpoint returns 501."""
-        app = FastAPI()
-        app.include_router(notifications_router)
-        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(user_id=99, tenant_id="acme")
-        app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
-        client = TestClient(app, raise_server_exceptions=False)
-        response = client.get("/api/v1/notifications/preferences")
-        # tenant_id="acme" is not None/0, so auth check passes; preferences endpoint returns 501.
-        assert response.status_code == 501
-        assert response.json().get("detail") == "notification_preferences table not yet implemented"
-
 
 # ---------------------------------------------------------------------------
 # Cross-tenant isolation tests
@@ -579,9 +588,9 @@ class TestInvalidTenant:
 class TestRouterPassesTenantContext:
     """Verifies the router passes the correct tenant context to the service.
 
-    Actual cross-tenant isolation is enforced at the service and DB layer
-    (Rule 126) and verified in integration tests. This test only confirms the
-    router forwards the auth context (tenant_id) correctly to the service.
+    This test confirms the router forwards the auth context (tenant_id) correctly
+    to the service. Actual cross-tenant isolation is enforced at the service and
+    DB layer (Rule 126) and verified in integration tests.
     """
 
     def test_cross_tenant_read_returns_empty_list(self):

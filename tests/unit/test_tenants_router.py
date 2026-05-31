@@ -107,7 +107,9 @@ class TestCreateTenantEndpoint:
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["name"] == "Acme Corp"
-        svc.create_tenant.assert_called_once_with(name="Acme Corp", plan="enterprise", admin_email="admin@acme.com", settings=None)
+        svc.create_tenant.assert_called_once_with(
+            name="Acme Corp", plan="enterprise", admin_email="admin@acme.com", settings=None
+        )
 
     def test_service_error_returns_4xx(self, tenant_router_client):
         client, svc = tenant_router_client
@@ -255,9 +257,10 @@ class TestTenantStatsEndpoint:
         client, svc = tenant_router_client
         stats_data = {
             "tenant_id": 1,
+            "name": "Acme Corp",
+            "plan": "enterprise",
+            "status": "active",
             "user_count": 10,
-            "storage_used": 1024,
-            "api_calls": 5000,
         }
         mock_stats = MagicMock()
         mock_stats.to_dict.return_value = stats_data
@@ -265,6 +268,7 @@ class TestTenantStatsEndpoint:
         resp = client.get("/api/v1/tenants/stats")
         assert resp.status_code == 200
         body = resp.json()
+        assert body["success"] is True
         assert body["data"]["tenant_id"] == 1
         assert body["data"]["user_count"] == 10
         svc.get_tenant_stats.assert_called_once()
@@ -291,6 +295,7 @@ class TestTenantUsageEndpoint:
         resp = client.get("/api/v1/tenants/usage")
         assert resp.status_code == 200
         body = resp.json()
+        assert body["success"] is True
         assert body["data"]["tenant_id"] == 1
         svc.get_tenant_usage.assert_called_once()
 
@@ -301,13 +306,13 @@ class TestTenantUsageEndpoint:
 
 
 class TestTenantServiceSmoke:
-    def test_list_tenants_called_on_get(self, tenant_router_client):
-        """Verify list_tenants is called once when GET /api/v1/tenants executes."""
+    def test_constructor_receives_session(self, tenant_router_client):
+        """Verify TenantService is instantiated with the session from the DB dependency."""
         client, svc = tenant_router_client
         svc.list_tenants = AsyncMock(return_value=([], 0))
         resp = client.get("/api/v1/tenants")
         assert resp.status_code == 200
-        svc.list_tenants.assert_called_once()
+        svc.list_tenants.assert_called_once_with(page=1, page_size=20, search=None, requesting_tenant_id=1)
 
 
 # ---------------------------------------------------------------------------

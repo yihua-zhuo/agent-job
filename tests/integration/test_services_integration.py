@@ -7,6 +7,7 @@ Run against a real PostgreSQL database (Supabase via DATABASE_URL env var):
 Requires DATABASE_URL (or TEST_DATABASE_URL) pointing at a live Postgres instance.
 Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -97,18 +98,23 @@ class TestWorkflowIntegration:
         )
 
         match = await svc.evaluate_conditions(
-            created.id, {"amount": 50000, "stage": "qualified"}, tenant_id=tenant_id,
+            created.id,
+            {"amount": 50000, "stage": "qualified"},
+            tenant_id=tenant_id,
         )
         assert match is True
 
         no_match = await svc.evaluate_conditions(
-            created.id, {"amount": 500, "stage": "new"}, tenant_id=tenant_id,
+            created.id,
+            {"amount": 500, "stage": "new"},
+            tenant_id=tenant_id,
         )
         assert no_match is False
 
     async def test_workflow_execute_not_found(self, db_schema, tenant_id, async_session):
         """execute_workflow with a non-existent id raises NotFoundException."""
         from pkg.errors.app_exceptions import NotFoundException
+
         svc = WorkflowService(async_session)
         with pytest.raises(NotFoundException):
             await svc.execute_workflow(
@@ -386,12 +392,10 @@ class TestActivityIntegration:
         cid = await self._seed_customer(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
         await svc.create_activity(
-            customer_id=cid, activity_type="call",
-            content=f"Call {suffix}", created_by=uid, tenant_id=tenant_id
+            customer_id=cid, activity_type="call", content=f"Call {suffix}", created_by=uid, tenant_id=tenant_id
         )
         await svc.create_activity(
-            customer_id=cid, activity_type="email",
-            content=f"Email {suffix}", created_by=uid, tenant_id=tenant_id
+            customer_id=cid, activity_type="email", content=f"Email {suffix}", created_by=uid, tenant_id=tenant_id
         )
 
         items, total = await svc.list_activities(tenant_id=tenant_id)
@@ -404,12 +408,18 @@ class TestActivityIntegration:
         uid = await self._seed_user(tenant_id, async_session)
         cid = await self._seed_customer(tenant_id, async_session)
         await svc.create_activity(
-            customer_id=cid, activity_type="call", content="Call 1",
-            created_by=uid, tenant_id=tenant_id,
+            customer_id=cid,
+            activity_type="call",
+            content="Call 1",
+            created_by=uid,
+            tenant_id=tenant_id,
         )
         await svc.create_activity(
-            customer_id=cid, activity_type="call", content="Call 2",
-            created_by=uid, tenant_id=tenant_id,
+            customer_id=cid,
+            activity_type="call",
+            content="Call 2",
+            created_by=uid,
+            tenant_id=tenant_id,
         )
 
         result = await svc.get_customer_activities(customer_id=cid, tenant_id=tenant_id)
@@ -489,8 +499,12 @@ class TestNotificationIntegration:
     async def test_unread_count(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
-        await svc.send_notification(user_id=uid, notification_type="in_app", title="N1", content="m", tenant_id=tenant_id)
-        await svc.send_notification(user_id=uid, notification_type="in_app", title="N2", content="m", tenant_id=tenant_id)
+        await svc.send_notification(
+            user_id=uid, notification_type="in_app", title="N1", content="m", tenant_id=tenant_id
+        )
+        await svc.send_notification(
+            user_id=uid, notification_type="in_app", title="N2", content="m", tenant_id=tenant_id
+        )
 
         count = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert count == 2
@@ -514,9 +528,7 @@ class TestNotificationIntegration:
 
         from db.models.reminder import ReminderModel
 
-        result_check = await async_session.execute(
-            select(ReminderModel).where(ReminderModel.id == result.id)
-        )
+        result_check = await async_session.execute(select(ReminderModel).where(ReminderModel.id == result.id))
         assert result_check.scalar_one_or_none() is None
 
     async def test_notification_cross_tenant_isolation(
@@ -595,14 +607,18 @@ class TestTenantIntegration:
     async def test_list_tenants(self, db_schema, async_session):
         svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
-        created_a = await svc.create_tenant(name=f"List Tenant A {suffix}", plan="free", admin_email=f"a_{suffix}@x.com")
+        created_a = await svc.create_tenant(
+            name=f"List Tenant A {suffix}", plan="free", admin_email=f"a_{suffix}@x.com"
+        )
         await svc.create_tenant(name=f"List Tenant B {suffix}", plan="pro", admin_email=f"b_{suffix}@x.com")
 
         # A tenant can only see itself via list_tenants (Rule126 enforcement).
         items, total = await svc.list_tenants(requesting_tenant_id=created_a.id)
         names = [t.name for t in items]
         assert any(f"List Tenant A {suffix}" in n for n in names)
-        assert total >= 1
+        # Verify tenant B's record is absent (Rule 126).
+        assert all(f"List Tenant B {suffix}" not in n for n in names)
+        assert total == 1
 
     async def test_get_tenant_stats(self, db_schema, async_session):
         svc = TenantService(async_session)

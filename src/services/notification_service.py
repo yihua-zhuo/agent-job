@@ -50,12 +50,10 @@ class NotificationService:
         """Queue a notification for delivery.
 
         Creates a notification record with status='pending'. Actual delivery is
-        handled asynchronously by a background worker. Flushes and refreshes
-        the model; actual commit is owned by the router transaction boundary.
+        handled asynchronously by a background worker. Flushes the model;
+        actual commit is owned by the router transaction boundary.
         """
         priority = kwargs.get("priority", "normal")
-        if priority is None:
-            raise ValidationException("priority is required")
         if priority not in VALID_PRIORITIES:
             raise ValidationException(f"priority must be one of {sorted(VALID_PRIORITIES)}, got {priority!r}")
         if notification_type not in VALID_NOTIFICATION_CHANNELS:

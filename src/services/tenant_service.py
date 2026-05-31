@@ -158,5 +158,5 @@ class TenantService:
         return self.TenantStats(tenant, user_count)
 
     async def get_tenant_usage(self, tenant_id: int, requesting_tenant_id: int) -> TenantStats:
-        """Return tenant usage data. Delegates to get_tenant_stats for real implementation."""
+        """Alias for get_tenant_stats. Returns the same aggregate usage data."""
         return await self.get_tenant_stats(tenant_id, requesting_tenant_id)
