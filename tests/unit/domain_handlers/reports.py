@@ -17,21 +17,19 @@ def _get_tenant_id(params):
     """Extract tenant_id from bound params, handling SQLAlchemy's name mangling.
 
     SQLAlchemy appends a numeric suffix when a param name appears multiple
-    times in a query (e.g. tenant_id_1, tenant_id_2). We only strip the
-    suffix when the key contains an underscore and the suffix is purely
-    numeric — avoiding corruption of keys like created_by.
+    times in a query (e.g. tenant_id_1, tenant_id_2). We handle both the bare
+    key (tenant_id) and mangled keys (tenant_id_1, tenant_id_2, etc.).
 
     Raises _MissingTenantIdError if tenant_id is absent, so that UPDATE/DELETE
     handlers return MockResult([]) instead of silently operating on tenant_id=0.
     """
     for key, val in params.items():
+        if key == "tenant_id":
+            return val
         if "_" in key:
             prefix, suffix = key.rsplit("_", 1)
-            if suffix.isdigit():
-                if prefix == "tenant_id":
-                    return val
-        elif key == "tenant_id":
-            return val
+            if suffix.isdigit() and prefix == "tenant_id":
+                return val
     raise _MissingTenantIdError(
         f"tenant_id not found in bound params (keys: {list(params.keys())}). "
         "Ensure every SQL query includes a tenant_id bind parameter."
@@ -49,6 +47,18 @@ def _get_report_id(params):
     the same column appears multiple times in a compiled statement.
     Handles both bare `id` and `report_id` bound parameters.
 
+    The SQL text matching contract used by this handler is:
+      - "insert into reports"      → INSERT
+      - "update ... reports"      → UPDATE (sql_text.startswith("update"))
+      - "delete ... reports"      → DELETE (sql_text.startswith("delete"))
+      - "select ... count(... from reports)" → COUNT (guarded by "count(" and "from reports")
+      - "where reports.id"        → GET (guarded by "where reports.id" AND "tenant_id")
+      - "select ... from reports"  → LIST (all other SELECT from reports)
+
+    All sql_text comparisons use lowercase, so callers must pass
+    sql_text.lower() or rely on startswith() which is case-sensitive on
+    the SQL text as compiled by SQLAlchemy (always lowercase keywords).
+
     Returns _REPORT_ID_NOT_FOUND (-1) when no id param is present, so that
     UPDATE/DELETE handlers return MockResult([]) instead of silently matching
     record id=0 or None.
@@ -58,13 +68,17 @@ def _get_report_id(params):
     if "report_id" in params:
         return params["report_id"]
     for key, val in params.items():
+        # Match id_1, id_2, id_12, etc. (any numeric suffix)
         if key.startswith("id_") and isinstance(val, int):
             return val
     return _REPORT_ID_NOT_FOUND
 
 
 def _get_schedule_id(params):
-    """Extract the schedule (report_schedules.id) from params, handling SQLAlchemy's name mangling."""
+    """Extract the schedule (report_schedules.id) from params, handling SQLAlchemy's name mangling.
+
+    Matches id, schedule_id, and id_<number> (any numeric suffix).
+    """
     if "id" in params:
         return params["id"]
     for key, val in params.items():
@@ -108,6 +122,7 @@ def make_report_handler(state: MockState):
                 "created_by": params.get("created_by", 0),
                 "last_run_at": params.get("last_run_at"),
                 "created_at": params.get("created_at"),
+                "updated_at": _get_mangled(params, "updated_at"),
             }
             _reports["records"][rid] = record
             return MockResult([MockRow(record.copy())])
@@ -129,6 +144,7 @@ def make_report_handler(state: MockState):
             for k, v in params.items():
                 if k not in ("id", "tenant_id") and not k.endswith("_id"):
                     rec[k] = v
+            _reports["records"][report_id] = rec
             return MockResult([MockRow(rec.copy())])
 
         if sql_text.startswith("delete") and "reports" in sql_text:
@@ -223,6 +239,7 @@ def make_schedule_handler(state: MockState):
                 new_updated_at = _get_mangled(params, "updated_at")
                 updates["updated_at"] = new_updated_at
                 existing.update(updates)
+                _schedules["records"][existing["id"]] = existing
                 return MockResult([MockRow(existing.copy())])
 
             sched_id = _schedules["next_id"]

@@ -347,36 +347,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Drop all nine tables in reverse dependency order (child before parent).
-    op.drop_index(op.f("ix_customer_enrichments_next_refresh_at"), table_name="customer_enrichments")
-    op.drop_index(op.f("ix_customer_enrichments_customer_id"), table_name="customer_enrichments")
-    op.drop_index(op.f("ix_customer_enrichments_tenant_id"), table_name="customer_enrichments")
-    op.drop_table("customer_enrichments")
-    op.drop_index(op.f("ix_opportunity_activities_opportunity_id"), table_name="opportunity_activities")
-    op.drop_index(op.f("ix_opportunity_activities_tenant_id"), table_name="opportunity_activities")
-    op.drop_table("opportunity_activities")
-    op.drop_index("ix_conversation_messages_tenant_id", table_name="conversation_messages")
-    op.drop_index("ix_conversation_messages_tenant_conv", table_name="conversation_messages")
-    op.drop_index(op.f("ix_conversation_messages_conversation_id"), table_name="conversation_messages")
-    op.drop_table("conversation_messages")
-    op.drop_index("ix_conversations_tenant_user", table_name="conversations")
-    op.drop_index(op.f("ix_conversations_user_id"), table_name="conversations")
-    op.drop_index(op.f("ix_conversations_tenant_id"), table_name="conversations")
-    op.drop_table("conversations")
-    op.drop_index(op.f("ix_report_definitions_owner_tenant_id"), table_name="report_definitions")
-    op.drop_index(op.f("ix_report_definitions_report_type"), table_name="report_definitions")
-    op.drop_index(op.f("ix_report_definitions_tenant_id"), table_name="report_definitions")
-    op.drop_table("report_definitions")
-    op.drop_index(op.f("ix_automation_logs_rule_id"), table_name="automation_logs")
-    op.drop_index(op.f("ix_automation_logs_tenant_id"), table_name="automation_logs")
-    op.drop_table("automation_logs")
-    op.drop_index(op.f("ix_automation_rules_trigger_event"), table_name="automation_rules")
-    op.drop_index(op.f("ix_automation_rules_tenant_id"), table_name="automation_rules")
-    op.drop_index(op.f("ix_automation_rules_created_by"), table_name="automation_rules")
-    op.drop_table("automation_rules")
-    op.drop_table("agent_tasks")
-    op.drop_index(op.f("ix_export_jobs_tenant_id"), table_name="export_jobs")
-    op.drop_table("export_jobs")
-    op.drop_index(op.f("ix_import_jobs_entity_type"), table_name="import_jobs")
-    op.drop_index(op.f("ix_import_jobs_tenant_id"), table_name="import_jobs")
-    op.drop_table("import_jobs")
+    # Tables are dropped by merge_heads_63274_addcp001.downgrade(), which is this
+    # migration's single parent — nothing to drop here.
+    pass

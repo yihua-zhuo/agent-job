@@ -3,10 +3,10 @@
 import pytest
 from sqlalchemy import inspect as sqla_inspect
 
-from pkg.errors.app_exceptions import NotFoundException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.report_service import ReportService
 from tests.unit.conftest import MockState, make_mock_session
-from tests.unit.domain_handlers.reports import make_report_handler
+from tests.unit.domain_handlers.reports import make_report_handler, make_schedule_handler
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -42,8 +42,6 @@ def mock_db_session():
 @pytest.fixture
 def mock_db_session_for_update():
     """Mock session for update tests with a pre-seeded report (id=4)."""
-    # Note: schedule_report integration tests require adding make_schedule_handler
-    # to the session's handler list alongside make_report_handler.
     state = MockState()
     state.opaque["reports"] = {"records": {}, "next_id": 21}
     state.opaque["reports"]["records"][4] = {
@@ -283,3 +281,146 @@ class TestDeleteReport:
         with pytest.raises(NotFoundException, match="Report"):
             await svc.delete_report(report_id=20, tenant_id=99)
         mock_db_session.delete.assert_not_called()
+
+
+# ---------------------------------------------------------------------------
+# TestScheduleReport
+# ---------------------------------------------------------------------------
+
+@pytest.fixture
+def mock_db_session_for_schedule():
+    """Mock session for schedule_report tests with both report and schedule handlers."""
+    state = MockState()
+    state.opaque["reports"] = {"records": {}, "next_id": 1}
+    state.opaque["report_schedules"] = {"records": {}, "next_id": 1}
+    state.opaque["reports"]["records"][7] = {
+        "id": 7, "tenant_id": 1, "name": "Report to Schedule",
+        "type": "custom", "config": {}, "date_range": {}, "created_by": 0,
+        "last_run_at": None, "created_at": None,
+    }
+    return make_mock_session(
+        [make_report_handler(state), make_schedule_handler(state)], state=state
+    )
+
+
+@pytest.mark.asyncio
+class TestScheduleReport:
+    async def test_upsert_creates_schedule(self, mock_db_session_for_schedule):
+        """schedule_report inserts a new schedule when none exists for (report_id, tenant_id)."""
+        svc = ReportService(mock_db_session_for_schedule)
+        result = await svc.schedule_report(
+            report_id=7,
+            schedule={"frequency": "daily"},
+            tenant_id=1,
+        )
+        mock_db_session_for_schedule.add.assert_called()
+        mock_db_session_for_schedule.flush.assert_called()
+        call_args = mock_db_session_for_schedule.add.call_args[0][0]
+        assert call_args.report_id == 7
+        assert call_args.tenant_id == 1
+        assert call_args.schedule == {"frequency": "daily"}
+        assert call_args.active is True
+
+    async def test_upsert_updates_existing_schedule(self, mock_db_session_for_schedule):
+        """schedule_report updates the schedule when one already exists for (report_id, tenant_id)."""
+        svc = ReportService(mock_db_session_for_schedule)
+        # First call — creates
+        await svc.schedule_report(report_id=7, schedule={"frequency": "daily"}, tenant_id=1)
+        # Reset mock state from the first call
+        mock_db_session_for_schedule.add.reset_mock()
+        mock_db_session_for_schedule.flush.reset_mock()
+        # Second call — updates the existing record
+        result = await svc.schedule_report(
+            report_id=7,
+            schedule={"frequency": "weekly"},
+            tenant_id=1,
+        )
+        # A new ReportScheduleModel should NOT be added on the update path
+        added_schedules = [
+            c for c in mock_db_session_for_schedule.add.call_args_list
+            if c[0][0].__class__.__name__ == "ReportScheduleModel"
+        ]
+        assert len(added_schedules) == 0
+        # The schedule field was updated to the new value
+        assert result.schedule == {"frequency": "weekly"}
+
+    async def test_creates_schedule_for_nonexistent_report(self, mock_db_session_for_schedule):
+        """schedule_report inserts a schedule even if the report row doesn't exist in reports table.
+
+        The service does not validate report existence — it only upserts by (report_id, tenant_id).
+        """
+        svc = ReportService(mock_db_session_for_schedule)
+        result = await svc.schedule_report(report_id=9999, schedule={"frequency": "monthly"}, tenant_id=1)
+        mock_db_session_for_schedule.add.assert_called()
+        call_args = mock_db_session_for_schedule.add.call_args[0][0]
+        assert call_args.report_id == 9999
+        assert call_args.tenant_id == 1
+
+
+# ---------------------------------------------------------------------------
+# TestReportGenerators (stubs)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestReportGenerators:
+    async def test_generate_pdf_returns_valid_structure(self):
+        """generate_pdf_report returns the expected stub response shape."""
+        svc = ReportService(None)
+        result = await svc.generate_pdf_report(title="Test PDF", report_type="custom")
+        assert result["status"] == "generated"
+        assert result["format"] == "pdf"
+        assert result["filename"].endswith(".pdf")
+        assert "_is_stub" in result
+
+    async def test_generate_excel_returns_valid_structure(self):
+        """generate_excel_report returns the expected stub response shape."""
+        svc = ReportService(None)
+        result = await svc.generate_excel_report(title="Test Excel", report_type="custom")
+        assert result["status"] == "generated"
+        assert result["format"] == "excel"
+        assert result["filename"].endswith(".xlsx")
+
+
+# ---------------------------------------------------------------------------
+# TestExportToCsv
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+class TestExportToCsv:
+    async def test_safe_filename_rejects_absolute_path(self):
+        """_safe_export_filename rejects absolute paths to prevent path traversal."""
+        svc = ReportService(None)
+        result = await svc.export_to_csv(
+            data=[{"a": 1}],
+            filename="/etc/passwd",
+        )
+        assert result["filename"].startswith("export-")
+        assert result["filename"].endswith(".csv")
+        assert result["filename"] != "/etc/passwd"
+
+    async def test_safe_filename_rejects_parent_reference(self):
+        """_safe_export_filename rejects '..' to prevent directory traversal."""
+        svc = ReportService(None)
+        result = await svc.export_to_csv(
+            data=[{"a": 1}],
+            filename="../../../etc/passwd",
+        )
+        assert result["filename"].startswith("export-")
+        assert result["filename"].endswith(".csv")
+
+    async def test_safe_filename_accepts_plain_name(self):
+        """_safe_export_filename accepts a plain filename without modification."""
+        svc = ReportService(None)
+        result = await svc.export_to_csv(
+            data=[{"a": 1}],
+            filename="my-report.csv",
+        )
+        assert result["filename"] == "my-report.csv"
+
+    async def test_raises_when_no_data(self):
+        """export_to_csv raises ValidationException when data is empty."""
+        svc = ReportService(None)
+        with pytest.raises(ValidationException, match="No data"):
+            await svc.export_to_csv(data=[])

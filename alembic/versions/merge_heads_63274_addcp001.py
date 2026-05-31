@@ -18,6 +18,16 @@ e646948c549a (automation_logs / automation_rules) for DBs that arrived via
 a path that skipped that migration, and adding missing tenant_id indexes on
 auth tables created by db67d696b6ab for DBs that bypassed that head.
 
+**Tables NOT given FKs here and why:**
+All other tenant tables (import_jobs, export_jobs, agent_tasks, conversations,
+conversation_messages, report_definitions, customer_enrichments,
+opportunity_activities) are created with tenant FKs directly inside 52b19ee00eaf,
+which is in the direct ancestry of this migration. Any DB on the linear
+upgrade path (52b19ee00eaf → this migration) already has those FKs. The DO
+blocks below target only automation_logs / automation_rules, which are created
+by e646948c549a — a branch that may be absent from the ancestry of a DB that
+arrived via 185055a0d4f0's path.
+
 Upgrade path notes:
 - **Linear upgrade (52b19ee00eaf → 4001ca3d5d6f → ...):** automation_logs and
   automation_rules FKs are already added by 52b19ee00eaf.  This migration's

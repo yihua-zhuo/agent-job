@@ -45,9 +45,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Verified manually: `alembic downgrade -1 && alembic upgrade head` against a
-    # disposable DB correctly drops recycle_history, recycle_count, assigned_at in
-    # that order (child columns before parent). Do not reorder.
+    # Verified manually against alembic_dev: `alembic downgrade -1 && alembic upgrade head`
+    # correctly drops recycle_history, recycle_count, assigned_at in that order
+    # (child columns before parent). Do not reorder.
     op.drop_column('customers', 'recycle_history')
     op.drop_column('customers', 'recycle_count')
     op.drop_column('customers', 'assigned_at')
