@@ -8,6 +8,7 @@ from db.connection import get_db
 from db.models.customer_enrichment import CustomerEnrichmentModel
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.enrichment import EnrichmentLookupRequest, EnrichmentRefreshRequest
+from pkg.errors.app_exceptions import ValidationException
 from services.enrichment_service import EnrichmentService
 
 enrichment_router = APIRouter(prefix="/api/v1/enrichment", tags=["enrichment"])
@@ -29,11 +30,17 @@ async def lookup(
     the raw response to ``customer_enrichments``.
     """
     svc = EnrichmentService(session)
-    result = await svc.lookup(
+    result, raw_data = await svc.lookup(
         domain=request.domain,
         company_name=request.company_name,
         tenant_id=ctx.tenant_id,
         customer_id=request.customer_id,
+    )
+    # Router owns persistence: upsert the enrichment record
+    await svc._upsert_enrichment(
+        tenant_id=ctx.tenant_id,
+        customer_id=request.customer_id,
+        raw_data=raw_data,
     )
     return _success(result)
 
@@ -71,10 +78,21 @@ async def refresh_enrichment(
             domain_param = raw.get("domain")
             company_name_param = raw.get("name")
 
-    result = await svc.refresh(
+    if domain_param is None and company_name_param is None:
+        raise ValidationException(
+            "domain or company_name is required when customer has no prior enrichment record"
+        )
+
+    result, raw_data = await svc.refresh(
         customer_id=customer_id,
         tenant_id=ctx.tenant_id,
         domain=domain_param,
         company_name=company_name_param,
+    )
+    # Router owns persistence: upsert the enrichment record
+    await svc._upsert_enrichment(
+        tenant_id=ctx.tenant_id,
+        customer_id=customer_id,
+        raw_data=raw_data,
     )
     return _success(result)

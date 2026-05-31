@@ -27,12 +27,11 @@ class EnrichmentService:
         *,
         tenant_id: int | None = None,
         customer_id: int | None = None,
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Look up company enrichment data from a third-party provider.
 
         Requires exactly one of *domain* or *company_name*.
-        Persists the raw provider payload to ``customer_enrichments`` and returns
-        a normalised dict of enriched fields.
+        Returns a (normalised, raw) tuple; caller owns persistence.
         """
         # Normalise: treat blank strings as absent
         if domain is not None:
@@ -60,8 +59,22 @@ class EnrichmentService:
 
     async def _lookup_clearbit(
         self, domain: str | None, company_name: str | None, tenant_id: int, customer_id: int
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name)
+        normalised = self._normalise_clearbit(raw_data)
+        return normalised, raw_data
+
+    async def _call_clearbit_api(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        domain: str | None,
+        company_name: str | None,
     ) -> dict[str, Any]:
-        # Verify customer belongs to the requesting tenant
+        """Validate the customer, check API key, and call Clearbit.
+
+        Returns the raw provider payload. Caller owns persistence.
+        """
         result = await self.session.execute(
             select(CustomerModel).where(
                 and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
@@ -78,24 +91,10 @@ class EnrichmentService:
         params: dict[str, str] = {}
         if domain:
             params["domain"] = domain.strip()
-        else:
-            params["name"] = company_name.strip()  # type: ignore[arg-type]
+        elif company_name:
+            params["name"] = company_name.strip()
 
-        raw_data = await self._call_clearbit(params, api_key)
-        normalised = self._normalise_clearbit(raw_data)
-
-        # Persist raw payload
-        enrichment = CustomerEnrichmentModel(
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-            provider="clearbit",
-            raw_data_json=raw_data,
-            enriched_at=datetime.now(UTC),
-        )
-        self.session.add(enrichment)
-        await self.session.flush()
-
-        return normalised
+        return await self._call_clearbit(params, api_key)
 
     async def _call_clearbit(
         self,
@@ -130,9 +129,11 @@ class EnrichmentService:
         tenant_id: int,
         customer_id: int,
         raw_data: dict[str, Any],
-        now: datetime,
+        now: datetime | None = None,
     ) -> None:
         """Upsert a CustomerEnrichmentModel record (insert or replace)."""
+        if now is None:
+            now = datetime.now(UTC)
         stmt = pg_insert(CustomerEnrichmentModel).values(
             tenant_id=tenant_id,
             customer_id=customer_id,
@@ -150,7 +151,6 @@ class EnrichmentService:
             },
         )
         await self.session.execute(stmt)
-        await self.session.flush()
 
     def _normalise_clearbit(self, data: dict[str, Any]) -> dict[str, Any]:
         """Flatten a Clearbit company payload into a portable dict.
@@ -185,33 +185,20 @@ class EnrichmentService:
         tenant_id: int,
         domain: str | None = None,
         company_name: str | None = None,
-    ) -> dict[str, Any]:
-        """Re-call the enrichment provider for an existing customer and upsert the record.
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        """Re-call the enrichment provider for an existing customer.
 
-        Verifies customer ownership, calls the provider, upserts the
-        CustomerEnrichmentModel record, and returns the normalised dict.
+        Validates inputs, calls Clearbit, and returns a (normalised, raw) tuple;
+        caller owns persistence.
         """
-        result = await self.session.execute(
-            select(CustomerModel).where(
-                and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
-            )
-        )
-        customer = result.scalar_one_or_none()
-        if customer is None:
-            raise NotFoundException("Customer")
-
-        api_key: str = settings.clearbit_api_key
-        if not api_key:
-            raise ValidationException("Clearbit API key is not configured")
-
-        params: dict[str, str] = {}
+        # Normalise and validate inputs
         if domain:
-            params["domain"] = domain.strip()
-        elif company_name:
-            params["name"] = company_name.strip()
+            domain = domain.strip() or None
+        if company_name:
+            company_name = company_name.strip() or None
+        if not domain and not company_name:
+            raise ValidationException("At least one of domain or company_name is required")
 
-        raw_data = await self._call_clearbit(params, api_key)
-        now = datetime.now(UTC)
-        await self._upsert_enrichment(tenant_id, customer_id, raw_data, now)
-
-        return self._normalise_clearbit(raw_data)
+        raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name)
+        normalised = self._normalise_clearbit(raw_data)
+        return normalised, raw_data

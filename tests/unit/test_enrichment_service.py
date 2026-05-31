@@ -115,23 +115,20 @@ class TestLookupDomainSuccess:
         with patch("services.enrichment_service.settings") as mock_settings, \
              patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
             mock_settings.clearbit_api_key = "test-key"
-            result = await service.lookup(domain="stripe.com", customer_id=1, tenant_id=42)
+            normalised, raw = await service.lookup(domain="stripe.com", customer_id=1, tenant_id=42)
 
-        assert result["name"] == "Stripe"
-        assert result["domain"] == "stripe.com"
-        assert result["legal_name"] == "Stripe, Inc."
-        assert result["geo_city"] == "San Francisco"
-        assert result["metrics_employees"] == 8000
+        assert normalised["name"] == "Stripe"
+        assert normalised["domain"] == "stripe.com"
+        assert normalised["legal_name"] == "Stripe, Inc."
+        assert normalised["geo_city"] == "San Francisco"
+        assert normalised["metrics_employees"] == 8000
 
         mock_get.assert_called_once()
         call_kwargs = mock_get.call_args.kwargs
         assert call_kwargs["params"]["domain"] == "stripe.com"
 
-        mock_db_session.add.assert_called_once()
-        added = mock_db_session.add.call_args[0][0]
-        assert added.provider == "clearbit"
-        assert added.raw_data_json == clearbit_payload
-        assert added.tenant_id == 42
+        # Router (not service) owns persistence — verify raw_data is returned
+        assert raw == clearbit_payload
 
     async def test_inserts_enrichment_row(self, service, mock_db_session):
         mock_resp = MagicMock()
@@ -154,15 +151,13 @@ class TestLookupDomainSuccess:
         with patch("services.enrichment_service.settings") as mock_settings, \
              patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
             mock_settings.clearbit_api_key = "test-key"
-            await service.lookup(domain="acme.com", customer_id=1, tenant_id=1)
+            normalised, raw = await service.lookup(domain="acme.com", customer_id=1, tenant_id=1)
 
-        mock_db_session.add.assert_called_once()
-        added = mock_db_session.add.call_args[0][0]
-        assert added.customer_id == 1
-        assert added.tenant_id == 1
-        assert added.provider == "clearbit"
-        assert added.raw_data_json == {"name": "Acme", "domain": "acme.com"}
-        mock_db_session.flush.assert_awaited_once()
+        # Service returns normalised + raw data; router owns persistence
+        assert normalised["name"] == "Acme"
+        assert raw == {"name": "Acme", "domain": "acme.com"}
+        mock_db_session.add.assert_not_called()
+        mock_db_session.flush.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
@@ -191,11 +186,11 @@ class TestLookupCompanyNameSuccess:
         with patch("services.enrichment_service.settings") as mock_settings, \
              patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
             mock_settings.clearbit_api_key = "test-key"
-            result = await service.lookup(company_name="Acme Corp", customer_id=1, tenant_id=1)
+            normalised, raw = await service.lookup(company_name="Acme Corp", customer_id=1, tenant_id=1)
 
         call_kwargs = mock_client.get.call_args
         assert call_kwargs.kwargs["params"]["name"] == "Acme Corp"
-        assert result["name"] == "Acme Corp"
+        assert normalised["name"] == "Acme Corp"
 
 
 # ---------------------------------------------------------------------------

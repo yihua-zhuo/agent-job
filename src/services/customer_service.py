@@ -450,4 +450,3 @@ class CustomerService:
             },
         )
         await self.session.execute(stmt)
-        await self.session.flush()

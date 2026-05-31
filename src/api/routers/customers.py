@@ -222,7 +222,63 @@ async def search_customers(
 ):
     service = CustomerService(session)
     items = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
-    return {"success": True, "data": {"keyword": keyword, "items": items}}
+
+    # Batch-fetch enrichment status for each result (same pattern as list_customers)
+    customer_ids = [(c.id if hasattr(c, "id") else c["id"]) for c in items if (hasattr(c, "id") or "id" in c)]
+    customer_ids = [cid for cid in customer_ids if cid is not None]
+    enrichment_map: dict[int, CustomerEnrichmentModel] = {}
+    if customer_ids:
+        latest_subq = (
+            select(
+                CustomerEnrichmentModel.customer_id,
+                func.max(CustomerEnrichmentModel.enriched_at).label("max_enriched_at"),
+            )
+            .where(
+                and_(
+                    CustomerEnrichmentModel.customer_id.in_(customer_ids),
+                    CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
+                )
+            )
+            .group_by(CustomerEnrichmentModel.customer_id)
+            .subquery()
+        )
+        enrich_result = await session.execute(
+            select(CustomerEnrichmentModel)
+            .where(
+                and_(
+                    CustomerEnrichmentModel.customer_id.in_(customer_ids),
+                    CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
+                    tuple_(
+                        CustomerEnrichmentModel.customer_id,
+                        CustomerEnrichmentModel.enriched_at,
+                    ).in_(
+                        select(latest_subq.c.customer_id, latest_subq.c.max_enriched_at)
+                    ),
+                )
+            )
+            .limit(len(customer_ids))
+        )
+        for row in enrich_result.all():
+            enrichment_map[row.customer_id] = row
+
+    now = datetime.now(UTC)
+    enriched_items = []
+    for customer in items:
+        d = customer.to_dict() if hasattr(customer, "to_dict") else customer
+        cust_id = getattr(customer, "id", customer.get("id") if isinstance(customer, dict) else None)
+        enrich = enrichment_map.get(cust_id)
+        if enrich is None:
+            d["enrichment_status"] = "none"
+            d["last_enriched_at"] = None
+        else:
+            d["last_enriched_at"] = enrich.enriched_at.isoformat() if enrich.enriched_at else None
+            if enrich.next_refresh_at is not None and enrich.next_refresh_at <= now:
+                d["enrichment_status"] = "stale"
+            else:
+                d["enrichment_status"] = "enriched"
+        enriched_items.append(d)
+
+    return {"success": True, "data": {"keyword": keyword, "items": enriched_items}}
 
 
 @customers_router.get("/{customer_id}")

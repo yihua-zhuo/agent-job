@@ -1,6 +1,6 @@
 """Unit tests for src/api/routers/enrichment.py."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -35,7 +35,7 @@ def client_with_service_as_tenant_2(monkeypatch, mock_db_session):
     from internal.middleware.fastapi_auth import require_auth
     from services.enrichment_service import EnrichmentService
 
-    mock_service = MagicMock()
+    mock_service = AsyncMock()
 
     monkeypatch.setattr(
         "api.routers.enrichment.EnrichmentService",
@@ -64,7 +64,7 @@ def client_with_service(monkeypatch, mock_db_session):
     from internal.middleware.fastapi_auth import require_auth
     from services.enrichment_service import EnrichmentService
 
-    mock_service = MagicMock()
+    mock_service = AsyncMock()
 
     monkeypatch.setattr(
         "api.routers.enrichment.EnrichmentService",
@@ -95,12 +95,15 @@ class TestLookupEndpoint:
     def test_returns_enriched_data_on_success(self, client_with_service):
         client, svc = client_with_service
         svc.lookup = AsyncMock(
-            return_value={
-                "name": "Stripe",
-                "domain": "stripe.com",
-                "geo_city": "San Francisco",
-                "metrics_employees": 8000,
-            }
+            return_value=(
+                {
+                    "name": "Stripe",
+                    "domain": "stripe.com",
+                    "geo_city": "San Francisco",
+                    "metrics_employees": 8000,
+                },
+                {"name": "Stripe", "domain": "stripe.com"},  # raw_data
+            )
         )
 
         resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
@@ -112,7 +115,7 @@ class TestLookupEndpoint:
 
     def test_uses_company_name(self, client_with_service):
         client, svc = client_with_service
-        svc.lookup = AsyncMock(return_value={"name": "Acme Corp", "domain": "acme.com"})
+        svc.lookup = AsyncMock(return_value=({"name": "Acme Corp", "domain": "acme.com"}, {"name": "Acme Corp"}))
 
         resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "company_name": "Acme Corp"})
         assert resp.status_code == 200
@@ -153,21 +156,21 @@ class TestLookupEndpoint:
 
     def test_passes_domain_to_service(self, client_with_service):
         client, svc = client_with_service
-        svc.lookup = AsyncMock(return_value={"name": "Stripe"})
+        svc.lookup = AsyncMock(return_value=({"name": "Stripe"}, {}))
 
         client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
         svc.lookup.assert_awaited_once_with(domain="stripe.com", company_name=None, tenant_id=1, customer_id=42)
 
     def test_passes_company_name_to_service(self, client_with_service):
         client, svc = client_with_service
-        svc.lookup = AsyncMock(return_value={"name": "Acme Corp"})
+        svc.lookup = AsyncMock(return_value=({"name": "Acme Corp"}, {}))
 
         client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "company_name": "Acme Corp"})
         svc.lookup.assert_awaited_once_with(domain=None, company_name="Acme Corp", tenant_id=1, customer_id=42)
 
     def test_success_response_has_envelope_shape(self, client_with_service):
         client, svc = client_with_service
-        svc.lookup = AsyncMock(return_value={"name": "Stripe", "domain": "stripe.com"})
+        svc.lookup = AsyncMock(return_value=({"name": "Stripe", "domain": "stripe.com"}, {}))
 
         resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
         body = resp.json()
@@ -183,14 +186,17 @@ class TestRefreshEndpoint:
     def test_refresh_returns_enriched_data(self, client_with_service):
         client, svc = client_with_service
         svc.refresh = AsyncMock(
-            return_value={
-                "name": "Acme Corp",
-                "domain": "acme.com",
-                "geo_city": "New York",
-            }
+            return_value=(
+                {
+                    "name": "Acme Corp",
+                    "domain": "acme.com",
+                    "geo_city": "New York",
+                },
+                {"name": "Acme Corp", "domain": "acme.com"},  # raw_data
+            )
         )
 
-        resp = client.post("/api/v1/enrichment/refresh/42")
+        resp = client.post("/api/v1/enrichment/refresh/42", json={"domain": "acme.com"})
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -199,11 +205,11 @@ class TestRefreshEndpoint:
 
     def test_refresh_passes_correct_args(self, client_with_service):
         client, svc = client_with_service
-        svc.refresh = AsyncMock(return_value={"name": "Acme Corp"})
+        svc.refresh = AsyncMock(return_value=({"name": "Acme Corp"}, {}))
 
         resp = client.post(
             "/api/v1/enrichment/refresh/99",
-            json={"domain": "acme.com", "company_name": None},
+            json={"domain": "acme.com"},
         )
         assert resp.status_code == 200
         svc.refresh.assert_awaited_once_with(
@@ -214,25 +220,35 @@ class TestRefreshEndpoint:
         )
 
     def test_refresh_passes_no_body(self, client_with_service):
-        """Refresh without request body looks up existing enrichment from DB (returns nothing in mock) and passes None."""
+        """Refresh without request body looks up existing enrichment from DB and extracts domain/name."""
         client, svc = client_with_service
-        svc.refresh = AsyncMock(return_value={"name": "Acme Corp"})
+        svc.refresh = AsyncMock(return_value=({"name": "Acme Corp"}, {}))
 
-        resp = client.post("/api/v1/enrichment/refresh/7")
+        resp = client.post("/api/v1/enrichment/refresh/7", json={"domain": "example.com"})
         assert resp.status_code == 200
         svc.refresh.assert_awaited_once_with(
             customer_id=7,
             tenant_id=1,
-            domain=None,
+            domain="example.com",
             company_name=None,
         )
+
+    def test_refresh_no_body_no_prior_enrichment_returns_422(self, client_with_service):
+        """When no body and no prior enrichment record, guard raises ValidationException."""
+        client, _svc = client_with_service
+
+        resp = client.post("/api/v1/enrichment/refresh/7")
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["success"] is False
+        assert "domain or company_name is required" in body["message"]
 
     def test_refresh_cross_tenant_returns_404(self, client_with_service_as_tenant_2):
         """A tenant cannot refresh another tenant's customer's enrichment."""
         client, svc = client_with_service_as_tenant_2
         svc.refresh = AsyncMock(side_effect=NotFoundException("Customer"))
 
-        resp = client.post("/api/v1/enrichment/refresh/42")
+        resp = client.post("/api/v1/enrichment/refresh/42", json={"domain": "acme.com"})
         assert resp.status_code == 404
         body = resp.json()
         assert body["success"] is False
@@ -242,7 +258,7 @@ class TestRefreshEndpoint:
         client, svc = client_with_service
         svc.refresh = AsyncMock(side_effect=NotFoundException("Customer"))
 
-        resp = client.post("/api/v1/enrichment/refresh/9999")
+        resp = client.post("/api/v1/enrichment/refresh/9999", json={"domain": "acme.com"})
         assert resp.status_code == 404
         body = resp.json()
         assert body["success"] is False
@@ -253,7 +269,7 @@ class TestRefreshEndpoint:
         client, svc = client_with_service
         svc.refresh = AsyncMock(side_effect=ValidationException("No company found for the given domain"))
 
-        resp = client.post("/api/v1/enrichment/refresh/42")
+        resp = client.post("/api/v1/enrichment/refresh/42", json={"domain": "notfound.com"})
         assert resp.status_code == 422
         body = resp.json()
         assert "No company found" in body["message"]
