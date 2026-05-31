@@ -19,6 +19,9 @@ already exist in that branch's timeline.
 
 from collections.abc import Sequence
 
+import sqlalchemy as sa
+from alembic import op
+
 # revision identifiers, used by Alembic.
 revision: str = "merge_nt_662"
 down_revision: str | Sequence[str] | None = ("52b19ee00eaf", "5d575a161b5d")
@@ -31,4 +34,14 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    pass  # Alembic downgrade rolls back both sub-revisions via their own downgrade() functions.
+    op.drop_table("notification_templates", if_exists=True)
+    op.drop_index(
+        op.f("ix_notification_templates_tenant_id"),
+        table_name="notification_templates",
+        if_exists=True,
+    )
+    op.execute(
+        sa.text(
+            "ALTER TABLE notification_templates DROP CONSTRAINT IF EXISTS notification_templates_tenant_id_fkey"
+        )
+    )
