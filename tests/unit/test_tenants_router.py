@@ -271,7 +271,7 @@ class TestTenantStatsEndpoint:
         assert body["success"] is True
         assert body["data"]["tenant_id"] == 1
         assert body["data"]["user_count"] == 10
-        svc.get_tenant_stats.assert_called_once()
+        svc.get_tenant_stats.assert_called_once_with(tenant_id=1, requesting_tenant_id=1)
 
 
 # ---------------------------------------------------------------------------
@@ -297,7 +297,7 @@ class TestTenantUsageEndpoint:
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["tenant_id"] == 1
-        svc.get_tenant_usage.assert_called_once()
+        svc.get_tenant_usage.assert_called_once_with(tenant_id=1, requesting_tenant_id=1)
 
 
 # ---------------------------------------------------------------------------
@@ -356,22 +356,22 @@ class TestTenantCrossTenantIsolation:
         svc.get_tenant_usage.assert_called_once()
 
     def test_update_tenant_rejects_cross_tenant_id(self, tenant_router_client):
-        """Cross-tenant update is forbidden — service raises ForbiddenException (403)."""
+        """Cross-tenant update is forbidden — router raises ForbiddenException (403) before reaching the service."""
         from pkg.errors.app_exceptions import ForbiddenException
         client, svc = tenant_router_client
         svc.update_tenant = AsyncMock(side_effect=ForbiddenException("Access denied"))
         resp = client.put("/api/v1/tenants/9999", json={"name": "Stolen"})
         assert resp.status_code == 403
-        svc.update_tenant.assert_called_once()
+        svc.update_tenant.assert_not_called()
 
     def test_update_tenant_forbidden_on_cross_tenant(self, tenant_router_client):
-        """Cross-tenant update is forbidden — service raises ForbiddenException (403)."""
+        """Cross-tenant update is forbidden — router raises ForbiddenException (403) before reaching the service."""
         from pkg.errors.app_exceptions import ForbiddenException
         client, svc = tenant_router_client
         svc.update_tenant = AsyncMock(side_effect=ForbiddenException("Access denied"))
         resp = client.put("/api/v1/tenants/2", json={"name": "Hijack"})
         assert resp.status_code == 403
-        svc.update_tenant.assert_called_once()
+        svc.update_tenant.assert_not_called()
 
     @pytest.mark.xfail(reason="Rule 126 gap: cross-tenant requesting_tenant_id check not implemented for create_tenant")
     def test_create_tenant_uses_caller_tenant_id(self, tenant_router_client):

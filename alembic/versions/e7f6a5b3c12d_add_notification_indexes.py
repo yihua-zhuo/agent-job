@@ -83,8 +83,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Phase 1 (reversed): drop new columns before dropping indexes that reference them.
-    # Must run before dropping indexes so the columns still exist at constraint-check time.
+    # Phase 4 (reversed): drop indexes first — they reference columns we're about to drop.
+    op.drop_index("ix_notifications_in_app_unread", table_name="notifications")
+    op.drop_index("ix_notifications_tenant_user_status", table_name="notifications")
+
+    # Phase 1 (reversed): drop new columns after indexes are gone.
     op.drop_column("notifications", "read_at")
     op.drop_column("notifications", "delivered_at")
     op.drop_column("notifications", "priority")
@@ -92,10 +95,6 @@ def downgrade() -> None:
     op.drop_column("notifications", "params_")
     op.drop_column("notifications", "template")
     op.drop_column("notifications", "channel")
-
-    # Phase 4 (reversed): drop indexes created in upgrade before restoring old columns.
-    op.drop_index("ix_notifications_in_app_unread", table_name="notifications")
-    op.drop_index("ix_notifications_tenant_user_status", table_name="notifications")
 
     # Phase 4 (reversed): add back old columns — NOT NULL constraints applied directly
     # in add_column so no post-creation DO block is needed (no constraint-application
@@ -160,3 +159,4 @@ def downgrade() -> None:
     )
     # content and title are NOT NULL via add_column (no post-creation constraint window).
     # is_read is added as nullable, so its post-creation constraint is still needed.
+# related_type is added as nullable; apply NOT NULL via DO block.

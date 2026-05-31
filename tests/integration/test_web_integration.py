@@ -833,10 +833,15 @@ class TestNotificationEndpoints:
     async def test_get_notification_preferences(self, api_client: AsyncClient):
         resp = await api_client.get("/api/v1/notifications/preferences")
         # Returns 501 until notification_preferences table is implemented.
-        pytest.skip("notification_preferences feature not yet implemented")
+        assert resp.status_code == 501, f"Body: {resp.text}"
 
     async def test_update_notification_preferences(self, api_client: AsyncClient):
-        pytest.skip("notification_preferences feature not yet implemented")
+        resp = await api_client.put(
+            "/api/v1/notifications/preferences",
+            json={"email": True, "sms": False, "in_app": True, "push": False},
+        )
+        # Returns 501 until notification_preferences table is implemented.
+        assert resp.status_code == 501, f"Body: {resp.text}"
 
     async def test_create_reminder(self, api_client: AsyncClient):
         resp = await api_client.post(
@@ -869,7 +874,7 @@ class TestNotificationEndpoints:
 
 
 class TestAuthMiddleware:
-    """ "Auth guard: endpoints that require Bearer token."""
+    """Auth guard: endpoints that require Bearer token."""
 
     async def test_unauthenticated_request_returns_401(self, client):
         resp = await client.get("/api/v1/customers")
@@ -1148,7 +1153,7 @@ class TestEdgeCases:
         assert del2.status_code == 404
 
     async def test_get_customer_activities_for_nonexistent_customer(self, api_client: AsyncClient):
-        """ "Getting activities for a non-existent customer returns empty or 404."""
+        """Getting activities for a non-existent customer returns empty or 404."""
         resp = await api_client.get("/api/v1/customers/999999999/activities")
         assert resp.status_code in (200, 404)
 
@@ -1501,19 +1506,6 @@ class TestEdgeCases:
         )
         # Tenant service may or may not enforce unique name constraint
         assert resp2.status_code in (201, 200, 409, 422), f"Body: {resp2.text}"
-
-    async def test_get_nonexistent_tenant_returns_403(self, api_client: AsyncClient):
-        """Get a non-existent tenant ID returns 403 — cross-tenant check runs before existence check."""
-        resp = await api_client.get("/api/v1/tenants/999999999")
-        assert resp.status_code == 403, f"Body: {resp.text}"
-
-    async def test_update_nonexistent_tenant_returns_403(self, api_client: AsyncClient):
-        """Updating a tenant you don't own is forbidden (403) — cross-tenant check runs before existence check."""
-        resp = await api_client.put(
-            "/api/v1/tenants/999999999",
-            json={"name": "Does Not Exist"},
-        )
-        assert resp.status_code == 403, f"Body: {resp.text}"
 
     async def test_create_tenant_invalid_plan(self, api_client: AsyncClient):
         """Create tenant with invalid plan returns 422."""

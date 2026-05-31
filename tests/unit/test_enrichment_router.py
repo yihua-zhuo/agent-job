@@ -1,6 +1,6 @@
 """Unit tests for src/api/routers/enrichment.py."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from fastapi import FastAPI
@@ -11,13 +11,15 @@ from starlette.responses import JSONResponse
 from api.routers.enrichment import enrichment_router
 from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
-from pkg.errors.app_exceptions import AppException, ValidationException
-from tests.unit.conftest import make_mock_session
+from pkg.errors.app_exceptions import AppException, NotFoundException, ValidationException
+from pydantic import ValidationError
+from tests.unit.conftest import make_mock_session, make_customer_handler, MockState
 
 
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+
 
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
@@ -25,8 +27,52 @@ def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
 
 @pytest.fixture
 def mock_db_session():
-    # Router delegates to service; no DB queries needed in this fixture.
-    return make_mock_session(handlers=[])
+    # Include a customer handler so router's tenant pre-check passes.
+    state = MockState()
+    state.customers[42] = {"id": 42, "tenant_id": 1, "name": "Test Customer"}
+    state.customers[99] = {"id": 99, "tenant_id": 1, "name": "Another Customer"}
+    return make_mock_session([make_customer_handler(state)], state=state)
+
+
+@pytest.fixture
+def client_with_service_as_tenant_2(monkeypatch, mock_db_session):
+    """Return a TestClient authenticated as tenant_id=2."""
+    from internal.middleware.fastapi_auth import require_auth
+    from services.enrichment_service import EnrichmentService
+
+    mock_service = AsyncMock()
+
+    monkeypatch.setattr(
+        "api.routers.enrichment.EnrichmentService",
+        lambda session: mock_service,
+    )
+
+    app = FastAPI()
+    app.include_router(enrichment_router)
+    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=2)
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
+    @app.exception_handler(ValidationError)
+    async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
+        detail = exc.detail
+        if isinstance(detail, list) and detail:
+            msg = detail[0].get("msg", str(detail))
+        else:
+            msg = str(detail)
+        return JSONResponse(
+            status_code=422,
+            content={"success": False, "message": msg, "detail": detail},
+        )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    return client, mock_service
 
 
 @pytest.fixture
@@ -35,7 +81,7 @@ def client_with_service(monkeypatch, mock_db_session):
     from internal.middleware.fastapi_auth import require_auth
     from services.enrichment_service import EnrichmentService
 
-    mock_service = MagicMock()
+    mock_service = AsyncMock()
 
     monkeypatch.setattr(
         "api.routers.enrichment.EnrichmentService",
@@ -54,6 +100,18 @@ def client_with_service(monkeypatch, mock_db_session):
             content={"success": False, "message": exc.detail, "code": exc.code},
         )
 
+    @app.exception_handler(ValidationError)
+    async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
+        detail = exc.detail
+        if isinstance(detail, list) and detail:
+            msg = detail[0].get("msg", str(detail))
+        else:
+            msg = str(detail)
+        return JSONResponse(
+            status_code=422,
+            content={"success": False, "message": msg, "detail": detail},
+        )
+
     client = TestClient(app, raise_server_exceptions=False)
     return client, mock_service
 
@@ -62,16 +120,20 @@ def client_with_service(monkeypatch, mock_db_session):
 # POST /api/v1/enrichment/lookup
 # ---------------------------------------------------------------------------
 
+
 class TestLookupEndpoint:
     def test_returns_enriched_data_on_success(self, client_with_service):
         client, svc = client_with_service
         svc.lookup = AsyncMock(
-            return_value={
-                "name": "Stripe",
-                "domain": "stripe.com",
-                "geo_city": "San Francisco",
-                "metrics_employees": 8000,
-            }
+            return_value=(
+                {
+                    "name": "Stripe",
+                    "domain": "stripe.com",
+                    "geo_city": "San Francisco",
+                    "metrics_employees": 8000,
+                },
+                {"name": "Stripe", "domain": "stripe.com"},  # raw_data
+            )
         )
 
         resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
@@ -83,7 +145,7 @@ class TestLookupEndpoint:
 
     def test_uses_company_name(self, client_with_service):
         client, svc = client_with_service
-        svc.lookup = AsyncMock(return_value={"name": "Acme Corp", "domain": "acme.com"})
+        svc.lookup = AsyncMock(return_value=({"name": "Acme Corp", "domain": "acme.com"}, {"name": "Acme Corp"}))
 
         resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "company_name": "Acme Corp"})
         assert resp.status_code == 200
@@ -102,7 +164,9 @@ class TestLookupEndpoint:
 
     def test_model_validator_rejects_both_fields(self, client_with_service):
         client, _svc = client_with_service
-        resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com", "company_name": "Stripe"})
+        resp = client.post(
+            "/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com", "company_name": "Stripe"}
+        )
         assert resp.status_code == 422
         body = resp.json()
         assert "Provide exactly one of domain or company_name" in body["detail"][0]["msg"]
@@ -124,21 +188,21 @@ class TestLookupEndpoint:
 
     def test_passes_domain_to_service(self, client_with_service):
         client, svc = client_with_service
-        svc.lookup = AsyncMock(return_value={"name": "Stripe"})
+        svc.lookup = AsyncMock(return_value=({"name": "Stripe"}, {}))
 
         client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
         svc.lookup.assert_awaited_once_with(domain="stripe.com", company_name=None, tenant_id=1, customer_id=42)
 
     def test_passes_company_name_to_service(self, client_with_service):
         client, svc = client_with_service
-        svc.lookup = AsyncMock(return_value={"name": "Acme Corp"})
+        svc.lookup = AsyncMock(return_value=({"name": "Acme Corp"}, {}))
 
         client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "company_name": "Acme Corp"})
         svc.lookup.assert_awaited_once_with(domain=None, company_name="Acme Corp", tenant_id=1, customer_id=42)
 
     def test_success_response_has_envelope_shape(self, client_with_service):
         client, svc = client_with_service
-        svc.lookup = AsyncMock(return_value={"name": "Stripe", "domain": "stripe.com"})
+        svc.lookup = AsyncMock(return_value=({"name": "Stripe", "domain": "stripe.com"}, {}))
 
         resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com"})
         body = resp.json()
@@ -146,3 +210,128 @@ class TestLookupEndpoint:
         assert "data" in body
         assert "message" in body
         assert isinstance(body["message"], str)
+
+
+class TestRefreshEndpoint:
+    """Unit tests for POST /api/v1/enrichment/refresh/{customer_id}."""
+
+    def test_refresh_returns_enriched_data(self, client_with_service):
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(
+            return_value=(
+                {
+                    "name": "Acme Corp",
+                    "domain": "acme.com",
+                    "geo_city": "New York",
+                },
+                {"name": "Acme Corp", "domain": "acme.com"},  # raw_data
+            )
+        )
+
+        resp = client.post("/api/v1/enrichment/refresh/42", json={"domain": "acme.com"})
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["name"] == "Acme Corp"
+        assert body["data"]["domain"] == "acme.com"
+
+    def test_refresh_passes_correct_args(self, client_with_service):
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(return_value=({"name": "Acme Corp"}, {}))
+
+        resp = client.post(
+            "/api/v1/enrichment/refresh/99",
+            json={"domain": "acme.com"},
+        )
+        assert resp.status_code == 200
+        svc.refresh.assert_awaited_once_with(
+            customer_id=99,
+            tenant_id=1,
+            domain="acme.com",
+            company_name=None,
+        )
+
+    def test_refresh_passes_domain(self, client_with_service):
+        """Refresh with a domain body passes domain and company_name to the service."""
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(return_value=({"name": "Acme Corp"}, {}))
+
+        resp = client.post("/api/v1/enrichment/refresh/7", json={"domain": "example.com"})
+        assert resp.status_code == 200
+        svc.refresh.assert_awaited_once_with(
+            customer_id=7,
+            tenant_id=1,
+            domain="example.com",
+            company_name=None,
+        )
+
+    def test_refresh_no_body_no_prior_enrichment_returns_422(self, client_with_service):
+        """When no body and no prior enrichment record, guard raises ValidationException."""
+        client, _svc = client_with_service
+
+        resp = client.post("/api/v1/enrichment/refresh/7")
+        assert resp.status_code == 422
+        body = resp.json()
+        assert body["success"] is False
+        assert "domain or company_name is required" in body["message"]
+
+    def test_refresh_cross_tenant_returns_404(self, client_with_service_as_tenant_2):
+        """A tenant cannot refresh another tenant's customer's enrichment."""
+        client, svc = client_with_service_as_tenant_2
+        svc.refresh = AsyncMock(side_effect=NotFoundException("Customer"))
+
+        resp = client.post("/api/v1/enrichment/refresh/42", json={"domain": "acme.com"})
+        assert resp.status_code == 404
+        body = resp.json()
+        assert body["success"] is False
+        assert body["code"] == "NOT_FOUND"
+        svc.refresh.assert_awaited_once_with(customer_id=42, tenant_id=2, domain="acme.com", company_name=None)
+
+    def test_refresh_customer_not_found_returns_404(self, client_with_service):
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(side_effect=NotFoundException("Customer"))
+
+        resp = client.post("/api/v1/enrichment/refresh/9999", json={"domain": "acme.com"})
+        assert resp.status_code == 404
+        body = resp.json()
+        assert body["success"] is False
+        assert "not found" in body["message"]
+        assert body["code"] == "NOT_FOUND"
+
+    def test_refresh_validation_error_returns_422(self, client_with_service):
+        client, svc = client_with_service
+        svc.refresh = AsyncMock(side_effect=ValidationException("No company found for the given domain"))
+
+        resp = client.post("/api/v1/enrichment/refresh/42", json={"domain": "notfound.com"})
+        assert resp.status_code == 422
+        body = resp.json()
+        assert "No company found" in body["message"]
+        assert body["code"] == "VALIDATION_ERROR"
+
+    def test_refresh_rejects_both_fields(self, client_with_service):
+        """When neither domain nor company_name is provided, the model validator raises."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        from models.enrichment import EnrichmentRefreshRequest
+
+        with pytest.raises(PydanticValidationError) as exc_info:
+            EnrichmentRefreshRequest.model_validate({})
+        errors = exc_info.value.errors()
+        assert any("At least one of domain or company_name is required" in str(e.get("msg", "")) for e in errors)
+
+    def test_refresh_accepts_both_fields(self, client_with_service):
+        """When both domain and company_name are provided, the model accepts the request.
+
+        The service will use domain and ignore company_name (domain takes priority).
+        """
+        from pydantic import ValidationError as PydanticValidationError
+
+        from models.enrichment import EnrichmentRefreshRequest
+
+        # Both present → valid (at-least-one constraint satisfied)
+        try:
+            req = EnrichmentRefreshRequest.model_validate({"domain": "x.com", "company_name": "X Corp"})
+        except PydanticValidationError:
+            pytest.fail("ValidationError should not be raised when both fields are provided")
+        assert req.domain == "x.com"
+        assert req.company_name == "X Corp"
