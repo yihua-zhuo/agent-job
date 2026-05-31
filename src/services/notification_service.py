@@ -71,7 +71,8 @@ class NotificationService:
         params_str = json.dumps(params, ensure_ascii=False)
         if len(params_str.encode("utf-8")) > 4096:
             raise ValidationException("notification params exceed maximum size of 4096 bytes")
-# unknown_keys is checked against params after all conditional fields are added.
+
+        # unknown_keys is checked against params after all conditional fields are added.
         # Reject any keys beyond the allow-list before persisting — the to_dict()
         # filtering only applies at serialization time, not at insert.
         unknown_keys = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS

@@ -118,17 +118,14 @@ class TestCopilotIntegration:
         data_tenant_2 = response_tenant_2.json()
         assert data_tenant_2["success"] is True
 
-        # Seed tenant 2's conversation so we can verify cross-tenant isolation
-        # (tenant 2 cannot access tenant 1's conversation). Note: conv_tenant_2.id
-        # equals conv_tenant_1.id in this test due to TRUNCATE CASCADE resetting the
-        # id sequence between tests, so a separate reverse-isolation check is omitted
-        # — checking one direction is sufficient given the shared ID.
-        conv_tenant_2 = await seed_conversation(async_session, tenant_id_2_web, _TENANT_2_USER_ID)
-        await seed_message(async_session, conv_tenant_2.id, tenant_id_2_web, "user", "hello")
-        await seed_message(async_session, conv_tenant_2.id, tenant_id_2_web, "assistant", "response")
-
         # Verify tenant 2 cannot access tenant 1's conversation (cross-tenant isolation).
         history_cross = await api_client_tenant_2.get(f"/copilot/{conv_tenant_1.id}/history")
         assert history_cross.status_code == 404
         body = history_cross.json()
         assert body["success"] is False, f"Expected success=False for cross-tenant access, got: {body}"
+
+        # Verify tenant 1 cannot access tenant 2's conversation (reverse-direction isolation).
+        history_reverse = await api_client.get(f"/copilot/{conv_tenant_2.id}/history")
+        assert history_reverse.status_code == 404
+        body_reverse = history_reverse.json()
+        assert body_reverse["success"] is False, f"Expected success=False for reverse cross-tenant access, got: {body_reverse}"
