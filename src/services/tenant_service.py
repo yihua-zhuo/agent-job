@@ -1,4 +1,5 @@
 """Tenant service — CRUD via SQLAlchemy ORM (TenantModel)."""
+from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -59,8 +60,8 @@ class TenantService:
         await self.session.flush()
         return tenant
 
-    async def _fetch_tenant(self, target_tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
-        if requesting_tenant_id > 0 and requesting_tenant_id != target_tenant_id:
+    async def _fetch_tenant(self, target_tenant_id: int, requesting_tenant_id: int) -> TenantModel:
+        if requesting_tenant_id != target_tenant_id:
             raise ForbiddenException(f"Access denied to tenant {target_tenant_id}")
         conditions = [TenantModel.id == target_tenant_id]
         result = await self.session.execute(select(TenantModel).where(and_(*conditions)))
@@ -69,11 +70,11 @@ class TenantService:
             raise NotFoundException(f"Tenant {target_tenant_id}")
         return tenant
 
-    async def get_tenant(self, tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
+    async def get_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
         return await self._fetch_tenant(tenant_id, requesting_tenant_id)
 
-    async def update_tenant(self, tenant_id: int, requesting_tenant_id: int = 0, **kwargs) -> TenantModel:
-        if requesting_tenant_id > 0 and tenant_id != requesting_tenant_id:
+    async def update_tenant(self, tenant_id: int, requesting_tenant_id: int, **kwargs) -> TenantModel:
+        if tenant_id != requesting_tenant_id:
             raise ForbiddenException(f"Tenant {tenant_id}")
         tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
 
@@ -104,10 +105,10 @@ class TenantService:
         await self.session.flush()
         return tenant
 
-    async def suspend_tenant(self, tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
+    async def suspend_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
         return await self.update_tenant(tenant_id, requesting_tenant_id=requesting_tenant_id, status="suspended")
 
-    async def delete_tenant(self, tenant_id: int, requesting_tenant_id: int = 0) -> TenantModel:
+    async def delete_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
         tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
         now = datetime.now(UTC)
         new_settings = dict(tenant.settings or {})
@@ -120,20 +121,19 @@ class TenantService:
 
     async def list_tenants(
         self,
+        requesting_tenant_id: int,
         page: int = 1,
         page_size: int = 20,
         status: str | None = None,
         search: str | None = None,
-        requesting_tenant_id: int = 0,
     ) -> tuple[list[TenantModel], int]:
         conditions = [TenantModel.status != "deleted"]
         if status:
             conditions.append(TenantModel.status == status)
         if search:
             conditions.append(TenantModel.name.ilike(f"%{search}%"))
-        # Rule126: non-zero requesting_tenant_id may only see its own tenant record
-        if requesting_tenant_id > 0:
-            conditions.append(TenantModel.id == requesting_tenant_id)
+        # Rule126: requesting_tenant_id restricts visibility to its own tenant record.
+        conditions.append(TenantModel.id == requesting_tenant_id)
 
         count_result = await self.session.execute(select(func.count(TenantModel.id)).where(and_(*conditions)))
         total = count_result.scalar_one()
@@ -145,7 +145,7 @@ class TenantService:
         items = list(result.scalars().all())
         return items, total
 
-    async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int = 0) -> "TenantService._TenantStats":
+    async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int) -> _TenantStats:
         tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
         user_count_result = await self.session.execute(
             select(func.count(UserModel.id)).where(UserModel.tenant_id == tenant_id)
@@ -153,6 +153,6 @@ class TenantService:
         user_count = user_count_result.scalar() or 0
         return self._TenantStats(tenant, user_count)
 
-    async def get_tenant_usage(self, tenant_id: int, requesting_tenant_id: int = 0) -> "TenantService._TenantStats":
+    async def get_tenant_usage(self, tenant_id: int, requesting_tenant_id: int) -> _TenantStats:
         """Return tenant usage data. Delegates to get_tenant_stats for real implementation."""
         return await self.get_tenant_stats(tenant_id, requesting_tenant_id)

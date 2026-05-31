@@ -10,7 +10,7 @@ Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 import pytest
 
@@ -241,7 +241,6 @@ class TestTaskIntegration:
         return reg.id
 
     async def test_create_and_get_task(self, db_schema, tenant_id, async_session):
-        from datetime import date
         svc = TaskService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.create_task(
@@ -572,7 +571,7 @@ class TestTenantIntegration:
         assert result.name == f"Acme Corp {suffix}"
         assert result.plan == "pro"
 
-        fetched = await svc.get_tenant(result.id)
+        fetched = await svc.get_tenant(result.id, requesting_tenant_id=result.id)
         assert fetched is not None
         assert fetched.name == f"Acme Corp {suffix}"
 
@@ -584,7 +583,7 @@ class TestTenantIntegration:
         )
         tid = created.id
 
-        updated = await svc.update_tenant(tid, plan="enterprise", name=f"Updated {suffix}")
+        updated = await svc.update_tenant(tid, requesting_tenant_id=tid, plan="enterprise", name=f"Updated {suffix}")
         assert updated is not None
         assert updated.plan == "enterprise"
         assert updated.name == f"Updated {suffix}"
@@ -592,13 +591,14 @@ class TestTenantIntegration:
     async def test_list_tenants(self, db_schema, async_session):
         svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
-        await svc.create_tenant(name=f"List Tenant A {suffix}", plan="free", admin_email=f"a_{suffix}@x.com")
+        created_a = await svc.create_tenant(name=f"List Tenant A {suffix}", plan="free", admin_email=f"a_{suffix}@x.com")
         await svc.create_tenant(name=f"List Tenant B {suffix}", plan="pro", admin_email=f"b_{suffix}@x.com")
 
-        items, total = await svc.list_tenants()
+        # A tenant can only see itself via list_tenants (Rule126 enforcement).
+        items, total = await svc.list_tenants(requesting_tenant_id=created_a.id)
         names = [t.name for t in items]
         assert any(f"List Tenant A {suffix}" in n for n in names)
-        assert any(f"List Tenant B {suffix}" in n for n in names)
+        assert total >= 1
 
     async def test_get_tenant_stats(self, db_schema, async_session):
         svc = TenantService(async_session)
@@ -606,7 +606,7 @@ class TestTenantIntegration:
         created = await svc.create_tenant(name=f"Stats Tenant {suffix}", plan="pro", admin_email=f"s_{suffix}@x.com")
         tid = created.id
 
-        stats = await svc.get_tenant_stats(tid)
+        stats = await svc.get_tenant_stats(tid, requesting_tenant_id=tid)
         assert stats is not None
         stats_dict = stats.to_dict()
         assert "user_count" in stats_dict

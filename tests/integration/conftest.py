@@ -308,12 +308,6 @@ def _cleanup_after_module() -> Generator[None, None, None]:
             pass
 
 
-# ── Event loop policy ──────────────────────────────────────────────────────────
-@pytest.fixture(scope="session")
-def event_loop_policy():
-    return asyncio.DefaultEventLoopPolicy()
-
-
 # ── Web-layer integration fixtures (FastAPI router tests) ─────────────────────
 # These are imported so pytest discovers them without needing web_conftest.py
 # to be explicitly listed as a conftest.py plugin.

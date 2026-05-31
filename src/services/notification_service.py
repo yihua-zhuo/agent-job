@@ -206,12 +206,7 @@ class NotificationService:
         related_type: str | None = None,
         related_id: int | None = None,
     ) -> ReminderModel:
-        """Create a reminder.
-
-        Flushes without refresh: ORM-generated fields (e.g. id) are populated
-        post-flush, and callers only use the returned object for to_dict()
-        serialization, so a separate refresh() round-trip is unnecessary.
-        """
+        """Create a reminder for a user at a specified time."""
         if isinstance(remind_at, str):
             remind_at = datetime.fromisoformat(remind_at)
         reminder = ReminderModel(

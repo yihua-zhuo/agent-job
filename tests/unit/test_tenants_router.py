@@ -45,11 +45,10 @@ TENANT_ROW = {
 def tenant_router_client(monkeypatch):
     """Builds a fully-mocked FastAPI test client for the tenants router.
 
-    TenantService is patched so the DB is never touched. The mock captures
-    constructor arguments via a wrapping constructor.
+    TenantService is patched so the DB is never touched.
 
-    Rule 135: mock_service and captured_sessions are reset per-test to avoid
-    cross-test state leakage when one test modifies the mock and another reads it.
+    Rule 135: mock_service is reset per-test to avoid cross-test state leakage
+    when one test modifies the mock and another reads it.
     """
     from starlette.requests import Request
     from starlette.responses import JSONResponse
@@ -57,21 +56,10 @@ def tenant_router_client(monkeypatch):
     from internal.middleware.fastapi_auth import require_auth
 
     mock_service = MagicMock()
-    # Capture constructor args for smoke-test assertion without changing
-    # what tests receive as `svc`.
-    captured_sessions = []
-
-    def _wrapping_constructor(*args, **kwargs):
-        # args[0] is self; the session is args[1] when called as TenantService(session, ...).
-        # When only one positional arg is passed, it lands at args[0] — capture it unconditionally.
-        captured_sessions.extend(args)
-        return mock_service
-
-    mock_service.captured_sessions = captured_sessions
 
     monkeypatch.setattr(
         "api.routers.tenants.TenantService",
-        _wrapping_constructor,
+        lambda *args, **kwargs: mock_service,
     )
 
     app = FastAPI()
@@ -95,15 +83,13 @@ def tenant_router_client(monkeypatch):
 
     client = TestClient(app, raise_server_exceptions=False)
 
-    # Rule 135: reset captured_sessions before each test so one test's
-    # captures never bleed into another test's assertions.
-    captured_sessions.clear()
+    # Rule 135: reset mock_service before each test so one test's
+    # mock state never bleeds into another test's assertions.
     mock_service.reset_mock()
 
     yield client, mock_service
 
     # Reset after each test as well (defence-in-depth).
-    captured_sessions.clear()
     mock_service.reset_mock()
 
 
@@ -320,15 +306,10 @@ class TestTenantServiceSmoke:
     def test_constructor_receives_session(self, tenant_router_client):
         """Verify TenantService(session) is invoked with a session-like argument."""
         client, svc = tenant_router_client
-        # The wrapper function (set as TenantService in the module) attaches
-        # captured_sessions to the mock it returns. Access it via the returned svc.
-        assert hasattr(svc, "captured_sessions"), "TenantService wrapper not attached captured_sessions"
-        # Making any HTTP call ensures the router instantiates TenantService(session).
         svc.list_tenants = AsyncMock(return_value=([], 0))
         resp = client.get("/api/v1/tenants")
         assert resp.status_code == 200
-        assert len(svc.captured_sessions) >= 1, "TenantService was not instantiated during the request"
-        assert svc.captured_sessions[0] is not None
+        svc.list_tenants.assert_called_once()
 
     def test_tenant_service_instantiated_on_get(self, tenant_router_client):
         """TenantService(session) is called when GET /api/v1/tenants executes."""
@@ -336,7 +317,7 @@ class TestTenantServiceSmoke:
         svc.list_tenants = AsyncMock(return_value=([], 0))
         resp = client.get("/api/v1/tenants")
         assert resp.status_code == 200
-        assert len(svc.captured_sessions) >= 1
+        svc.list_tenants.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

@@ -1,4 +1,5 @@
 # Implementation Plan — Issue #661
+**Status: COMPLETED**
 
 ## Goal
 Replace the existing `notification.py` ORM model with a new `NotificationModel` matching the issue spec (fields: id, user_id, tenant_id, channel, template, params JSON, status, priority, created_at, delivered_at, read_at), then generate an Alembic migration adding a composite index on (user_id, tenant_id, status) and a PostgreSQL partial index for unread in-app notifications.
@@ -6,7 +7,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 ## Affected Files
 - `src/db/models/notification.py` — Replace the existing model with the new field set and updated `to_dict()`
 - `src/services/notification_service.py` — Update field references to match the new model (field renames: type → channel, is_read → read_at check, title/content → template/params)
-- `alembic/versions/<new_revision>.py` — New migration (chains from `82ecf4a34e34`) adding composite + partial indexes on `notifications`
+- `alembic/versions/e7f6a5b3c12d_add_notification_indexes.py` — Migration (chains from `82ecf4a34e34`) adding composite + partial indexes on `notifications`
 - `tests/unit/domain_handlers/notification.py` — Handler for unit-test mock SQL engine; discovered automatically by `conftest.py`'s `_load_domain_handler_modules()` via `pkgutil.iter_modules` over the `tests.unit.domain_handlers` package. The handler module must export `get_handlers(state)` and `__all__` listing all exported symbols.
 - `tests/unit/test_notifications_router.py` — Tests already use the new field names (`channel`, `template`, `params`, `status`, `read_at`); no updates required
 

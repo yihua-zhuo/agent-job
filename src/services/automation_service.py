@@ -18,11 +18,6 @@ from services.task_service import TaskService
 logger = logging.getLogger(__name__)
 
 
-def _unimplemented_action(action_type: str, params: dict, key: str) -> dict:
-    logger.warning("%s action is not implemented: %s=%s", action_type, key, params.get(key))
-    return {"type": action_type, "status": "not_implemented", key: params.get(key)}
-
-
 # Supported trigger events
 TRIGGER_EVENTS: tuple[str, ...] = (
     "ticket.created",
@@ -58,9 +53,6 @@ def _eval_condition(condition: dict, context: dict) -> bool:
     if actual is None:
         return False
 
-    # Guard against attacker-controlled deeply nested dicts causing performance issues.
-    # Size check is cached once in trigger_event before iterating over rules.
-
     op_map = {
         "eq": lambda a, e: a == e,
         "ne": lambda a, e: a != e,
@@ -93,6 +85,11 @@ class AutomationService:
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    @staticmethod
+    def _unimplemented_action(action_type: str, params: dict, key: str) -> dict:
+        logger.warning("%s action is not implemented: %s=%s", action_type, key, params.get(key))
+        return {"type": action_type, "status": "not_implemented", key: params.get(key)}
 
     async def _execute_action(self, action: dict, context: dict, tenant_id: int, executed_by: int) -> dict:
         action_type = action.get("type")
@@ -143,11 +140,11 @@ class AutomationService:
             return {"type": action_type, "status": "created"}
 
         elif action_type == "email.send":
-            return _unimplemented_action(action_type, params, "template")
+            return self._unimplemented_action(action_type, params, "template")
         elif action_type == "webhook.call":
-            return _unimplemented_action(action_type, params, "url")
+            return self._unimplemented_action(action_type, params, "url")
         elif action_type == "tag.add":
-            return _unimplemented_action(action_type, params, "tag")
+            return self._unimplemented_action(action_type, params, "tag")
         elif action_type == "ticket.assign":
             assignee_id = params.get("assignee_id")
             if assignee_id:
@@ -169,7 +166,7 @@ class AutomationService:
                 )
                 if opp_check.scalar_one_or_none() is None:
                     return {"type": action_type, "status": "skipped", "reason": "opportunity not found in tenant"}
-            return _unimplemented_action(action_type, params, "note")
+            return self._unimplemented_action(action_type, params, "note")
         else:
             return {"type": action_type, "status": "unknown_action"}
 
@@ -308,7 +305,7 @@ class AutomationService:
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id,
             AutomationRuleModel.trigger_event == trigger_event,
-            AutomationRuleModel.enabled == True,  # noqa: E712
+            AutomationRuleModel.enabled,
         )
         result = await self.session.execute(stmt)
         rules = result.scalars().all()

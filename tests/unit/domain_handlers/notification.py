@@ -151,7 +151,8 @@ def make_notification_handler(state):
             n = state._notifications.get(nid)
             if n and n.get("tenant_id") == params.get("tenant_id") and n.get("user_id") == params.get("user_id"):
                 n["read_at"] = params.get("read_at")
-                n["status"] = "read"
+                if params.get("read_at") is not None:
+                    n["status"] = "read"
                 return MockResult([_notification_to_row(n)])
             return MockResult([])
 
