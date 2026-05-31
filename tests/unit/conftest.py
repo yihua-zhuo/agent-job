@@ -179,6 +179,8 @@ class MockState:
         # domain-agnostic opaque slot — each domain handler may store its own
         # state here via state.opaque['domain_name'] = {...}.
         self.opaque: dict = {}
+        self.agent_tasks: dict[int, dict] = {}
+        self.agent_tasks_next_id: int = 1
 
 
 def _load_domain_handler_modules():
