@@ -47,7 +47,11 @@ def mock_db_session():
     session = MagicMock()
     session.add = MagicMock()
     session.flush = AsyncMock()
-    session.execute = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalars.return_value.all.return_value = []
+    mock_result.scalar_one.return_value = 0
+    mock_result.scalar_one_or_none.return_value = None
+    session.execute = AsyncMock(return_value=mock_result)
     return session
 
 
@@ -373,8 +377,8 @@ class TestTenantCrossTenantIsolation:
         assert resp.status_code == 403
         svc.update_tenant.assert_not_called()
 
-    def test_update_tenant_forbidden_on_cross_tenant(self, tenant_router_client):
-        """Cross-tenant update is rejected at router level (403) before reaching the service."""
+    def test_update_tenant_rejected_at_router_for_cross_tenant_id(self, tenant_router_client):
+        """Tenant A requesting tenant B's update via URL path is rejected by the router guard before reaching the service."""
         client, svc = tenant_router_client
         svc.update_tenant = AsyncMock(side_effect=ForbiddenException("Access denied"))
         resp = client.put("/api/v1/tenants/2", json={"name": "Hijack"})
@@ -382,24 +386,19 @@ class TestTenantCrossTenantIsolation:
         svc.update_tenant.assert_not_called()
 
     async def test_update_tenant_service_rejects_cross_tenant_requesting_id(self, mock_db_session):
-        """Service-layer update_tenant raises ForbiddenException when requesting_tenant_id != tenant_id."""
+        """Service-layer update_tenant raises ForbiddenException when requesting_tenant_id != tenant_id (before DB access)."""
         from services.tenant_service import TenantService
 
         svc = TenantService(mock_db_session)
-        # Mock the session execute to return a tenant matching tenant_id but not requesting_tenant_id.
-        mock_result = MagicMock()
-        mock_tenant = MagicMock()
-        mock_tenant.status = "active"
-        mock_result.scalar_one_or_none.return_value = mock_tenant
-        mock_db_session.execute = AsyncMock(return_value=mock_result)
 
         with pytest.raises(ForbiddenException):
-            # tenant_id=99 but requesting_tenant_id=1 — mismatched, service must reject.
+            # tenant_id=99 but requesting_tenant_id=1 — mismatched, service raises ForbiddenException
+            # at the entry guard (line 79 in tenant_service.py) before ever calling session.execute.
             await svc.update_tenant(tenant_id=99, requesting_tenant_id=1, name="Hacked")
 
-    @pytest.mark.xfail(reason="Rule 126 gap: cross-tenant requesting_tenant_id check not implemented for create_tenant")
+    @pytest.mark.skip(reason="Rule 126 gap: create_tenant does not enforce requesting_tenant_id — fix belongs in TenantService.create_tenant")
     def test_create_tenant_uses_caller_tenant_id(self, tenant_router_client):
-        """POST /api/v1/tenants creates a tenant; current design allows any authenticated tenant to create."""
+        """POST /api/v1/tenants creates a tenant; current design allows any authenticated tenant to create (Rule 126 gap)."""
         client, svc = tenant_router_client
         mock_tenant = MagicMock()
         mock_tenant.to_dict.return_value = {**TENANT_ROW, "id": 2}

@@ -106,12 +106,7 @@ def make_notification_handler(state):
                 raise ValueError(
                     f"notification count must bind tenant_id and user_id (got keys: {list(params.keys())})"
                 )
-            # Explicit unread_only param takes precedence; fall back to SQL text heuristic
-            # for tests using raw SQL text matching (backward compat).
-            if "_unread_only" in params:
-                unread_filter = params["_unread_only"]
-            else:
-                unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
+            unread_filter = params.get("_unread_only", False)
             if unread_filter:
                 count = sum(
                     1

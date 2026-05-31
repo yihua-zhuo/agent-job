@@ -272,13 +272,16 @@ class AutomationService:
         executed_by: int = 0,
     ) -> list[dict]:
         # Guard against attacker-controlled deeply nested dicts once, up-front.
-        def _max_depth(d, _depth=0):
+        def _max_depth(d, _depth=None):
+            if _depth is None:
+                _depth = 0
             return max((_max_depth(v, _depth + 1) for v in d.values() if isinstance(v, dict)), default=_depth)
 
-        if _max_depth(context) > 16 or len(json.dumps(context, ensure_ascii=False).encode("utf-8")) > 64_000:
+        encoded = json.dumps(context, ensure_ascii=False).encode("utf-8")
+        if _max_depth(context) > 16 or len(encoded) > 64_000:
             logger.warning(
                 "Automation event dropped: context size %d exceeds limit or depth exceeds 16",
-                len(json.dumps(context, ensure_ascii=False).encode("utf-8")),
+                len(encoded),
             )
             return []
         stmt = select(AutomationRuleModel).where(
