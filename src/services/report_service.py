@@ -62,6 +62,7 @@ class ReportService:
 
     async def generate_excel_report(
         self,
+        tenant_id: int,
         report_data: dict | None = None,
         title: str | None = None,
         report_type: str | None = None,

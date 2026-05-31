@@ -63,7 +63,10 @@ def upgrade() -> None:
     # constraint so DBs that already added the constraint (or skipped the
     # table entirely) are not broken.
     # Only duplicate_object (FK already exists) and undefined_object
-    # (table not present) are caught; syntax_error indicates a real problem.
+    # (table not present) are caught; syntax_error is intentionally not caught
+    # because it indicates a real problem in the SQL itself.
+    # This migration's downgrade() assumes 52b19ee00eaf ran inline FKs and
+    # only ever needs to drop the catch-up FKs added here.
     op.execute(
         sa.text(
             "DO $$ BEGIN "

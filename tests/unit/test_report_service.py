@@ -2,6 +2,7 @@
 
 import pytest
 from sqlalchemy import inspect as sqla_inspect
+from unittest.mock import MagicMock
 
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.report_service import ReportService
@@ -366,7 +367,7 @@ class TestScheduleReport:
 class TestReportGenerators:
     async def test_generate_pdf_returns_valid_structure(self):
         """generate_pdf_report returns the expected stub response shape."""
-        svc = ReportService(None)
+        svc = ReportService(MagicMock())
         result = await svc.generate_pdf_report(title="Test PDF", report_type="custom")
         assert result["status"] == "generated"
         assert result["format"] == "pdf"
@@ -375,8 +376,8 @@ class TestReportGenerators:
 
     async def test_generate_excel_returns_valid_structure(self):
         """generate_excel_report returns the expected stub response shape."""
-        svc = ReportService(None)
-        result = await svc.generate_excel_report(title="Test Excel", report_type="custom")
+        svc = ReportService(MagicMock())
+        result = await svc.generate_excel_report(tenant_id=0, title="Test Excel", report_type="custom")
         assert result["status"] == "generated"
         assert result["format"] == "excel"
         assert result["filename"].endswith(".xlsx")
@@ -391,7 +392,7 @@ class TestReportGenerators:
 class TestExportToCsv:
     async def test_safe_filename_rejects_absolute_path(self):
         """_safe_export_filename rejects absolute paths to prevent path traversal."""
-        svc = ReportService(None)
+        svc = ReportService(MagicMock())
         result = await svc.export_to_csv(
             data=[{"a": 1}],
             filename="/etc/passwd",
@@ -402,7 +403,7 @@ class TestExportToCsv:
 
     async def test_safe_filename_rejects_parent_reference(self):
         """_safe_export_filename rejects '..' to prevent directory traversal."""
-        svc = ReportService(None)
+        svc = ReportService(MagicMock())
         result = await svc.export_to_csv(
             data=[{"a": 1}],
             filename="../../../etc/passwd",
@@ -412,7 +413,7 @@ class TestExportToCsv:
 
     async def test_safe_filename_accepts_plain_name(self):
         """_safe_export_filename accepts a plain filename without modification."""
-        svc = ReportService(None)
+        svc = ReportService(MagicMock())
         result = await svc.export_to_csv(
             data=[{"a": 1}],
             filename="my-report.csv",
@@ -421,6 +422,6 @@ class TestExportToCsv:
 
     async def test_raises_when_no_data(self):
         """export_to_csv raises ValidationException when data is empty."""
-        svc = ReportService(None)
+        svc = ReportService(MagicMock())
         with pytest.raises(ValidationException, match="No data"):
             await svc.export_to_csv(data=[])
