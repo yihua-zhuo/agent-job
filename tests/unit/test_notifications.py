@@ -241,7 +241,7 @@ class TestCreateSmartNotificationValidation:
 
 class TestCreateSmartNotificationRouting:
     def test_empty_deliveries_still_returns_200(self):
-        """priority=normal with no user_id returns 200 with empty deliveries list."""
+        """priority=normal with no user_id returns 200 with an empty deliveries list."""
         with (
             patch("api.routers.notifications.NotificationService") as svc_cls,
             patch("api.routers.notifications.NotificationRoutingService") as routing_cls,
