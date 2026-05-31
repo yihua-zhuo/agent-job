@@ -57,6 +57,9 @@ class NotificationTemplateModel(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -68,6 +71,7 @@ class NotificationTemplateModel(Base):
             "body_html": self.body_html,
             "body_text": self.body_text,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
 ```
 
@@ -122,7 +126,7 @@ PYTHONPATH=src DATABASE_URL="postgresql+asyncpg://test_user:test_pass@localhost:
 
 Write `tests/unit/test_notification_template_model.py` covering: `test_table_name`, `test_to_dict_returns_all_fields`, `test_to_dict_with_null_optional_fields`, `test_channel_accepts_standard_values` (4 channels), `test_channel_non_standard_values_accepted` (6 channels), `test_name_accepts_100_chars`, `test_subject_accepts_255_chars`, `test_to_dict_created_at_isoformat`, `test_empty_name_is_accepted_by_orm`, `test_unknown_channel_accepted_by_orm`.
 
-**Verification**: `PYTHONPATH=src pytest tests/unit/test_notification_template_model.py -v` → 9 passed
+**Verification**: `PYTHONPATH=src pytest tests/unit/test_notification_template_model.py -v` → 10 passed
 
 ---
 
@@ -143,11 +147,11 @@ Inspect the generated `alembic/versions/<id>_drift_check.py` — both `up()` and
 
 ## Test Plan
 
-- Unit tests in `tests/unit/`: `tests/unit/test_notification_template_model.py` (new) — 9 passing tests covering `to_dict()` serialization of all fields, null optional fields, `__tablename__`, channel values, name/subject length boundaries, and invalid-input acceptance
+- Unit tests in `tests/unit/`: `tests/unit/test_notification_template_model.py` (new) — 10 passing tests covering `to_dict()` serialization of all fields, null optional fields, `__tablename__`, channel values, name/subject length boundaries, and invalid-input acceptance
 - Integration tests in `tests/integration/`: none (model-only issue; integration tests belong to the service/router layer in a later issue)
 - Dev-plan verification commands:
   - `ruff check src/db/models/notification_template.py` → 0 errors
-  - `PYTHONPATH=src pytest tests/unit/test_notification_template_model.py -v` → 9 passed
+  - `PYTHONPATH=src pytest tests/unit/test_notification_template_model.py -v` → 10 passed
   - `PYTHONPATH=src DATABASE_URL="postgresql+asyncpg://test_user:test_pass@localhost:5432/alembic_dev" alembic upgrade head` → exit 0
   - `PYTHONPATH=src DATABASE_URL="postgresql+asyncpg://test_user:test_pass@localhost:5432/alembic_dev" alembic downgrade -1` → exit 0
   - `PYTHONPATH=src DATABASE_URL="postgresql+asyncpg://test_user:test_pass@localhost:5432/alembic_dev" alembic upgrade head` → exit 0
@@ -155,10 +159,10 @@ Inspect the generated `alembic/versions/<id>_drift_check.py` — both `up()` and
 
 ## Acceptance Criteria
 
-- `src/db/models/notification_template.py` exists, defines `NotificationTemplateModel` with fields: `id`, `tenant_id`, `name`, `channel`, `subject`, `body_html`, `body_text`, `created_at`
+- `src/db/models/notification_template.py` exists, defines `NotificationTemplateModel` with fields: `id`, `tenant_id`, `name`, `channel`, `subject`, `body_html`, `body_text`, `created_at`, `updated_at`
 - `ruff check src/db/models/notification_template.py` exits 0
 - `alembic/versions/5d575a161b5d_add_notification_templates.py` exists and creates `notification_templates` table with correct column types and FK constraint on `tenant_id`
 - `alembic/versions/merge_nt_662.py` exists as a merge revision with `down_revision = (52b19ee00eaf, 5d575a161b5d)`, allowing `alembic upgrade head` to succeed on a fresh database
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` all exit 0 on the `alembic_dev` database
-- `tests/unit/test_notification_template_model.py` has 9 passing tests covering `to_dict`, null optionals, `__tablename__`, channel values, length boundaries, and invalid-input acceptance
+- `tests/unit/test_notification_template_model.py` has 10 passing tests covering `to_dict`, null optionals, `__tablename__`, channel values, length boundaries, and invalid-input acceptance
 - Drift check produces an empty migration (confirms model and DB schema are in sync)
