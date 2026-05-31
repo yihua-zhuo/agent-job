@@ -35,12 +35,6 @@ TENANT_ROW = {
 
 
 # ---------------------------------------------------------------------------
-# Smoke test — constructor receives a session-like argument
-# ---------------------------------------------------------------------------
-
-
-
-# ---------------------------------------------------------------------------
 # Test fixture
 # ---------------------------------------------------------------------------
 
@@ -48,9 +42,8 @@ TENANT_ROW = {
 def tenant_router_client(monkeypatch):
     """Builds a fully-mocked FastAPI test client for the tenants router.
 
-    TenantService is patched so the DB is never touched.  A smoke assertion
-    verifies the constructor receives a session-like argument, detecting
-    signature changes in the service constructor early.
+    TenantService is patched so the DB is never touched. The mock captures
+    constructor arguments via a wrapping constructor.
     """
     from starlette.requests import Request
     from starlette.responses import JSONResponse
@@ -353,4 +346,15 @@ class TestTenantCrossTenantIsolation:
         client, svc = tenant_router_client
         svc.update_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 9999"))
         resp = client.put("/api/v1/tenants/9999", json={"name": "Stolen"})
+        assert resp.status_code == 403
+
+    def test_get_tenant_update_forbidden_on_cross_tenant(self, tenant_router_client):
+        """Tenant A requesting tenant B's data for an existing-but-inaccessible tenant via GET, then PUT."""
+        client, svc = tenant_router_client
+        svc.get_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 2"))
+        resp = client.get("/api/v1/tenants/2")
+        assert resp.status_code == 403
+        svc.get_tenant.assert_called_once_with(2, requesting_tenant_id=1)
+        svc.update_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 2"))
+        resp = client.put("/api/v1/tenants/2", json={"name": "Hijack"})
         assert resp.status_code == 403

@@ -76,7 +76,7 @@ class _MockReminderModel:
     the router's .to_dict() serialization branch rather than the dict fallback.
     """
 
-    def __init__(self, id: int, title: str, remind_at: str, tenant_id: int = 1, user_id: int = 99):
+    def __init__(self, id: int, title: str, remind_at: str, tenant_id: int = 1, user_id: int = 99, created_at=None):
         self.id = id
         self.title = title
         self.content = ""
@@ -84,6 +84,8 @@ class _MockReminderModel:
         self.tenant_id = tenant_id
         self.user_id = user_id
         self.is_completed = False
+        from datetime import datetime, UTC
+        self.created_at = created_at if created_at is not None else datetime(2026, 1, 1, tzinfo=UTC)
 
     def to_dict(self) -> dict:
         return {
@@ -94,6 +96,7 @@ class _MockReminderModel:
             "content": self.content,
             "remind_at": self.remind_at,
             "is_completed": self.is_completed,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
         }
 
     def __iter__(self):
@@ -297,8 +300,7 @@ class TestMarkAllRead:
 
 
 class TestPreferences:
-    # notification_preferences table not yet implemented — storage is hardcoded in-router
-    # responses with no service involvement. Add the table to remove this skip, see issue #661.
+    # TODO(#661): re-enable once notification_preferences table is implemented
     @pytest.mark.skip(reason="notification_preferences table not yet implemented — see issue #661")
 
     def test_get_preferences_ok(self):

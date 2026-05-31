@@ -73,7 +73,7 @@ class TenantService:
         return await self._fetch_tenant(tenant_id, requesting_tenant_id)
 
     async def update_tenant(self, tenant_id: int, requesting_tenant_id: int = 0, **kwargs) -> TenantModel:
-        if requesting_tenant_id and tenant_id != requesting_tenant_id:
+        if requesting_tenant_id > 0 and tenant_id != requesting_tenant_id:
             raise ForbiddenException(f"Tenant {tenant_id}")
         tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
 
@@ -91,8 +91,9 @@ class TenantService:
             new_settings.update(kwargs["settings"])
             settings_changed = True
 
-        for key in allowed & kwargs.keys():
-            setattr(tenant, key, kwargs[key])
+        for key in allowed:
+            if key in kwargs:
+                setattr(tenant, key, kwargs[key])
         tenant.updated_at = datetime.now(UTC)
         if settings_changed:
             tenant.settings = new_settings

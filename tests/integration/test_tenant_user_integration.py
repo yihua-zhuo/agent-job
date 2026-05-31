@@ -130,7 +130,6 @@ class TestTenantServiceIntegration:
         )
         tid = created.id
         stats = await svc.get_tenant_stats(tid)
-        assert stats is not None
         assert hasattr(stats, "to_dict")
         stats_dict = stats.to_dict()
         assert "user_count" in stats_dict

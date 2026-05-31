@@ -15,7 +15,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
    - Fields: `id` (pk), `user_id` (index=True), `tenant_id` (index=True), `channel` (String(50)), `template` (String(255)), `payload_params` (JSON, mapped_column `params_`, using `postgresql.JSON`), `status` (String(50)), `priority` (String(20)), `created_at` (DateTime, `server_default=func.now()`), `delivered_at` (DateTime, nullable), `read_at` (DateTime, nullable).
    - Add `__table_args__` with a composite index: `Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status")`.
    - Import `JSON` from `sqlalchemy.dialects.postgresql`.
-   - `to_dict()` must serialize `payload_params` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`. The dict key should use `'params'` (without trailing underscore) — `{"params": self.payload_params, ...}` — to present a clean API contract while the Python attribute remains `payload_params`.
+   - `to_dict()` must serialize `params_` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`. The dict key should use `'params'` (without trailing underscore) — `{"params": self.payload_params, ...}` — to present a clean API contract while the Python attribute remains `payload_params`.
    - Python attribute is `payload_params` (mapped to DB column `params_`).
    - References to the JSON field use `params_` throughout (DB column name) and `payload_params` (Python ORM attribute name) internally.
 
@@ -47,7 +47,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
      - `UPDATE notifications SET title = template WHERE template IS NOT NULL`
      - `UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL`
      - `UPDATE notifications SET related_type = params_->>'related_type' WHERE params_ IS NOT NULL`
-     - `UPDATE notifications SET related_id = (params_->>'related_id')::bigint WHERE params_ IS NOT NULL`
+     - `UPDATE notifications SET related_id = (params_->>'related_id')::bigint WHERE params_ IS NOT NULL AND (params_->>'related_id')::bigint BETWEEN -9223372036854775808 AND 9223372036854775807`
      - `UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL`
      - Drop new columns (channel, template, params_, status, priority, delivered_at, read_at)
 

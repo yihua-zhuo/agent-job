@@ -52,8 +52,11 @@ class NotificationService:
         if kwargs.get("related_type") is not None:
             params["related_type"] = kwargs["related_type"]
         if kwargs.get("related_id") is not None:
-            params["related_id"] = int(kwargs["related_id"])
-        if len(json.dumps(params).encode()) > 4096:
+            try:
+                params["related_id"] = int(kwargs["related_id"])
+            except (ValueError, TypeError):
+                raise ValidationException("related_id must be an integer")
+        if len(json.dumps(params, ensure_ascii=False).encode("utf-8")) > 4096:
             raise ValidationException("payload_params exceeds maximum size of 4096 bytes")
         notification = NotificationModel(
             tenant_id=tenant_id,

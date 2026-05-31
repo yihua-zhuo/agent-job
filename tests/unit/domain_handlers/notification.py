@@ -132,10 +132,7 @@ def make_notification_handler(state):
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            if "_unread_only" in params:
-                unread_filter = params["_unread_only"]
-            else:
-                unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
+            unread_filter = params.get("_unread_only", False)
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = []

@@ -127,9 +127,9 @@ class TestCopilotIntegration:
         await seed_message(async_session, conv_tenant_2.id, tenant_id_2_web, "assistant", "response")
 
         # Verify tenant 2's conversation is accessible via its own API client.
-        history_tenant_2 = await api_client_tenant_2.get(f"/copilot/{conv_tenant_2.id}/history")
-        assert history_tenant_2.status_code == 200, f"Expected 200, got {history_tenant_2.status_code}: {history_tenant_2.json()}"
-        history_data = history_tenant_2.json()
+        history_resp_2 = await api_client_tenant_2.get(f"/copilot/{conv_tenant_2.id}/history")
+        assert history_resp_2.status_code == 200, f"Expected 200, got {history_resp_2.status_code}: {history_resp_2.json()}"
+        history_data = history_resp_2.json()
         assert history_data["success"] is True
         assert "messages" in history_data["data"]
 

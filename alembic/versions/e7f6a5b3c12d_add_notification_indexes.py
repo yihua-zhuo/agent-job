@@ -128,13 +128,19 @@ def downgrade() -> None:
 
     # Phase 4 (reversed): apply NOT NULL constraint idempotently — check whether
     # the constraint is already present before applying it, to survive replayed
-    # downgrades or prior partial downgrades.
+    # downgrades or prior partial downgrades. Uses information_schema rather than
+    # SQLERRM pattern-matching so it works regardless of PostgreSQL locale.
     op.execute(
         text(
-            "DO $$ BEGIN "
+            "DO $$ "
+            "BEGIN "
+            "IF NOT EXISTS ("
+            "SELECT 1 FROM information_schema.table_constraints "
+            "WHERE constraint_name = 'notifications_is_read_notnull' "
+            "AND table_name = 'notifications'"
+            ") THEN "
             "ALTER TABLE notifications ALTER COLUMN is_read SET NOT NULL; "
-            "EXCEPTION WHEN others THEN "
-            "IF SQLERRM NOT LIKE '%already%' THEN RAISE NOTICE 'unexpected error: %', SQLERRM; END IF; "
+            "END IF; "
             "END $$"
         )
     )
