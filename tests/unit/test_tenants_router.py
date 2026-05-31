@@ -6,6 +6,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+from starlette.requests import Request
+from starlette.responses import JSONResponse
+
 from api.routers.tenants import tenants_router
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
@@ -223,7 +226,6 @@ class TestUpdateTenantEndpoint:
         # Use matching tenant_id so the authorization check passes;
         # ForbiddenException would be raised before reaching the service.
         app = client.app
-        from internal.middleware.fastapi_auth import require_auth
 
         app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=9999)
         resp = client.put("/api/v1/tenants/9999", json={"name": "X"})
@@ -346,9 +348,6 @@ class TestTenantCrossTenantIsolation:
 
     def test_get_tenant_stats_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant 2 cannot access tenant 1's stats; service layer returns 404 for unknown tenant."""
-        from starlette.requests import Request
-        from starlette.responses import JSONResponse
-
         app = FastAPI()
         app.include_router(tenants_router)
         app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=2)
@@ -374,9 +373,6 @@ class TestTenantCrossTenantIsolation:
 
     def test_get_tenant_usage_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant 2 cannot access tenant 1's usage; service layer returns 404 for unknown tenant."""
-        from starlette.requests import Request
-        from starlette.responses import JSONResponse
-
         app = FastAPI()
         app.include_router(tenants_router)
         app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=2)

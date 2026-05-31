@@ -8,7 +8,7 @@ from enum import StrEnum
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
@@ -54,6 +54,13 @@ class NotificationCreate(BaseModel):
     content: str = Field(..., min_length=1)
     related_type: str | None = Field(None, max_length=50)
     related_id: int | None = Field(None, ge=1)
+
+    @model_validator(mode="after")
+    def validate_notification_type(self):
+        valid = {"email", "in_app", "push", "sms"}
+        if self.notification_type.value not in valid:
+            raise ValueError(f"notification_type must be one of {sorted(valid)}")
+        return self
 
 
 class PreferencesData(BaseModel):
@@ -119,7 +126,9 @@ async def send_notification(
     data = await svc.send_notification(
         tenant_id=current_user.tenant_id,
         user_id=body.user_id,
-        notification_type=body.notification_type,
+        # NotificationType values (EMAIL='email', IN_APP='in_app') are identical to
+        # VALID_NOTIFICATION_CHANNELS strings; .value makes the correspondence explicit.
+        notification_type=str(body.notification_type),
         title=body.title,
         content=body.content,
         related_type=body.related_type,
@@ -160,7 +169,7 @@ async def mark_all_notifications_read(
 
     svc = NotificationService(session)
     data = await svc.mark_all_as_read(current_user.user_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data, "message": "所有通知已标记为已读"}
+    return {"success": True, "data": data.to_dict(), "message": "所有通知已标记为已读"}
 
 
 @notifications_router.delete(

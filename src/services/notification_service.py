@@ -2,6 +2,7 @@
 
 import json
 import logging
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, func, select, update
@@ -14,6 +15,16 @@ from pkg.constants.notification_constants import VALID_NOTIFICATION_CHANNELS, VA
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class MarkAllReadResult:
+    """Result of marking all notifications as read."""
+
+    marked_count: int
+
+    def to_dict(self) -> dict:
+        return {"marked_count": self.marked_count}
 
 
 class NotificationService:
@@ -128,7 +139,7 @@ class NotificationService:
         await self.session.flush()
         return notification
 
-    async def mark_all_as_read(self, user_id: int, tenant_id: int) -> dict:
+    async def mark_all_as_read(self, user_id: int, tenant_id: int) -> MarkAllReadResult:
         """Mark all unread notifications as read for a user."""
         user_check = await self.session.execute(
             select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
@@ -148,7 +159,7 @@ class NotificationService:
             .values(read_at=now, status="read")
         )
         marked_count = result.rowcount or 0
-        return {"marked_count": marked_count}
+        return MarkAllReadResult(marked_count=marked_count)
 
     async def delete_notification(self, notification_id: int, tenant_id: int) -> NotificationModel:
         """Delete a notification."""
@@ -208,7 +219,10 @@ class NotificationService:
     ) -> ReminderModel:
         """Create a reminder for a user at a specified time."""
         if isinstance(remind_at, str):
-            remind_at = datetime.fromisoformat(remind_at)
+            try:
+                remind_at = datetime.fromisoformat(remind_at)
+            except ValueError:
+                raise ValidationException("remind_at must be a valid ISO8601 datetime")
         reminder = ReminderModel(
             tenant_id=tenant_id,
             user_id=user_id,

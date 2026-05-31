@@ -9,9 +9,9 @@ from typing import Any
 from tests.unit.conftest import MockResult, MockRow, MockState
 
 # SQLAlchemy uses the Python attribute name as the bind parameter name for mapped
-# attributes; however, the ORM maps payload_params to DB column `params_`, so the
-# bind key used by the ORM is `params_`, not `payload_params`.
-_NOTIFICATION_PARAMS_KEY = "params_"
+# attributes. payload_params maps to DB column `params_`, but the bind key is
+# the Python attribute name: "payload_params".
+_NOTIFICATION_PARAMS_KEY = "payload_params"
 
 
 def _notification_to_row(n: dict):
@@ -22,7 +22,7 @@ def _notification_to_row(n: dict):
             "user_id": n.get("user_id"),
             "channel": n.get("channel"),
             "template": n.get("template"),
-            _NOTIFICATION_PARAMS_KEY: n.get("params_"),
+            "payload_params": n.get("payload_params"),
             "status": n.get("status"),
             "priority": n.get("priority"),
             "created_at": n.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC),
@@ -86,7 +86,7 @@ def make_notification_handler(state):
                 "user_id": params.get("user_id", 0),
                 "channel": params.get("channel"),
                 "template": params.get("template"),
-                "params_": params.get(_NOTIFICATION_PARAMS_KEY),
+                "params_": params.get("payload_params"),
                 "status": params.get("status", "pending"),
                 "priority": params.get("priority", "normal"),
                 "created_at": params.get("created_at"),
@@ -116,16 +116,13 @@ def make_notification_handler(state):
                 count = sum(
                     1
                     for n in state._notifications.values()
-                    if n.get("tenant_id") == tenant_id
-                    and n.get("user_id") == user_id
-                    and n.get("read_at") is None
+                    if n.get("tenant_id") == tenant_id and n.get("user_id") == user_id and n.get("read_at") is None
                 )
             else:
                 count = sum(
                     1
                     for n in state._notifications.values()
-                    if n.get("tenant_id") == tenant_id
-                    and n.get("user_id") == user_id
+                    if n.get("tenant_id") == tenant_id and n.get("user_id") == user_id
                 )
             return MockResult([[count]])
 
@@ -135,15 +132,16 @@ def make_notification_handler(state):
             unread_filter = params.get("_unread_only", False)
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
-            rows = []
-            for n in state._notifications.values():
-                if n.get("tenant_id") != tenant_id:
-                    continue
-                if n.get("user_id") != user_id:
-                    continue
-                if unread_filter and n.get("read_at") is not None:
-                    continue
-                rows.append(n)
+            rows = sorted(
+                (
+                    n
+                    for n in state._notifications.values()
+                    if n.get("tenant_id") == tenant_id
+                    and n.get("user_id") == user_id
+                    and not (unread_filter and n.get("read_at") is not None)
+                ),
+                key=lambda n: n.get("id", 0),
+            )
             return MockResult([_notification_to_row(r) for r in rows[offset : offset + page_size]])
 
         if "update notifications" in sql_text_lower and "read_at" in sql_text_lower:
@@ -229,9 +227,7 @@ def make_reminder_handler(state):
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             count = sum(
-                1
-                for r in state._reminders.values()
-                if r.get("tenant_id") == tenant_id and r.get("user_id") == user_id
+                1 for r in state._reminders.values() if r.get("tenant_id") == tenant_id and r.get("user_id") == user_id
             )
             return MockResult([[count]])
 
@@ -294,7 +290,16 @@ def _reminder_to_row(r: dict):
 
 
 def get_handlers(state: MockState) -> list[Callable[[str, dict], MockResult | None]]:
-    return [make_notification_handler(state), make_reminder_handler(state)]
+    handlers = [make_notification_handler(state), make_reminder_handler(state)]
+    # Deduplicate in case notification.py is listed alongside domain-specific modules
+    # that also export overlapping handlers (Rule 135).
+    seen_ids = set()
+    unique = []
+    for h in handlers:
+        if id(h) not in seen_ids:
+            seen_ids.add(id(h))
+            unique.append(h)
+    return unique
 
 
 __all__ = ["get_handlers", "make_notification_handler", "make_reminder_handler"]

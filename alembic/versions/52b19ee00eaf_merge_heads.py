@@ -103,8 +103,12 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=255), nullable=False),
         sa.Column("description", sa.String(length=512), nullable=True),
         sa.Column("trigger_event", sa.String(length=100), nullable=False),
-        sa.Column("conditions", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'::jsonb")),
-        sa.Column("actions", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'::jsonb")),
+        sa.Column(
+            "conditions", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'::jsonb")
+        ),
+        sa.Column(
+            "actions", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'::jsonb")
+        ),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_by", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
@@ -137,8 +141,18 @@ def upgrade() -> None:
         sa.Column("rule_id", sa.Integer(), sa.ForeignKey("automation_rules.id", ondelete="CASCADE"), nullable=False),
         sa.Column("tenant_id", sa.Integer(), nullable=False, server_default=sa.text("0")),
         sa.Column("trigger_event", sa.String(length=100), nullable=False),
-        sa.Column("trigger_context", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'{}'::jsonb")),
-        sa.Column("actions_executed", postgresql.JSONB(astext_type=sa.Text()), nullable=False, server_default=sa.text("'[]'::jsonb")),
+        sa.Column(
+            "trigger_context",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'{}'::jsonb"),
+        ),
+        sa.Column(
+            "actions_executed",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'[]'::jsonb"),
+        ),
         sa.Column("status", sa.String(length=50), nullable=False, server_default=sa.text("'success'")),
         sa.Column("error_message", sa.Text(), nullable=True),
         sa.Column("executed_by", sa.Integer(), nullable=False, server_default=sa.text("0")),
@@ -217,7 +231,9 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_report_definitions_tenant_id"), "report_definitions", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_report_definitions_report_type"), "report_definitions", ["report_type"], unique=False)
-    op.create_index(op.f("ix_report_definitions_owner_tenant_id"), "report_definitions", ["owner_tenant_id"], unique=False)
+    op.create_index(
+        op.f("ix_report_definitions_owner_tenant_id"), "report_definitions", ["owner_tenant_id"], unique=False
+    )
     # tenant_id FK for report_definitions — catches DBs that arrived via a path
     # that skipped this migration; uses IF NOT EXISTS so existing constraints are
     # not broken.
@@ -271,8 +287,12 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["conversation_id"], ["conversations.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(op.f("ix_conversation_messages_conversation_id"), "conversation_messages", ["conversation_id"], unique=False)
-    op.create_index("ix_conversation_messages_tenant_conv", "conversation_messages", ["tenant_id", "conversation_id"], unique=False)
+    op.create_index(
+        op.f("ix_conversation_messages_conversation_id"), "conversation_messages", ["conversation_id"], unique=False
+    )
+    op.create_index(
+        "ix_conversation_messages_tenant_conv", "conversation_messages", ["tenant_id", "conversation_id"], unique=False
+    )
     op.create_index("ix_conversation_messages_tenant_id", "conversation_messages", ["tenant_id"], unique=False)
     # tenant_id FK for conversation_messages — catches DBs that arrived via a path
     # that skipped this migration; uses IF NOT EXISTS so existing constraints are
@@ -301,7 +321,9 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_opportunity_activities_tenant_id"), "opportunity_activities", ["tenant_id"], unique=False)
-    op.create_index(op.f("ix_opportunity_activities_opportunity_id"), "opportunity_activities", ["opportunity_id"], unique=False)
+    op.create_index(
+        op.f("ix_opportunity_activities_opportunity_id"), "opportunity_activities", ["opportunity_id"], unique=False
+    )
     # tenant_id FK for opportunity_activities — catches DBs that arrived via a path
     # that skipped this migration.
     # Only duplicate_object (constraint already exists) and undefined_object
@@ -344,11 +366,19 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_customer_enrichments_tenant_id"), "customer_enrichments", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_customer_enrichments_customer_id"), "customer_enrichments", ["customer_id"], unique=False)
-    op.create_index(op.f("ix_customer_enrichments_next_refresh_at"), "customer_enrichments", ["next_refresh_at"], unique=False)
+    op.create_index(
+        op.f("ix_customer_enrichments_next_refresh_at"), "customer_enrichments", ["next_refresh_at"], unique=False
+    )
 
 
 def downgrade() -> None:
     # Drop tables and columns created by upgrade() in reverse dependency order.
+    #
+    # NOTE: This downgrade() correctness depends on merge_heads_63274_addcp001's
+    # downgrade dropping its own tables first, which triggers CASCADE removal of
+    # foreign-key constraints this migration created. Running this downgrade
+    # standalone (without that parent migration's tables present) will fail because
+    # the FK constraints cannot be dropped before the referenced tables exist.
     op.drop_table("customer_enrichments")
     op.drop_table("opportunity_activities")
     op.drop_table("conversation_messages")

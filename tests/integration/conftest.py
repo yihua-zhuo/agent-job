@@ -9,6 +9,7 @@ Services import `get_db_session` at module load time by name:
 so we monkey-patch that attribute on every service module (not just on
 db.connection) so the services transparently use the test DB session.
 """
+
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -73,9 +74,7 @@ if _resolved is None:
     )
 
 TEST_DATABASE_URL: str = _resolved
-TEST_SYNC_DATABASE_URL: str = TEST_DATABASE_URL.replace(
-    "postgresql+asyncpg://", "postgresql://", 1
-)
+TEST_SYNC_DATABASE_URL: str = TEST_DATABASE_URL.replace("postgresql+asyncpg://", "postgresql://", 1)
 
 # Ensure required env vars are present for services instantiated in tests.
 # Note: dotenv loaded .env above which may have the real secret; override for tests.
@@ -125,9 +124,7 @@ def _get_test_sync_engine():
     if _test_sync_engine is None:
         from sqlalchemy import create_engine
 
-        _test_sync_engine = create_engine(
-            TEST_SYNC_DATABASE_URL, pool_pre_ping=True, pool_size=3
-        )
+        _test_sync_engine = create_engine(TEST_SYNC_DATABASE_URL, pool_pre_ping=True, pool_size=3)
     return _test_sync_engine
 
 
@@ -230,9 +227,7 @@ async def async_session(db_schema) -> AsyncGenerator[AsyncSession, None]:
 
 @pytest.fixture(scope="function")
 def sync_session(db_schema) -> Generator[Session, None, None]:
-    SessionLocal = sessionmaker(
-        bind=_get_test_sync_engine(), autoflush=False, autocommit=False
-    )
+    SessionLocal = sessionmaker(bind=_get_test_sync_engine(), autoflush=False, autocommit=False)
     with SessionLocal() as session:
         yield session
 
@@ -295,6 +290,7 @@ async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
 # individual tests. This module-scope fixture is the "last line of defense"
 # to guarantee no test data leaks between files.
 
+
 @pytest.fixture(scope="module", autouse=True)
 def _cleanup_after_module() -> Generator[None, None, None]:
     """Truncate all tables once after every test file completes."""
@@ -319,11 +315,12 @@ from httpx import ASGITransport, AsyncClient
 def fastapi_app():
     """Import and return the FastAPI app from main.py."""
     from main import app
+
     return app
 
 
 @pytest_asyncio.fixture(scope="function")
-async def client(fresh_schema, fastapi_app, async_session) -> AsyncGenerator[AsyncClient, None]:
+async def client(fresh_schema, fastapi_app, async_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Async HTTP client that hits the FastAPI app directly via ASGI.
 
     Overrides get_db to share the same session/connection as the test's async_session
@@ -371,6 +368,7 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
     from db.models.tenant import TenantModel
     from services.auth_service import AuthService
     from services.user_service import UserService
+
     result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_web))
     if result.scalar_one_or_none() is None:
         tenant = TenantModel(id=tenant_id_web, name="Web Test Tenant", plan="free", status="active")

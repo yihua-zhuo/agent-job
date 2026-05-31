@@ -15,7 +15,7 @@ status, priority, delivered_at, read_at).
 import logging
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, and_, column, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, and_, column, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -39,6 +39,9 @@ class NotificationModel(Base):
         # Composite index for user + tenant + status queries.
         Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status"),
         # Partial index for unread in-app notifications lookup.
+        # Uses column() (string) rather than the model attribute because the partial
+        # index WHERE clause requires a SQL expression that the mapped column reference
+        # cannot express directly.
         Index(
             "ix_notifications_in_app_unread",
             "user_id",
@@ -47,6 +50,17 @@ class NotificationModel(Base):
                 column("channel") == "in_app",
                 column("read_at").is_(None),
             ),
+        ),
+        # DB-level enforcement of the channel, priority, and status allow-lists.
+        CheckConstraint(
+            column("channel").in_(["in_app", "email", "sms", "push"]), name="ix_notifications_channel_check"
+        ),
+        CheckConstraint(
+            column("priority").in_(["low", "normal", "high", "urgent"]), name="ix_notifications_priority_check"
+        ),
+        CheckConstraint(
+            column("status").in_(["pending", "read", "archived", "delivered", "failed"]),
+            name="ix_notifications_status_check",
         ),
     )
 

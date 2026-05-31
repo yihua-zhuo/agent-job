@@ -1,4 +1,5 @@
 """Tenant service — CRUD via SQLAlchemy ORM (TenantModel)."""
+
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -62,12 +63,12 @@ class TenantService:
 
     async def _fetch_tenant(self, target_tenant_id: int, requesting_tenant_id: int) -> TenantModel:
         if requesting_tenant_id != target_tenant_id:
-            raise ForbiddenException(f"Access denied to tenant {target_tenant_id}")
+            raise ForbiddenException("Access denied")
         conditions = [TenantModel.id == target_tenant_id]
         result = await self.session.execute(select(TenantModel).where(and_(*conditions)))
         tenant = result.scalar_one_or_none()
         if tenant is None or tenant.status == "deleted":
-            raise NotFoundException(f"Tenant {target_tenant_id}")
+            raise NotFoundException("Tenant")
         return tenant
 
     async def get_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
@@ -75,7 +76,7 @@ class TenantService:
 
     async def update_tenant(self, tenant_id: int, requesting_tenant_id: int, **kwargs) -> TenantModel:
         if tenant_id != requesting_tenant_id:
-            raise ForbiddenException(f"Tenant {tenant_id}")
+            raise ForbiddenException("Access denied")
         tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
 
         allowed = {"name", "plan", "status", "admin_email", "settings"}

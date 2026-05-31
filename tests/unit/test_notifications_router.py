@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 from fastapi import FastAPI, HTTPException
@@ -308,7 +308,9 @@ class TestMarkAllRead:
     def test_mark_all_read_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
-            svc.mark_all_as_read = AsyncMock(return_value={"marked_count": 7})
+            mock_result = MagicMock()
+            mock_result.to_dict.return_value = {"marked_count": 7}
+            svc.mark_all_as_read = AsyncMock(return_value=mock_result)
             client = _app()
             response = client.post("/api/v1/notifications/mark-all-read")
             assert response.status_code == 200

@@ -84,6 +84,17 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Phase 1 (reversed): drop new columns before dropping indexes that reference them.
+    # Must run before dropping indexes so the columns still exist at constraint-check time.
+    op.drop_column("notifications", "read_at")
+    op.drop_column("notifications", "delivered_at")
+    op.drop_column("notifications", "priority")
+    op.drop_column("notifications", "status")
+    op.drop_column("notifications", "params_")
+    op.drop_column("notifications", "template")
+    op.drop_column("notifications", "channel")
+
+    # Phase 4 (reversed): drop indexes created in upgrade before restoring old columns.
     op.drop_index("ix_notifications_in_app_unread", table_name="notifications")
     op.drop_index("ix_notifications_user_tenant_status", table_name="notifications")
 
@@ -125,6 +136,9 @@ def downgrade() -> None:
     )
     op.execute(text("UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL"))
     op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL AND status IS NOT NULL"))
+    # Catch-all for rows that had NULL status during the Phase 2 backfill —
+    # these rows should have is_read=false to match the pre-migration implicit default.
+    op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL"))
 
     # Phase 4 (reversed): apply NOT NULL constraint idempotently — check whether
     # the constraint is already present before applying it, to survive replayed
@@ -144,12 +158,3 @@ def downgrade() -> None:
             "END $$"
         )
     )
-
-    # Phase 2 (reversed): drop new columns added in the upgrade (channel, template, etc.)
-    op.drop_column("notifications", "read_at")
-    op.drop_column("notifications", "delivered_at")
-    op.drop_column("notifications", "priority")
-    op.drop_column("notifications", "status")
-    op.drop_column("notifications", "params_")
-    op.drop_column("notifications", "template")
-    op.drop_column("notifications", "channel")
