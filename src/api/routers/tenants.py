@@ -4,7 +4,7 @@ Services raise AppException on errors (caught by global handler in main.py).
 Router wraps successful results in {"success": True, "data": ..., "message": ...}.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -91,7 +91,7 @@ async def get_tenant_usage(
 
 @tenants_router.get("/{tenant_id}")
 async def get_tenant(
-    tenant_id: int,
+    tenant_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
@@ -129,14 +129,13 @@ async def list_tenants(
 
 @tenants_router.put("/{tenant_id}")
 async def update_tenant(
-    tenant_id: int,
-    body: TenantUpdate,
+    tenant_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
+    body: TenantUpdate = Body(...),
 ):
     service = TenantService(session)
-    update_data = body.model_dump()
-    # Strip None values so the service's merge logic handles omitted fields.
+    update_data = body.model_dump(exclude_unset=True)
     update_data = {k: v for k, v in update_data.items() if v is not None}
     data = await service.update_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id, **update_data)
     return {"success": True, "data": data.to_dict(), "message": "Tenant updated"}
