@@ -20,6 +20,7 @@ import pytest
 from dotenv import load_dotenv
 from sqlalchemy import insert, select, table, text
 from sqlalchemy.exc import CompileError, MultipleResultsFound, UnsupportedCompilationError
+from sqlalchemy.sql.elements import ClauseElement
 
 # Load .env so DATABASE_URL is available in test environment.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
@@ -276,7 +277,8 @@ def make_mock_session(handlers=None, state=None):
         sql_text = str(sql).lower().strip()
         bound_params = {}
         try:
-            bound_params.update(getattr(sql.compile(), "params", {}) or {})
+            if isinstance(sql, ClauseElement):
+                bound_params.update(getattr(sql.compile(), "params", {}) or {})
         except (TypeError, AttributeError, RuntimeError, CompileError, UnsupportedCompilationError) as exc:
             # These are the exceptions SQLAlchemy's .compile() can raise at
             # bind-param extraction time; others (KeyboardInterrupt, SystemExit)

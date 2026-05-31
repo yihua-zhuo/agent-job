@@ -115,6 +115,7 @@ class TestNotificationTemplateModel:
         )
         d = model.to_dict()
         assert len(d["name"]) == 100
+        assert d["name"] == "x" * 100
 
     def test_subject_accepts_255_chars(self):
         """Subject field accepts a 255-character string without error."""
@@ -129,6 +130,7 @@ class TestNotificationTemplateModel:
         )
         d = model.to_dict()
         assert len(d["subject"]) == 255
+        assert d["subject"] == "y" * 255
 
     def test_to_dict_created_at_isoformat(self):
         """created_at is serialized as an ISO-format string."""

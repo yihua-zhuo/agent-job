@@ -2,7 +2,7 @@
 
 ## Goal
 
-Create `NotificationTemplateModel` ORM class in `src/db/models/notification_template.py` with fields `id`, `name`, `channel`, `subject`, `body_html`, `body_text`, `created_at`, and generate the corresponding Alembic migration to create the `notification_templates` table. No service, router, or API layer is included — this is purely the data model + migration step of the notification system (parent issue #646).
+Create `NotificationTemplateModel` ORM class in `src/db/models/notification_template.py` with fields `id`, `name`, `channel`, `subject`, `body_html`, `body_text`, `created_at`, `updated_at`, and generate the corresponding Alembic migration to create the `notification_templates` table. No service, router, or API layer is included — this is purely the data model + migration step of the notification system (parent issue #646).
 
 ## Source Contract
 
@@ -122,7 +122,7 @@ PYTHONPATH=src DATABASE_URL="postgresql+asyncpg://test_user:test_pass@localhost:
 
 Write `tests/unit/test_notification_template_model.py` with the three test cases from the dev-plan §5 Step 3: `test_to_dict_returns_all_fields`, `test_to_dict_with_null_optional_fields`, `test_table_name`.
 
-**Verification**: `PYTHONPATH=src pytest tests/unit/test_notification_template_model.py -v` → 3 passed
+**Verification**: `PYTHONPATH=src pytest tests/unit/test_notification_template_model.py -v` → 6 passed
 
 ---
 
@@ -155,7 +155,7 @@ Inspect the generated `alembic/versions/<id>_drift_check.py` — both `up()` and
 
 ## Acceptance Criteria
 
-- `src/db/models/notification_template.py` exists, defines `NotificationTemplateModel` with fields: `id`, `tenant_id`, `name`, `channel`, `subject`, `body_html`, `body_text`, `created_at`
+- `src/db/models/notification_template.py` exists, defines `NotificationTemplateModel` with fields: `id`, `tenant_id`, `name`, `channel`, `subject`, `body_html`, `body_text`, `created_at`, `updated_at`
 - `ruff check src/db/models/notification_template.py` exits 0
 - `alembic/versions/5d575a161b5d_add_notification_templates.py` exists and creates `notification_templates` table with correct column types and FK constraint on `tenant_id`
 - `alembic/versions/merge_nt_662.py` exists as a merge revision with `down_revision = (52b19ee00eaf, 5d575a161b5d)`, allowing `alembic upgrade head` to succeed on a fresh database

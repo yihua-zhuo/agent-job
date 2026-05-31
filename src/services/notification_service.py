@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
+from db.models.smart_notification import Channel, Priority, SmartNotificationModel, Timing
 from db.models.user import UserModel
 from pkg.constants.notification_constants import (
     PAYLOAD_PARAMS_ALLOWED_KEYS,
@@ -167,6 +168,39 @@ class NotificationService:
         if notification is None:
             raise NotFoundException("Notification")
         await self.session.delete(notification)
+        await self.session.flush()
+        return notification
+
+    async def create_smart_notification(
+        self,
+        summarized_content: str,
+        priority: int,
+        channel: int,
+        timing: int,
+        tenant_id: int,
+        recipient_filter: dict | None = None,
+    ) -> SmartNotificationModel:
+        """Persist a smart notification record and return it.
+
+        Actual channel routing is performed by NotificationRoutingService.route()
+        in the router — this method only persists.
+        """
+        if priority not in {p.value for p in Priority}:
+            raise ValidationException(f"priority must be 0 (urgent), 1 (normal), or 2 (low), got {priority}")
+        if channel not in {c.value for c in Channel}:
+            raise ValidationException(f"channel must be 0 (email), 1 (sms), 2 (push), or 3 (in_app), got {channel}")
+        if timing not in {t.value for t in Timing}:
+            raise ValidationException(f"timing must be 0 (immediate) or 1 (batch), got {timing}")
+
+        notification = SmartNotificationModel(
+            tenant_id=tenant_id,
+            summarized_content=summarized_content,
+            priority=priority,
+            channel=channel,
+            timing=timing,
+            recipient_filter=recipient_filter,
+        )
+        self.session.add(notification)
         await self.session.flush()
         return notification
 
