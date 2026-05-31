@@ -41,13 +41,21 @@ class EnrichmentRefreshRequest(BaseModel):
     domain: str | None = None
     company_name: str | None = None
 
+    @field_validator("domain", "company_name")
+    @classmethod
+    def strip_whitespace(cls, v: str | None) -> str | None:
+        if v is not None:
+            v = v.strip()
+        return v
+
     @model_validator(mode="after")
     def require_at_least_one(self) -> "EnrichmentRefreshRequest":
+        # After strip validation, both '' and None are treated as absent.
+        # Use object.__getattribute__ to bypass the to-python strip already applied.
         raw_domain: str | None = object.__getattribute__(self, "domain")
         raw_name: str | None = object.__getattribute__(self, "company_name")
         active = [
-            x.strip() if isinstance(x, str) else None
-            for x in (raw_domain, raw_name)
+            x for x in (raw_domain, raw_name)
             if x is not None and x != ""
         ]
         if len(active) == 0:

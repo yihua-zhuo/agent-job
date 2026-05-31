@@ -143,7 +143,6 @@ class CustomerService:
 
         customer.updated_at = datetime.now(UTC)
         await self.session.flush()
-        await self.session.refresh(customer)
 
         # Upsert enrichment data when present in payload
         if data.get("enrichment_data") is not None:

@@ -189,6 +189,7 @@ async def list_customers(
                     ),
                 )
             )
+            .limit(len(customer_ids))
         )
         for row in enrich_result.all():
             enrichment_map[row.customer_id] = row

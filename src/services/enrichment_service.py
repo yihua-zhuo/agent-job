@@ -81,6 +81,31 @@ class EnrichmentService:
         else:
             params["name"] = company_name.strip()  # type: ignore[arg-type]
 
+        raw_data = await self._call_clearbit(params, api_key)
+        normalised = self._normalise_clearbit(raw_data)
+
+        # Persist raw payload
+        enrichment = CustomerEnrichmentModel(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider="clearbit",
+            raw_data_json=raw_data,
+            enriched_at=datetime.now(UTC),
+        )
+        self.session.add(enrichment)
+        await self.session.flush()
+
+        return normalised
+
+    async def _call_clearbit(
+        self,
+        params: dict[str, str],
+        api_key: str,
+    ) -> dict[str, Any]:
+        """Make a request to the Clearbit company API and return parsed JSON.
+
+        Raises ValidationException on 404 or non-success status codes.
+        """
         async with httpx.AsyncClient(
             timeout=httpx.Timeout(
                 settings.clearbit_read_timeout,
@@ -98,21 +123,34 @@ class EnrichmentService:
         if not response.is_success:
             raise ValidationException(f"Clearbit API error: {response.status_code}")
 
-        raw_data: dict[str, Any] = response.json()
-        normalised = self._normalise_clearbit(raw_data)
+        return response.json()
 
-        # Persist raw payload
-        enrichment = CustomerEnrichmentModel(
+    async def _upsert_enrichment(
+        self,
+        tenant_id: int,
+        customer_id: int,
+        raw_data: dict[str, Any],
+        now: datetime,
+    ) -> None:
+        """Upsert a CustomerEnrichmentModel record (insert or replace)."""
+        stmt = pg_insert(CustomerEnrichmentModel).values(
             tenant_id=tenant_id,
             customer_id=customer_id,
             provider="clearbit",
             raw_data_json=raw_data,
-            enriched_at=datetime.now(UTC),
+            enriched_at=now,
         )
-        self.session.add(enrichment)
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tenant_id", "customer_id"],
+            set_={
+                "provider": "clearbit",
+                "raw_data_json": stmt.excluded.raw_data_json,
+                "enriched_at": stmt.excluded.enriched_at,
+                "updated_at": now,
+            },
+        )
+        await self.session.execute(stmt)
         await self.session.flush()
-
-        return normalised
 
     def _normalise_clearbit(self, data: dict[str, Any]) -> dict[str, Any]:
         """Flatten a Clearbit company payload into a portable dict.
@@ -172,42 +210,8 @@ class EnrichmentService:
         elif company_name:
             params["name"] = company_name.strip()
 
-        async with httpx.AsyncClient(
-            timeout=httpx.Timeout(
-                settings.clearbit_read_timeout,
-                connect=settings.clearbit_connect_timeout or 5.0,
-            )
-        ) as client:
-            response = await client.get(
-                "https://company.clearbit.com/v2/companies/find",
-                params=params,
-                headers={"Authorization": f"Bearer {api_key}"},
-            )
-
-        if response.status_code == 404:
-            raise ValidationException("No company found for the given domain or name")
-        if not response.is_success:
-            raise ValidationException(f"Clearbit API error: {response.status_code}")
-
-        raw_data: dict[str, Any] = response.json()
+        raw_data = await self._call_clearbit(params, api_key)
         now = datetime.now(UTC)
-        stmt = pg_insert(CustomerEnrichmentModel).values(
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-            provider="clearbit",
-            raw_data_json=raw_data,
-            enriched_at=now,
-        )
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["tenant_id", "customer_id"],
-            set_={
-                "provider": "clearbit",
-                "raw_data_json": stmt.excluded.raw_data_json,
-                "enriched_at": stmt.excluded.enriched_at,
-                "updated_at": now,
-            },
-        )
-        await self.session.execute(stmt)
-        await self.session.flush()
+        await self._upsert_enrichment(tenant_id, customer_id, raw_data, now)
 
         return self._normalise_clearbit(raw_data)
