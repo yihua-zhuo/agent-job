@@ -23,9 +23,6 @@ class MarkAllReadResult:
 
     marked_count: int
 
-    def to_dict(self) -> dict:
-        return {"marked_count": self.marked_count}
-
 
 class NotificationService:
     """Notification service backed by PostgreSQL via SQLAlchemy async ORM."""

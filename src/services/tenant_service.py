@@ -72,6 +72,7 @@ class TenantService:
         return tenant
 
     async def get_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
+        """Fetch a tenant by ID, validating that the requester owns it."""
         return await self._fetch_tenant(tenant_id, requesting_tenant_id)
 
     async def update_tenant(self, tenant_id: int, requesting_tenant_id: int, **kwargs) -> TenantModel:

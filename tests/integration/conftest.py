@@ -36,6 +36,7 @@ if str(_src_root) not in sys.path:
 import pytest
 import pytest_asyncio
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
@@ -385,7 +386,7 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
             tenant_id=tenant_id_web,
         )
         actual_user_id = user.id
-    except Exception:
+    except IntegrityError:
         # Already exists from a prior fixture run; look up the real id.
         existing = await user_svc.get_user_by_username(tenant_id_web, "webtest")
         assert existing is not None, "auth_headers_web failed to seed the test user"
@@ -431,7 +432,8 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
             tenant_id=tenant_id_2_web,
         )
         actual_user_id = user.id
-    except Exception:
+        assert actual_user_id is not None, "auth_headers_tenant_2 failed to seed the test user"
+    except IntegrityError:
         existing = await user_svc.get_user_by_username(tenant_id_2_web, "webtest2")
         assert existing is not None, "auth_headers_tenant_2 failed to seed the test user"
         actual_user_id = existing.id
@@ -458,7 +460,7 @@ async def api_client(
     session/connection as the test, ensuring any data seeded by auth_headers_web
     is visible to request handlers.
     """
-    client.headers.update(auth_headers_web)
+    client.headers = {**client.headers, **auth_headers_web}
     return client
 
 
@@ -470,10 +472,10 @@ async def api_client_tenant_2(
 ) -> AsyncGenerator[AsyncClient, None]:
     """HTTP client authenticated as tenant 2.
 
-    Uses its own AsyncClient so headers don't leak across tenant boundaries —
-    sharing the `client` fixture would mutate the headers on `api_client` too.
-    Shares the same async_session as auth_headers_tenant_2 so that user-records
-    created during auth fixture setup are visible to request handlers.
+    Builds a fully isolated AsyncClient so no shared state (headers, app
+    overrides) leaks across tenant boundaries. Shares the same async_session
+    as auth_headers_tenant_2 so that user-records created during auth fixture
+    setup are visible to request handlers.
     """
     from db.connection import get_db
 
@@ -482,7 +484,6 @@ async def api_client_tenant_2(
 
     fastapi_app.dependency_overrides[get_db] = _override_get_db
     transport = ASGITransport(app=fastapi_app)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
-        ac.headers.update(auth_headers_tenant_2)
+    async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers_tenant_2) as ac:
         yield ac
     fastapi_app.dependency_overrides.pop(get_db, None)

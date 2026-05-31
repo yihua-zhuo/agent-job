@@ -159,7 +159,7 @@ async def mark_all_notifications_read(
 
     svc = NotificationService(session)
     data = await svc.mark_all_as_read(current_user.user_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data.to_dict(), "message": "所有通知已标记为已读"}
+    return {"success": True, "data": {"marked_count": data.marked_count}, "message": "所有通知已标记为已读"}
 
 
 @notifications_router.delete(

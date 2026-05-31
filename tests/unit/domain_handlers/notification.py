@@ -8,9 +8,8 @@ from typing import Any
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
-# SQLAlchemy uses the Python attribute name as the bind parameter name for mapped
-# attributes. payload_params maps to DB column `params_`, but the bind key is
-# the Python attribute name: "payload_params".
+# The ORM attribute is named payload_params, which SQLAlchemy uses as the bind
+# parameter name. The internal mock store key params_ is unrelated.
 _NOTIFICATION_PARAMS_KEY = "payload_params"
 
 

@@ -608,7 +608,6 @@ class TestTenantIntegration:
 
         stats = await svc.get_tenant_stats(tid, requesting_tenant_id=tid)
         assert stats is not None
-        stats_dict = stats.to_dict()
-        assert "user_count" in stats_dict
-        assert "tenant_id" in stats_dict
-        assert "name" in stats_dict
+        assert stats.user_count is not None
+        assert stats.tenant.id == tid
+        assert stats.tenant.name is not None

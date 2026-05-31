@@ -333,6 +333,7 @@ class TestTenantCrossTenantIsolation:
     def test_get_tenant_returns_403_for_cross_tenant(self, tenant_router_client):
         """Tenant A requesting tenant B's data via URL path tenant_id is rejected by the router guard before reaching the service."""
         client, svc = tenant_router_client
+        svc.get_tenant = AsyncMock()
         resp = client.get("/api/v1/tenants/9999")
         assert resp.status_code == 403
         svc.get_tenant.assert_not_called()
@@ -340,6 +341,7 @@ class TestTenantCrossTenantIsolation:
     def test_get_tenant_forbidden_on_existing_cross_tenant(self, tenant_router_client):
         """Tenant A requesting tenant B's data for an existing tenant is rejected by the router guard (403) before reaching the service."""
         client, svc = tenant_router_client
+        svc.get_tenant = AsyncMock()
         resp = client.get("/api/v1/tenants/2")
         assert resp.status_code == 403
         svc.get_tenant.assert_not_called()
@@ -363,6 +365,7 @@ class TestTenantCrossTenantIsolation:
     def test_update_tenant_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant A updating tenant B's record via URL path tenant_id is rejected by the router guard (403) before reaching the service."""
         client, svc = tenant_router_client
+        svc.update_tenant = AsyncMock()
         resp = client.put("/api/v1/tenants/9999", json={"name": "Stolen"})
         assert resp.status_code == 403
         svc.update_tenant.assert_not_called()
@@ -370,6 +373,7 @@ class TestTenantCrossTenantIsolation:
     def test_update_tenant_forbidden_on_cross_tenant(self, tenant_router_client):
         """Tenant A requesting tenant B's data via URL path is rejected by the router guard (403) before reaching the service."""
         client, svc = tenant_router_client
+        svc.update_tenant = AsyncMock()
         resp = client.put("/api/v1/tenants/2", json={"name": "Hijack"})
         assert resp.status_code == 403
         svc.update_tenant.assert_not_called()

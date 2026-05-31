@@ -109,19 +109,25 @@ def _make_auth_override(tenant_id: int = 1, user_id: int = 99):
     return _make_auth_ctx(tenant_id=tenant_id, user_id=user_id)
 
 
-def _app(tenant_id: int = 1) -> TestClient:
-    # get_db must be overridden so FastAPI can construct the router's session dependency.
-    # NotificationService is fully patched in these tests, so the real session is not used,
-    # but FastAPI checks the dependency signature at startup — the override satisfies it.
+def _make_test_app(auth_override):
+    """Build a FastAPI app with the notifications router and given auth override."""
     app = FastAPI()
     app.include_router(notifications_router)
-    app.dependency_overrides[require_auth] = lambda: _make_auth_override(tenant_id=tenant_id)
+    app.dependency_overrides[require_auth] = auth_override
     app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
 
     @app.exception_handler(AppException)
     async def _handler(request, exc):
         return JSONResponse(status_code=exc.status_code, content={"success": False, "message": exc.detail})
 
+    return app
+
+
+def _app(tenant_id: int = 1) -> TestClient:
+    # get_db must be overridden so FastAPI can construct the router's session dependency.
+    # NotificationService is fully patched in these tests, so the real session is not used,
+    # but FastAPI checks the dependency signature at startup — the override satisfies it.
+    app = _make_test_app(lambda: _make_auth_override(tenant_id=tenant_id))
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -311,7 +317,7 @@ class TestMarkAllRead:
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
             mock_result = MagicMock()
-            mock_result.to_dict.return_value = {"marked_count": 7}
+            mock_result.marked_count = 7
             svc.mark_all_as_read = AsyncMock(return_value=mock_result)
             client = _app()
             response = client.post("/api/v1/notifications/mark-all-read")
@@ -470,15 +476,7 @@ class TestDeleteReminderEndpoint:
 class TestInvalidTenant:
     def _app_invalid_tenant(self) -> TestClient:
         """Use a valid AuthContext (tenant_id=0) so the router's own guard is exercised."""
-        app = FastAPI()
-        app.include_router(notifications_router)
-        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=0, user_id=99)
-        app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
-
-        @app.exception_handler(AppException)
-        async def _handler(request, exc):
-            return JSONResponse(status_code=exc.status_code, content={"success": False, "message": exc.detail})
-
+        app = _make_test_app(lambda: _make_auth_ctx(tenant_id=0, user_id=99))
         return TestClient(app, raise_server_exceptions=False)
 
     def test_list_notifications_invalid_tenant(self):

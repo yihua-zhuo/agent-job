@@ -279,7 +279,7 @@ class AutomationService:
         new_enabled = not row.enabled
         update_stmt = (
             update(AutomationRuleModel)
-            .where(AutomationRuleModel.id == rule_id)
+            .where(AutomationRuleModel.id == rule_id, AutomationRuleModel.tenant_id == tenant_id)
             .values(enabled=new_enabled, updated_at=datetime.now(UTC))
             .returning(AutomationRuleModel)
         )

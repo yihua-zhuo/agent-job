@@ -65,7 +65,7 @@ async def create_tenant(
         name=body.name,
         plan=body.plan,
         admin_email=body.admin_email,
-        **({"settings": body.settings} if body.settings else {}),
+        settings=body.settings,
     )
     return {"success": True, "data": data.to_dict(), "message": "Tenant created successfully"}
 

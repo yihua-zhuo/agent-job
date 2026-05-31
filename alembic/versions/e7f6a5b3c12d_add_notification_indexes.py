@@ -12,7 +12,7 @@ params_, status, priority, delivered_at, read_at) then adds:
 """
 
 import sqlalchemy as sa
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
+from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 
 from alembic import op
