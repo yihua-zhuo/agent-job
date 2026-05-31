@@ -7,7 +7,7 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
 ## Affected Files
 
 - `src/db/models/churn_prediction.py` — new ORM model with id, customer_id, tenant_id, score, tier enum, factors JSON, recommended_actions JSON, model_version, created_at
-- `alembic/versions/<new_revision>_add_churn_predictions.py` — new migration extending head `merge_heads_63274_addcp001`
+- `alembic/versions/addcp001_add_churn_predictions.py` — new migration extending head `9d8e7f6a5b3c`
 - `tests/integration/test_churn_prediction_integration.py` — new integration test file
 
 ## Implementation Steps

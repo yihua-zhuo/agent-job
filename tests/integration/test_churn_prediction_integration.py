@@ -122,7 +122,7 @@ class TestChurnPredictionIntegration:
             factors=[{"name": "infrequent_purchase", "weight": 0.7, "explanation": "Purchase frequency dropped"}],
         )
         async_session.add(pred)
-        await async_session.commit()
+        await async_session.flush()
 
         d = pred.to_dict()
         assert d["tenant_id"] == tenant_id

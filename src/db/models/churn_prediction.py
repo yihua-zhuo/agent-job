@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 
 import sqlalchemy as sa
-from sqlalchemy import CheckConstraint, DateTime, Index, Integer, String, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,7 +26,7 @@ class ChurnPredictionModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    customer_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    customer_id: Mapped[int] = mapped_column(Integer, ForeignKey("customers.id"), nullable=False)
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     tier: Mapped[ChurnTier] = mapped_column(sa.Enum(ChurnTier, name="churntier"), nullable=False)
     factors: Mapped[list[dict]] = mapped_column(JSON, default=lambda: list, nullable=False)

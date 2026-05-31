@@ -24,11 +24,15 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("customer_id", sa.Integer(), nullable=False),
-        sa.Column("score", sa.Float(), nullable=False),
-        sa.Column("tier", sa.String(length=50), nullable=True),
+        sa.Column("score", sa.Integer(), nullable=False),
+        sa.Column("tier", sa.Enum("high", "medium", "low", name="churntier"), nullable=False),
         sa.Column(
             "factors", postgresql.JSON(astext_type=sa.Text()), nullable=False
         ),
+        sa.Column(
+            "recommended_actions", postgresql.JSON(astext_type=sa.Text()), nullable=False
+        ),
+        sa.Column("model_version", sa.String(length=50), nullable=True),
         sa.Column(
             "predicted_at",
             sa.DateTime(timezone=True),
@@ -83,3 +87,4 @@ def downgrade() -> None:
         table_name="churn_predictions",
     )
     op.drop_table("churn_predictions")
+    op.execute(sa.text("DROP TYPE churntier"))
