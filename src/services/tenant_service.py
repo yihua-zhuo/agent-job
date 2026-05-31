@@ -131,9 +131,6 @@ class TenantService:
             # expanding the pattern (e.g. "%" matches everything, "_" matches any char).
             escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             conditions.append(TenantModel.name.ilike(f"%{escaped}%", escape="\\"))
-            # Performance trade-off: without a gin_trgm_ops index on name, ILIKE with
-            # leading wildcards forces a sequential scan on large tenant tables.
-            # TODO: add gin_trgm_ops index on tenant name — track as a dedicated performance ticket.
         # Rule126: requesting_tenant_id restricts visibility to its own tenant record.
         # This filter guarantees at most one matching record, so pagination (page/page_size)
         # is functionally a no-op — it is kept for API contract stability (callers that

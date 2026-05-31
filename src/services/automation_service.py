@@ -92,10 +92,8 @@ class AutomationService:
             except AppException as e:
                 return {"type": action_type, "status": "error", "error": str(e)}
             except BaseException as e:
-                if isinstance(e, Exception):
-                    logger.exception("Unexpected error in notification.send action")
-                    return {"type": action_type, "status": "error", "error": str(e)}
-                raise  # do not swallow CancelledError / KeyboardInterrupt
+                logger.exception("Unexpected error in notification.send action")
+                return {"type": action_type, "status": "error", "error": str(e)}
 
         elif action_type == "task.create":
             assignee_id = params.get("assignee_id")
@@ -119,10 +117,7 @@ class AutomationService:
             except AppException as e:
                 return {"type": action_type, "status": "error", "error": str(e)}
             except BaseException as e:
-                if isinstance(e, Exception):
-                    logger.exception("Unexpected error in task.create action")
-                    return {"type": action_type, "status": "error", "error": str(e)}
-                raise  # do not swallow CancelledError / KeyboardInterrupt
+                logger.exception("Unexpected error in task.create action")
                 return {"type": action_type, "status": "error", "error": str(e)}
             return {"type": action_type, "status": "created"}
 
