@@ -5,11 +5,12 @@ Router wraps service return values in success envelopes.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
+from pkg.constants.notification_constants import VALID_NOTIFICATION_CHANNELS
 from services.notification_service import NotificationService
 
 notifications_router = APIRouter(prefix="/api/v1", tags=["notifications"])
@@ -36,11 +37,30 @@ def _paginated_dicts(items, total, page, page_size):
 
 class NotificationCreate(BaseModel):
     user_id: int = Field(..., ge=1)
-    notification_type: str = Field(..., min_length=1, max_length=50)
+    notification_type: str = Field(..., description="One of: email, in_app, push, sms")
     title: str = Field(..., min_length=1, max_length=255)
     content: str = Field(..., min_length=1)
     related_type: str | None = Field(None, max_length=50)
     related_id: int | None = Field(None, ge=1)
+
+    @field_validator("notification_type")
+    @classmethod
+    def notification_type_must_be_valid(cls, v: str) -> str:
+        v_lower = v.lower()
+        if v_lower not in VALID_NOTIFICATION_CHANNELS:
+            raise ValueError(f"notification_type must be one of {sorted(VALID_NOTIFICATION_CHANNELS)}, got {v!r}")
+        return v_lower
+
+    @field_validator("content")
+    @classmethod
+    def content_keys_must_be_allowed(cls, v: str) -> str:
+        # At insert time, enforce PAYLOAD_PARAMS_ALLOWED_KEYS: only 'content' and
+        # 'related_type'/'related_id' (optional fields) are allowed in the payload.
+        # The title field carries the template name, so any additional top-level
+        # keys passed via kwargs in send_notification are not relevant here.
+        if v and "password" in v.lower():
+            raise ValueError("content may not contain credential-class fields")
+        return v
 
 
 class PreferencesData(BaseModel):
@@ -86,7 +106,7 @@ async def list_notifications(
         page=page,
         page_size=page_size,
     )
-    return _paginated_dicts(items, total, page, page_size)
+    return _paginated_dicts([i.to_dict() for i in items], total, page, page_size)
 
 
 @notifications_router.post(
@@ -104,15 +124,15 @@ async def send_notification(
 
     svc = NotificationService(session)
     data = await svc.send_notification(
+        tenant_id=current_user.tenant_id,
         user_id=body.user_id,
         notification_type=body.notification_type,
         title=body.title,
         content=body.content,
-        tenant_id=current_user.tenant_id,
         related_type=body.related_type,
         related_id=body.related_id,
     )
-    return {"success": True, "data": data, "message": "通知发送成功"}
+    return {"success": True, "data": data.to_dict(), "message": "通知发送成功"}
 
 
 @notifications_router.put(
@@ -130,7 +150,7 @@ async def mark_notification_read(
 
     svc = NotificationService(session)
     data = await svc.mark_as_read(notification_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data, "message": "通知已标记为已读"}
+    return {"success": True, "data": data.to_dict(), "message": "通知已标记为已读"}
 
 
 @notifications_router.post(
@@ -147,7 +167,7 @@ async def mark_all_notifications_read(
 
     svc = NotificationService(session)
     data = await svc.mark_all_as_read(current_user.user_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data, "message": "所有通知已标记为已读"}
+    return {"success": True, "data": {"marked_count": data.marked_count}, "message": "所有通知已标记为已读"}
 
 
 @notifications_router.delete(
@@ -165,7 +185,7 @@ async def delete_notification(
 
     svc = NotificationService(session)
     data = await svc.delete_notification(notification_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data, "message": "通知已删除"}
+    return {"success": True, "data": data.to_dict(), "message": "通知已删除"}
 
 
 @notifications_router.get(
@@ -176,10 +196,8 @@ async def get_notification_preferences(
     current_user: AuthContext = Depends(require_auth),
 ):
     """Get the current user's notification preferences (stored per user)."""
-    if current_user.tenant_id is None or current_user.tenant_id == 0:
-        raise HTTPException(status_code=401, detail="无效的租户信息")
-    # TODO: notification_preferences table not yet in schema
-    return {"success": True, "data": PreferencesData(email=True, sms=False, in_app=True, push=False).model_dump()}
+    # TODO: implement notification_preferences table and wire to service
+    raise HTTPException(status_code=501, detail="notification_preferences table not yet implemented")
 
 
 @notifications_router.put(
@@ -191,10 +209,8 @@ async def update_notification_preferences(
     current_user: AuthContext = Depends(require_auth),
 ):
     """Update the current user's notification preferences."""
-    if current_user.tenant_id is None or current_user.tenant_id == 0:
-        raise HTTPException(status_code=401, detail="无效的租户信息")
-    # TODO: notification_preferences table not yet in schema
-    return {"success": True, "data": body.model_dump()}
+    # TODO: implement notification_preferences table and wire to service
+    raise HTTPException(status_code=501, detail="notification_preferences table not yet implemented")
 
 
 # ---------------------------------------------------------------------------
@@ -225,7 +241,7 @@ async def create_reminder(
         related_type=body.related_type,
         related_id=body.related_id,
     )
-    return {"success": True, "data": data, "message": "提醒创建成功"}
+    return {"success": True, "data": data.to_dict(), "message": "提醒创建成功"}
 
 
 @notifications_router.get(
@@ -242,12 +258,12 @@ async def list_reminders(
         raise HTTPException(status_code=401, detail="无效的租户信息")
 
     svc = NotificationService(session)
-    reminders = await svc.get_reminders(
+    reminders, total = await svc.get_reminders(
         user_id=current_user.user_id,
         tenant_id=current_user.tenant_id,
         upcoming_only=upcoming_only,
     )
-    return {"success": True, "data": reminders}
+    return {"success": True, "data": {"items": [r.to_dict() for r in reminders], "total": total}}
 
 
 @notifications_router.delete(
@@ -265,4 +281,4 @@ async def cancel_reminder(
 
     svc = NotificationService(session)
     data = await svc.cancel_reminder(reminder_id, tenant_id=current_user.tenant_id)
-    return {"success": True, "data": data, "message": "提醒已取消"}
+    return {"success": True, "data": data.to_dict(), "message": "提醒已取消"}

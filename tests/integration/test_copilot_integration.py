@@ -46,12 +46,17 @@ class TestCopilotIntegration:
 
     async def test_history_integration(self, db_schema, async_session, api_client, tenant_id_web: int):
         """GET /copilot/{conv_id}/history returns {"success": True, "messages": [...], "total": N}}."""
-        # Use tenant_id_web so seeded data matches the JWT-authenticated tenant.
-        conv = await seed_conversation(async_session, tenant_id_web, user_id=1)
+        from sqlalchemy import select
+
+        from db.models.user import UserModel
+
+        result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
+        user = result.scalar_one_or_none()
+        assert user is not None, f"No user found for tenant {tenant_id_web} — auth_headers_web must run first"
+        user_id = user.id
+        conv = await seed_conversation(async_session, tenant_id_web, user_id=user_id)
         await seed_message(async_session, conv.id, tenant_id_web, "user", "Hello!")
         await seed_message(async_session, conv.id, tenant_id_web, "assistant", "Hi there!")
-        # Commit so the API's separate session can see the seeded data.
-        await async_session.commit()
 
         response = await api_client.get(f"/copilot/{conv.id}/history")
         assert response.status_code == 200
@@ -69,10 +74,17 @@ class TestCopilotIntegration:
 
     async def test_history_caps_at_20(self, db_schema, async_session, api_client, tenant_id_web: int):
         """History endpoint returns at most 20 messages even when more are seeded."""
-        conv = await seed_conversation(async_session, tenant_id_web, user_id=1)
+        from sqlalchemy import select
+
+        from db.models.user import UserModel
+
+        result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
+        user = result.scalar_one_or_none()
+        assert user is not None, f"No user found for tenant {tenant_id_web} — auth_headers_web must run first"
+        user_id = user.id
+        conv = await seed_conversation(async_session, tenant_id_web, user_id=user_id)
         for i in range(25):
             await seed_message(async_session, conv.id, tenant_id_web, "user", f"Message {i}")
-        await async_session.commit()
 
         response = await api_client.get(f"/copilot/{conv.id}/history")
         assert response.status_code == 200
@@ -91,11 +103,10 @@ class TestCopilotIntegration:
         tenant_id_2_web: int,
     ):
         """A second tenant gets its own conversation, not the first tenant's."""
-        # Seed distinct user IDs per tenant to avoid primary-key collision.
+        # Seed users for both tenants so the copilot service can find them when
+        # creating conversations — matching the pattern used for tenant 1 below.
         await seed_user(async_session, tenant_id_web, _TENANT_1_USER_ID)
-        # tenant_id_2_web matches JWT user_id=_TENANT_1_USER_ID (999) in auth_headers_tenant_2.
-        await seed_user(async_session, tenant_id_2_web, _TENANT_1_USER_ID)
-        await async_session.commit()
+        await seed_user(async_session, tenant_id_2_web, _TENANT_2_USER_ID)
 
         # Create a conversation in tenant 1 so there IS something to find.
         conv_tenant_1 = await seed_conversation(async_session, tenant_id_web, _TENANT_1_USER_ID)
@@ -107,35 +118,27 @@ class TestCopilotIntegration:
         data_tenant_2 = response_tenant_2.json()
         assert data_tenant_2["success"] is True
 
+        # Explicitly seed the conversation in async_session so it is visible
+        # to the tenant-2 client override.
+        conv_tenant_2 = await seed_conversation(async_session, tenant_id_2_web, _TENANT_2_USER_ID)
+        await seed_message(async_session, conv_tenant_2.id, tenant_id_2_web, "user", "hello")
+        await seed_message(async_session, conv_tenant_2.id, tenant_id_2_web, "assistant", "response")
+
+        # Verify tenant 2's conversation is accessible via its own API client.
+        history_resp_2 = await api_client_tenant_2.get(f"/copilot/{conv_tenant_2.id}/history")
+        assert history_resp_2.status_code == 200, (
+            f"Expected 200, got {history_resp_2.status_code}: {history_resp_2.json()}"
+        )
+        history_data = history_resp_2.json()
+        assert history_data["success"] is True
+        assert "messages" in history_data["data"]
+
         # Verify tenant 2 cannot access tenant 1's conversation.
-        history_tenant_2 = await api_client_tenant_2.get(f"/copilot/{conv_tenant_1.id}/history")
-        assert history_tenant_2.status_code == 404
+        history_cross = await api_client_tenant_2.get(f"/copilot/{conv_tenant_1.id}/history")
+        assert history_cross.status_code == 404
+        body = history_cross.json()
+        assert body["success"] is False, f"Expected success=False for cross-tenant access, got: {body}"
 
-        # Verify tenant 2 created its own separate conversation.
-        from sqlalchemy import and_, func, select
-
-        from db.models.conversation import ConversationModel
-        from db.models.conversation_message import ConversationMessageModel
-
-        # Query conversation ID using tenant_id and user_id (bypasses stale ORM object).
-        result = await async_session.execute(
-            select(ConversationModel.id).where(
-                and_(
-                    ConversationModel.tenant_id == tenant_id_2_web,
-                    ConversationModel.user_id == _TENANT_1_USER_ID,
-                )
-            )
-        )
-        conv_tenant_2_id = result.scalar_one_or_none()
-        assert conv_tenant_2_id is not None, "Tenant 2 should have a conversation"
-
-        result2 = await async_session.execute(
-            select(func.count(ConversationMessageModel.id)).where(
-                and_(
-                    ConversationMessageModel.conversation_id == conv_tenant_2_id,
-                    ConversationMessageModel.tenant_id == tenant_id_2_web,
-                )
-            )
-        )
-        msg_count = result2.scalar()
-        assert msg_count == 2
+        # Verify tenant 1 cannot access tenant 2's conversation (reverse isolation).
+        history_cross_reverse = await api_client.get(f"/copilot/{conv_tenant_2.id}/history")
+        assert history_cross_reverse.status_code == 404

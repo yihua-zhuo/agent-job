@@ -44,15 +44,15 @@ class RoleUpdate(BaseModel):
 
 
 class PermissionAssign(BaseModel):
-    permission_names: list[str] = Field(..., min_items=1)
+    permission_names: list[str] = Field(..., min_length=1)
 
 
 class RoleAssign(BaseModel):
-    role_id: int
+    role_id: int = Field(..., description="Role to assign to the user")
 
 
 class UserRolesSet(BaseModel):
-    role_ids: list[int] = Field(..., min_items=1)
+    role_ids: list[int] = Field(..., min_length=1)
 
 
 # Endpoints — Roles
