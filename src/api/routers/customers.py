@@ -14,6 +14,7 @@ from sqlalchemy import and_, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
+from db.models.customer import CustomerModel
 from db.models.customer_enrichment import CustomerEnrichmentModel
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.customer import CustomerStatus
@@ -402,8 +403,6 @@ async def list_sales_leads(
     elif status == "assigned":
         items, total = await service.get_leads_by_owner(ctx.tenant_id, ctx.user_id, page=page, page_size=page_size)
     else:  # recycled
-        from db.models.customer import CustomerModel
-
         conditions = and_(
             CustomerModel.tenant_id == ctx.tenant_id,
             CustomerModel.status == "lead",

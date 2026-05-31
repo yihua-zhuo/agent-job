@@ -1,6 +1,6 @@
 """Customer service — CRUD + tagging + status management via SQLAlchemy ORM."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, delete, func, or_, select, update
@@ -428,12 +428,14 @@ class CustomerService:
         record for the same (tenant_id, customer_id) pair already exists.
         """
         now = datetime.now(UTC)
+        next_refresh = now + timedelta(days=7)
         stmt = pg_insert(CustomerEnrichmentModel).values(
             tenant_id=tenant_id,
             customer_id=customer_id,
             provider=enrichment_data.get("provider", "clearbit"),
             raw_data_json=enrichment_data.get("raw_data_json", enrichment_data),
             enriched_at=enrichment_data.get("enriched_at", now),
+            next_refresh_at=next_refresh,
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=["tenant_id", "customer_id"],
@@ -441,6 +443,7 @@ class CustomerService:
                 "provider": stmt.excluded.provider,
                 "raw_data_json": stmt.excluded.raw_data_json,
                 "enriched_at": stmt.excluded.enriched_at,
+                "next_refresh_at": next_refresh,
                 "updated_at": now,
             },
         )

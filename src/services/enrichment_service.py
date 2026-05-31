@@ -1,6 +1,6 @@
 """Enrichment service — third-party company data enrichment via Clearbit."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 import httpx
@@ -22,12 +22,14 @@ async def _upsert_enrichment(
 ) -> None:
     """Upsert a CustomerEnrichmentModel record (insert or replace)."""
     now = datetime.now(UTC)
+    next_refresh = now + timedelta(days=7)
     stmt = pg_insert(CustomerEnrichmentModel).values(
         tenant_id=tenant_id,
         customer_id=customer_id,
         provider="clearbit",
         raw_data_json=raw_data,
         enriched_at=now,
+        next_refresh_at=next_refresh,
     )
     stmt = stmt.on_conflict_do_update(
         index_elements=["tenant_id", "customer_id"],
@@ -35,6 +37,7 @@ async def _upsert_enrichment(
             "provider": "clearbit",
             "raw_data_json": stmt.excluded.raw_data_json,
             "enriched_at": stmt.excluded.enriched_at,
+            "next_refresh_at": next_refresh,
             "updated_at": now,
         },
     )
@@ -90,17 +93,21 @@ class EnrichmentService:
         tenant_id: int,
         domain: str | None,
         company_name: str | None,
+        *,
+        customer: Any = None,
     ) -> dict[str, Any]:
-        """Validate the customer, check API key, and call Clearbit.
+        """Check API key and call Clearbit.
 
-        Returns the raw provider payload. Caller owns persistence.
+        Returns the raw provider payload. Caller is responsible for validating
+        the customer exists when ``customer`` is not provided.
         """
-        result = await self.session.execute(
-            select(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
-        )
-        customer = result.scalar_one_or_none()
         if customer is None:
-            raise NotFoundException("Customer")
+            result = await self.session.execute(
+                select(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
+            )
+            customer = result.scalar_one_or_none()
+            if customer is None:
+                raise NotFoundException("Customer")
 
         api_key: str = settings.clearbit_api_key
         if not api_key:
@@ -190,7 +197,15 @@ class EnrichmentService:
         if not domain and not company_name:
             raise ValidationException("At least one of domain or company_name is required")
 
-        raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name)
+        # Fetch the customer once and reuse across validation + API call
+        result = await self.session.execute(
+            select(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
+        )
+        customer = result.scalar_one_or_none()
+        if customer is None:
+            raise NotFoundException("Customer")
+
+        raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name, customer=customer)
         normalised = self._normalise_clearbit(raw_data)
 
         await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)

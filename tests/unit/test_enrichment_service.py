@@ -37,11 +37,11 @@ def mock_httpx_client():
 
 
 @pytest.fixture
-def mock_customer(tenant_id: int = 1, customer_id: int = 1):
+def mock_customer():
     """Return a mock CustomerModel-like object."""
     customer = MagicMock()
-    customer.id = customer_id
-    customer.tenant_id = tenant_id
+    customer.id = 1
+    customer.tenant_id = 1
     return customer
 
 
@@ -66,15 +66,11 @@ class TestLookupArgumentValidation:
             await service.lookup(domain="stripe.com", customer_id=None, tenant_id=1)
         assert "customer_id" in exc_info.value.detail
 
-    async def test_blank_domain_treated_as_absent(self, service):
-        """domain='' should fall through to company_name check."""
+    @pytest.mark.parametrize("domain", ["", "   "])
+    async def test_blank_and_whitespace_domains_treated_as_absent(self, service, domain):
+        """domain='' and domain='   ' should fall through to the 'exactly one' check."""
         with pytest.raises(ValidationException) as exc_info:
-            await service.lookup(domain="", company_name=None, customer_id=1, tenant_id=1)
-        assert "exactly one" in exc_info.value.detail
-
-    async def test_whitespace_only_domain_treated_as_absent(self, service):
-        with pytest.raises(ValidationException) as exc_info:
-            await service.lookup(domain="   ", company_name=None, customer_id=1, tenant_id=1)
+            await service.lookup(domain=domain, company_name=None, customer_id=1, tenant_id=1)
         assert "exactly one" in exc_info.value.detail
 
 
@@ -148,11 +144,11 @@ class TestLookupDomainSuccess:
             mock_settings.clearbit_api_key = "test-key"
             normalised, raw = await service.lookup(domain="acme.com", customer_id=1, tenant_id=1)
 
-        assert normalised["name"] == "Acme"
-        assert raw == {"name": "Acme", "domain": "acme.com"}
-        # Two calls: customer-tenant check + upsert
-        assert mock_db_session.execute.call_count == 2
-        mock_db_session.add.assert_not_called()
+            assert normalised["name"] == "Acme"
+            assert raw == {"name": "Acme", "domain": "acme.com"}
+            # Two calls: customer-tenant check + upsert
+            assert mock_db_session.execute.call_count == 2
+            mock_db_session.add.assert_not_called()
 
 
 # ---------------------------------------------------------------------------

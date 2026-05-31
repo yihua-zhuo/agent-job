@@ -223,8 +223,8 @@ class TestRefreshEndpoint:
             company_name=None,
         )
 
-    def test_refresh_passes_no_body(self, client_with_service):
-        """Refresh without request body looks up existing enrichment from DB and extracts domain/name."""
+    def test_refresh_passes_domain(self, client_with_service):
+        """Refresh with a domain body passes domain and company_name to the service."""
         client, svc = client_with_service
         svc.refresh = AsyncMock(return_value=({"name": "Acme Corp"}, {}))
 
