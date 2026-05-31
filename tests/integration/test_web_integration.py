@@ -906,9 +906,7 @@ class TestEdgeCases:
         """Expired or malformed JWT should be rejected."""
         resp = await api_client.get(
             "/api/v1/customers",
-            headers={
-                "Authorization": ("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.invalid"),
-            },
+            headers={"Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.invalid"},
         )
         assert resp.status_code == 401
 

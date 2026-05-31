@@ -70,9 +70,9 @@ def make_notification_handler(state):
         sql_text_lower = sql_text.lower()
 
         if "insert into notifications" in sql_text_lower:
-            # The service sets payload_params as an ORM attribute; SQLAlchemy uses
-            # the Python attribute name "payload_params" as the bind key.
-            # params_ is the DB column name; the ORM populates it internally.
+            # DB column 'params_' is populated by the ORM from payload_params.
+            # SQLAlchemy resolves the bind key from the mapped_column name, not the
+            # Python attribute name.
             nid = state._notifications_next_id
             state._notifications_next_id += 1
             n = {
@@ -94,13 +94,15 @@ def make_notification_handler(state):
         if "from notifications where id" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
-            if n and n.get("tenant_id") == params.get("tenant_id"):
+            if n and n.get("tenant_id") == params.get("tenant_id") and n.get("user_id") == params.get("user_id"):
                 return MockResult([_notification_to_row(n)])
             return MockResult([])
 
         if "count(" in sql_text_lower and "from notifications" in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
+            if user_id is None:
+                raise ValueError(f"notification count must bind user_id (got keys: {list(params.keys())})")
             # Explicit unread_only param takes precedence; fall back to SQL text heuristic
             # for tests using raw SQL text matching (backward compat).
             if "_unread_only" in params:
@@ -186,12 +188,10 @@ def make_reminder_handler(state):
         sql_text_lower = sql_text.lower()
 
         if "insert into reminders" in sql_text_lower:
-            assert "tenant_id" in params and params["tenant_id"] is not None, (
-                f"insert must bind non-None tenant_id (got keys: {list(params.keys())})"
-            )
-            assert "user_id" in params and params["user_id"] is not None, (
-                f"insert must bind non-None user_id (got keys: {list(params.keys())})"
-            )
+            if "tenant_id" not in params or params["tenant_id"] is None:
+                raise ValueError(f"insert must bind non-None tenant_id (got keys: {list(params.keys())})")
+            if "user_id" not in params or params["user_id"] is None:
+                raise ValueError(f"insert must bind non-None user_id (got keys: {list(params.keys())})")
             rid = state._reminders_next_id
             state._reminders_next_id += 1
             r = {
@@ -228,9 +228,8 @@ def make_reminder_handler(state):
             return MockResult([], rowcount=0)
 
         if "count(" in sql_text_lower and "from reminders" in sql_text_lower:
-            assert "user_id" in params and "tenant_id" in params, (
-                f"reminder count must bind user_id and tenant_id (got keys: {list(params.keys())})"
-            )
+            if "user_id" not in params or "tenant_id" not in params:
+                raise ValueError(f"reminder count must bind user_id and tenant_id (got keys: {list(params.keys())})")
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             count = sum(
@@ -239,9 +238,8 @@ def make_reminder_handler(state):
             return MockResult([[count]])
 
         if "from reminders" in sql_text_lower and "count" not in sql_text_lower:
-            assert "user_id" in params and "tenant_id" in params, (
-                f"list-reminders must bind user_id and tenant_id (got keys: {list(params.keys())})"
-            )
+            if "user_id" not in params or "tenant_id" not in params:
+                raise ValueError(f"list-reminders must bind user_id and tenant_id (got keys: {list(params.keys())})")
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             # is_completed_filter comes from params (set by the service).

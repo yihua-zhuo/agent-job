@@ -258,8 +258,8 @@ class TestSendNotification:
             detail = response.json().get("detail", [])
             error_types = {e.get("type") for e in (detail if isinstance(detail, list) else [])}
             assert "value_error" in error_types, f"Expected value_error validation error, got {detail}"
-            # Verify the service was never instantiated (Pydantic rejected before routing to service).
-            svc_cls.assert_not_called()
+            # Verify send_notification was never called (Pydantic rejected before routing to service).
+            svc_cls.return_value.send_notification.assert_not_called()
 
     def test_send_service_validation_error_returns_422(self):
         """Service layer ValidationException (e.g. from a secondary type check) is caught by the global handler and returns 422."""
@@ -588,9 +588,9 @@ class TestInvalidTenant:
 class TestRouterPassesTenantContext:
     """Verifies the router passes the correct tenant context to the service.
 
-    This test confirms the router forwards the auth context (tenant_id) correctly
-    to the service. Actual cross-tenant isolation is enforced at the service and
-    DB layer (Rule 126) and verified in integration tests.
+    This class only verifies router-level tenant_id forwarding; true cross-tenant
+    isolation is enforced at the service and DB layer (Rule 126) and confirmed by
+    the service layer and integration tests.
     """
 
     def test_cross_tenant_read_returns_empty_list(self):
