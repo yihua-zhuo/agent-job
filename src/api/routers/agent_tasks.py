@@ -19,8 +19,7 @@ agent_tasks_router = APIRouter(prefix="/agents/tasks", tags=["Agent Tasks"])
 
 
 def _paginated(items, total, page, page_size):
-    total_pages = (total + page_size - 1) // page_size
-    has_next = page < total_pages
+    has_next = page < (total + page_size - 1) // page_size
     return {
         "success": True,
         "data": {
@@ -42,7 +41,10 @@ class AgentTaskCreate(BaseModel):
     description: str = Field(..., min_length=1)
 
 
-def _date_to_datetime(d: date) -> dt_cls:
+def _date_to_datetime(d: date, end_of_day: bool = False) -> dt_cls:
+    if end_of_day:
+        from datetime import time
+        return dt_cls.combine(d, time.max)
     return dt_cls.combine(d, dt_cls.min.time())
 
 
@@ -74,7 +76,7 @@ async def list_agent_tasks(
 ):
     service = AgentTaskService(session)
     dt_from = _date_to_datetime(date_from) if date_from is not None else None
-    dt_to = _date_to_datetime(date_to) if date_to is not None else None
+    dt_to = _date_to_datetime(date_to, end_of_day=True) if date_to is not None else None
     items, total = await service.list_tasks(
         tenant_id=ctx.tenant_id,
         status=status,

@@ -36,9 +36,9 @@ Follow the same pattern as [`src/api/routers/tasks.py`](src/api/routers/tasks.py
 - `from services.agent_task_service import AgentTaskService` — already exists at [`src/services/agent_task_service.py`](src/services/agent_task_service.py)
 - `from db.connection import get_db` — confirmed in [`src/db/connection.py`](src/db/connection.py)
 - `from internal.middleware.fastapi_auth import AuthContext, require_auth` — confirmed in `test_tasks.py` imports
-- `AgentTaskService.create_task(description: str, tenant_id: int)` — L29-45
-- `AgentTaskService.list_tasks(tenant_id, status, date_from, date_to, page, page_size)` — L61-93
-- `AgentTaskService.get_task(task_id, tenant_id)` — L47-59
+- `AgentTaskService.create_task(description: str, tenant_id: int)` — validates non-empty description, generates UUID task_id, flushes/refreshes
+- `AgentTaskService.list_tasks(tenant_id: int, status: str | None, date_from: datetime | None, date_to: datetime | None, page: int = 1, page_size: int = 20)` — L61-93
+- `AgentTaskService.get_task(task_id: int, tenant_id: int)` — L47-59
 
 **完成判定**：`PYTHONPATH=src python -c "from api.routers.agent_tasks import agent_tasks_router; print('import ok')"` → exit 0
 
@@ -48,7 +48,7 @@ Follow the same pattern as [`src/api/routers/tasks.py`](src/api/routers/tasks.py
 
 Mirror the pattern from [`tests/unit/test_tasks.py`](tests/unit/test_tasks.py) (lines 76-115). Use `FastAPI()`, `app.include_router(agent_tasks_router)`, `app.dependency_overrides[require_auth]`, `app.dependency_overrides[get_db]`, and `httpx.AsyncClient(ASGITransport(...))`. Mock `AgentTaskService` entirely (do NOT use `make_mock_session` — the service layer is already unit-tested in `test_agent_task_service.py`).
 
-**Test cases (≥ 5):**
+**Test cases**: 7 unit test cases (lines 111–144) and 7 integration test cases
 1. `POST /agents/tasks` — `description` provided → 201 + `{"success": true, "data": {"description": ..., "status": "pending", "task_id": ...}}`
 2. `POST /agents/tasks` — empty/whitespace description → 422 (Pydantic validation via service `ValidationException`)
 3. `GET /agents/tasks` — no filters → 200 + paginated envelope (`items`, `total`, `page`, `page_size`, `has_next`)
@@ -95,14 +95,14 @@ Mirror the pattern from [`tests/integration/test_tasks_integration.py`](tests/in
 ## Acceptance Criteria
 
 - `src/api/routers/agent_tasks.py` exists and exports `agent_tasks_router` (an `APIRouter` instance)
-- `POST /agents/tasks` accepts `{"description": "..."}` JSON body, returns 201 with `task_id`, `subtasks`, `status` fields
+- `POST /agents/tasks` accepts `{"description": "..."}` JSON body, returns 201 with `id` (auto-increment PK), `task_id` (UUID string), `subtasks`, `status` fields
 - `GET /agents/tasks` accepts `?status=` and `?date_from=` / `?date_to=` query params, returns paginated envelope with `items`/`total`/`page`/`page_size`/`has_next`
 - `GET /agents/tasks/{task_id}` returns 200 with full task dict or 404 via global handler
 - All three endpoints inject `tenant_id` from `AuthContext` (multi-tenancy enforced at service layer)
 - No `try/except` blocks in the router; `AppException` caught by `main.py` global handlers
 - `.to_dict()` called in router, not in service
 - `ruff check` and `ruff format --check` both pass on the new router file
-- Unit tests ≥ 5 passed, integration tests all passed
+- Unit tests: all 7 passed; integration tests: all 7 passed
 
 ## Risks / Open Questions
 
