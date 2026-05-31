@@ -1,8 +1,16 @@
-"""AI Chat Gateway — async adapter for the AI backend (stub / MiniMax-M2.7)."""
+"""AI Chat Gateway — async adapter for the AI backend.
+
+This module is a **stub implementation** — no real AI backend is wired in.
+``_call_gateway`` returns hardcoded, deterministic replies regardless of message
+content or history, which is suitable only for unit-test stability.
+
+For the real MiniMax-M2.7 integration, replace ``_call_gateway`` with a client
+that calls the actual endpoint. Track progress in: https://github.com/yihua-zhuo/agent-job/issues
+"""
 
 import hashlib
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -15,6 +23,8 @@ class AIResponse:
     reply: str
     suggestions: list[str] | None = None
     actions: list[dict] | None = None
+    conversation_id: int | None = None
+    tool_calls: list[dict] = field(default_factory=list)
 
 
 class AIChatGateway:

@@ -102,3 +102,41 @@ class NotificationModel(Base):
             "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
             "read_at": self.read_at.isoformat() if self.read_at else None,
         }
+
+
+class NotificationAnalytics(Base):
+    """Analytics record for a notification open/click event."""
+
+    __tablename__ = "notification_analytics"
+    __table_args__ = (
+        Index("ix_notification_analytics_notification_tenant", "notification_id", "tenant_id"),
+        CheckConstraint(
+            column("channel").in_(["in_app", "email", "sms", "push"]),
+            name="ck_notification_analytics_channel",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    notification_id: Mapped[int] = mapped_column(
+        ForeignKey("notifications.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    clicked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    channel: Mapped[str] = mapped_column(String(50), nullable=False, server_default="email")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "notification_id": self.notification_id,
+            "tenant_id": self.tenant_id,
+            "opened_at": self.opened_at.isoformat() if self.opened_at else None,
+            "clicked_at": self.clicked_at.isoformat() if self.clicked_at else None,
+            "channel": self.channel,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }

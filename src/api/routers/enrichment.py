@@ -1,6 +1,6 @@
 """Enrichment API router — ``POST /api/v1/enrichment/lookup`` and ``POST /api/v1/enrichment/refresh/{customer_id}``."""
 
-from datetime import UTC
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -60,7 +60,7 @@ async def refresh_enrichment(
     data = dict(result)
     if upserted is not None:
         data["last_enriched_at"] = upserted.enriched_at.isoformat() if upserted.enriched_at else None
-        if upserted.next_refresh_at is not None and upserted.next_refresh_at <= UTC.now():
+        if upserted.next_refresh_at is not None and upserted.next_refresh_at <= datetime.now(UTC):
             data["enrichment_status"] = "stale"
         else:
             data["enrichment_status"] = "enriched"

@@ -32,9 +32,9 @@ class AutomationLogModel(Base):
         index=True,
     )
     trigger_event: Mapped[str] = mapped_column(String(100), nullable=False)
-    trigger_context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    actions_executed: Mapped[list | None] = mapped_column(JSONB, nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="success", nullable=False)
+    trigger_context: Mapped[dict] = mapped_column(JSONB, server_default="{}", nullable=False)
+    actions_executed: Mapped[list] = mapped_column(JSONB, default=[], nullable=False)
+    status: Mapped[str] = mapped_column(String(50), server_default="success", nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     executed_by: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),

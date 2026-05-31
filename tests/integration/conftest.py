@@ -382,7 +382,10 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
         await async_session.flush()
     # Create the test user in the DB so /users/me resolves correctly (Rule 126).
     user_svc = UserService(async_session)
-    try:
+    existing = await user_svc.get_user_by_username(tenant_id_web, "webtest")
+    if existing is not None:
+        actual_user_id = existing.id
+    else:
         user = await user_svc.create_user(
             username="webtest",
             email="webtest@example.com",
@@ -391,11 +394,6 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
             tenant_id=tenant_id_web,
         )
         actual_user_id = user.id
-    except IntegrityError:
-        # Already exists from a prior fixture run; look up the real id.
-        existing = await user_svc.get_user_by_username(tenant_id_web, "webtest")
-        assert existing is not None, "auth_headers_web failed to seed the test user"
-        actual_user_id = existing.id
 
     auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
     token = auth_svc.generate_token(
@@ -428,7 +426,10 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
 
     # Create the test user in tenant 2 so /users/me resolves correctly (Rule 126).
     user_svc = UserService(async_session)
-    try:
+    existing = await user_svc.get_user_by_username(tenant_id_2_web, "webtest2")
+    if existing is not None:
+        actual_user_id = existing.id
+    else:
         user = await user_svc.create_user(
             username="webtest2",
             email="webtest2@example.com",
@@ -438,10 +439,6 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
         )
         actual_user_id = user.id
         assert actual_user_id is not None, "auth_headers_tenant_2 failed to seed the test user"
-    except IntegrityError:
-        existing = await user_svc.get_user_by_username(tenant_id_2_web, "webtest2")
-        assert existing is not None, "auth_headers_tenant_2 failed to seed the test user"
-        actual_user_id = existing.id
 
     auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
     token = auth_svc.generate_token(

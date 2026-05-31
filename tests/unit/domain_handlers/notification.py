@@ -70,20 +70,19 @@ def make_notification_handler(state):
         sql_text_lower = sql_text.lower()
 
         if "insert into notifications" in sql_text_lower:
-            # DB column 'params_' is populated by the ORM from payload_params.
-            # SQLAlchemy resolves the bind key from the mapped_column name, not the
-            # Python attribute name.
+            if "tenant_id" not in params or params["tenant_id"] is None:
+                raise ValueError(f"insert must bind non-None tenant_id (got keys: {list(params.keys())})")
+            if "user_id" not in params or params["user_id"] is None:
+                raise ValueError(f"insert must bind non-None user_id (got keys: {list(params.keys())})")
             nid = state._notifications_next_id
             state._notifications_next_id += 1
             n = {
                 "id": nid,
-                "tenant_id": params.get("tenant_id", 0),
-                "user_id": params.get("user_id", 0),
+                "tenant_id": params.get("tenant_id"),
+                "user_id": params.get("user_id"),
                 "channel": params.get("channel"),
                 "template": params.get("template"),
                 "params_": params.get("params_"),
-                # NOTE: If NotificationModel.payload_params ever changes to a
-                # different DB column name, update this bind key accordingly.
                 "status": params.get("status", "pending"),
                 "priority": params.get("priority", "normal"),
                 "created_at": params.get("created_at"),
@@ -103,14 +102,15 @@ def make_notification_handler(state):
         if "count(" in sql_text_lower and "from notifications" in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            if user_id is None:
-                raise ValueError(f"notification count must bind user_id (got keys: {list(params.keys())})")
-            # Explicit unread_only param takes precedence; fall back to SQL text heuristic
-            # for tests using raw SQL text matching (backward compat).
-            if "_unread_only" in params:
-                unread_filter = params["_unread_only"]
-            else:
-                unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
+            if tenant_id is None or user_id is None:
+                raise ValueError(
+                    f"notification count must bind tenant_id and user_id (got keys: {list(params.keys())})"
+                )
+            # _unread_only may be absent when SQLAlchemy uses a SQL default; fall through
+            # to the generic 'from notifications' branch rather than crashing.
+            if "_unread_only" not in params:
+                return None
+            unread_filter = params["_unread_only"]
             if unread_filter:
                 count = sum(
                     1
@@ -128,7 +128,15 @@ def make_notification_handler(state):
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = params.get("_unread_only", False)
+            if tenant_id is None or user_id is None:
+                raise ValueError(
+                    f"list-notifications must bind tenant_id and user_id (got keys: {list(params.keys())})"
+                )
+            # _unread_only may be absent when SQLAlchemy uses a SQL default; fall through
+            # to None so other handlers can respond, rather than crashing here.
+            if "_unread_only" not in params:
+                return None
+            unread_filter = params["_unread_only"]
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = sorted(
@@ -216,16 +224,30 @@ def make_reminder_handler(state):
             return MockResult([_reminder_to_row(r)])
 
         if "from reminders where id" in sql_text_lower and "delete" not in sql_text_lower:
+            if "user_id" not in params or "tenant_id" not in params:
+                raise ValueError(f"get-reminder must bind user_id and tenant_id (got keys: {list(params.keys())})")
             rid = params.get("id")
             r = state._reminders.get(rid)
-            if r and r.get("tenant_id") == params.get("tenant_id"):
+            if (
+                r
+                and r.get("tenant_id") == params.get("tenant_id")
+                and r.get("user_id") == params.get("user_id")
+            ):
                 return MockResult([_reminder_to_row(r)])
             return MockResult([])
 
         if "delete from reminders" in sql_text_lower:
+            if "user_id" not in params or "tenant_id" not in params:
+                raise ValueError(
+                    f"delete-reminder must bind user_id and tenant_id (got keys: {list(params.keys())})"
+                )
             rid = params.get("id")
             r = state._reminders.get(rid)
-            if r and r.get("tenant_id") == params.get("tenant_id"):
+            if (
+                r
+                and r.get("tenant_id") == params.get("tenant_id")
+                and r.get("user_id") == params.get("user_id")
+            ):
                 if r.get("is_completed"):
                     # Completed reminders cannot be cancelled.
                     return MockResult([], rowcount=0)
@@ -344,11 +366,100 @@ def get_handlers(state: MockState) -> list[Callable[..., MockResult | None]]:
         make_notification_handler(state),
         make_reminder_handler(state),
         make_smart_notification_handler(state),
+        make_notification_analytics_handler(state),
     ]
+
+
+def make_notification_analytics_handler(state):
+    """Return a handler that manages an in-memory notification_analytics store in state."""
+
+    def handler(sql_text: str, params: dict[str, Any]) -> MockResult | None:
+        # Initialise on first use; use getattr to avoid class-attribute shadowing
+        # when tests pre-seed state._notification_analytics before the session is built.
+        store = getattr(state, "_notification_analytics", None)
+        if store is None:
+            store = {}
+            state._notification_analytics = store
+
+        # Id counter: starts at 1, never reused after deletion (Rule 31).
+        next_id = getattr(state, "_notification_analytics_next_id", None)
+        if next_id is None:
+            # Bootstrap from existing store size so pre-seeded records keep their IDs.
+            next_id = max((r.get("id", 0) for r in store.values()), default=0) + 1
+            state._notification_analytics_next_id = next_id
+
+        sql_text_lower = sql_text.lower()
+
+        # SELECT: must be checked before INSERT/UPDATE since INSERT/UPDATE text also contains "from".
+        # NOTE: check for count(...) before the generic SELECT below — COUNT queries must
+        # return a scalar, not a row.
+        if "select" in sql_text_lower and "count(" in sql_text_lower and "from notification_analytics" in sql_text_lower:
+            nid = params.get("notification_id") or params.get("notification_id_1")
+            tid = params.get("tenant_id") or params.get("tenant_id_1")
+            count = sum(
+                1
+                for r in store.values()
+                if r.get("notification_id") == nid
+                and r.get("tenant_id") == tid
+                and r.get("opened_at") is not None
+            )
+            return MockResult([[count]])
+
+        if "select" in sql_text_lower and "from notification_analytics" in sql_text_lower and "notification_id" in sql_text_lower:
+            nid = params.get("notification_id") or params.get("notification_id_1")
+            tid = params.get("tenant_id") or params.get("tenant_id_1")
+            key = (nid, tid)
+            record = store.get(key)
+            if record:
+                return MockResult([_notification_analytics_to_row(record)])
+            return MockResult([])
+
+        if "insert into notification_analytics" in sql_text_lower:
+            key = (params.get("notification_id"), params.get("tenant_id"))
+            if key in store:
+                # Upsert: update existing record's timestamps — id is immutable (Rule 133).
+                row = store[key]
+                row["opened_at"] = params.get("opened_at")
+                row["clicked_at"] = params.get("clicked_at")
+                row["updated_at"] = params.get("opened_at") or datetime.now(UTC)
+                return MockResult([_notification_analytics_to_row(row)])
+            nid = params.get("notification_id")
+            tid = params.get("tenant_id")
+            record = {
+                "id": next_id,
+                "notification_id": nid,
+                "tenant_id": tid,
+                "opened_at": params.get("opened_at"),
+                "clicked_at": params.get("clicked_at"),
+                "channel": params.get("channel", "email"),
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
+            }
+            state._notification_analytics_next_id = next_id + 1
+            store[key] = record
+            return MockResult([_notification_analytics_to_row(record)])
+
+    return handler
+
+
+def _notification_analytics_to_row(r: dict):
+    return MockRow(
+        {
+            "id": r.get("id"),
+            "notification_id": r.get("notification_id"),
+            "tenant_id": r.get("tenant_id"),
+            "opened_at": r.get("opened_at"),
+            "clicked_at": r.get("clicked_at"),
+            "channel": r.get("channel", "email"),
+            "created_at": r.get("created_at"),
+            "updated_at": r.get("updated_at"),
+        }
+    )
 
 
 __all__ = [
     "get_handlers",
+    "make_notification_analytics_handler",
     "make_notification_handler",
     "make_reminder_handler",
     "make_smart_notification_handler",

@@ -29,8 +29,8 @@ class AutomationRuleModel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     trigger_event: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    conditions: Mapped[list[dict] | None] = mapped_column(JSONB, default=None, nullable=False)
-    actions: Mapped[list[dict] | None] = mapped_column(JSONB, default=None, nullable=False)
+    conditions: Mapped[list[dict]] = mapped_column(JSONB, default=[], nullable=False)
+    actions: Mapped[list[dict]] = mapped_column(JSONB, default=[], nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_by: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),

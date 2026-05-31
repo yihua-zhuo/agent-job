@@ -13,6 +13,7 @@ from db.models.reminder import ReminderModel
 from db.models.smart_notification import Channel, Priority, SmartNotificationModel, Timing
 from db.models.user import UserModel
 from pkg.constants.notification_constants import (
+    NOTIFICATION_PARAMS_MAX_BYTES,
     PAYLOAD_PARAMS_ALLOWED_KEYS,
     VALID_NOTIFICATION_CHANNELS,
     VALID_PRIORITIES,
@@ -70,8 +71,12 @@ class NotificationService:
             except (ValueError, TypeError):
                 raise ValidationException("related_id must be an integer")
         params_str = json.dumps(params, ensure_ascii=False)
-        if len(params_str.encode("utf-8")) > 4096:
-            raise ValidationException("notification params exceed maximum size of 4096 bytes")
+        if len(params_str.encode("utf-8")) > NOTIFICATION_PARAMS_MAX_BYTES:
+            raise ValidationException(
+                f"notification params exceed maximum size of {NOTIFICATION_PARAMS_MAX_BYTES} bytes"
+            )
+
+        # validated against PAYLOAD_PARAMS_ALLOWED_KEYS after all conditional fields are added.
         # Reject any keys beyond the allow-list before persisting — the to_dict()
         # filtering only applies at serialization time, not at insert.
         unknown_keys = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
@@ -191,6 +196,18 @@ class NotificationService:
             raise ValidationException(f"channel must be 0 (email), 1 (sms), 2 (push), or 3 (in_app), got {channel}")
         if timing not in {t.value for t in Timing}:
             raise ValidationException(f"timing must be 0 (immediate) or 1 (batch), got {timing}")
+        # Rule126: validate recipient_filter schema — a malformed filter dict could persist
+        # but fail at routing time.
+        if recipient_filter is not None:
+            if not isinstance(recipient_filter, dict):
+                raise ValidationException("recipient_filter must be a dict")
+            for key, value in recipient_filter.items():
+                if not isinstance(key, str):
+                    raise ValidationException(f"recipient_filter keys must be str, got {type(key).__name__}")
+                if not isinstance(value, (list, str, int)):
+                    raise ValidationException(
+                        f"recipient_filter values must be list | str | int, got {type(value).__name__} for key {key!r}"
+                    )
 
         notification = SmartNotificationModel(
             tenant_id=tenant_id,

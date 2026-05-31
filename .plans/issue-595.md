@@ -20,7 +20,6 @@ Reading order followed:
 3. `/home/runner/work/agent-job/agent-job/docs/dev-plan/40-campaigns/0595-add-post-notifications-smart-endpoint.md`
 
 ---
-
 ## Affected Files
 
 - `src/api/routers/notifications.py` — add `SmartNotificationCreate` Pydantic schema and `POST /notifications/smart` endpoint

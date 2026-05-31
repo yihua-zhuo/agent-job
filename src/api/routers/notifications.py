@@ -12,6 +12,7 @@ from db.connection import get_db
 from db.models.smart_notification import Channel, Priority, Timing
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.constants.notification_constants import VALID_NOTIFICATION_CHANNELS
+from services.notification_analytics_service import NotificationAnalyticsService
 from services.notification_routing_service import NotificationRoutingService
 from services.notification_service import NotificationService
 
@@ -60,7 +61,9 @@ class NotificationCreate(BaseModel):
         # 'related_type'/'related_id' (optional fields) are allowed in the payload.
         # The title field carries the template name, so any additional top-level
         # keys passed via kwargs in send_notification are not relevant here.
-        if v and "password" in v.lower():
+        # NOTE: the blocklist below is intentionally minimal — real credential-injection
+        # prevention belongs at the data layer. It only flags known sentinels.
+        if v and any(k in v.lower() for k in ("password", "api_key", "secret", "token", "auth", "credential")):
             raise ValueError("content may not contain credential-class fields")
         return v
 
@@ -258,6 +261,32 @@ async def mark_notification_read(
     svc = NotificationService(session)
     data = await svc.mark_as_read(notification_id, tenant_id=current_user.tenant_id)
     return {"success": True, "data": data.to_dict(), "message": "通知已标记为已读"}
+
+
+@notifications_router.patch(
+    "/notifications/{notification_id}/open",
+    summary="Track a notification open event",
+)
+async def track_notification_open(
+    notification_id: int = Path(..., ge=1, description="Notification ID"),
+    current_user: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Record that a notification was opened and return the open count."""
+    if current_user.tenant_id is None or current_user.tenant_id == 0:
+        raise HTTPException(status_code=401, detail="无效的租户信息")
+
+    svc = NotificationAnalyticsService(session)
+    analytics = await svc.track_open(notification_id, tenant_id=current_user.tenant_id)
+    count = await svc.get_open_count(notification_id, tenant_id=current_user.tenant_id)
+    return {
+        "success": True,
+        "data": {
+            "notification_id": notification_id,
+            "opened_at": analytics.opened_at.isoformat() if analytics.opened_at else None,
+            "open_count": count,
+        },
+    }
 
 
 @notifications_router.post(

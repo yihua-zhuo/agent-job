@@ -8,21 +8,22 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - `src/db/models/notification.py` — Replace the existing model with the new field set and updated `to_dict()`
 - `src/services/notification_service.py` — Update field references to match the new model (field renames: type → channel, is_read → read_at check, title/content → template/params)
 - `alembic/versions/e7f6a5b3c12d_add_notification_indexes.py` — Migration (chains from `82ecf4a34e34`) adding composite + partial indexes on `notifications`
-- `tests/unit/domain_handlers/notification.py` — Handler for unit-test mock SQL engine; discovered automatically by `conftest.py`'s `_load_domain_handler_modules()` via `pkgutil.iter_modules` over the `tests.unit.domain_handlers` package. The handler module must export `get_handlers(state)` and `__all__` listing all exported symbols.
+- `tests/unit/domain_handlers/notification.py` — Handler for unit-test mock SQL engine; discovered automatically by `conftest.py`'s `_load_domain_handler_modules()` via `pkgutil.iter_modules` over the `tests.unit.domain_handlers` package. The handler module must export `get_handlers(state)` and `__all__` listing all exported symbols. **Bind key note:** the notification handler reads `payload_params` (Python attribute name, not DB column `params_`) from SQL parameter dicts — SQLAlchemy resolves bind keys against Python attribute names at compilation time, not DB column names.
 - `tests/unit/test_notifications_router.py` — Tests already use the new field names (`channel`, `template`, `params`, `status`, `read_at`); no updates required
+- `src/api/routers/notifications.py` — `NotificationCreate` Pydantic schema intentionally retains the legacy API field names (`notification_type`, `title`, `content`) as the external contract. The service translates `notification_type → channel`, `title → template`, and `content → payload_params` internally. The router passes the legacy names directly to `NotificationService.send_notification` without an intermediate translation layer. `NotificationCreate.content` uses a `'password'` substring heuristic as a rough credential-injection guard in `content_keys_must_be_allowed`; this is intentionally incomplete and noted in-code.
 
 ## Implementation Steps
-1. **Replace `src/db/models/notification.py`** — DONE: model already updated with all 11 fields, `to_dict()` serializes `params_` as `"params"`.
+1. **Replace `src/db/models/notification.py`** — DONE: model already updated with all 11 fields, `to_dict()` serializes `payload_params` as `"params"`.
    - Fields: `id` (pk), `user_id` (index=True), `tenant_id` (index=True), `channel` (String(50)), `template` (String(255)), `payload_params` (JSON, mapped_column `params_`, using `postgresql.JSON`), `status` (String(50)), `priority` (String(20)), `created_at` (DateTime, `server_default=func.now()`), `delivered_at` (DateTime, nullable), `read_at` (DateTime, nullable).
-   - Add `__table_args__` with a composite index: `Index("ix_notifications_tenant_user_status", "tenant_id", "user_id", "status")`.
+   - `__table_args__` defines `Index("ix_notifications_tenant_user_status", "tenant_id", "user_id", "status")`.
    - Import `JSON` from `sqlalchemy.dialects.postgresql`.
-   - `to_dict()` must serialize `params_` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`. The dict key should use `'params'` (without trailing underscore) — `{"params": self.payload_params, ...}` — to present a clean API contract while the Python attribute remains `payload_params`.
-   - Python attribute is `payload_params` (mapped to DB column `params_`).
+   - `to_dict()` must serialize `payload_params` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`. The dict key uses `'params'` (without trailing underscore) — `{"params": self.payload_params, ...}` — to present a clean API contract while the Python attribute remains `payload_params` (mapped to DB column `params_`).
    - Throughout the service and router layers, the Python attribute is `payload_params` and the DB column is `params_`. The field is never called `params` internally — `'params'` is the serialized API key only.
+   - **Unit test handler binding:** `tests/unit/domain_handlers/notification.py` uses bind key `params_` (Python attribute name `payload_params` resolved by SQLAlchemy compile-time column mapping).
 
-2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
+2. **Create `tests/unit/domain_handlers/notification.py`** with `get_handlers(state)`, `make_notification_handler(state)`, `make_reminder_handler(state)`, and `make_smart_notification_handler(state)`. Follow the same handler loading pattern used by `sla.py` and `counts.py`. The handler validates that inserts bind non-None `tenant_id` and `user_id`; count/list branches validate both are present; reminder lookup/delete branches scope by both `tenant_id` and `user_id`.
 
-3. **Update `src/services/notification_service.py`**: Already complete — the service was updated to use the new field names (`channel`, `template`, `params_`, `read_at`, `status`) in place of the legacy names.
+3. **Update `src/services/notification_service.py`**: Already complete — the service was updated to use the new model fields (`channel`, `template`, `payload_params`, `read_at`, `status`) in place of the legacy names.
    - `send_notification` builds `payload_params` as `{"content": content, "related_type": ..., "related_id": ...}`.
    - `mark_as_read` sets `read_at` + `status` via ORM attributes, then calls `flush()` only (no `refresh()`).
 
@@ -57,15 +58,15 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - Integration tests in `tests/integration/`: No new integration test files required — the existing `notifications` table is already covered by `db_schema` fixture; the new indexes are exercised by the existing notification integration flows (list, send, mark-read) with no new fixtures needed.
 
 ## Acceptance Criteria
-- `src/db/models/notification.py` contains `NotificationModel` with all eleven fields (`id`, `user_id`, `tenant_id`, `channel`, `template`, `params_`, `status`, `priority`, `created_at`, `delivered_at`, `read_at`) and a `to_dict()` method serializing all fields correctly.
-- `NotificationModel.params_` is declared with `JSON` type from `sqlalchemy.dialects.postgresql`.
+- `src/db/models/notification.py` contains `NotificationModel` with all eleven fields (`id`, `user_id`, `tenant_id`, `channel`, `template`, `payload_params` (DB column `params_`), `status`, `priority`, `created_at`, `delivered_at`, `read_at`) and a `to_dict()` method serializing all fields correctly.
+- `NotificationModel.payload_params` is declared with `JSON` type from `sqlalchemy.dialects.postgresql` (mapped to DB column `params_`).
 - `__table_args__` defines `Index("ix_notifications_tenant_user_status", "tenant_id", "user_id", "status")`.
-- The Alembic migration in `alembic/versions/` contains `op.create_index` for the composite index and a manually written partial index `ix_notifications_in_app_unread` with `WHERE channel='in_app' AND read_at IS NULL`. The partial index must be written manually, not autogenerated.
+- The Alembic migration in `alembic/versions/` contains `op.create_index` for the composite index and a manually written partial index `ix_notifications_in_app_unread`. The partial index must be written manually, not autogenerated, using `sa.text()` for the predicate (e.g., `postgresql_where=text("channel = 'in_app' AND read_at IS NULL")`).
 - Migration upgrades and downgrades cleanly against a real PostgreSQL instance with `alembic upgrade head && alembic downgrade -1 && alembic upgrade head`.
-- `src/services/notification_service.py` uses the new model fields (`channel`, `template`, `params_`, `status`, `read_at`) throughout. `mark_as_read` calls `flush()` only (no `refresh()`); `mark_all_as_read` returns a plain `{"marked_count": <int>}` dict without calling `refresh()`.
+- `src/services/notification_service.py` uses the new model fields (`channel`, `template`, `payload_params`, `status`, `read_at`) throughout. `mark_as_read` calls `flush()` only (no `refresh()`); `mark_all_as_read` returns a plain `{"marked_count": <int>}` dict without calling `refresh()`.
 - Ruff linting clean: `PYTHONPATH=src ruff check src/`.
 
 ## Risks / Open Questions
-- The existing `NotificationService` in `notification_service.py` uses field names (`type`, `is_read`) that differ from the new model. These field references must be updated in the service — if the service is also used by other callers (e.g. API router), those callers' serialization layer may also need updating. The router tests patch `NotificationService` directly, so they are insulated, but any integration test that constructs `NotificationModel` directly will break until updated.
+- The service now uses `NotificationModel` fields throughout; callers that construct `NotificationModel` directly should be updated to use the new field names (`channel`, `template`, `payload_params`, `status`, `read_at`) if they have not already been updated.
 - The partial index `WHERE channel='in_app' AND read_at IS NULL` cannot be produced by autogenerate; it must be written manually in the migration. Pass the predicate as a raw SQL string via `op.create_index()` using `text()` (e.g., `postgresql_where=text("channel = 'in_app' AND read_at IS NULL")`), or use the SQLAlchemy Core boolean expression form (`and_(column("channel") == "in_app", column("read_at").is_(None))`).
 - `docker compose -f configs/docker-compose.test.yml` is the correct compose file per CLAUDE.md; confirm it exposes the `test-db` container name as referenced in the steps above before running.

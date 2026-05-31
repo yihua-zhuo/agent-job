@@ -54,16 +54,6 @@ async def _upsert_enrichment(
     return result.scalar_one()
 
 
-async def _upsert_enrichment_raw(
-    session: AsyncSession,
-    tenant_id: int,
-    customer_id: int,
-    raw_data: dict[str, Any],
-) -> None:
-    """Upsert a CustomerEnrichmentModel record without returning it (used by lookup)."""
-    await _upsert_enrichment(session, tenant_id, customer_id, raw_data)
-
-
 class EnrichmentService:
     """Third-party company data enrichment."""
 
@@ -103,7 +93,7 @@ class EnrichmentService:
         raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name)
         normalised = self._normalise_clearbit(raw_data)
 
-        await _upsert_enrichment_raw(self.session, tenant_id, customer_id, raw_data)
+        await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)
 
         return normalised, raw_data
 

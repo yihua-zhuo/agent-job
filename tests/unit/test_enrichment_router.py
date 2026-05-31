@@ -277,7 +277,13 @@ class TestRefreshEndpoint:
         assert "domain or company_name is required" in body["message"]
 
     def test_refresh_cross_tenant_returns_404(self, client_with_service_as_tenant_2):
-        """A tenant cannot refresh another tenant's customer's enrichment."""
+        """A tenant cannot refresh another tenant's customer's enrichment.
+
+        This is a router-level isolation test: the service is mocked to raise
+        NotFoundException immediately, short-circuiting before any DB access.
+        It verifies that the router correctly propagates the 404 response from
+        the service; it does not exercise cross-tenant database-level filtering.
+        """
         client, svc = client_with_service_as_tenant_2
         svc.refresh_full = AsyncMock(side_effect=NotFoundException("Customer"))
 

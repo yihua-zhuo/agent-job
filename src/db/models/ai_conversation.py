@@ -68,7 +68,10 @@ class AIMessageModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     conversation_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("ai_conversations.id", ondelete="CASCADE"), nullable=False
+        Integer,
+        ForeignKey("ai_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,  # indexed via composite ix_ai_messages_tenant_conv; explicit index redundant but harmless
     )
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     role: Mapped[MessageRole] = mapped_column(String(20), nullable=False)  # "user" | "assistant"
