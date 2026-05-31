@@ -53,11 +53,11 @@ def tenant_router_client(monkeypatch):
 
     from internal.middleware.fastapi_auth import require_auth
 
-    mock_service = MagicMock()
+    mock_svc = MagicMock()
 
     monkeypatch.setattr(
         "api.routers.tenants.TenantService",
-        lambda *args, **kwargs: mock_service,
+        lambda *args, **kwargs: mock_svc,
     )
 
     app = FastAPI()
@@ -81,7 +81,7 @@ def tenant_router_client(monkeypatch):
 
     client = TestClient(app, raise_server_exceptions=False)
 
-    yield client, mock_service
+    yield client, mock_svc
 
 
 # ---------------------------------------------------------------------------

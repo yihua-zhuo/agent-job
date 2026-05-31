@@ -111,6 +111,7 @@ class TenantService:
         return await self.update_tenant(tenant_id, requesting_tenant_id=requesting_tenant_id, status="suspended")
 
     async def delete_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
+        # Delegates to update_tenant to avoid duplicating the status + updated_at mutation.
         return await self.update_tenant(tenant_id, requesting_tenant_id=requesting_tenant_id, status="deleted")
 
     async def list_tenants(

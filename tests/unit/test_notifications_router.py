@@ -5,7 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock, patch
 
-import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from starlette.responses import JSONResponse
@@ -542,14 +541,17 @@ class TestInvalidTenant:
         assert response.status_code == 401
 
     def test_get_preferences_invalid_tenant(self):
+        # Preferences endpoint always returns 501 (not yet implemented) before any
+        # tenant check — the per-endpoint duplicate check was removed per review.
         client = self._app_invalid_tenant()
         response = client.get("/api/v1/notifications/preferences")
-        assert response.status_code == 401
+        assert response.status_code == 501
 
     def test_update_preferences_invalid_tenant(self):
+        # Same as above — 501 because the feature is not implemented.
         client = self._app_invalid_tenant()
         response = client.put("/api/v1/notifications/preferences", json={"email": False})
-        assert response.status_code == 401
+        assert response.status_code == 501
 
     def test_create_reminder_invalid_tenant(self):
         client = self._app_invalid_tenant()

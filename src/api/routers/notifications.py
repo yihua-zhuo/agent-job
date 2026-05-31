@@ -196,8 +196,6 @@ async def get_notification_preferences(
     current_user: AuthContext = Depends(require_auth),
 ):
     """Get the current user's notification preferences (stored per user)."""
-    if current_user.tenant_id is None or current_user.tenant_id == 0:
-        raise HTTPException(status_code=401, detail="无效的租户信息")
     # TODO: implement notification_preferences table and wire to service
     raise HTTPException(status_code=501, detail="notification_preferences table not yet implemented")
 
@@ -211,8 +209,6 @@ async def update_notification_preferences(
     current_user: AuthContext = Depends(require_auth),
 ):
     """Update the current user's notification preferences."""
-    if current_user.tenant_id is None or current_user.tenant_id == 0:
-        raise HTTPException(status_code=401, detail="无效的租户信息")
     # TODO: implement notification_preferences table and wire to service
     raise HTTPException(status_code=501, detail="notification_preferences table not yet implemented")
 

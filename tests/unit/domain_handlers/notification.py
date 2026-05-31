@@ -142,6 +142,8 @@ def make_notification_handler(state):
         if "update notifications" in sql_text_lower and "read_at" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
+            # UPDATE with wrong tenant/user returns rowcount=0 — matches SQLAlchemy
+            # semantics where the WHERE clause matches 0 rows, rather than raising.
             if n and n.get("tenant_id") == params.get("tenant_id") and n.get("user_id") == params.get("user_id"):
                 n["read_at"] = params.get("read_at")
                 if params.get("read_at") is not None:
@@ -152,6 +154,8 @@ def make_notification_handler(state):
         if "delete from notifications" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
+            # DELETE with wrong tenant/user returns rowcount=0 — matches SQLAlchemy
+            # semantics (no NotFoundException raised for a DELETE that hits 0 rows).
             if n and n.get("tenant_id") == params.get("tenant_id") and n.get("user_id") == params.get("user_id"):
                 del state._notifications[nid]
                 return MockResult([], rowcount=1)
@@ -168,7 +172,12 @@ def make_notification_handler(state):
 
 
 def make_reminder_handler(state):
-    """Return a handler that manages an in-memory reminder store in state."""
+    """Return a handler that manages an in-memory reminder store in state.
+
+    rowcount=0 semantics by operation:
+    - SELECT by id with no match: rowcount=0 (not-found)
+    - DELETE with wrong tenant or completed reminder: rowcount=0 (not-found / business-rule block)
+    """
 
     def handler(sql_text: str, params: dict[str, Any]) -> MockResult | None:
         if not hasattr(state, "_reminders"):
