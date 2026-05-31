@@ -137,7 +137,7 @@ def make_notification_handler(state):
                     n
                     for n in state._notifications.values()
                     if n.get("tenant_id") == tenant_id
-                    and n.get("user_id") == user_id
+                    and (user_id is None or n.get("user_id") == user_id)
                     and not (unread_filter and n.get("read_at") is not None)
                 ),
                 key=lambda n: n.get("id", 0),

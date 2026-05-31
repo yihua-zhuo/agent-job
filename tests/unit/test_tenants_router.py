@@ -413,3 +413,4 @@ class TestTenantCrossTenantIsolation:
         svc.update_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 2"))
         resp = client.put("/api/v1/tenants/2", json={"name": "Hijack"})
         assert resp.status_code == 403
+        svc.update_tenant.assert_called_once_with(2, requesting_tenant_id=1, name="Hijack")

@@ -69,11 +69,6 @@ class NotificationService:
                 raise ValidationException("related_id must be an integer")
         if len(json.dumps(params, ensure_ascii=False).encode("utf-8")) > 4096:
             raise ValidationException("notification params exceed maximum size of 4096 bytes")
-        user_check = await self.session.execute(
-            select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
-        )
-        if user_check.scalar_one_or_none() is None:
-            raise NotFoundException("User")
         notification = NotificationModel(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -96,11 +91,6 @@ class NotificationService:
         page_size: int = 20,
     ) -> tuple[list[NotificationModel], int]:
         """Fetch paginated notification list for a user."""
-        user_check = await self.session.execute(
-            select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
-        )
-        if user_check.scalar_one_or_none() is None:
-            raise NotFoundException("User")
         conditions = [
             NotificationModel.tenant_id == tenant_id,
             NotificationModel.user_id == user_id,
@@ -141,11 +131,6 @@ class NotificationService:
 
     async def mark_all_as_read(self, user_id: int, tenant_id: int) -> MarkAllReadResult:
         """Mark all unread notifications as read for a user."""
-        user_check = await self.session.execute(
-            select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
-        )
-        if user_check.scalar_one_or_none() is None:
-            raise NotFoundException("User")
         now = datetime.now(UTC)
         result = await self.session.execute(
             update(NotificationModel)
@@ -263,11 +248,6 @@ class NotificationService:
         page_size: int = 20,
     ) -> tuple[list[ReminderModel], int]:
         """Fetch reminders for a user with pagination."""
-        user_check = await self.session.execute(
-            select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
-        )
-        if user_check.scalar_one_or_none() is None:
-            raise NotFoundException("User")
         conditions = [
             ReminderModel.tenant_id == tenant_id,
             ReminderModel.user_id == user_id,

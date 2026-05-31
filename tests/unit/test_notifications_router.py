@@ -238,8 +238,8 @@ class TestSendNotification:
         # (We can verify this by checking no mock was invoked — the service is a class patch,
         # so we check the patched class was never instantiated by checking the call list.)
 
-    def test_send_notification_type_validated_at_service_layer(self):
-        """Service layer rejects unknown notification_type with a clear 422."""
+    def test_send_service_validation_error_returns_422(self):
+        """Service layer ValidationException (e.g. from a secondary type check) is caught by the global handler and returns 422."""
         from pkg.errors.app_exceptions import ValidationException
 
         with patch("api.routers.notifications.NotificationService") as svc_cls:
@@ -462,13 +462,26 @@ class TestDeleteReminderEndpoint:
 
 
 class TestInvalidTenant:
+    def _app_invalid_tenant(self) -> TestClient:
+        """Use a valid AuthContext (tenant_id=0) so the router's own guard is exercised."""
+        app = FastAPI()
+        app.include_router(notifications_router)
+        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=0, user_id=99)
+        app.dependency_overrides[get_db] = lambda: make_mock_session([])
+
+        @app.exception_handler(AppException)
+        async def _handler(request, exc):
+            return JSONResponse(status_code=exc.status_code, content={"success": False, "message": exc.detail})
+
+        return TestClient(app, raise_server_exceptions=False)
+
     def test_list_notifications_invalid_tenant(self):
-        client = _app(tenant_id=0)
+        client = self._app_invalid_tenant()
         response = client.get("/api/v1/notifications")
         assert response.status_code == 401
 
     def test_send_notification_invalid_tenant(self):
-        client = _app(tenant_id=0)
+        client = self._app_invalid_tenant()
         response = client.post(
             "/api/v1/notifications/send",
             json={
@@ -481,27 +494,27 @@ class TestInvalidTenant:
         assert response.status_code == 401
 
     def test_mark_read_invalid_tenant(self):
-        client = _app(tenant_id=0)
+        client = self._app_invalid_tenant()
         response = client.put("/api/v1/notifications/1/read")
         assert response.status_code == 401
 
     def test_mark_all_read_invalid_tenant(self):
-        client = _app(tenant_id=0)
+        client = self._app_invalid_tenant()
         response = client.post("/api/v1/notifications/mark-all-read")
         assert response.status_code == 401
 
     def test_get_preferences_invalid_tenant(self):
-        client = _app(tenant_id=0)
+        client = self._app_invalid_tenant()
         response = client.get("/api/v1/notifications/preferences")
         assert response.status_code == 401
 
     def test_update_preferences_invalid_tenant(self):
-        client = _app(tenant_id=0)
+        client = self._app_invalid_tenant()
         response = client.put("/api/v1/notifications/preferences", json={"email": False})
         assert response.status_code == 401
 
     def test_create_reminder_invalid_tenant(self):
-        client = _app(tenant_id=0)
+        client = self._app_invalid_tenant()
         response = client.post(
             "/api/v1/reminders",
             json={
@@ -512,12 +525,12 @@ class TestInvalidTenant:
         assert response.status_code == 401
 
     def test_list_reminders_invalid_tenant(self):
-        client = _app(tenant_id=0)
+        client = self._app_invalid_tenant()
         response = client.get("/api/v1/reminders")
         assert response.status_code == 401
 
     def test_cancel_reminder_invalid_tenant(self):
-        client = _app(tenant_id=0)
+        client = self._app_invalid_tenant()
         response = client.delete("/api/v1/reminders/1")
         assert response.status_code == 401
 

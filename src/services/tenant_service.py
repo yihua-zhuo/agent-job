@@ -110,6 +110,8 @@ class TenantService:
         return await self.update_tenant(tenant_id, requesting_tenant_id=requesting_tenant_id, status="suspended")
 
     async def delete_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
+        if tenant_id != requesting_tenant_id:
+            raise ForbiddenException("Access denied")
         tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
         now = datetime.now(UTC)
         new_settings = dict(tenant.settings or {})
