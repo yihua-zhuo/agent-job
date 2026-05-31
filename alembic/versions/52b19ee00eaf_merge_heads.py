@@ -56,6 +56,18 @@ def upgrade() -> None:
     )
     op.create_index(op.f("ix_import_jobs_tenant_id"), "import_jobs", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_import_jobs_entity_type"), "import_jobs", ["entity_type"], unique=False)
+    # tenant_id FK for import_jobs — catches DBs that arrived via a path that
+    # skipped this migration; uses IF NOT EXISTS so existing constraints are
+    # not broken.
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE import_jobs ADD CONSTRAINT fk_import_jobs_tenant_id "
+            "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
+            "END $$"
+        )
+    )
     op.create_table(
         "export_jobs",
         sa.Column("id", sa.Integer(), primary_key=True, nullable=False),
@@ -70,6 +82,18 @@ def upgrade() -> None:
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
     op.create_index(op.f("ix_export_jobs_tenant_id"), "export_jobs", ["tenant_id"], unique=False)
+    # tenant_id FK for export_jobs — catches DBs that arrived via a path that
+    # skipped this migration; uses IF NOT EXISTS so existing constraints are
+    # not broken.
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE export_jobs ADD CONSTRAINT fk_export_jobs_tenant_id "
+            "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
+            "END $$"
+        )
+    )
 
     # ── e646948c549a: automation_rules + automation_logs ─────────────────────
     op.create_table(
@@ -93,6 +117,10 @@ def upgrade() -> None:
     # tenant_id FK for automation_rules — catches DBs that arrived via a path
     # that skipped this migration; uses IF NOT EXISTS so existing constraints
     # (added by an earlier repair migration) are not broken.
+    # Only duplicate_object (constraint already exists) and undefined_object
+    # (table not present — should not occur in normal upgrade) are caught.
+    # syntax_error and other SQL failures indicate a real problem and must not
+    # be silently suppressed.
     op.execute(
         sa.text(
             "DO $$ BEGIN "
@@ -122,6 +150,10 @@ def upgrade() -> None:
     # tenant_id FK for automation_logs — catches DBs that arrived via a path
     # that skipped this migration; uses IF NOT EXISTS so existing constraints
     # (added by an earlier repair migration) are not broken.
+    # Only duplicate_object (constraint already exists) and undefined_object
+    # (table not present — should not occur in normal upgrade) are caught.
+    # syntax_error and other SQL failures indicate a real problem and must not
+    # be silently suppressed.
     op.execute(
         sa.text(
             "DO $$ BEGIN "
@@ -151,6 +183,18 @@ def upgrade() -> None:
     # Convert anonymous unique index to a named constraint (rule 125 / migration encapsulation).
     op.drop_index(op.f("ix_agent_tasks_task_id"), table_name="agent_tasks")
     op.create_unique_constraint("uq_agent_tasks_task_id", "agent_tasks", ["task_id"])
+    # tenant_id FK for agent_tasks — catches DBs that arrived via a path that
+    # skipped this migration; uses IF NOT EXISTS so existing constraints are
+    # not broken.
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE agent_tasks ADD CONSTRAINT fk_agent_tasks_tenant_id "
+            "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
+            "END $$"
+        )
+    )
 
     # ── afa7c3f333bd: add sent_at to campaigns ────────────────────────────────
     op.add_column("campaigns", sa.Column("sent_at", sa.DateTime(timezone=True), nullable=True))
@@ -173,6 +217,18 @@ def upgrade() -> None:
     op.create_index(op.f("ix_report_definitions_tenant_id"), "report_definitions", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_report_definitions_report_type"), "report_definitions", ["report_type"], unique=False)
     op.create_index(op.f("ix_report_definitions_owner_tenant_id"), "report_definitions", ["owner_tenant_id"], unique=False)
+    # tenant_id FK for report_definitions — catches DBs that arrived via a path
+    # that skipped this migration; uses IF NOT EXISTS so existing constraints are
+    # not broken.
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE report_definitions ADD CONSTRAINT fk_report_definitions_tenant_id "
+            "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
+            "END $$"
+        )
+    )
 
     # ── db63fcd03ab9: conversations + conversation_messages ──────────────────
     op.create_table(
@@ -188,6 +244,18 @@ def upgrade() -> None:
     op.create_index(op.f("ix_conversations_tenant_id"), "conversations", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_conversations_user_id"), "conversations", ["user_id"], unique=False)
     op.create_index("ix_conversations_tenant_user", "conversations", ["tenant_id", "user_id"], unique=False)
+    # tenant_id FK for conversations — catches DBs that arrived via a path that
+    # skipped this migration; uses IF NOT EXISTS so existing constraints are
+    # not broken.
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE conversations ADD CONSTRAINT fk_conversations_tenant_id "
+            "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
+            "END $$"
+        )
+    )
 
     op.create_table(
         "conversation_messages",
@@ -205,6 +273,18 @@ def upgrade() -> None:
     op.create_index(op.f("ix_conversation_messages_conversation_id"), "conversation_messages", ["conversation_id"], unique=False)
     op.create_index("ix_conversation_messages_tenant_conv", "conversation_messages", ["tenant_id", "conversation_id"], unique=False)
     op.create_index("ix_conversation_messages_tenant_id", "conversation_messages", ["tenant_id"], unique=False)
+    # tenant_id FK for conversation_messages — catches DBs that arrived via a path
+    # that skipped this migration; uses IF NOT EXISTS so existing constraints are
+    # not broken.
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE conversation_messages ADD CONSTRAINT fk_conversation_messages_tenant_id "
+            "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
+            "END $$"
+        )
+    )
 
     # ── e1f2a3b4c5d6: opportunity_activities ──────────────────────────────────
     # Assumes `opportunities` table already exists (stamped by a prior head).
@@ -223,6 +303,8 @@ def upgrade() -> None:
     op.create_index(op.f("ix_opportunity_activities_opportunity_id"), "opportunity_activities", ["opportunity_id"], unique=False)
     # tenant_id FK for opportunity_activities — catches DBs that arrived via a path
     # that skipped this migration.
+    # Only duplicate_object (constraint already exists) and undefined_object
+    # (table not present) are caught; syntax_error indicates a real problem.
     op.execute(
         sa.text(
             "DO $$ BEGIN "

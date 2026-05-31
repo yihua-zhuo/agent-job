@@ -178,6 +178,8 @@ class ReportService:
         """Return paginated reports for a tenant with total count."""
         if page < 1:
             raise ValidationException("page must be >= 1")
+        if page_size < 1:
+            raise ValidationException("page_size must be >= 1")
         offset = (page - 1) * page_size
 
         count_result = await self.session.execute(

@@ -18,6 +18,16 @@ e646948c549a (automation_logs / automation_rules) for DBs that arrived via
 a path that skipped that migration, and adding missing tenant_id indexes on
 auth tables created by db67d696b6ab for DBs that bypassed that head.
 
+Upgrade path notes:
+- **Linear upgrade (52b19ee00eaf → 4001ca3d5d6f → ...):** automation_logs and
+  automation_rules FKs are already added by 52b19ee00eaf.  This migration's
+  DO blocks will hit duplicate_object and pass harmlessly — the redundancy
+  is intentional and the DO block must NOT be removed.
+- **Branched / repair paths:** If a DB skipped 52b19ee00eaf (e.g. arrived via
+  82ecf4a34e34 directly), this migration's DO blocks add the missing FKs.
+  The duplicate_object catch ensures this is safe even if the constraint
+  was added by another concurrent repair migration.
+
 downgrade() reverses only those reconciliation steps.
 """
 
@@ -42,6 +52,8 @@ def upgrade() -> None:
     # Wrapped in a DO block that checks table existence before adding the
     # constraint so DBs that already added the constraint (or skipped the
     # table entirely) are not broken.
+    # Only duplicate_object (FK already exists) and undefined_object
+    # (table not present) are caught; syntax_error indicates a real problem.
     op.execute(
         sa.text(
             "DO $$ BEGIN "

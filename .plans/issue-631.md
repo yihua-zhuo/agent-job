@@ -24,7 +24,7 @@ Reading order followed:
    - Add `NotFoundException, ValidationException` to the existing `pkg.errors.app_exceptions` import
 
 2. **Add `list_reports` method to `ReportService`**
-   - Insert after the existing `schedule_report` method (around line 178)
+   - Insert after the existing `schedule_report` method definition ends (after `return entry` at ~line 170)
    - Uses `func.count()` for total + `SELECT ... LIMIT/OFFSET ORDER BY created_at DESC`
    - Returns `tuple[list[ReportModel], int]`
 
@@ -79,4 +79,4 @@ Reading order followed:
 
 ## Risks / Open Questions
 - **`ReportModel` has no `updated_at` column**: `update_report` does not assign `updated_at` (the column does not exist on `ReportModel`). Adding the column requires a separate Alembic migration scoped to the model definition, which is tracked separately.
-- **`make_mock_session` uses lowercase SQL text matching**: The `reports` SQL handler in `tests/unit/domain_handlers/reports.py` must match on `"select from reports"`, `"insert into reports"`, `"update reports"`, `"delete from reports"` (lowercase, as per `_execute_side_effect` in `conftest.py`).
+- **`make_mock_session` uses lowercase SQL text matching**: The handler in `tests/unit/domain_handlers/reports.py` (`make_report_handler`, lines 98–189) matches on `"insert into reports"`, `"update reports"`, `"delete from reports"`, `"select...count(...from reports)"`, `"where reports.id"` — all lowercase, as per `_execute_side_effect` in `conftest.py`. The `make_schedule_handler` (lines 195–273) similarly handles report_schedules upserts. Point-of-truth for the text-matching contract is `tests/unit/domain_handlers/reports.py`, not the plan description.
