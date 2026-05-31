@@ -348,6 +348,15 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Tables are dropped by merge_heads_63274_addcp001.downgrade(), which is this
-    # migration's single parent — nothing to drop here.
-    pass
+    # Drop tables and columns created by upgrade() in reverse dependency order.
+    op.drop_table("customer_enrichments")
+    op.drop_table("opportunity_activities")
+    op.drop_table("conversation_messages")
+    op.drop_table("conversations")
+    op.drop_table("report_definitions")
+    op.drop_table("agent_tasks")
+    op.drop_table("automation_logs")
+    op.drop_table("automation_rules")
+    op.drop_table("export_jobs")
+    op.drop_table("import_jobs")
+    op.drop_column("campaigns", "sent_at")

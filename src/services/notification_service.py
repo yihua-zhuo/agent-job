@@ -57,7 +57,12 @@ class NotificationService:
             except (ValueError, TypeError):
                 raise ValidationException("related_id must be an integer")
         if len(json.dumps(params, ensure_ascii=False).encode("utf-8")) > 4096:
-            raise ValidationException("payload_params exceeds maximum size of 4096 bytes")
+            raise ValidationException("notification params exceed maximum size of 4096 bytes")
+        user_check = await self.session.execute(
+            select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
+        )
+        if user_check.scalar_one_or_none() is None:
+            raise NotFoundException("User")
         notification = NotificationModel(
             tenant_id=tenant_id,
             user_id=user_id,
@@ -245,8 +250,10 @@ class NotificationService:
         user_id: int,
         tenant_id: int,
         upcoming_only: bool = True,
+        page: int = 1,
+        page_size: int = 20,
     ) -> tuple[list[ReminderModel], int]:
-        """Fetch reminders for a user."""
+        """Fetch reminders for a user with pagination."""
         user_check = await self.session.execute(
             select(UserModel.id).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
@@ -263,7 +270,8 @@ class NotificationService:
         count_result = await self.session.execute(select(func.count(ReminderModel.id)).where(and_(*conditions)))
         total = count_result.scalar_one()
 
+        offset = (page - 1) * page_size
         result = await self.session.execute(
-            select(ReminderModel).where(and_(*conditions)).order_by(ReminderModel.remind_at)
+            select(ReminderModel).where(and_(*conditions)).order_by(ReminderModel.remind_at).offset(offset).limit(page_size)
         )
-        return result.scalars().all(), total
+        return list(result.scalars().all()), total

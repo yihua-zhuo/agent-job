@@ -271,25 +271,6 @@ async def _seed_tenant(async_session, tenant_id: int) -> int:
 
 
 @pytest_asyncio.fixture
-async def _seed_notification_user(async_session, tenant_id: int, _seed_tenant) -> int:
-    """Seed tenant + user so notification FK constraints are satisfied.
-
-    Returns the user_id of the inserted row.
-    """
-    from services.user_service import UserService
-
-    user_svc = UserService(async_session)
-    suffix = uuid_module.uuid4().hex[:8]
-    user = await user_svc.create_user(
-        username=f"notif_{suffix}",
-        email=f"notif_{suffix}@example.com",
-        password="TestPass123!",
-        tenant_id=tenant_id,
-    )
-    return user.id
-
-
-@pytest_asyncio.fixture
 async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
     """Seed the second tenant record for cross-tenant isolation tests."""
     from db.models.tenant import TenantModel

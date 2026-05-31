@@ -82,6 +82,9 @@ class TenantService:
         if unknown:
             raise ValidationException(f"Unknown fields: {', '.join(sorted(unknown))}")
 
+        if "plan" in kwargs and kwargs["plan"] not in VALID_PLANS:
+            raise ValidationException(f"plan must be one of {sorted(VALID_PLANS)}, got {kwargs['plan']!r}")
+
         settings_changed = False
         new_settings = dict(tenant.settings or {})
         if "admin_email" in kwargs:
@@ -92,7 +95,7 @@ class TenantService:
             settings_changed = True
 
         for key in allowed:
-            if key in kwargs:
+            if key in kwargs and key not in ("admin_email", "settings"):
                 setattr(tenant, key, kwargs[key])
         tenant.updated_at = datetime.now(UTC)
         if settings_changed:

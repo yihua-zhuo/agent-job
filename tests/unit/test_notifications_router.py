@@ -384,11 +384,11 @@ class TestListReminders:
 
 
 # ---------------------------------------------------------------------------
-# DELETE /reminders/{id}
+# DELETE /notifications/{id}
 # ---------------------------------------------------------------------------
 
 
-class TestDeleteReminderEndpoint:
+class TestDeleteNotificationEndpoint:
     def test_delete_notification_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
@@ -409,11 +409,11 @@ class TestDeleteReminderEndpoint:
 
 
 # ---------------------------------------------------------------------------
-# DELETE /notifications/{id}
+# DELETE /reminders/{id}
 # ---------------------------------------------------------------------------
 
 
-class TestCancelNotificationEndpoint:
+class TestDeleteReminderEndpoint:
     def test_cancel_reminder_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value

@@ -13,9 +13,8 @@ async def _seed_notification(
     tenant_id: int,
     user_id: int,
     *,
-    # 'title' param aligns with send_notification(template=title) semantics.
     # Maps to ORM 'template' column (backfill migration sets template=title).
-    title: str = "default",
+    template_name: str = "default",
     channel: str = "in_app",
     payload_params: dict | None = None,
     status: str = "pending",
@@ -26,7 +25,7 @@ async def _seed_notification(
         tenant_id=tenant_id,
         user_id=user_id,
         channel=channel,
-        template=title,
+        template=template_name,
         payload_params=payload_params or {},
         status=status,
         priority=priority,

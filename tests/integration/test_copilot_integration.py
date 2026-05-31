@@ -119,9 +119,8 @@ class TestCopilotIntegration:
         data_tenant_2 = response_tenant_2.json()
         assert data_tenant_2["success"] is True
 
-        # Create a conversation for tenant 2 explicitly (bypasses the session-visibility
-        # issue where api_client_tenant_2's session and async_session are separate).
-        # This simulates what the copilot service would do on the tenant-2 chat call.
+        # Explicitly seed the conversation in async_session so it is visible
+        # to the tenant-2 client override.
         conv_tenant_2 = await seed_conversation(async_session, tenant_id_2_web, _TENANT_2_USER_ID)
         await seed_message(async_session, conv_tenant_2.id, tenant_id_2_web, "user", "hello")
         await seed_message(async_session, conv_tenant_2.id, tenant_id_2_web, "assistant", "response")

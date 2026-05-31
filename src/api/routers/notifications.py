@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from pkg.errors.app_exceptions import UnauthorizedException
 from services.notification_service import NotificationService
 
 notifications_router = APIRouter(prefix="/api/v1", tags=["notifications"])
@@ -240,7 +239,7 @@ async def list_reminders(
 ):
     """List reminders for the authenticated user."""
     if current_user.tenant_id is None or current_user.tenant_id == 0:
-        raise UnauthorizedException("无效的租户信息")
+        raise HTTPException(status_code=401, detail="无效的租户信息")
 
     svc = NotificationService(session)
     reminders, total = await svc.get_reminders(
