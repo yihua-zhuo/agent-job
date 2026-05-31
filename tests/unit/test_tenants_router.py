@@ -356,8 +356,7 @@ class TestTenantCrossTenantIsolation:
         svc.get_tenant_usage.assert_called_once()
 
     def test_update_tenant_rejects_cross_tenant_id(self, tenant_router_client):
-        """Cross-tenant update is forbidden — router raises ForbiddenException (403) before reaching the service."""
-        from pkg.errors.app_exceptions import ForbiddenException
+        """Cross-tenant update is rejected at router level (403) before reaching the service."""
         client, svc = tenant_router_client
         svc.update_tenant = AsyncMock(side_effect=ForbiddenException("Access denied"))
         resp = client.put("/api/v1/tenants/9999", json={"name": "Stolen"})
@@ -365,8 +364,7 @@ class TestTenantCrossTenantIsolation:
         svc.update_tenant.assert_not_called()
 
     def test_update_tenant_forbidden_on_cross_tenant(self, tenant_router_client):
-        """Cross-tenant update is forbidden — router raises ForbiddenException (403) before reaching the service."""
-        from pkg.errors.app_exceptions import ForbiddenException
+        """Cross-tenant update is rejected at router level (403) before reaching the service."""
         client, svc = tenant_router_client
         svc.update_tenant = AsyncMock(side_effect=ForbiddenException("Access denied"))
         resp = client.put("/api/v1/tenants/2", json={"name": "Hijack"})

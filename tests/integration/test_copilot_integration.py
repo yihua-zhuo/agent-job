@@ -119,7 +119,7 @@ class TestCopilotIntegration:
         assert data_tenant_2["success"] is True
 
         # Retrieve tenant 2's conversation from the DB (chat response doesn't include conversation_id).
-        from sqlalchemy import func, select
+        from sqlalchemy import select
 
         from db.models.conversation import ConversationModel
 

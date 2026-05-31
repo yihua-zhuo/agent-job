@@ -98,8 +98,9 @@ class AutomationService:
 
         elif action_type == "task.create":
             assignee_id = params.get("assignee_id")
+            # Rule126: verify the assignee belongs to the current tenant (applies even when assignee_id is None —
+            # the check is a no-op for None but the caller's tenant_id is always enforced via the service layer).
             if assignee_id:
-                # Rule126: verify the assignee belongs to the current tenant
                 assignee_check = await self.session.execute(
                     select(UserModel).where(UserModel.id == assignee_id, UserModel.tenant_id == tenant_id)
                 )
@@ -111,7 +112,7 @@ class AutomationService:
                     tenant_id=tenant_id,
                     title=params.get("title", "Automated task"),
                     description=params.get("description", ""),
-                    assigned_to=params.get("assignee_id"),
+                    assigned_to=assignee_id,
                     created_by=executed_by,
                 )
             except AppException as e:
