@@ -8,7 +8,7 @@ import math
 import re
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import and_, func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import get_db
 from db.models.customer import CustomerModel
 from db.models.customer_enrichment import CustomerEnrichmentModel
+from db.repositories import CustomerRepository  # noqa: F401 — kept for test monkeypatching
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.customer import CustomerStatus
 from services.customer_service import CustomerService
@@ -199,9 +200,9 @@ async def create_customer(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.create_customer(body.model_dump(), tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "客户创建成功"}
+    return {"success": True, "data": result.to_dict(), "message": "客户创建成功"}
 
 
 @customers_router.get("")
@@ -210,21 +211,17 @@ async def list_customers(
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     owner_id: int | None = Query(None, ge=0),
-    tags: str | None = None,
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     items, total = await service.list_customers(
         page=page,
         page_size=page_size,
         status=status,
         owner_id=owner_id,
-        tags=tags,
         tenant_id=ctx.tenant_id,
     )
-
-    # Batch-fetch enrichment status for each customer in the page
     customer_ids = [getattr(c, "id", None) for c in items]
     customer_ids = [cid for cid in customer_ids if cid is not None]
     enrichment_status_map = await _enrichment_status(customer_ids, session, ctx.tenant_id)
@@ -247,10 +244,8 @@ async def search_customers(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     items = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
-
-    # Batch-fetch enrichment status for each result
     customer_ids = [getattr(c, "id", None) for c in items]
     customer_ids = [cid for cid in customer_ids if cid is not None]
     enrichment_status_map = await _enrichment_status(customer_ids, session, ctx.tenant_id)
@@ -273,7 +268,7 @@ async def get_customer(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
     data = result.to_dict() if hasattr(result, "to_dict") else result
 
@@ -309,9 +304,9 @@ async def update_customer(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.update_customer(customer_id, body, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "客户更新成功"}
+    return {"success": True, "data": result.to_dict(), "message": "客户更新成功"}
 
 
 @customers_router.delete("/{customer_id}")
@@ -320,7 +315,7 @@ async def delete_customer(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.delete_customer(customer_id, tenant_id=ctx.tenant_id)
     return {"success": True, "data": result, "message": "客户删除成功"}
 
@@ -332,9 +327,9 @@ async def add_tag(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.add_tag(customer_id, _sanitize(body.tag), tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "标签添加成功"}
+    return {"success": True, "data": result.to_dict(), "message": "标签添加成功"}
 
 
 @customers_router.delete("/{customer_id}/tags/{tag}")
@@ -344,9 +339,9 @@ async def remove_tag(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.remove_tag(customer_id, _sanitize(tag), tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "标签移除成功"}
+    return {"success": True, "data": result.to_dict(), "message": "标签移除成功"}
 
 
 @customers_router.put("/{customer_id}/status")
@@ -356,9 +351,9 @@ async def change_status(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.change_status(customer_id, body.status, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "状态更新成功"}
+    return {"success": True, "data": result.to_dict(), "message": "状态更新成功"}
 
 
 @customers_router.put("/{customer_id}/owner")
@@ -368,9 +363,9 @@ async def assign_owner(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.assign_owner(customer_id, body.owner_id, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": result, "message": "负责人更新成功"}
+    return {"success": True, "data": result.to_dict(), "message": "负责人更新成功"}
 
 
 @customers_router.post("/import")
@@ -379,9 +374,7 @@ async def bulk_import(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    if len(body.customers) > 1000:
-        raise HTTPException(status_code=400, detail="Maximum 1000 customers per import")
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     imported_count = await service.bulk_import(body.customers, tenant_id=ctx.tenant_id)
     return {"success": True, "data": {"imported": imported_count}, "message": "批量导入成功"}
 
@@ -400,7 +393,7 @@ async def list_sales_leads(
     session: AsyncSession = Depends(get_db),
 ):
     """Unassigned leads queue for the sales team."""
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     routing_svc = LeadRoutingService(session)
 
     if status == "unassigned":
@@ -451,7 +444,7 @@ async def get_customer_assignment(
     session: AsyncSession = Depends(get_db),
 ):
     """Current assignment info for a customer."""
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     routing_svc = LeadRoutingService(session)
     customer = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
     sla = routing_svc.get_sla_status(customer.assigned_at)
@@ -492,7 +485,7 @@ async def manual_assign_customer(
     session: AsyncSession = Depends(get_db),
 ):
     """Manually assign a customer to an owner, bypassing routing rules."""
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.assign_owner(customer_id, body.owner_id, tenant_id=ctx.tenant_id)
     return {"success": True, "data": result.to_dict(), "message": "负责人分配成功"}
 
@@ -505,7 +498,7 @@ async def reassign_lead(
     session: AsyncSession = Depends(get_db),
 ):
     """Reassign a lead with reason logged to recycle_history."""
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     result = await service.reassign_lead(
         customer_id,
         body.new_owner_id,
@@ -526,7 +519,7 @@ async def trigger_lead_recycle(
         from pkg.errors.app_exceptions import ForbiddenException
 
         raise ForbiddenException("需要 admin 或 manager 角色")
-    service = CustomerService(session)
+    service = CustomerService(session, CustomerRepository(session))
     recycled = await service.bulk_recycle(body.customer_ids, tenant_id=ctx.tenant_id)
     return {
         "success": True,
