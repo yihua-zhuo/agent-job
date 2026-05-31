@@ -53,14 +53,14 @@ class NotificationModel(Base):
         ),
         # DB-level enforcement of the channel, priority, and status allow-lists.
         CheckConstraint(
-            column("channel").in_(["in_app", "email", "sms", "push"]), name="ix_notifications_channel_check"
+            column("channel").in_(["in_app", "email", "sms", "push"]), name="ck_notifications_channel"
         ),
         CheckConstraint(
-            column("priority").in_(["low", "normal", "high", "urgent"]), name="ix_notifications_priority_check"
+            column("priority").in_(["low", "normal", "high", "urgent"]), name="ck_notifications_priority"
         ),
         CheckConstraint(
             column("status").in_(["pending", "read", "archived", "delivered", "failed"]),
-            name="ix_notifications_status_check",
+            name="ck_notifications_status",
         ),
     )
 

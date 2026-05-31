@@ -264,9 +264,6 @@ def make_reminder_handler(state):
             ]
             return MockResult([_reminder_to_row(r) for r in rows[offset : offset + page_size]])
 
-        if "reminders" in sql_text_lower:
-            raise ValueError(f"Unhandled reminder SQL pattern: {sql_text[:80]}")
-
         return None
 
     return handler

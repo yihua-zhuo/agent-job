@@ -216,6 +216,7 @@ class TestSendNotification:
         errors = response.json().get("detail", [])
         error_fields = {e.get("loc")[-1] for e in errors}
         assert error_fields == {"user_id", "notification_type", "title", "content"}
+        assert len(errors) == 4
 
     def test_send_invalid_notification_type_rejected_at_schema_layer(self):
         """Rule 144: invalid notification_type returns 422 at the Pydantic validation layer (no service call)."""
@@ -544,7 +545,7 @@ class TestInvalidTenant:
         assert response.status_code == 401
 
     def test_list_notifications_invalid_tenant_type(self):
-        """Non-integer tenant_id (e.g. string) bypasses auth check but preferences not yet implemented."""
+        """Non-integer tenant_id is not caught by the tenant_id guard (not None/0); preferences endpoint returns 501."""
         app = FastAPI()
         app.include_router(notifications_router)
         # simulate AuthContext with non-integer tenant_id (edge case)

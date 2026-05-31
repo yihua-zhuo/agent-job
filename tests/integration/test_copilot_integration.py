@@ -110,12 +110,10 @@ class TestCopilotIntegration:
         tenant_id_2_web: int,
     ):
         """A second tenant gets its own conversation, not the first tenant's."""
-        # Seed the webtest2 user (created by auth_headers_tenant_2) in tenant 2
-        # so the copilot service can find it when creating the conversation.
-        # No explicit user_id seeding needed for tenant 2 — auth_headers_tenant_2
-        # creates the user automatically with an auto-increment ID.
-        # Seed a user in tenant 1 to anchor the tenant-1 conversation.
+        # Seed users for both tenants so the copilot service can find them when
+        # creating conversations — matching the pattern used for tenant 1 below.
         await seed_user(async_session, tenant_id_web, _TENANT_1_USER_ID)
+        await seed_user(async_session, tenant_id_2_web, _TENANT_2_USER_ID)
 
         # Create a conversation in tenant 1 so there IS something to find.
         conv_tenant_1 = await seed_conversation(async_session, tenant_id_web, _TENANT_1_USER_ID)

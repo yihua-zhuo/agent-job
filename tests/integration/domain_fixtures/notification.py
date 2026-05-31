@@ -13,7 +13,7 @@ async def _seed_notification(
     tenant_id: int,
     user_id: int,
     *,
-    # Maps to ORM 'template' column (backfill migration sets template=title).
+    # Maps to the ORM's server_default; tests use 'default' as the canonical template name.
     template_name: str = "default",
     channel: str = "in_app",
     payload_params: dict | None = None,

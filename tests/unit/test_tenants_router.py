@@ -327,8 +327,8 @@ class TestTenantServiceSmoke:
 class TestTenantCrossTenantIsolation:
     """Rule 126: a tenant cannot read/modify another tenant's data via the API."""
 
-    def test_get_tenant_rejects_cross_tenant_id(self, tenant_router_client):
-        """Tenant A requesting tenant B's data via URL path tenant_id returns 404 or 403."""
+    def test_get_tenant_returns_404_for_unknown_tenant(self, tenant_router_client):
+        """Tenant A requesting tenant B's data via URL path tenant_id returns 404."""
         client, svc = tenant_router_client
         svc.get_tenant = AsyncMock(side_effect=NotFoundException("Tenant"))
         resp = client.get("/api/v1/tenants/9999")
@@ -345,57 +345,19 @@ class TestTenantCrossTenantIsolation:
 
     def test_get_tenant_stats_returns_404_for_unknown_tenant(self, tenant_router_client):
         """Service raises NotFoundException for an unknown tenant."""
-        from starlette.requests import Request
-        from starlette.responses import JSONResponse
-
-        app = FastAPI()
-        app.include_router(tenants_router)
-        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=1)
-        app.dependency_overrides[get_db] = lambda: MagicMock()
-
-        @app.exception_handler(AppException)
-        async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
-            return JSONResponse(
-                status_code=exc.status_code,
-                content={"success": False, "message": exc.detail, "code": exc.code},
-            )
-
-        @app.exception_handler(Exception)
-        async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-            return JSONResponse(status_code=500, content={"success": False, "message": str(exc)})
-
-        client = TestClient(app, raise_server_exceptions=False)
-        with patch("api.routers.tenants.TenantService") as svc_cls:
-            svc_cls.return_value.get_tenant_stats = AsyncMock(side_effect=NotFoundException("Tenant"))
-            resp = client.get("/api/v1/tenants/stats")
-            assert resp.status_code == 404
+        client, svc = tenant_router_client
+        svc.get_tenant_stats = AsyncMock(side_effect=NotFoundException("Tenant"))
+        resp = client.get("/api/v1/tenants/stats")
+        assert resp.status_code == 404
+        svc.get_tenant_stats.assert_called_once()
 
     def test_get_tenant_usage_returns_404_for_unknown_tenant(self, tenant_router_client):
         """Service raises NotFoundException for an unknown tenant."""
-        from starlette.requests import Request
-        from starlette.responses import JSONResponse
-
-        app = FastAPI()
-        app.include_router(tenants_router)
-        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=1)
-        app.dependency_overrides[get_db] = lambda: MagicMock()
-
-        @app.exception_handler(AppException)
-        async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
-            return JSONResponse(
-                status_code=exc.status_code,
-                content={"success": False, "message": exc.detail, "code": exc.code},
-            )
-
-        @app.exception_handler(Exception)
-        async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-            return JSONResponse(status_code=500, content={"success": False, "message": str(exc)})
-
-        client = TestClient(app, raise_server_exceptions=False)
-        with patch("api.routers.tenants.TenantService") as svc_cls:
-            svc_cls.return_value.get_tenant_usage = AsyncMock(side_effect=NotFoundException("Tenant"))
-            resp = client.get("/api/v1/tenants/usage")
-            assert resp.status_code == 404
+        client, svc = tenant_router_client
+        svc.get_tenant_usage = AsyncMock(side_effect=NotFoundException("Tenant"))
+        resp = client.get("/api/v1/tenants/usage")
+        assert resp.status_code == 404
+        svc.get_tenant_usage.assert_called_once()
 
     def test_update_tenant_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant A updating tenant B's record via URL path tenant_id returns 403."""

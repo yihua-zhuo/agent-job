@@ -249,7 +249,7 @@ class TestTaskIntegration:
             assigned_to=uid,
             priority="high",
             due_date=date(2026, 12, 31),
-            tenant_id=tenant_id,
+            tenant_id=tenant_id,  # keyword for clarity and to prevent silent transposition
         )
         task = result
         assert task.title == "Review PR #42"

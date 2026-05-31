@@ -11,8 +11,9 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
+import sqlalchemy as sa
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 
 from alembic import op
 
@@ -25,7 +26,7 @@ depends_on: str | None = None
 def upgrade() -> None:
     op.add_column("notifications", Column("channel", String(length=50), nullable=True))
     op.add_column("notifications", Column("template", String(length=255), nullable=True))
-    op.add_column("notifications", Column("params_", JSON(), nullable=True, server_default="{}"))
+    op.add_column("notifications", Column("params_", PG_JSON(), nullable=True, server_default=sa.text("'{}'::jsonb")))
     op.add_column("notifications", Column("status", String(length=50), nullable=True))
     op.add_column("notifications", Column("priority", String(length=20), nullable=True))
     op.add_column("notifications", Column("delivered_at", DateTime(timezone=True), nullable=True))
