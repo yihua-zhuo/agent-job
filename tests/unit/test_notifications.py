@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
 from api.routers.notifications import notifications_router
@@ -239,8 +240,8 @@ class TestCreateSmartNotificationValidation:
 
 
 class TestCreateSmartNotificationRouting:
-    def test_routing_returns_empty_deliveries(self):
-        """priority=normal with no user_id returns200 with empty deliveries list."""
+    def test_empty_deliveries_still_returns_200(self):
+        """priority=normal with no user_id returns 200 with empty deliveries list."""
         with (
             patch("api.routers.notifications.NotificationService") as svc_cls,
             patch("api.routers.notifications.NotificationRoutingService") as routing_cls,

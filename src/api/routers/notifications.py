@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
-from db.models.smart_notification import Channel, Priority
+from db.models.smart_notification import Channel, Priority, Timing
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.constants.notification_constants import VALID_NOTIFICATION_CHANNELS
 from services.notification_routing_service import NotificationRoutingService
@@ -101,6 +101,15 @@ class SmartNotificationCreate(BaseModel):
             raise ValueError(f"channel must be 0 (email), 1 (sms), 2 (push), or 3 (in_app), got {v}")
         return v
 
+    @field_validator("timing")
+    @classmethod
+    def timing_must_be_valid(cls, v: int) -> int:
+        if v not in {t.value for t in Timing}:
+            raise ValueError(f"timing must be 0 (immediate) or 1 (batch), got {v}")
+        return v
+
+
+_PRIORITY_MAP = {Priority.urgent: "urgent", Priority.normal: "normal", Priority.low: "low"}
 
 # ---------------------------------------------------------------------------
 # Notification endpoints
@@ -187,6 +196,9 @@ async def create_smart_notification(
 
     # Route via NotificationRoutingService to determine delivery channels
     routing_svc = NotificationRoutingService(session)
+    # Map IntEnum priority to string name before routing
+    routing_priority = _PRIORITY_MAP[record.priority] if isinstance(record.priority, Priority) else record.priority
+    record.priority = routing_priority
     deliveries = await routing_svc.route(record, tenant_id=current_user.tenant_id)
 
     return {
