@@ -5,7 +5,7 @@ VALID_PRIORITIES = frozenset({"low", "normal", "high", "urgent"})
 
 # Valid channel values for NotificationModel.channel / notification_type parameter.
 # Maps to the channel column; do NOT use to validate a general 'notification_type' concept.
-VALID_NOTIFICATION_TYPES = frozenset({"in_app", "email", "sms", "push"})
+VALID_NOTIFICATION_CHANNELS = frozenset({"in_app", "email", "sms", "push"})
 
 # Allowed keys in NotificationModel.payload_params.
 # Used to structurally reject credential-class or other unexpected fields in to_dict().

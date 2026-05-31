@@ -114,6 +114,12 @@ async def list_tenants(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """List all tenants visible to the requesting tenant.
+
+    requesting_tenant_id is passed to the service to enforce access control:
+    callers only see tenants they are permitted to access (typically their own).
+    Cross-tenant visibility is enforced at the service layer (Rule 126).
+    """
     service = TenantService(session)
     items, total = await service.list_tenants(
         page=page, page_size=page_size, search=search, requesting_tenant_id=ctx.tenant_id

@@ -4,6 +4,8 @@ Services raise AppException on errors (caught by global handler in main.py).
 Router wraps service return values in success envelopes.
 """
 
+from enum import StrEnum
+
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,6 +13,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from services.notification_service import NotificationService
+
+
+class NotificationType(StrEnum):
+    """Valid notification channel values (maps to NotificationModel.channel)."""
+
+    EMAIL = "email"
+    IN_APP = "in_app"
+    PUSH = "push"
+    SMS = "sms"
+
 
 notifications_router = APIRouter(prefix="/api/v1", tags=["notifications"])
 
@@ -36,7 +48,7 @@ def _paginated_dicts(items, total, page, page_size):
 
 class NotificationCreate(BaseModel):
     user_id: int = Field(..., ge=1)
-    notification_type: str = Field(..., min_length=1, max_length=50)
+    notification_type: NotificationType = Field(..., description="One of: email, in_app, push, sms")
     title: str = Field(..., min_length=1, max_length=255)
     content: str = Field(..., min_length=1)
     related_type: str | None = Field(None, max_length=50)

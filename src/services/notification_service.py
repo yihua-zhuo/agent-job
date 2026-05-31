@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
 from db.models.user import UserModel
-from pkg.constants.notification_constants import VALID_NOTIFICATION_TYPES, VALID_PRIORITIES
+from pkg.constants.notification_constants import VALID_NOTIFICATION_CHANNELS, VALID_PRIORITIES
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 logger = logging.getLogger(__name__)
@@ -44,9 +44,9 @@ class NotificationService:
         priority = kwargs.get("priority", "normal")
         if priority not in VALID_PRIORITIES:
             raise ValidationException(f"priority must be one of {sorted(VALID_PRIORITIES)}, got {priority!r}")
-        if notification_type not in VALID_NOTIFICATION_TYPES:
+        if notification_type not in VALID_NOTIFICATION_CHANNELS:
             raise ValidationException(
-                f"notification_type must be one of {sorted(VALID_NOTIFICATION_TYPES)}, got {notification_type!r}"
+                f"notification_type must be one of {sorted(VALID_NOTIFICATION_CHANNELS)}, got {notification_type!r}"
             )
         params = {"content": content}
         if kwargs.get("related_type") is not None:
@@ -272,6 +272,10 @@ class NotificationService:
 
         offset = (page - 1) * page_size
         result = await self.session.execute(
-            select(ReminderModel).where(and_(*conditions)).order_by(ReminderModel.remind_at).offset(offset).limit(page_size)
+            select(ReminderModel)
+            .where(and_(*conditions))
+            .order_by(ReminderModel.remind_at)
+            .offset(offset)
+            .limit(page_size)
         )
         return list(result.scalars().all()), total
