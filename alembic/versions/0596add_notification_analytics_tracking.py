@@ -30,9 +30,22 @@ def upgrade() -> None:
         sa.Column("opened_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("clicked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("channel", sa.String(length=50), nullable=False, server_default="email"),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
     )
     op.create_index(op.f("ix_notification_analytics_notification_tenant"), "notification_analytics", ["notification_id", "tenant_id"], unique=False)
     op.create_index(op.f("ix_notification_analytics_tenant_id"), "notification_analytics", ["tenant_id"])
+    # notification_id FK — intentionally guarded with IF NOT EXISTS for existing-row safety;
+    # notifications are hard-deleted via API so analytics may outlast their parent row.
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE notification_analytics ADD CONSTRAINT fk_notification_analytics_notification_id "
+            "FOREIGN KEY (notification_id) REFERENCES notifications(id) ON DELETE CASCADE; "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
+            "END $$"
+        )
+    )
     # tenant_id FK — catches DBs that arrived via a path that skipped this migration.
     op.execute(
         sa.text(
@@ -46,6 +59,22 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(sa.text("DO $$ BEGIN ALTER TABLE notification_analytics DROP CONSTRAINT IF EXISTS fk_notification_analytics_tenant_id; EXCEPTION WHEN undefined_object THEN NULL; END $$"))
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE notification_analytics DROP CONSTRAINT IF EXISTS fk_notification_analytics_notification_id; "
+            "EXCEPTION WHEN undefined_object THEN NULL; "
+            "END $$"
+        )
+    )
+    op.execute(
+        sa.text(
+            "DO $$ BEGIN "
+            "ALTER TABLE notification_analytics DROP CONSTRAINT IF EXISTS fk_notification_analytics_tenant_id; "
+            "EXCEPTION WHEN undefined_object THEN NULL; "
+            "END $$"
+        )
+    )
     op.drop_index(op.f("ix_notification_analytics_notification_tenant"), table_name="notification_analytics")
+    op.drop_index(op.f("ix_notification_analytics_tenant_id"), table_name="notification_analytics")
     op.drop_table("notification_analytics")

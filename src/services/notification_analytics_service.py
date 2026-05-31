@@ -53,5 +53,5 @@ class NotificationAnalyticsService:
                 NotificationAnalytics.opened_at.isnot(None),
             )
         )
-        count = result.scalar() or 0
+        count = result.scalar_one()
         return count

@@ -130,3 +130,15 @@ class NotificationAnalytics(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "notification_id": self.notification_id,
+            "tenant_id": self.tenant_id,
+            "opened_at": self.opened_at.isoformat() if self.opened_at else None,
+            "clicked_at": self.clicked_at.isoformat() if self.clicked_at else None,
+            "channel": self.channel,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+        }
