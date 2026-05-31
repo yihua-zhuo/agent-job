@@ -10,7 +10,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from pkg.errors.app_exceptions import ForbiddenException
 from services.tenant_service import TenantService
 
 tenants_router = APIRouter(prefix="/api/v1/tenants", tags=["tenants"])
@@ -92,7 +91,7 @@ async def get_tenant_usage(
 
 @tenants_router.get("/{tenant_id}")
 async def get_tenant(
-    tenant_id: int,
+    tenant_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
@@ -134,8 +133,6 @@ async def update_tenant(
     session: AsyncSession = Depends(get_db),
     body: TenantUpdate = Body(...),
 ):
-    if tenant_id != ctx.tenant_id:
-        raise ForbiddenException("Cannot access other tenants")
     service = TenantService(session)
     update_data = body.model_dump(exclude_unset=True, exclude_none=True)
     data = await service.update_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id, **update_data)

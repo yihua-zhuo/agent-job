@@ -99,8 +99,9 @@ class TenantService:
         if settings_updated:
             tenant.settings = new_settings
 
-        for key in allowed:
-            if key in kwargs and key not in ("admin_email", "settings"):
+        direct_keys = allowed - {"admin_email", "settings"}
+        for key in direct_keys:
+            if key in kwargs:
                 setattr(tenant, key, kwargs[key])
         tenant.updated_at = datetime.now(UTC)
 
@@ -131,7 +132,6 @@ class TenantService:
         conditions.append(TenantModel.id == requesting_tenant_id)
 
         count_stmt = select(func.count(TenantModel.id)).where(and_(*conditions))
-
         total_result = await self.session.execute(count_stmt)
         total = total_result.scalar_one()
 

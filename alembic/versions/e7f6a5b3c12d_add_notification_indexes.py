@@ -160,4 +160,3 @@ def downgrade() -> None:
     )
     # content and title are NOT NULL via add_column (no post-creation constraint window).
     # is_read is added as nullable, so its post-creation constraint is still needed.
-    # related_type is added as nullable; apply NOT NULL via DO block.

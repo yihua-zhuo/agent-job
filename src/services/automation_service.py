@@ -89,9 +89,12 @@ class AutomationService:
                     related_type=context.get("entity_type"),
                     related_id=context.get("entity_id"),
                 )
-                return {"type": action_type, "status": "sent"}
             except AppException as e:
                 return {"type": action_type, "status": "error", "error": str(e)}
+            except Exception as e:
+                logger.exception("Unexpected error in notification.send action")
+                return {"type": action_type, "status": "error", "error": str(e)}
+            return {"type": action_type, "status": "sent"}
 
         elif action_type == "task.create":
             assignee_id = params.get("assignee_id")
@@ -103,13 +106,19 @@ class AutomationService:
                 if assignee_check.scalar_one_or_none() is None:
                     return {"type": action_type, "status": "skipped", "reason": "assignee not found in tenant"}
             svc = TaskService(self.session)
-            await svc.create_task(
-                tenant_id=tenant_id,
-                title=params.get("title", "Automated task"),
-                description=params.get("description", ""),
-                assigned_to=params.get("assignee_id"),
-                created_by=executed_by,
-            )
+            try:
+                await svc.create_task(
+                    tenant_id=tenant_id,
+                    title=params.get("title", "Automated task"),
+                    description=params.get("description", ""),
+                    assigned_to=params.get("assignee_id"),
+                    created_by=executed_by,
+                )
+            except AppException as e:
+                return {"type": action_type, "status": "error", "error": str(e)}
+            except Exception as e:
+                logger.exception("Unexpected error in task.create action")
+                return {"type": action_type, "status": "error", "error": str(e)}
             return {"type": action_type, "status": "created"}
 
         elif action_type == "email.send":
@@ -262,9 +271,14 @@ class AutomationService:
         executed_by: int = 0,
     ) -> list[dict]:
         # Guard against attacker-controlled deeply nested dicts once, up-front.
-        context_bytes = json.dumps(context, ensure_ascii=False).encode("utf-8")
-        if len(context_bytes) > 64_000:
-            logger.warning("Automation event dropped: context size %d exceeds limit", len(context_bytes))
+        def _max_depth(d, _depth=0):
+            return max((_max_depth(v, _depth + 1) for v in d.values() if isinstance(v, dict)), default=_depth)
+
+        if _max_depth(context) > 16 or len(json.dumps(context, ensure_ascii=False).encode("utf-8")) > 64_000:
+            logger.warning(
+                "Automation event dropped: context size %d exceeds limit or depth exceeds 16",
+                len(json.dumps(context, ensure_ascii=False).encode("utf-8")),
+            )
             return []
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id,
