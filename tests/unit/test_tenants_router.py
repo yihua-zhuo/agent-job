@@ -42,32 +42,6 @@ TENANT_ROW = {
 
 
 @pytest.fixture
-def mock_db_session():
-    """Minimal mock AsyncSession for service-layer unit tests.
-
-    Uses a function-based side effect so session.execute() returns the mock
-    result synchronously when awaited — matching the SQLAlchemy async contract.
-    Chained result methods (scalars().all(), scalar_one(), scalar_one_or_none())
-    are also wired so services that traverse the chain work correctly.
-    """
-    session = MagicMock()
-    session.add = MagicMock()
-    session.flush = AsyncMock()
-
-    def _execute_side_effect(*args, **kwargs):
-        # Return a fresh mock result each call so the same session can be
-        # reused across multiple test assertions.
-        mock_result = MagicMock()
-        mock_result.scalars.return_value.all.return_value = []
-        mock_result.scalar_one.return_value = 0
-        mock_result.scalar_one_or_none.return_value = None
-        return mock_result
-
-    session.execute = AsyncMock(side_effect=_execute_side_effect)
-    return session
-
-
-@pytest.fixture
 def tenant_router_client(monkeypatch):
     """Builds a fully-mocked FastAPI test client for the tenants router.
 
@@ -397,7 +371,7 @@ class TestTenantCrossTenantIsolation:
         assert resp.status_code == 403
         svc.update_tenant.assert_not_called()
 
-    async def test_update_tenant_service_rejects_cross_tenant_requesting_id(self, mock_db_session):
+    async def test_update_tenant_service_rejects_cross_tenant_requesting_id(self):
         """Service-layer update_tenant raises ForbiddenException when requesting_tenant_id != tenant_id.
 
         The forbidden guard fires at the top of update_tenant (tenant_service.py line 79) before
@@ -406,7 +380,20 @@ class TestTenantCrossTenantIsolation:
         """
         from services.tenant_service import TenantService
 
-        svc = TenantService(mock_db_session)
+        session = MagicMock()
+        session.add = MagicMock()
+        session.flush = AsyncMock()
+
+        def _execute_side_effect(*args, **kwargs):
+            mock_result = MagicMock()
+            mock_result.scalars.return_value.all.return_value = []
+            mock_result.scalar_one.return_value = 0
+            mock_result.scalar_one_or_none.return_value = None
+            return mock_result
+
+        session.execute = AsyncMock(side_effect=_execute_side_effect)
+
+        svc = TenantService(session)
 
         with pytest.raises(ForbiddenException):
             await svc.update_tenant(tenant_id=99, requesting_tenant_id=1, name="Hacked")

@@ -106,7 +106,11 @@ def make_notification_handler(state):
                 raise ValueError(
                     f"notification count must bind tenant_id and user_id (got keys: {list(params.keys())})"
                 )
-            unread_filter = params.get("_unread_only", False)
+            if "_unread_only" not in params:
+                raise ValueError(
+                    f"notification count must bind _unread_only explicitly (got keys: {list(params.keys())})"
+                )
+            unread_filter = params["_unread_only"]
             if unread_filter:
                 count = sum(
                     1
@@ -128,7 +132,11 @@ def make_notification_handler(state):
                 raise ValueError(
                     f"list-notifications must bind tenant_id and user_id (got keys: {list(params.keys())})"
                 )
-            unread_filter = params.get("_unread_only", False)
+            if "_unread_only" not in params:
+                raise ValueError(
+                    f"list-notifications must bind _unread_only explicitly (got keys: {list(params.keys())})"
+                )
+            unread_filter = params["_unread_only"]
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = sorted(
