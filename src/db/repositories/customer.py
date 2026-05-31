@@ -130,11 +130,12 @@ class CustomerRepository(BaseRepository):
 
     async def reassign_lead(
         self,
-        customer_id: int,
         new_owner_id: int,
         recycle_count: int,
         recycle_history: list[dict[str, Any]],
         tenant_id: int,
+        *,
+        customer_id: int,
     ) -> CustomerModel:
         """Reassign a lead (update owner, increment recycle_count, append history)."""
         now = datetime.now(UTC)
@@ -307,26 +308,37 @@ class CustomerRepository(BaseRepository):
                 )
             )
         )
-        leads = result.scalars().all()
+        leads = list(result.scalars().all())
         if not leads:
             return []
-        for lead in leads:
-            history = list(lead.recycle_history or [])
-            history.append({
-                "recycled_at": now.isoformat(),
-                "previous_owner_id": lead.owner_id,
-                "reason": "manual_bulk_recycle",
-            })
-            await self.session.execute(
-                update(CustomerModel)
-                .where(and_(CustomerModel.id == lead.id, CustomerModel.tenant_id == tenant_id))
-                .values(
-                    owner_id=0,
-                    assigned_at=None,
-                    recycle_count=lead.recycle_count + 1,
-                    recycle_history=history,
-                    updated_at=now,
+        # Build per-lead history entries for each lead's previous owner
+        recycled_ids = [lead.id for lead in leads]
+        # Use a single bulk UPDATE with the id IN clause
+        await self.session.execute(
+            update(CustomerModel)
+            .where(
+                and_(
+                    CustomerModel.id.in_(recycled_ids),
+                    CustomerModel.tenant_id == tenant_id,
                 )
             )
+            .values(
+                owner_id=0,
+                assigned_at=None,
+                recycle_count=CustomerModel.recycle_count + 1,
+                updated_at=now,
+            )
+        )
+        # Append history entries individually (requires per-row values)
+        for lead in leads:
+            history = list(lead.recycle_history or [])
+            history.append(
+                {
+                    "recycled_at": now.isoformat(),
+                    "previous_owner_id": lead.owner_id,
+                    "reason": "manual_bulk_recycle",
+                }
+            )
+            lead.recycle_history = history
         await self.session.flush()
-        return [lead.id for lead in leads]
+        return recycled_ids

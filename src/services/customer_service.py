@@ -22,6 +22,7 @@ class CustomerService:
         self,
         data: dict[str, Any] | CustomerCreateDTO,
         tenant_id: int,
+        routing_service: "LeadRoutingService | None" = None,
     ) -> Any:
         """Create a customer and trigger auto-assignment for new leads with no owner.
 
@@ -34,9 +35,8 @@ class CustomerService:
             d = data or {}
         customer = await self.repository.create(d, tenant_id)
 
-        if customer.status == "lead" and customer.owner_id == 0:
-            routing_svc = LeadRoutingService(self.repository.session)
-            await routing_svc.auto_assign_lead(customer.id, tenant_id)
+        if routing_service is not None and customer.status == "lead" and customer.owner_id == 0:
+            await routing_service.auto_assign_lead(customer.id, tenant_id)
 
         # Upsert enrichment data when present in payload
         if isinstance(data, dict) and data.get("enrichment_data") is not None:
@@ -136,11 +136,11 @@ class CustomerService:
         history = list(customer.recycle_history or [])
         history.append(entry)
         return await self.repository.reassign_lead(
-            customer_id,
             new_owner_id,
             customer.recycle_count + 1,
             history,
             tenant_id,
+            customer_id=customer_id,
         )
 
     async def get_unassigned_leads(

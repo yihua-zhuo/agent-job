@@ -39,7 +39,7 @@ async def _seed_user(async_session, tenant_id: int = 1) -> int:
     return reg.id
 
 
-async def _seed_customer(async_session, tenant_id: int = 1, **overrides):
+async def _seed_customer(async_session, tenant_id: int, **overrides):
     """Create a customer and return the CustomerModel."""
     cust_svc = CustomerService(CustomerRepository(async_session))
     suffix = uuid.uuid4().hex[:8]
@@ -203,7 +203,7 @@ class TestCustomerServiceIntegration:
         cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         customers = [
-            {"name": f"Bulk {suffix} {i}", "email": f"bulk_{suffix}_{i}@example.com", "owner_id": 1}
+            {"name": f"Bulk {suffix} {i}", "email": f"bulk_{suffix}_{i}@example.com"}
             for i in range(3)
         ]
         result = await cust_svc.bulk_import(customers, tenant_id=tenant_id)
@@ -535,6 +535,9 @@ class TestCustomerCountByStatusIntegration:
                 },
             )
             assert r.status_code == 201
+
+        # Ensure tenant 2's writes are visible before aggregation
+        await async_session.flush()
 
         # Verify counts via service layer using tenant sessions
         cust_svc = CustomerService(CustomerRepository(async_session))

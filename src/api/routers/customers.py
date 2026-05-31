@@ -202,7 +202,8 @@ async def create_customer(
 ):
     repo = CustomerRepository(session)
     service = CustomerService(repo)
-    result = await service.create_customer(body.model_dump(), tenant_id=ctx.tenant_id)
+    routing_svc = LeadRoutingService(session)
+    result = await service.create_customer(body.model_dump(), tenant_id=ctx.tenant_id, routing_service=routing_svc)
     return {"success": True, "data": result.to_dict(), "message": "客户创建成功"}
 
 
