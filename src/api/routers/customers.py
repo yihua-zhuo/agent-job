@@ -26,12 +26,14 @@ CUSTOMER_STATUS_PATTERN = "^(" + "|".join(re.escape(status.value) for status in 
 STATUS_CHANGE_PATTERN = "^(active|inactive|blocked)$"
 
 
-def _enrichment_status_value(next_refresh_at) -> str:
+def _enrichment_status_value(next_refresh_at, now=None) -> str:
     """Derive 'stale' | 'enriched' from a next_refresh_at timestamp.
 
     Falls back to 'enriched' when next_refresh_at is None (not yet computed).
     """
-    if next_refresh_at is not None and next_refresh_at <= datetime.now(UTC):
+    if now is None:
+        now = datetime.now(UTC)
+    if next_refresh_at is not None and next_refresh_at <= now:
         return "stale"
     return "enriched"
 
@@ -79,6 +81,7 @@ async def _enrichment_status(
     if not customer_ids:
         return {}
 
+    now = datetime.now(UTC)
     latest_subq = (
         select(
             CustomerEnrichmentModel.customer_id,
@@ -105,12 +108,12 @@ async def _enrichment_status(
                 ).in_(select(latest_subq.c.customer_id, latest_subq.c.max_enriched_at)),
             )
         )
-        .order_by(CustomerEnrichmentModel.enriched_at.desc())
+        .order_by(CustomerEnrichmentModel.enriched_at.desc(), CustomerEnrichmentModel.id.desc())
     )
     status_map: dict[int, dict] = {}
     for enrichment in result.scalars().all():
         last_enriched = enrichment.enriched_at.isoformat() if enrichment.enriched_at else None
-        status = _enrichment_status_value(enrichment.next_refresh_at)
+        status = _enrichment_status_value(enrichment.next_refresh_at, now=now)
         status_map[enrichment.customer_id] = {"enrichment_status": status, "last_enriched_at": last_enriched}
 
     # Mark customers with no enrichment record
@@ -274,6 +277,8 @@ async def get_customer(
     result = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
     data = result.to_dict() if hasattr(result, "to_dict") else result
 
+    now = datetime.now(UTC)
+
     # Add derived enrichment status from joined enrichment record
     enrich_result = await session.execute(
         select(CustomerEnrichmentModel)
@@ -283,7 +288,7 @@ async def get_customer(
                 CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
             )
         )
-        .order_by(CustomerEnrichmentModel.enriched_at.desc())
+        .order_by(CustomerEnrichmentModel.enriched_at.desc(), CustomerEnrichmentModel.id.desc())
         .limit(1)
     )
     enrichment = enrich_result.scalar_one_or_none()
@@ -292,7 +297,7 @@ async def get_customer(
         data["last_enriched_at"] = None
     else:
         data["last_enriched_at"] = enrichment.enriched_at.isoformat() if enrichment.enriched_at else None
-        data["enrichment_status"] = _enrichment_status_value(enrichment.next_refresh_at)
+        data["enrichment_status"] = _enrichment_status_value(enrichment.next_refresh_at, now=now)
 
     return {"success": True, "data": data}
 

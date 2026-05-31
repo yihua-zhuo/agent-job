@@ -12,7 +12,8 @@ from api.routers.enrichment import enrichment_router
 from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
 from pkg.errors.app_exceptions import AppException, NotFoundException, ValidationException
-from tests.unit.conftest import make_mock_session
+from pydantic import ValidationError
+from tests.unit.conftest import make_mock_session, make_customer_handler, MockState
 
 
 # ---------------------------------------------------------------------------
@@ -26,8 +27,11 @@ def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
 
 @pytest.fixture
 def mock_db_session():
-    # Router delegates to service; no DB queries needed in this fixture.
-    return make_mock_session(handlers=[])
+    # Include a customer handler so router's tenant pre-check passes.
+    state = MockState()
+    state.customers[42] = {"id": 42, "tenant_id": 1, "name": "Test Customer"}
+    state.customers[99] = {"id": 99, "tenant_id": 1, "name": "Another Customer"}
+    return make_mock_session([make_customer_handler(state)], state=state)
 
 
 @pytest.fixture
@@ -53,6 +57,18 @@ def client_with_service_as_tenant_2(monkeypatch, mock_db_session):
         return JSONResponse(
             status_code=exc.status_code,
             content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
+    @app.exception_handler(ValidationError)
+    async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
+        detail = exc.detail
+        if isinstance(detail, list) and detail:
+            msg = detail[0].get("msg", str(detail))
+        else:
+            msg = str(detail)
+        return JSONResponse(
+            status_code=422,
+            content={"success": False, "message": msg, "detail": detail},
         )
 
     client = TestClient(app, raise_server_exceptions=False)
@@ -82,6 +98,18 @@ def client_with_service(monkeypatch, mock_db_session):
         return JSONResponse(
             status_code=exc.status_code,
             content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
+    @app.exception_handler(ValidationError)
+    async def validation_error_handler(request: Request, exc: ValidationError) -> JSONResponse:
+        detail = exc.detail
+        if isinstance(detail, list) and detail:
+            msg = detail[0].get("msg", str(detail))
+        else:
+            msg = str(detail)
+        return JSONResponse(
+            status_code=422,
+            content={"success": False, "message": msg, "detail": detail},
         )
 
     client = TestClient(app, raise_server_exceptions=False)
@@ -279,3 +307,31 @@ class TestRefreshEndpoint:
         body = resp.json()
         assert "No company found" in body["message"]
         assert body["code"] == "VALIDATION_ERROR"
+
+    def test_refresh_rejects_both_fields(self, client_with_service):
+        """When neither domain nor company_name is provided, the model validator raises."""
+        from pydantic import ValidationError as PydanticValidationError
+
+        from models.enrichment import EnrichmentRefreshRequest
+
+        with pytest.raises(PydanticValidationError) as exc_info:
+            EnrichmentRefreshRequest.model_validate({})
+        errors = exc_info.value.errors()
+        assert any("At least one of domain or company_name is required" in str(e.get("msg", "")) for e in errors)
+
+    def test_refresh_accepts_both_fields(self, client_with_service):
+        """When both domain and company_name are provided, the model accepts the request.
+
+        The service will use domain and ignore company_name (domain takes priority).
+        """
+        from pydantic import ValidationError as PydanticValidationError
+
+        from models.enrichment import EnrichmentRefreshRequest
+
+        # Both present → valid (at-least-one constraint satisfied)
+        try:
+            req = EnrichmentRefreshRequest.model_validate({"domain": "x.com", "company_name": "X Corp"})
+        except PydanticValidationError:
+            pytest.fail("ValidationError should not be raised when both fields are provided")
+        assert req.domain == "x.com"
+        assert req.company_name == "X Corp"

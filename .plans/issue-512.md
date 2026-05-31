@@ -74,8 +74,8 @@ Add a `TestRefreshEndpoint` class with:
 
 - Unit tests in `tests/unit/test_customer_service.py`: add `TestEnrichmentUpsert` covering create/update with and without enrichment payload, using file-local fixtures (no changes to `tests/unit/conftest.py` per rule 149).
 - Unit tests in `tests/unit/test_enrichment_router.py`: add `TestRefreshEndpoint` covering success, arg-passing, and 404 cases (Step 7).
-- Integration tests: not required by the issue; enrichment external call is mocked in unit tests and verified manually via `POST /api/v1/enrichment/refresh/{id}` in staging.
-- Dev-plan verification: `PYTHONPATH=src ruff check src/services/customer_service.py src/api/routers/enrichment.py` must exit 0; `PYTHONPATH=src pytest tests/unit/test_customer_service.py tests/unit/test_enrichment_router.py -v` must pass all new and existing tests.
+- Integration tests for the refresh endpoint were deferred (enrichment external call is mocked in unit tests and verified manually via `POST /api/v1/enrichment/refresh/{id}` in staging).
+- Dev-plan verification: `PYTHONPATH=src ruff check src/` must exit 0; `PYTHONPATH=src pytest tests/unit/test_customer_service.py tests/unit/test_enrichment_router.py -v` must pass all new and existing tests.
 
 ## Acceptance Criteria
 
@@ -84,4 +84,4 @@ Add a `TestRefreshEndpoint` class with:
 - `GET /api/v1/customers/{id}` response includes `enrichment_status` (`"none" | "enriched" | "stale"`) and `last_enriched_at` (ISO datetime or null).
 - `POST /api/v1/enrichment/refresh/{customer_id}` returns 200 and the normalised enrichment data; re-running it updates the existing record's `enriched_at` timestamp.
 - Unit test suite: `PYTHONPATH=src pytest tests/unit/test_customer_service.py tests/unit/test_enrichment_router.py -v` → all pass with no new coverage gaps.
-- Lint: `ruff check src/services/customer_service.py src/api/routers/enrichment.py` → 0 errors.
+- Lint: `PYTHONPATH=src ruff check src/` → 0 errors.

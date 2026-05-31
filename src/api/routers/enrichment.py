@@ -1,4 +1,4 @@
-"""Enrichment API router — ``POST /api/v1/enrichment/lookup``."""
+"""Enrichment API router — ``POST /api/v1/enrichment/lookup`` and ``POST /api/v1/enrichment/refresh/{customer_id}``."""
 
 from datetime import UTC, datetime
 
@@ -7,10 +7,11 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
+from db.models.customer import CustomerModel
 from db.models.customer_enrichment import CustomerEnrichmentModel
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.enrichment import EnrichmentLookupRequest, EnrichmentRefreshRequest
-from pkg.errors.app_exceptions import ValidationException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.enrichment_service import EnrichmentService
 
 enrichment_router = APIRouter(prefix="/api/v1/enrichment", tags=["enrichment"])
@@ -80,8 +81,23 @@ async def refresh_enrichment(
         domain_param = raw.get("domain")
         company_name_param = raw.get("name")
 
+    # Guard: if stored values are empty strings, don't call the provider with them.
+    if not domain_param:
+        domain_param = None
+    if not company_name_param:
+        company_name_param = None
+
     if domain_param is None and company_name_param is None:
         raise ValidationException("domain or company_name is required when customer has no prior enrichment record")
+
+    # Verify the customer belongs to this tenant before calling the service.
+    customer_result = await session.execute(
+        select(CustomerModel).where(
+            and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == ctx.tenant_id)
+        )
+    )
+    if customer_result.scalar_one_or_none() is None:
+        raise NotFoundException("Customer")
 
     result, _raw_data = await svc.refresh(
         customer_id=customer_id,
@@ -113,8 +129,8 @@ async def refresh_enrichment(
         else:
             data["enrichment_status"] = "enriched"
     else:
-        # Edge case: upsert succeeded but record vanished (shouldn't happen)
+        # Consistency problem: upsert reported success but the record is gone.
         data["last_enriched_at"] = None
-        data["enrichment_status"] = "enriched"
+        data["enrichment_status"] = "none"
 
     return _success(data)

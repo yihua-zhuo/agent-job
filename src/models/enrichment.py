@@ -43,7 +43,10 @@ class EnrichmentLookupRequest(BaseModel):
 
 
 class EnrichmentRefreshRequest(BaseModel):
-    """Optional request body for ``POST /api/v1/enrichment/refresh/{customer_id}``."""
+    """Optional request body for ``POST /api/v1/enrichment/refresh/{customer_id}``.
+
+    At least one of domain or company_name must be provided when the body is sent.
+    """
 
     domain: str | None = None
     company_name: str | None = None

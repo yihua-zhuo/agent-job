@@ -127,7 +127,7 @@ class TestLookupDomainSuccess:
         assert raw == clearbit_payload
 
     async def test_returns_tuple_without_persisting(self, service, mock_db_session, mock_httpx_client, mock_customer):
-        """Service upserts via _upsert_enrichment; verify execute was called and add/flush were not."""
+        """Service upserts via _upsert_enrichment; verify execute was called and add was not."""
         mock_resp = MagicMock()
         mock_resp.is_success = True
         mock_resp.json = MagicMock(return_value={"name": "Acme", "domain": "acme.com"})
