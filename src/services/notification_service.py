@@ -11,7 +11,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
 from db.models.user import UserModel
-from pkg.constants.notification_constants import VALID_NOTIFICATION_CHANNELS, VALID_PRIORITIES
+from pkg.constants.notification_constants import (
+    PAYLOAD_PARAMS_ALLOWED_KEYS,
+    VALID_NOTIFICATION_CHANNELS,
+    VALID_PRIORITIES,
+)
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 logger = logging.getLogger(__name__)
@@ -68,6 +72,11 @@ class NotificationService:
                 raise ValidationException("related_id must be an integer")
         if len(json.dumps(params, ensure_ascii=False).encode("utf-8")) > 4096:
             raise ValidationException("notification params exceed maximum size of 4096 bytes")
+        # Reject any keys beyond the allow-list before persisting — the to_dict()
+        # filtering only applies at serialization time, not at insert.
+        unknown_keys = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
+        if unknown_keys:
+            raise ValidationException(f"unknown payload keys: {', '.join(sorted(unknown_keys))}")
         notification = NotificationModel(
             tenant_id=tenant_id,
             user_id=user_id,

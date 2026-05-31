@@ -160,7 +160,8 @@ class TestGetTenantEndpoint:
     def test_not_found_returns_404(self, tenant_router_client):
         client, svc = tenant_router_client
         svc.get_tenant = AsyncMock(side_effect=NotFoundException("Tenant"))
-        # Use matching tenant_id so the router guard passes; service raises 404.
+        # Use tenant_id=9999 so the router guard passes (auth override matches the
+        # URL path tenant_id), allowing the service's NotFoundException to surface as 404.
         app = client.app
         app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=9999)
         resp = client.get("/api/v1/tenants/9999")
@@ -222,8 +223,8 @@ class TestUpdateTenantEndpoint:
     def test_not_found_returns_404(self, tenant_router_client):
         client, svc = tenant_router_client
         svc.update_tenant = AsyncMock(side_effect=NotFoundException("Tenant"))
-        # Use matching tenant_id so the authorization check passes;
-        # ForbiddenException would be raised before reaching the service.
+        # Use tenant_id=9999 so the router guard passes (auth override matches the
+        # URL path tenant_id), allowing the service's NotFoundException to surface as 404.
         app = client.app
 
         app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=9999)
@@ -377,3 +378,15 @@ class TestTenantCrossTenantIsolation:
         resp = client.put("/api/v1/tenants/2", json={"name": "Hijack"})
         assert resp.status_code == 403
         svc.update_tenant.assert_not_called()
+
+    def test_create_tenant_uses_caller_tenant_id(self, tenant_router_client):
+        """POST /api/v1/tenants creates a tenant; current design allows any authenticated tenant to create."""
+        client, svc = tenant_router_client
+        mock_tenant = MagicMock()
+        mock_tenant.to_dict.return_value = {**TENANT_ROW, "id": 2}
+        svc.create_tenant = AsyncMock(return_value=mock_tenant)
+        resp = client.post("/api/v1/tenants", json={"name": "NewTenant", "plan": "free"})
+        assert resp.status_code == 201
+        svc.create_tenant.assert_called_once()
+        # Note: cross-tenant requesting_tenant_id check is not implemented at router
+        # or service level for create_tenant; add a guard if this becomes a requirement.

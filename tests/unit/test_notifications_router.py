@@ -131,7 +131,7 @@ def _app(tenant_id: int = 1) -> TestClient:
     # get_db must be overridden so FastAPI can construct the router's session dependency.
     # NotificationService is fully patched in these tests, so the real session is not used,
     # but FastAPI checks the dependency signature at startup — the override satisfies it.
-    app = _make_test_app(lambda: _make_auth_ctx(tenant_id=tenant_id))
+    app = _make_test_app(lambda: _make_auth_override(tenant_id=tenant_id))
     return TestClient(app, raise_server_exceptions=False)
 
 

@@ -88,21 +88,21 @@ class TenantService:
         if "plan" in kwargs and kwargs["plan"] not in VALID_PLANS:
             raise ValidationException(f"plan must be one of {sorted(VALID_PLANS)}, got {kwargs['plan']!r}")
 
-        settings_changed = False
         new_settings = dict(tenant.settings or {})
+        settings_updated = False
         if "admin_email" in kwargs:
             new_settings["admin_email"] = kwargs["admin_email"]
-            settings_changed = True
+            settings_updated = True
         if "settings" in kwargs and isinstance(kwargs["settings"], dict):
             new_settings.update(kwargs["settings"])
-            settings_changed = True
+            settings_updated = True
+        if settings_updated:
+            tenant.settings = new_settings
 
         for key in allowed:
             if key in kwargs and key not in ("admin_email", "settings"):
                 setattr(tenant, key, kwargs[key])
         tenant.updated_at = datetime.now(UTC)
-        if settings_changed:
-            tenant.settings = new_settings
 
         await self.session.flush()
         return tenant
