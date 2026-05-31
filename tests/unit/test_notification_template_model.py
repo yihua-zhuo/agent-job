@@ -17,7 +17,6 @@ class TestNotificationTemplateModel:
     def test_to_dict_returns_all_fields(self):
         """to_dict() serializes all required and optional fields correctly."""
         now = datetime(2026, 1, 15, 10, 30, 0)
-        updated = datetime(2026, 1, 16, 11, 0, 0)
         model = NotificationTemplateModel(
             id=1,
             tenant_id=42,
@@ -27,7 +26,6 @@ class TestNotificationTemplateModel:
             body_html="<p>Hello</p>",
             body_text="Hello",
             created_at=now,
-            updated_at=updated,
         )
         d = model.to_dict()
         assert d["id"] == 1
@@ -38,10 +36,9 @@ class TestNotificationTemplateModel:
         assert d["body_html"] == "<p>Hello</p>"
         assert d["body_text"] == "Hello"
         assert d["created_at"] == now.isoformat()
-        assert d["updated_at"] == updated.isoformat()
 
     def test_to_dict_with_null_optional_fields(self):
-        """to_dict() handles subject, body_html, body_text, updated_at as None gracefully."""
+        """to_dict() handles subject, body_html, body_text as None gracefully."""
         now = datetime(2026, 3, 1, 8, 0, 0)
         model = NotificationTemplateModel(
             id=5,
@@ -52,7 +49,6 @@ class TestNotificationTemplateModel:
             body_html=None,
             body_text=None,
             created_at=now,
-            updated_at=None,
         )
         d = model.to_dict()
         assert d["id"] == 5
@@ -63,7 +59,6 @@ class TestNotificationTemplateModel:
         assert d["body_html"] is None
         assert d["body_text"] is None
         assert d["created_at"] == now.isoformat()
-        assert d["updated_at"] is None
 
     @pytest.mark.parametrize("channel", ["email", "sms", "push", "in_app"])
     def test_channel_accepts_standard_values(self, channel):
@@ -87,7 +82,7 @@ class TestNotificationTemplateModel:
             "",
             "EMAIL",
             "sms_upper",
-            "x" * 21,
+            "x" * 20,
         ],
     )
     def test_channel_non_standard_values_accepted(self, channel):
@@ -144,31 +139,6 @@ class TestNotificationTemplateModel:
         )
         d = model.to_dict()
         assert d["created_at"] == "2026-06-01T14:30:00"
-
-    def test_updated_at_serialization(self):
-        """updated_at is serialized as an ISO-format string when set, None when absent."""
-        now = datetime(2026, 6, 1, 14, 30, 0)
-        updated = datetime(2026, 6, 2, 9, 0, 0)
-        # With value
-        model_with = NotificationTemplateModel(
-            id=21,
-            tenant_id=99,
-            name="Has Updated",
-            channel="email",
-            created_at=now,
-            updated_at=updated,
-        )
-        assert model_with.to_dict()["updated_at"] == "2026-06-02T09:00:00"
-        # With None
-        model_without = NotificationTemplateModel(
-            id=22,
-            tenant_id=99,
-            name="No Updated",
-            channel="email",
-            created_at=now,
-            updated_at=None,
-        )
-        assert model_without.to_dict()["updated_at"] is None
 
     def test_empty_name_is_accepted_by_orm(self):
         """The ORM layer does not validate that name is non-empty; DB-level NOT NULL enforcement is exercised by integration tests."""

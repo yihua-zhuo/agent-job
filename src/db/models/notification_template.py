@@ -22,7 +22,6 @@ class NotificationTemplateModel(Base):
     body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     body_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), onupdate=func.now(), nullable=True)
 
     def to_dict(self) -> dict:
         return {
@@ -34,5 +33,4 @@ class NotificationTemplateModel(Base):
             "body_html": self.body_html,
             "body_text": self.body_text,
             "created_at": self.created_at.isoformat() if self.created_at else None,
-            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
