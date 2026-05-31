@@ -365,3 +365,102 @@ class TestSearchCustomers:
         sql = str(compiled)
         assert r"100\%\_fit\\\\" in sql
         assert "ESCAPE" in sql
+
+
+class TestEnrichmentUpsert:
+    """Unit tests for enrichment upsert on customer create/update."""
+
+    @pytest.mark.asyncio
+    async def test_create_customer_with_enrichment_data_calls_upsert(self, mock_db_session):
+        """create_customer calls _upsert_enrichment when enrichment_data is in the payload."""
+        service = CustomerService(mock_db_session)
+        next_id = [10]
+
+        # Auto-assign IDs when objects are added to the session
+        def assign_id(obj):
+            obj.id = next_id[0]
+            next_id[0] += 1
+
+        _original_add = mock_db_session.add
+
+        def tracked_add(obj):
+            assign_id(obj)
+            return _original_add(obj)
+
+        mock_db_session.add = tracked_add
+
+        async def fake_refresh(obj):
+            pass
+
+        mock_db_session.refresh = fake_refresh
+
+        with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
+            await service.create_customer(
+                {"name": "Enriched Customer", "enrichment_data": {"raw": "payload"}},
+                tenant_id=1,
+            )
+            mock_upsert.assert_awaited_once_with(10, 1, {"raw": "payload"})
+
+    @pytest.mark.asyncio
+    async def test_update_customer_with_enrichment_data_calls_upsert(self, mock_db_session):
+        """update_customer calls _upsert_enrichment when enrichment_data is in the payload."""
+        service = CustomerService(mock_db_session)
+
+        fake_customer = MagicMock()
+        fake_customer.id = 7
+        fake_customer.name = "Updated Customer"
+        fake_customer.status = "lead"
+        fake_customer.owner_id = 0
+
+        async def fake_refresh(obj):
+            pass
+
+        mock_db_session.refresh = fake_refresh
+
+        with patch.object(service, "get_customer", new_callable=AsyncMock) as mock_get:
+            mock_get.return_value = fake_customer
+            with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
+                await service.update_customer(
+                    7,
+                    {"name": "Updated Name", "enrichment_data": {"raw": "updated"}},
+                    tenant_id=1,
+                )
+                mock_upsert.assert_awaited_once_with(7, 1, {"raw": "updated"})
+
+    @pytest.mark.asyncio
+    async def test_create_customer_without_enrichment_data_skips_upsert(self, mock_db_session):
+        """_upsert_enrichment is NOT called when no enrichment_data key is present."""
+        service = CustomerService(mock_db_session)
+
+        async def fake_refresh(obj):
+            obj.id = 20
+            obj.name = "Plain Customer"
+            obj.status = "lead"
+
+        mock_db_session.refresh = fake_refresh
+
+        with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
+            await service.create_customer(
+                {"name": "Plain Customer"},
+                tenant_id=1,
+            )
+            mock_upsert.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_customer_with_none_enrichment_data_skips_upsert(self, mock_db_session):
+        """_upsert_enrichment is NOT called when enrichment_data is explicitly None."""
+        service = CustomerService(mock_db_session)
+
+        async def fake_refresh(obj):
+            obj.id = 21
+            obj.name = "Null Enrich Customer"
+            obj.status = "lead"
+
+        mock_db_session.refresh = fake_refresh
+
+        with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
+            await service.create_customer(
+                {"name": "Null Enrich Customer", "enrichment_data": None},
+                tenant_id=1,
+            )
+            mock_upsert.assert_not_called()

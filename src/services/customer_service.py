@@ -1,12 +1,14 @@
 """Customer service — CRUD + tagging + status management via SQLAlchemy ORM."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
+from db.models.customer_enrichment import CustomerEnrichmentModel
 from models.customer import CustomerCreateDTO, CustomerStatus
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
@@ -73,6 +75,10 @@ class CustomerService:
             routing_svc = LeadRoutingService(self.session)
             await routing_svc.auto_assign_lead(customer.id, tenant_id)
 
+        # Step 9 — upsert enrichment data when present in payload
+        if isinstance(data, dict) and data.get("enrichment_data") is not None:
+            await self._upsert_enrichment(customer.id, tenant_id, data["enrichment_data"])
+
         return customer
 
     async def list_customers(
@@ -137,7 +143,11 @@ class CustomerService:
 
         customer.updated_at = datetime.now(UTC)
         await self.session.flush()
-        await self.session.refresh(customer)
+
+        # Upsert enrichment data when present in payload
+        if data.get("enrichment_data") is not None:
+            await self._upsert_enrichment(customer.id, tenant_id, data["enrichment_data"])
+
         return customer
 
     async def delete_customer(self, customer_id: int, tenant_id: int) -> dict:
@@ -198,7 +208,6 @@ class CustomerService:
         customer.tags = tags
         customer.updated_at = datetime.now(UTC)
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def remove_tag(self, customer_id: int, tag: str, tenant_id: int) -> CustomerModel:
@@ -207,7 +216,6 @@ class CustomerService:
         customer.tags = [t for t in (customer.tags or []) if t != tag]
         customer.updated_at = datetime.now(UTC)
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def change_status(
@@ -223,7 +231,6 @@ class CustomerService:
         customer.status = status
         customer.updated_at = datetime.now(UTC)
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def assign_owner(
@@ -240,7 +247,6 @@ class CustomerService:
             customer.assigned_at = now
         customer.updated_at = now
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def bulk_import(self, customers: list[dict], tenant_id: int) -> int:
@@ -296,7 +302,6 @@ class CustomerService:
             )
         )
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def get_unassigned_leads(
@@ -405,3 +410,41 @@ class CustomerService:
             )
         await self.session.flush()
         return recycled_ids
+
+    # -------------------------------------------------------------------------
+    # Enrichment helpers
+    # -------------------------------------------------------------------------
+
+    async def _upsert_enrichment(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        enrichment_data: dict[str, Any],
+    ) -> None:
+        """Upsert a CustomerEnrichmentModel record for the given customer.
+
+        Uses INSERT … ON CONFLICT (tenant_id, customer_id) DO UPDATE so that
+        each call creates the record if absent, or updates the existing row if a
+        record for the same (tenant_id, customer_id) pair already exists.
+        """
+        now = datetime.now(UTC)
+        next_refresh = now + timedelta(days=7)
+        stmt = pg_insert(CustomerEnrichmentModel).values(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider=enrichment_data.get("provider", "clearbit"),
+            raw_data_json=enrichment_data.get("raw_data_json", enrichment_data),
+            enriched_at=enrichment_data.get("enriched_at", now),
+            next_refresh_at=next_refresh,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tenant_id", "customer_id"],
+            set_={
+                "provider": stmt.excluded.provider,
+                "raw_data_json": stmt.excluded.raw_data_json,
+                "enriched_at": stmt.excluded.enriched_at,
+                "next_refresh_at": next_refresh,
+                "updated_at": now,
+            },
+        )
+        await self.session.execute(stmt)
