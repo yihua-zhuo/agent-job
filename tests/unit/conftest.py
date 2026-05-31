@@ -90,6 +90,9 @@ class MockRow:
             raise NotImplementedError("get() not supported for list-based MockRow")
         return self._mapping.get(key, default)
 
+    def to_dict(self):
+        return self._mapping
+
     def __repr__(self):
         return f"MockRow({self._mapping!r})"
 
@@ -173,6 +176,9 @@ class MockState:
         self.tenants_next_id: int = 1
         self.activities: dict[int, dict] = {}
         self.activities_next_id: int = 1
+        # domain-agnostic opaque slot — each domain handler may store its own
+        # state here via state.opaque['domain_name'] = {...}.
+        self.opaque: dict = {}
 
 
 def _load_domain_handler_modules():
@@ -286,7 +292,8 @@ def make_mock_session(handlers=None, state=None):
         return MockResult([])
 
     session.execute = AsyncMock(side_effect=_execute_side_effect)
-    session.delete = MagicMock()
+    session.add = MagicMock()
+    session.delete = AsyncMock()
     session.commit = AsyncMock()
     session.rollback = AsyncMock()
     session.close = AsyncMock()
@@ -295,6 +302,10 @@ def make_mock_session(handlers=None, state=None):
     session.scalar_one_or_none = MagicMock()
     session.scalar_one = MagicMock()
     session.result = MagicMock()
+    # Store state reference in the mock's __dict__ so tests can seed records
+    # via session._state.report_records[id] = {...}.  Direct __dict__ write
+    # is required to bypass MagicMock's attribute interception.
+    session.__dict__["_state"] = state
 
     # Capture ORM objects added via session.add() so flush() can persist them.
     _pending: list = []
