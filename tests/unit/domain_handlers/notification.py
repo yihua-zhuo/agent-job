@@ -106,10 +106,10 @@ def make_notification_handler(state):
                 raise ValueError(
                     f"notification count must bind tenant_id and user_id (got keys: {list(params.keys())})"
                 )
+            # _unread_only may be absent when SQLAlchemy uses a SQL default; fall through
+            # to the generic 'from notifications' branch rather than crashing.
             if "_unread_only" not in params:
-                raise ValueError(
-                    f"notification count must bind _unread_only explicitly (got keys: {list(params.keys())})"
-                )
+                return None
             unread_filter = params["_unread_only"]
             if unread_filter:
                 count = sum(
@@ -132,10 +132,10 @@ def make_notification_handler(state):
                 raise ValueError(
                     f"list-notifications must bind tenant_id and user_id (got keys: {list(params.keys())})"
                 )
+            # _unread_only may be absent when SQLAlchemy uses a SQL default; fall through
+            # to None so other handlers can respond, rather than crashing here.
             if "_unread_only" not in params:
-                raise ValueError(
-                    f"list-notifications must bind _unread_only explicitly (got keys: {list(params.keys())})"
-                )
+                return None
             unread_filter = params["_unread_only"]
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
