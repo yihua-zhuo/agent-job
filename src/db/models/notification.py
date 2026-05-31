@@ -45,6 +45,8 @@ class NotificationModel(Base):
     template: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Trailing underscore avoids collision with ORM/DB column names.
     # Serialized as 'params' in to_dict() for a cleaner API surface.
+    # NOTE: If this column name changes, update _NOTIFICATION_PARAMS_KEY in
+    # tests/unit/domain_handlers/notification.py accordingly.
     payload_params: Mapped[dict | None] = mapped_column("params_", JSON, nullable=True)
     status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     priority: Mapped[str | None] = mapped_column(String(20), nullable=True)
