@@ -8,10 +8,9 @@ Creates the notification_templates table for the notification system
 (parent issue #646). Stores reusable notification content by channel.
 """
 
-from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects import postgresql
 
+from alembic import op
 
 revision: str = "5d575a161b5d"
 down_revision: str = "e7f6a5b3c12d"
@@ -49,6 +48,8 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index(
-        op.f("ix_notification_templates_tenant_id"), table_name="notification_templates"
+        op.f("ix_notification_templates_tenant_id"),
+        table_name="notification_templates",
+        if_exists=True,
     )
-    op.drop_table("notification_templates")
+    op.drop_table("notification_templates", if_exists=True)
