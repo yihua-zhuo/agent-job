@@ -87,7 +87,6 @@ class AutomationService:
         self.session = session
 
     @staticmethod
-    @staticmethod
     def _unimplemented_action(action_type: str, params: dict, key: str) -> dict:
         logger.warning("%s action is not implemented: %s=%s", action_type, key, params.get(key))
         return {"type": action_type, "status": "not_implemented", key: params.get(key)}

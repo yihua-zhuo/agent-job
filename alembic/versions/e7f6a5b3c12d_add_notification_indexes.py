@@ -103,7 +103,7 @@ def downgrade() -> None:
     op.add_column("notifications", Column("type", String(length=50), nullable=True))
     op.add_column("notifications", Column("title", String(length=255), nullable=True))
     op.add_column("notifications", Column("content", String(length=2000), nullable=True))
-    op.add_column("notifications", Column("is_read", Boolean(), nullable=True, server_default="false"))
+    op.add_column("notifications", Column("is_read", Boolean(), nullable=True, server_default=sa.text("false")))
     op.add_column("notifications", Column("related_type", String(length=50), nullable=True))
     op.add_column("notifications", Column("related_id", Integer(), nullable=True))
 

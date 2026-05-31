@@ -116,7 +116,7 @@ def _app(tenant_id: int = 1) -> TestClient:
     app = FastAPI()
     app.include_router(notifications_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_override(tenant_id=tenant_id)
-    app.dependency_overrides[get_db] = lambda: make_mock_session([])
+    app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
 
     @app.exception_handler(AppException)
     async def _handler(request, exc):
@@ -473,7 +473,7 @@ class TestInvalidTenant:
         app = FastAPI()
         app.include_router(notifications_router)
         app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=0, user_id=99)
-        app.dependency_overrides[get_db] = lambda: make_mock_session([])
+        app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
 
         @app.exception_handler(AppException)
         async def _handler(request, exc):
@@ -544,7 +544,7 @@ class TestInvalidTenant:
         app = FastAPI()
         app.include_router(notifications_router)
         app.dependency_overrides[require_auth] = lambda: AuthContext(user_id=99, tenant_id=None, roles=[])
-        app.dependency_overrides[get_db] = lambda: make_mock_session([])
+        app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
         client = TestClient(app, raise_server_exceptions=False)
         response = client.get("/api/v1/notifications")
         assert response.status_code == 401
@@ -555,7 +555,7 @@ class TestInvalidTenant:
         app.include_router(notifications_router)
         # simulate AuthContext with non-integer tenant_id (edge case)
         app.dependency_overrides[require_auth] = lambda: AuthContext(user_id=99, tenant_id="acme", roles=[])
-        app.dependency_overrides[get_db] = lambda: make_mock_session([])
+        app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
         client = TestClient(app, raise_server_exceptions=False)
         response = client.get("/api/v1/notifications/preferences")
         # tenant_id="acme" is not None/0, so auth check passes; preferences endpoint returns 501.
