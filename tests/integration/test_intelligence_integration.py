@@ -10,6 +10,7 @@ if str(_src_root) not in sys.path:
 
 import pytest
 
+from db.repositories.customer import CustomerRepository
 from pkg.errors.app_exceptions import NotFoundException
 from services.churn_prediction import ChurnPredictionService
 from services.customer_service import CustomerService
@@ -19,7 +20,7 @@ from services.smart_categorization import SmartCategorizationService
 
 async def _seed_customer(async_session, tenant_id: int) -> int:
     """Seed a customer and return its id."""
-    svc = CustomerService(async_session)
+    svc = CustomerService(CustomerRepository(async_session))
     suffix = uuid.uuid4().hex[:8]
     result = await svc.create_customer(
         data={

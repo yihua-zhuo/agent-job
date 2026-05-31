@@ -2,7 +2,6 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer_enrichment import CustomerEnrichmentModel
 from db.repositories.customer import CustomerRepository
@@ -16,13 +15,8 @@ class CustomerService:
 
     VALID_STATUSES = {status.value for status in CustomerStatus}
 
-    def __init__(
-        self,
-        session: AsyncSession,
-        customer_repo: CustomerRepository | None = None,
-    ):
-        self.session = session
-        self.customer_repo = customer_repo if customer_repo is not None else CustomerRepository(session)
+    def __init__(self, repository: CustomerRepository) -> None:
+        self.repository = repository
 
     async def create_customer(
         self,
@@ -38,10 +32,10 @@ class CustomerService:
             d = data.to_dict()
         else:
             d = data or {}
-        customer = await self.customer_repo.create(d, tenant_id)
+        customer = await self.repository.create(d, tenant_id)
 
         if customer.status == "lead" and customer.owner_id == 0:
-            routing_svc = LeadRoutingService(self.session)
+            routing_svc = LeadRoutingService(self.repository.session)
             await routing_svc.auto_assign_lead(customer.id, tenant_id)
 
         # Upsert enrichment data when present in payload
@@ -59,7 +53,7 @@ class CustomerService:
         owner_id: int | None = None,
     ) -> tuple[list[Any], int]:
         """List customers for tenant with optional filters."""
-        return await self.customer_repo.list_customers(
+        return await self.repository.list_customers(
             tenant_id=tenant_id,
             page=page,
             page_size=page_size,
@@ -69,7 +63,7 @@ class CustomerService:
 
     async def get_customer(self, customer_id: int, tenant_id: int) -> Any:
         """Get a customer by id (tenant-scoped)."""
-        return await self.customer_repo.get_customer(customer_id, tenant_id)
+        return await self.repository.get_customer(customer_id, tenant_id)
 
     async def update_customer(
         self,
@@ -78,27 +72,27 @@ class CustomerService:
         tenant_id: int,
     ) -> Any | None:
         """Update a customer (tenant-scoped)."""
-        return await self.customer_repo.update_customer(customer_id, data, tenant_id)
+        return await self.repository.update_customer(customer_id, data, tenant_id)
 
     async def delete_customer(self, customer_id: int, tenant_id: int) -> dict:
         """Delete a customer (tenant-scoped)."""
-        return await self.customer_repo.delete_customer(customer_id, tenant_id)
+        return await self.repository.delete_customer(customer_id, tenant_id)
 
     async def count_by_status(self, tenant_id: int) -> dict[CustomerStatus, int]:
         """Count customers grouped by status."""
-        return await self.customer_repo.count_by_status(tenant_id)
+        return await self.repository.count_by_status(tenant_id)
 
     async def search_customers(self, keyword: str, tenant_id: int) -> list[Any]:
         """Search customers by name or email (case-insensitive)."""
-        return await self.customer_repo.search_customers(keyword, tenant_id)
+        return await self.repository.search_customers(keyword, tenant_id)
 
     async def add_tag(self, customer_id: int, tag: str, tenant_id: int) -> Any:
         """Add a tag to a customer."""
-        return await self.customer_repo.add_tag(customer_id, tag, tenant_id)
+        return await self.repository.add_tag(customer_id, tag, tenant_id)
 
     async def remove_tag(self, customer_id: int, tag: str, tenant_id: int) -> Any:
         """Remove a tag from a customer."""
-        return await self.customer_repo.remove_tag(customer_id, tag, tenant_id)
+        return await self.repository.remove_tag(customer_id, tag, tenant_id)
 
     async def change_status(
         self,
@@ -109,7 +103,7 @@ class CustomerService:
         """Change a customer's status."""
         if status not in self.VALID_STATUSES:
             raise ValidationException(f"Invalid status: {status}")
-        return await self.customer_repo.update_status(customer_id, status, tenant_id)
+        return await self.repository.update_status(customer_id, status, tenant_id)
 
     async def assign_owner(
         self,
@@ -118,11 +112,11 @@ class CustomerService:
         tenant_id: int,
     ) -> Any:
         """Assign an owner to a customer."""
-        return await self.customer_repo.update_owner(customer_id, owner_id, tenant_id)
+        return await self.repository.update_owner(customer_id, owner_id, tenant_id)
 
     async def bulk_import(self, customers: list[dict[str, Any]], tenant_id: int) -> int:
         """Bulk insert customers, returns imported count."""
-        return await self.customer_repo.bulk_import(customers, tenant_id)
+        return await self.repository.bulk_import(customers, tenant_id)
 
     async def reassign_lead(
         self,
@@ -132,7 +126,7 @@ class CustomerService:
         reason: str | None = None,
     ) -> Any:
         """Reassign a lead with history tracking."""
-        customer = await self.customer_repo.get_customer(customer_id, tenant_id)
+        customer = await self.repository.get_customer(customer_id, tenant_id)
         now = datetime.now(UTC)
         entry = {
             "recycled_at": now.isoformat(),
@@ -141,7 +135,7 @@ class CustomerService:
         }
         history = list(customer.recycle_history or [])
         history.append(entry)
-        return await self.customer_repo.reassign_lead(
+        return await self.repository.reassign_lead(
             customer_id,
             new_owner_id,
             customer.recycle_count + 1,
@@ -156,26 +150,7 @@ class CustomerService:
         page_size: int = 20,
     ) -> tuple[list[Any], int]:
         """Return leads with owner_id=0 and status=lead, ordered by created_at."""
-        from sqlalchemy import and_, func, select
-
-        from db.models.customer import CustomerModel
-
-        conditions = [
-            CustomerModel.tenant_id == tenant_id,
-            CustomerModel.owner_id == 0,
-            CustomerModel.status == "lead",
-        ]
-        count_result = await self.session.execute(select(func.count(CustomerModel.id)).where(and_(*conditions)))
-        total = count_result.scalar() or 0
-        offset = (page - 1) * page_size
-        result = await self.session.execute(
-            select(CustomerModel)
-            .where(and_(*conditions))
-            .order_by(CustomerModel.created_at.asc())
-            .offset(offset)
-            .limit(page_size)
-        )
-        return list(result.scalars().all()), total
+        return await self.repository.get_unassigned_leads(tenant_id, page, page_size)
 
     async def get_leads_by_owner(
         self,
@@ -185,79 +160,11 @@ class CustomerService:
         page_size: int = 20,
     ) -> tuple[list[Any], int]:
         """Return leads for a specific owner."""
-        from sqlalchemy import and_, func, select
-
-        from db.models.customer import CustomerModel
-
-        conditions = [
-            CustomerModel.tenant_id == tenant_id,
-            CustomerModel.owner_id == owner_id,
-            CustomerModel.status == "lead",
-        ]
-        count_result = await self.session.execute(select(func.count(CustomerModel.id)).where(and_(*conditions)))
-        total = count_result.scalar() or 0
-        offset = (page - 1) * page_size
-        result = await self.session.execute(
-            select(CustomerModel)
-            .where(and_(*conditions))
-            .order_by(CustomerModel.created_at.asc())
-            .offset(offset)
-            .limit(page_size)
-        )
-        return list(result.scalars().all()), total
+        return await self.repository.get_leads_by_owner(owner_id, tenant_id, page, page_size)
 
     async def bulk_recycle(self, customer_ids: list[int], tenant_id: int) -> list[int]:
         """Bulk recycle a list of lead IDs (set owner_id=0, increment count, log history)."""
-        from sqlalchemy import and_, select, update
-
-        from db.models.customer import CustomerModel
-
-        if not customer_ids:
-            return []
-        now = datetime.now(UTC)
-        result = await self.session.execute(
-            select(CustomerModel).where(
-                and_(
-                    CustomerModel.tenant_id == tenant_id,
-                    CustomerModel.id.in_(customer_ids),
-                    CustomerModel.status == "lead",
-                    CustomerModel.owner_id != 0,
-                )
-            )
-        )
-        leads = result.scalars().all()
-        if not leads:
-            return []
-
-        recycle_entries = [
-            {
-                "recycled_at": now.isoformat(),
-                "previous_owner_id": lead.owner_id,
-                "reason": "manual_bulk_recycle",
-            }
-            for lead in leads
-        ]
-        new_histories = []
-        for lead, entry in zip(leads, recycle_entries):
-            history = list(lead.recycle_history or [])
-            history.append(entry)
-            new_histories.append(history)
-
-        recycled_ids = [lead.id for lead in leads]
-        for lead, new_hist in zip(leads, new_histories):
-            await self.session.execute(
-                update(CustomerModel)
-                .where(and_(CustomerModel.id == lead.id, CustomerModel.tenant_id == tenant_id))
-                .values(
-                    owner_id=0,
-                    assigned_at=None,
-                    recycle_count=lead.recycle_count + 1,
-                    recycle_history=new_hist,
-                    updated_at=now,
-                )
-            )
-        await self.session.flush()
-        return recycled_ids
+        return await self.repository.bulk_recycle(customer_ids, tenant_id)
 
     # -------------------------------------------------------------------------
     # Enrichment helpers
@@ -295,4 +202,4 @@ class CustomerService:
                 "updated_at": now,
             },
         )
-        await self.session.execute(stmt)
+        await self.repository.session.execute(stmt)

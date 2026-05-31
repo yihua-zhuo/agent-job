@@ -13,6 +13,7 @@ import uuid
 
 import pytest
 
+from db.repositories.customer import CustomerRepository
 from models.customer import CustomerStatus
 from pkg.errors.app_exceptions import NotFoundException
 from services.customer_service import CustomerService
@@ -40,7 +41,7 @@ async def _seed_user(async_session, tenant_id: int = 1) -> int:
 
 async def _seed_customer(async_session, tenant_id: int = 1, **overrides):
     """Create a customer and return the CustomerModel."""
-    cust_svc = CustomerService(async_session)
+    cust_svc = CustomerService(CustomerRepository(async_session))
     suffix = uuid.uuid4().hex[:8]
     data = {"name": f"SC Cust {suffix}", "email": f"sc_{suffix}@example.com", **overrides}
     result = await cust_svc.create_customer(data=data, tenant_id=tenant_id)
@@ -56,7 +57,7 @@ class TestCustomerServiceIntegration:
     """Full customer lifecycle via the real DB using the shared async_session fixture."""
 
     async def test_create_and_get_customer(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         result = await cust_svc.create_customer(
             data={"name": f"Create Get {suffix}", "email": f"cg_{suffix}@example.com"},
@@ -70,7 +71,7 @@ class TestCustomerServiceIntegration:
         assert fetched.email == f"cg_{suffix}@example.com"
 
     async def test_create_customer_with_all_fields(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         result = await cust_svc.create_customer(
             data={
@@ -87,7 +88,7 @@ class TestCustomerServiceIntegration:
         assert result.status == "customer"
 
     async def test_update_customer(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         created = await cust_svc.create_customer(
             data={"name": f"Update {suffix}", "email": f"up_{suffix}@example.com"},
@@ -99,12 +100,12 @@ class TestCustomerServiceIntegration:
         assert updated.name == f"Updated {suffix}"
 
     async def test_update_customer_not_found(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         with pytest.raises(NotFoundException):
             await cust_svc.update_customer(99999, {"name": "Ghost"}, tenant_id=tenant_id)
 
     async def test_delete_customer(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         created = await cust_svc.create_customer(
             data={"name": f"Delete {suffix}", "email": f"del_{suffix}@example.com"},
@@ -119,7 +120,7 @@ class TestCustomerServiceIntegration:
             await cust_svc.get_customer(cid, tenant_id=tenant_id)
 
     async def test_list_customers(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         for i in range(3):
             await cust_svc.create_customer(
@@ -131,7 +132,7 @@ class TestCustomerServiceIntegration:
         assert len(items) >= 3
 
     async def test_list_customers_pagination(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         for i in range(5):
             await cust_svc.create_customer(
@@ -147,7 +148,7 @@ class TestCustomerServiceIntegration:
         assert len(items2) == 2
 
     async def test_search_customers(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         await cust_svc.create_customer(
             data={"name": f"Search Target {suffix}", "email": f"st_{suffix}@example.com"},
@@ -159,7 +160,7 @@ class TestCustomerServiceIntegration:
         assert any(suffix.lower() in item.name.lower() for item in result)
 
     async def test_add_and_remove_tag(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         created = await cust_svc.create_customer(
             data={"name": f"Tag {suffix}", "email": f"tag_{suffix}@example.com"},
@@ -174,7 +175,7 @@ class TestCustomerServiceIntegration:
         assert removed is not None
 
     async def test_change_status(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         created = await cust_svc.create_customer(
             data={"name": f"Status {suffix}", "email": f"st_{suffix}@example.com", "status": "lead"},
@@ -186,7 +187,7 @@ class TestCustomerServiceIntegration:
         assert changed.status == "customer"
 
     async def test_assign_owner(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         uid = await _seed_user(async_session, tenant_id)
         suffix = uuid.uuid4().hex[:8]
         created = await cust_svc.create_customer(
@@ -199,7 +200,7 @@ class TestCustomerServiceIntegration:
         assert assigned.owner_id == uid
 
     async def test_bulk_import(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         customers = [
             {"name": f"Bulk {suffix} {i}", "email": f"bulk_{suffix}_{i}@example.com", "owner_id": 1}
@@ -209,7 +210,7 @@ class TestCustomerServiceIntegration:
         assert result == 3
 
     async def test_count_by_status(self, db_schema, tenant_id, async_session):
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         await cust_svc.create_customer(
             data={"name": f"Count {suffix}", "email": f"cnt_{suffix}@example.com", "status": "lead"},
@@ -431,7 +432,7 @@ class TestCustomerCountByStatusIntegration:
         self, db_schema, tenant_id_web, async_session
     ):
         """Returns empty dict when no customers exist for the tenant."""
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         result = await cust_svc.count_by_status(tenant_id=tenant_id_web)
         assert result == {}
 
@@ -439,7 +440,7 @@ class TestCustomerCountByStatusIntegration:
         self, db_schema, tenant_id_web, async_session
     ):
         """Returns one exact enum-keyed count when all customers share a status."""
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         for i in range(3):
             await cust_svc.create_customer(
@@ -497,7 +498,7 @@ class TestCustomerCountByStatusIntegration:
         assert r.status_code == 201
 
         # Verify aggregation via the service layer
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         result = await cust_svc.count_by_status(tenant_id=tenant_id_web)
 
         assert result[CustomerStatus.LEAD] == 3
@@ -536,7 +537,7 @@ class TestCustomerCountByStatusIntegration:
             assert r.status_code == 201
 
         # Verify counts via service layer using tenant sessions
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id_web)
         await async_session.commit()
         result_t2 = await cust_svc.count_by_status(tenant_id=tenant_id_2_web)

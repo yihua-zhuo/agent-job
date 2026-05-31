@@ -18,14 +18,12 @@ from dotenv import load_dotenv
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
 load_dotenv(_dotenv_path)
 
-import asyncio
 import contextlib
 import importlib
 import os
 import pkgutil
 import random
 import sys
-import uuid as uuid_module
 from collections.abc import AsyncGenerator, Generator
 
 # Ensure src/ is on sys.path so top-level package imports resolve

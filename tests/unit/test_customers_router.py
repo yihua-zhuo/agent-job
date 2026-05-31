@@ -1,5 +1,4 @@
 """Unit tests for src/api/routers/customers.py — router endpoint tests."""
-import inspect
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -107,11 +106,10 @@ def client_with_service(monkeypatch):
     from starlette.responses import JSONResponse
 
     from internal.middleware.fastapi_auth import require_auth
-    from pkg.errors.app_exceptions import AppException
 
     mock_service = MagicMock()
 
-    def override_customer_service(session, customer_repo):
+    def override_customer_service(repository):
         return mock_service
 
     # Async-aware mock session for session.execute() calls (enrichment queries)
@@ -128,19 +126,18 @@ def client_with_service(monkeypatch):
 
     # Patch CustomerService in the router's module namespace so the
     # router uses mock_service directly instead of instantiating the real class.
-    # Set __signature__ so monkeypatch's signature check passes (the new init
-    # has no defaults; the old lambda had customer_repo=None).
-    override_customer_service.__signature__ = inspect.signature(
-        lambda session, customer_repo=None: None
-    )
     monkeypatch.setattr(
         "api.routers.customers.CustomerService",
         override_customer_service,
     )
-    # Also patch CustomerRepository so inline instantiation in the router succeeds.
+    # Mock CustomerRepository so that CustomerRepository(session) in the router
+    # returns a mock whose .session attribute is the mock_session we control.
+    # A plain MagicMock() fails with InvalidSpecError because MagicMock
+    # cannot be used as a spec= argument (it recursively checks attribute types).
+    # Returning a plain mock from the constructor avoids this.
     monkeypatch.setattr(
         "api.routers.customers.CustomerRepository",
-        MagicMock(),
+        lambda session: MagicMock(session=session),
     )
 
     @app.exception_handler(AppException)
