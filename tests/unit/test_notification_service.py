@@ -5,20 +5,29 @@ import pytest
 from services.notification_service import NotificationService
 from tests.unit.conftest import MockState, make_mock_session
 from tests.unit.domain_handlers.notifications import make_notification_handler
+from tests.unit.domain_handlers.users import make_user_handler
 
 
 @pytest.fixture
 def mock_db_session():
     state = MockState()
-    handler = make_notification_handler(state)
+    notification_handler = make_notification_handler(state)
+    user_handler = make_user_handler(state)
+    session = make_mock_session([notification_handler, user_handler], state=state)
     pending = []
 
+    # Track objects added via session.add so flush can persist them
+    original_add = session.add
+
+    def tracked_add(obj):
+        pending.append(obj)
+        original_add(obj)
+
+    session.add = tracked_add
+
     async def flush_handler():
-        # Flush persists pending ORM objects via the handler so they appear in
-        # state. ID assignment is deferred to refresh so the object and state
-        # stay in sync (flush runs before refresh).
         for obj in pending[:]:
-            handler(
+            notification_handler(
                 "insert into notifications",
                 {
                     "tenant_id": getattr(obj, "tenant_id", 0),
@@ -34,20 +43,10 @@ def mock_db_session():
         pending.clear()
 
     async def refresh_handler(obj):
-        # The ID was already assigned by the handler during flush (id is
-        # incremented before storing). Sync the object attribute to match.
+        # ID was assigned by the notification handler during flush
         nid = getattr(state, "notifications_next_id", 1) - 1
         obj.id = nid
 
-    session = make_mock_session([handler], state=state)
-
-    _add = session.add
-
-    def tracked_add(obj):
-        pending.append(obj)
-        _add(obj)
-
-    session.add = tracked_add
     session.flush = flush_handler
     session.refresh = refresh_handler
     return session
@@ -57,7 +56,7 @@ class TestNotificationService:
     """Tests for NotificationService."""
 
     @pytest.mark.asyncio
-    async def test_get_unread_count(self, mock_db_session):
+    async def test_mark_as_read_updates_unread_count(self, mock_db_session):
         """get_unread_count returns correct count before and after marking a notification as read."""
         svc = NotificationService(mock_db_session)
 
@@ -67,7 +66,7 @@ class TestNotificationService:
             notification = await svc.send_notification(
                 tenant_id=1,
                 user_id=99,
-                notification_type="info",
+                notification_type="email",
                 title=f"Notification {i+1}",
                 content="Test",
             )
