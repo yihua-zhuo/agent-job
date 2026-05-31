@@ -87,4 +87,24 @@ describe("Login component", () => {
     expect(screen.getByPlaceholderText("········").disabled).toBe(true);
     expect(mockSubmit).not.toHaveBeenCalled();
   });
+
+  it("disables controls and prevents double-submit on external isLoading transition", async () => {
+    let resolve: () => void = () => {};
+    mockSubmit.mockImplementation(
+      () => new Promise<void>((r) => { resolve = r; })
+    );
+    const { rerender } = render(<Login onSubmit={mockSubmit} isLoading={false} />);
+    fireEvent.change(screen.getByPlaceholderText("name@example.com"), {
+      target: { value: "test@example.com" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
+    await waitFor(() => expect(mockSubmit).toHaveBeenCalledTimes(1));
+    // Transition to isLoading=true while submit is still pending
+    rerender(<Login onSubmit={mockSubmit} isLoading={true} />);
+    // Button stays disabled — no double-submit
+    expect(screen.getByRole("button", { name: /signing in…/i }).disabled).toBe(true);
+    // External isLoading takes precedence; internal state is overridden
+    expect(screen.getByPlaceholderText("name@example.com").disabled).toBe(true);
+    resolve();
+  });
 });

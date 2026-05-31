@@ -217,14 +217,14 @@ class TestRefreshEndpoint:
 
     def test_refresh_returns_enriched_data(self, client_with_service):
         client, svc = client_with_service
-        svc.refresh = AsyncMock(
+        svc.refresh_full = AsyncMock(
             return_value=(
                 {
                     "name": "Acme Corp",
                     "domain": "acme.com",
                     "geo_city": "New York",
                 },
-                {"name": "Acme Corp", "domain": "acme.com"},  # raw_data
+                None,  # upserted record
             )
         )
 
@@ -237,37 +237,38 @@ class TestRefreshEndpoint:
 
     def test_refresh_passes_correct_args(self, client_with_service):
         client, svc = client_with_service
-        svc.refresh = AsyncMock(return_value=({"name": "Acme Corp"}, {}))
+        svc.refresh_full = AsyncMock(return_value=({"name": "Acme Corp"}, None))
 
         resp = client.post(
             "/api/v1/enrichment/refresh/99",
             json={"domain": "acme.com"},
         )
         assert resp.status_code == 200
-        svc.refresh.assert_awaited_once_with(
+        svc.refresh_full.assert_awaited_once_with(
             customer_id=99,
             tenant_id=1,
-            domain="acme.com",
-            company_name=None,
+            domain_override="acme.com",
+            company_name_override=None,
         )
 
     def test_refresh_passes_domain(self, client_with_service):
         """Refresh with a domain body passes domain and company_name to the service."""
         client, svc = client_with_service
-        svc.refresh = AsyncMock(return_value=({"name": "Acme Corp"}, {}))
+        svc.refresh_full = AsyncMock(return_value=({"name": "Acme Corp"}, None))
 
         resp = client.post("/api/v1/enrichment/refresh/7", json={"domain": "example.com"})
         assert resp.status_code == 200
-        svc.refresh.assert_awaited_once_with(
+        svc.refresh_full.assert_awaited_once_with(
             customer_id=7,
             tenant_id=1,
-            domain="example.com",
-            company_name=None,
+            domain_override="example.com",
+            company_name_override=None,
         )
 
     def test_refresh_no_body_no_prior_enrichment_returns_422(self, client_with_service):
-        """When no body and no prior enrichment record, guard raises ValidationException."""
-        client, _svc = client_with_service
+        """When no body and no prior enrichment record, service raises ValidationException."""
+        client, svc = client_with_service
+        svc.refresh_full = AsyncMock(side_effect=ValidationException("domain or company_name is required when customer has no prior enrichment record"))
 
         resp = client.post("/api/v1/enrichment/refresh/7")
         assert resp.status_code == 422
@@ -278,18 +279,18 @@ class TestRefreshEndpoint:
     def test_refresh_cross_tenant_returns_404(self, client_with_service_as_tenant_2):
         """A tenant cannot refresh another tenant's customer's enrichment."""
         client, svc = client_with_service_as_tenant_2
-        svc.refresh = AsyncMock(side_effect=NotFoundException("Customer"))
+        svc.refresh_full = AsyncMock(side_effect=NotFoundException("Customer"))
 
         resp = client.post("/api/v1/enrichment/refresh/42", json={"domain": "acme.com"})
         assert resp.status_code == 404
         body = resp.json()
         assert body["success"] is False
         assert body["code"] == "NOT_FOUND"
-        svc.refresh.assert_awaited_once_with(customer_id=42, tenant_id=2, domain="acme.com", company_name=None)
+        svc.refresh_full.assert_awaited_once_with(customer_id=42, tenant_id=2, domain_override="acme.com", company_name_override=None)
 
     def test_refresh_customer_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
-        svc.refresh = AsyncMock(side_effect=NotFoundException("Customer"))
+        svc.refresh_full = AsyncMock(side_effect=NotFoundException("Customer"))
 
         resp = client.post("/api/v1/enrichment/refresh/9999", json={"domain": "acme.com"})
         assert resp.status_code == 404
@@ -300,7 +301,7 @@ class TestRefreshEndpoint:
 
     def test_refresh_validation_error_returns_422(self, client_with_service):
         client, svc = client_with_service
-        svc.refresh = AsyncMock(side_effect=ValidationException("No company found for the given domain"))
+        svc.refresh_full = AsyncMock(side_effect=ValidationException("No company found for the given domain"))
 
         resp = client.post("/api/v1/enrichment/refresh/42", json={"domain": "notfound.com"})
         assert resp.status_code == 422

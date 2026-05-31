@@ -87,6 +87,56 @@ class EnrichmentService:
 
         return normalised, raw_data
 
+    async def refresh_full(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        domain_override: str | None = None,
+        company_name_override: str | None = None,
+    ) -> tuple[dict[str, Any], CustomerEnrichmentModel | None]:
+        """Full refresh flow: resolve domain/company from stored enrichment if not provided, then call API."""
+        domain: str | None = domain_override
+        company_name: str | None = company_name_override
+
+        if domain is None and company_name is None:
+            # Pull from stored enrichment record
+            existing = await self.get_latest_enrichment(customer_id, tenant_id)
+            if existing is not None:
+                raw = existing.raw_data_json or {}
+                domain = raw.get("domain")
+                company_name = raw.get("name")
+                if not domain:
+                    domain = None
+                if not company_name:
+                    company_name = None
+
+        if domain is None and company_name is None:
+            raise ValidationException("domain or company_name is required when customer has no prior enrichment record")
+
+        # Customer existence is validated inside refresh() via _call_clearbit_api
+        result, _raw_data = await self.refresh(customer_id, tenant_id, domain=domain, company_name=company_name)
+        upserted = await self.get_latest_enrichment(customer_id, tenant_id)
+        return result, upserted
+
+    async def get_latest_enrichment(
+        self,
+        customer_id: int,
+        tenant_id: int,
+    ) -> "CustomerEnrichmentModel | None":
+        """Fetch the most recent enrichment record for a customer."""
+        result = await self.session.execute(
+            select(CustomerEnrichmentModel)
+            .where(
+                and_(
+                    CustomerEnrichmentModel.customer_id == customer_id,
+                    CustomerEnrichmentModel.tenant_id == tenant_id,
+                )
+            )
+            .order_by(CustomerEnrichmentModel.enriched_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
     async def _call_clearbit_api(
         self,
         customer_id: int,

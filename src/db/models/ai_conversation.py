@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
@@ -14,9 +14,7 @@ class AIConversationModel(Base):
     __tablename__ = "ai_conversations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
-    )
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     title: Mapped[str | None] = mapped_column(String(200), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -57,9 +55,7 @@ class AIMessageModel(Base):
     conversation_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("ai_conversations.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     role: Mapped[str] = mapped_column(String(20), nullable=False)  # "user" | "assistant"
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -67,6 +63,9 @@ class AIMessageModel(Base):
     __table_args__ = (
         # Index for fetching messages in order per tenant + conversation
         Index("ix_ai_messages_tenant_conv", "tenant_id", "conversation_id"),
+        # Index for queries that filter messages by tenant only
+        Index("ix_ai_messages_tenant", "tenant_id"),
+        CheckConstraint("role IN ('user', 'assistant')", name="ck_ai_messages_role"),
         {"sqlite_autoincrement": True},
     )
 

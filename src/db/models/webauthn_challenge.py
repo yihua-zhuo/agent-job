@@ -21,7 +21,7 @@ class WebAuthnChallengeModel(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
     challenge: Mapped[str] = mapped_column(String(512), nullable=False)
     purpose: Mapped[str] = mapped_column(

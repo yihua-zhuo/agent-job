@@ -18,7 +18,7 @@ class RefreshTokenModel(Base):
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
     token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     device_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)

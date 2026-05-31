@@ -37,48 +37,50 @@ export function Login({ onSubmit, isLoading: externalLoading }: LoginProps) {
   );
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      <div className="space-y-1.5">
-        <label htmlFor="email" className="sr-only">Email address</label>
-        <Input
-          id="email"
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          placeholder="name@example.com"
-          disabled={isLoading}
-        />
-      </div>
-      <div className="space-y-1.5">
-        <label htmlFor="password" className="sr-only">Password</label>
-        <Input
-          id="password"
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          placeholder="········"
-          disabled={isLoading}
-        />
-      </div>
-      <label htmlFor="remember-me" className="flex items-center gap-2 text-sm">
-        <input
-          id="remember-me"
-          type="checkbox"
-          checked={rememberMe}
-          onChange={(e) => setRememberMe(e.target.checked)}
-          disabled={isLoading}
-        />
-        Remember me
-      </label>
+    <div className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div className="space-y-1.5">
+          <label htmlFor="email" className="text-sm font-medium">Email</label>
+          <Input
+            id="email"
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="name@example.com"
+            disabled={isLoading}
+          />
+        </div>
+        <div className="space-y-1.5">
+          <label htmlFor="password" className="text-sm font-medium">Password</label>
+          <Input
+            id="password"
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="········"
+            disabled={isLoading}
+          />
+        </div>
+        <label htmlFor="remember-me" className="flex items-center gap-2 text-sm">
+          <input
+            id="remember-me"
+            type="checkbox"
+            checked={rememberMe}
+            onChange={(e) => setRememberMe(e.target.checked)}
+            disabled={isLoading}
+          />
+          Remember me
+        </label>
+        <Button type="submit" disabled={isLoading} className="w-full">
+          {isLoading ? "Signing in…" : "Sign In"}
+        </Button>
+      </form>
       <Link
         href="/forgot-password"
-        className="text-sm text-muted-foreground hover:underline"
+        className="block text-sm text-muted-foreground hover:underline"
       >
         Forgot password?
       </Link>
-      <Button type="submit" disabled={isLoading} className="w-full">
-        {isLoading ? "Signing in…" : "Sign In"}
-      </Button>
-    </form>
+    </div>
   );
 }
