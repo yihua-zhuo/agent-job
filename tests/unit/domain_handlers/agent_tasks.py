@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+ORDER = 50
+
 import re
 from collections.abc import Callable
 from datetime import datetime

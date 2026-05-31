@@ -20,6 +20,7 @@ import pytest
 from dotenv import load_dotenv
 from sqlalchemy import insert, select, table, text
 from sqlalchemy.exc import CompileError, MultipleResultsFound, UnsupportedCompilationError
+from sqlalchemy.sql.elements import ClauseElement
 
 # Load .env so DATABASE_URL is available in test environment.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"

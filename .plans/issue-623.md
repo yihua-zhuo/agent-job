@@ -6,12 +6,12 @@ Add `agent_tasks` and `agent_tasks_next_id` fields to `MockState.__init__` in `t
 
 ## Source Contract
 
-Dev-plan target: `/home/runner/work/agent-job/agent-job/docs/dev-plan/50-automation/0623-add-unit-tests-for-agenttaskservice-and-router.md`
-Template depth: `deep`
-Reading order followed:
-1. `/home/runner/work/agent-job/agent-job/docs/dev-plan/README.md`
-2. `/home/runner/work/agent-job/agent-job/docs/dev-plan/_template-deep.md`
-3. `/home/runner/work/agent-job/agent-job/docs/dev-plan/50-automation/0623-add-unit-tests-for-agenttaskservice-and-router.md`
+The implementation targets the already-present test files and domain handler:
+- `tests/unit/test_agent_task_service.py` (209 lines) — covers `AgentTaskService` create/read/list
+- `tests/unit/test_agent_tasks.py` (223 lines) — covers router endpoints
+- `tests/unit/domain_handlers/agent_tasks.py` — provides `make_agent_task_handler(state)` and `get_handlers(state)`
+
+Note: the dev-plan stub (`0623-add-unit-tests-for-agenttaskservice-and-router.md`) showed a task_id-based lookup interface; the real handler uses int-based IDs and richer SQL patterns.
 
 ## Affected Files
 
