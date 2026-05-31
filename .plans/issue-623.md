@@ -30,8 +30,8 @@ Reading order followed:
   - `tests/unit/test_agent_tasks.py` — already exists (223 lines); covers: POST 201 envelope, GET list envelope with `items`/`total`/`has_next`/`page`/`page_size`, GET 404 from `NotFoundException`, status query param, pagination bounds.
 - `tests/unit/domain_handlers/agent_tasks.py` — already exists; provides `make_agent_task_handler(state)` and `get_handlers(state)`.
 - Dev-plan verification (per dev-plan §6):
-  - `ruff check tests/unit/test_agent_task_service.py tests/unit/test_agent_task_router.py tests/unit/domain_handlers/agent_tasks.py` → 0 errors
-  - `PYTHONPATH=src pytest tests/unit/test_agent_task_service.py tests/unit/test_agent_tasks.py -v` → ≥ 10 passed total (service ≥ 4, router ≥ 6)
+  - `ruff check tests/unit/test_agent_task_service.py tests/unit/test_agent_tasks.py tests/unit/domain_handlers/agent_tasks.py` → 0 errors
+  - `PYTHONPATH=src pytest tests/unit/test_agent_task_service.py tests/unit/test_agent_tasks.py -v` → ≥ 10 passed total (service ≥ 4, router ≥ 6 from test_agent_tasks.py)
   - `PYTHONPATH=src python -c "from tests.unit.domain_handlers.agent_tasks import get_handlers, make_agent_task_handler"` → exit 0
 
 ## Acceptance Criteria

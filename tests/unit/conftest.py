@@ -278,7 +278,8 @@ def make_mock_session(handlers=None, state=None):
         sql_text = str(sql).lower().strip()
         bound_params = {}
         try:
-            bound_params.update(getattr(sql.compile(), "params", {}) or {})
+            if not isinstance(sql, str):
+                bound_params.update(getattr(sql.compile(), "params", {}) or {})
         except (TypeError, AttributeError, RuntimeError, CompileError, UnsupportedCompilationError) as exc:
             # These are the exceptions SQLAlchemy's .compile() can raise at
             # bind-param extraction time; others (KeyboardInterrupt, SystemExit)
