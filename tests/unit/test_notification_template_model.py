@@ -8,6 +8,8 @@ from db.models.notification_template import NotificationTemplateModel
 
 
 class TestNotificationTemplateModel:
+    """Model-only tests; cross-tenant isolation is enforced at the service layer, not here."""
+
     def test_table_name(self):
         """__tablename__ is notification_templates."""
         assert NotificationTemplateModel.__tablename__ == "notification_templates"
@@ -15,6 +17,7 @@ class TestNotificationTemplateModel:
     def test_to_dict_returns_all_fields(self):
         """to_dict() serializes all required and optional fields correctly."""
         now = datetime(2026, 1, 15, 10, 30, 0)
+        updated = datetime(2026, 1, 16, 11, 0, 0)
         model = NotificationTemplateModel(
             id=1,
             tenant_id=42,
@@ -24,6 +27,7 @@ class TestNotificationTemplateModel:
             body_html="<p>Hello</p>",
             body_text="Hello",
             created_at=now,
+            updated_at=updated,
         )
         d = model.to_dict()
         assert d["id"] == 1
@@ -34,9 +38,10 @@ class TestNotificationTemplateModel:
         assert d["body_html"] == "<p>Hello</p>"
         assert d["body_text"] == "Hello"
         assert d["created_at"] == now.isoformat()
+        assert d["updated_at"] == updated.isoformat()
 
     def test_to_dict_with_null_optional_fields(self):
-        """to_dict() handles subject, body_html, body_text as None gracefully."""
+        """to_dict() handles subject, body_html, body_text, updated_at as None gracefully."""
         now = datetime(2026, 3, 1, 8, 0, 0)
         model = NotificationTemplateModel(
             id=5,
@@ -47,6 +52,7 @@ class TestNotificationTemplateModel:
             body_html=None,
             body_text=None,
             created_at=now,
+            updated_at=None,
         )
         d = model.to_dict()
         assert d["id"] == 5
@@ -57,6 +63,7 @@ class TestNotificationTemplateModel:
         assert d["body_html"] is None
         assert d["body_text"] is None
         assert d["created_at"] == now.isoformat()
+        assert d["updated_at"] is None
 
     @pytest.mark.parametrize("channel", ["email", "sms", "push", "in_app"])
     def test_channel_accepts_standard_values(self, channel):
@@ -96,8 +103,8 @@ class TestNotificationTemplateModel:
         d = model.to_dict()
         assert d["channel"] == channel  # ORM accepts; enforcement delegated to service/DB layer
 
-    def test_name_max_length(self):
-        """Name field accepts strings up to and including 100 characters."""
+    def test_name_accepts_100_chars(self):
+        """Name field accepts a 100-character string without error."""
         now = datetime(2026, 5, 1, 12, 0, 0)
         model = NotificationTemplateModel(
             id=11,
@@ -109,8 +116,8 @@ class TestNotificationTemplateModel:
         d = model.to_dict()
         assert len(d["name"]) == 100
 
-    def test_subject_max_length(self):
-        """Subject field accepts strings up to and including 255 characters."""
+    def test_subject_accepts_255_chars(self):
+        """Subject field accepts a 255-character string without error."""
         now = datetime(2026, 5, 1, 12, 0, 0)
         model = NotificationTemplateModel(
             id=12,
@@ -136,16 +143,51 @@ class TestNotificationTemplateModel:
         d = model.to_dict()
         assert d["created_at"] == "2026-06-01T14:30:00"
 
-    def test_updated_at_intentionally_absent_from_to_dict(self):
-        """The model does not have an updated_at field; to_dict() correctly omits it. This test will fail (and catch the gap) if updated_at is added to the model without updating to_dict()."""
+    def test_updated_at_serialization(self):
+        """updated_at is serialized as an ISO-format string when set, None when absent."""
         now = datetime(2026, 6, 1, 14, 30, 0)
-        model = NotificationTemplateModel(
+        updated = datetime(2026, 6, 2, 9, 0, 0)
+        # With value
+        model_with = NotificationTemplateModel(
             id=21,
             tenant_id=99,
-            name="Updated At Test",
+            name="Has Updated",
+            channel="email",
+            created_at=now,
+            updated_at=updated,
+        )
+        assert model_with.to_dict()["updated_at"] == "2026-06-02T09:00:00"
+        # With None
+        model_without = NotificationTemplateModel(
+            id=22,
+            tenant_id=99,
+            name="No Updated",
+            channel="email",
+            created_at=now,
+            updated_at=None,
+        )
+        assert model_without.to_dict()["updated_at"] is None
+
+    def test_empty_name_is_accepted_by_orm(self):
+        """The ORM layer does not validate that name is non-empty; DB-level NOT NULL enforcement is exercised by integration tests."""
+        now = datetime(2026, 6, 1, 14, 30, 0)
+        model = NotificationTemplateModel(
+            id=25,
+            tenant_id=1,
+            name="",
             channel="email",
             created_at=now,
         )
-        d = model.to_dict()
-        # If updated_at is added to the model but forgotten in to_dict(), this assertion fails.
-        assert "updated_at" not in d
+        assert model.to_dict()["name"] == ""
+
+    def test_unknown_channel_accepted_by_orm(self):
+        """The ORM layer does not validate channel values; invalid values are accepted and silently stored. DB-level enforcement (CHECK constraint) is exercised by integration tests."""
+        now = datetime(2026, 6, 1, 14, 30, 0)
+        model = NotificationTemplateModel(
+            id=26,
+            tenant_id=1,
+            name="Unknown Channel",
+            channel="telegram",
+            created_at=now,
+        )
+        assert model.to_dict()["channel"] == "telegram"

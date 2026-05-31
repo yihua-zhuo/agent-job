@@ -34,6 +34,11 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=True,
+        ),
         sa.PrimaryKeyConstraint("id"),
         if_not_exists=True,
     )

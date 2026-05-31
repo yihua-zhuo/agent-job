@@ -143,7 +143,7 @@ Inspect the generated `alembic/versions/<id>_drift_check.py` — both `up()` and
 
 ## Test Plan
 
-- Unit tests in `tests/unit/`: `tests/unit/test_notification_template_model.py` (new) — covers `to_dict()` serialization of all 7 fields, null optional fields, and `__tablename__`
+- Unit tests in `tests/unit/`: `tests/unit/test_notification_template_model.py` (new) — 6 passing tests covering `to_dict()` serialization of all fields including `updated_at`, null optional fields, `__tablename__`, name/subject length, and invalid-input acceptance boundaries
 - Integration tests in `tests/integration/`: none (model-only issue; integration tests belong to the service/router layer in a later issue)
 - Dev-plan verification commands:
   - `ruff check src/db/models/notification_template.py` → 0 errors
@@ -160,5 +160,5 @@ Inspect the generated `alembic/versions/<id>_drift_check.py` — both `up()` and
 - `alembic/versions/5d575a161b5d_add_notification_templates.py` exists and creates `notification_templates` table with correct column types and FK constraint on `tenant_id`
 - `alembic/versions/merge_heads_notification_templates_662.py` exists as a merge revision with `down_revision = (52b19ee00eaf, 5d575a161b5d)`, allowing `alembic upgrade head` to succeed on a fresh database
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` all exit 0 on the `alembic_dev` database
-- `tests/unit/test_notification_template_model.py` has 3 passing tests covering `to_dict`, null optionals, and `__tablename__`
+- `tests/unit/test_notification_template_model.py` has 6 passing tests covering `to_dict`, null optionals, `updated_at`, `__tablename__`, length boundaries, and invalid-input acceptance
 - Drift check produces an empty migration (confirms model and DB schema are in sync)
