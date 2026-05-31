@@ -19,7 +19,7 @@ Reading order followed:
 
 ## Affected Files
 
-- `src/services/customer_service.py` — add `upsert_enrichment()` helper and call it from `create_customer` / `update_customer` when `enrichment_data` is present in the payload
+- `src/services/customer_service.py` — add `_upsert_enrichment()` private helper and call it from `create_customer` / `update_customer` when `enrichment_data` is present in the payload
 - `src/models/enrichment.py` — add `EnrichmentRefreshRequest` Pydantic schema and `enrichment_status` / `last_enriched_at` fields
 - `src/api/routers/enrichment.py` — add `POST /api/v1/enrichment/refresh/{customer_id}` endpoint
 - `src/db/models/customer_enrichment.py` — already exists and is complete; no changes needed

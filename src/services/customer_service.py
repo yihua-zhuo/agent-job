@@ -208,7 +208,6 @@ class CustomerService:
         customer.tags = tags
         customer.updated_at = datetime.now(UTC)
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def remove_tag(self, customer_id: int, tag: str, tenant_id: int) -> CustomerModel:
@@ -217,7 +216,6 @@ class CustomerService:
         customer.tags = [t for t in (customer.tags or []) if t != tag]
         customer.updated_at = datetime.now(UTC)
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def change_status(
@@ -233,7 +231,6 @@ class CustomerService:
         customer.status = status
         customer.updated_at = datetime.now(UTC)
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def assign_owner(
@@ -250,7 +247,6 @@ class CustomerService:
             customer.assigned_at = now
         customer.updated_at = now
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def bulk_import(self, customers: list[dict], tenant_id: int) -> int:
@@ -306,7 +302,6 @@ class CustomerService:
             )
         )
         await self.session.flush()
-        await self.session.refresh(customer)
         return customer
 
     async def get_unassigned_leads(

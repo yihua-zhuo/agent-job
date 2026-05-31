@@ -55,6 +55,67 @@ def _paginated(items, total, page, page_size):
     }
 
 
+async def _enrichment_status(
+    customer_ids: list[int],
+    session: AsyncSession,
+    tenant_id: int,
+) -> dict[int, dict]:
+    """Batch-fetch the most recent enrichment record per customer and return status map.
+
+    Returns a dict mapping customer_id -> {"enrichment_status": str, "last_enriched_at": str|None}.
+    Uses a subquery to find max(enriched_at) per customer before fetching full rows.
+    """
+    if not customer_ids:
+        return {}
+
+    now = datetime.now(UTC)
+    latest_subq = (
+        select(
+            CustomerEnrichmentModel.customer_id,
+            func.max(CustomerEnrichmentModel.enriched_at).label("max_enriched_at"),
+        )
+        .where(
+            and_(
+                CustomerEnrichmentModel.customer_id.in_(customer_ids),
+                CustomerEnrichmentModel.tenant_id == tenant_id,
+            )
+        )
+        .group_by(CustomerEnrichmentModel.customer_id)
+        .subquery()
+    )
+    result = await session.execute(
+        select(CustomerEnrichmentModel)
+        .where(
+            and_(
+                CustomerEnrichmentModel.customer_id.in_(customer_ids),
+                CustomerEnrichmentModel.tenant_id == tenant_id,
+                tuple_(
+                    CustomerEnrichmentModel.customer_id,
+                    CustomerEnrichmentModel.enriched_at,
+                ).in_(
+                    select(latest_subq.c.customer_id, latest_subq.c.max_enriched_at)
+                ),
+            )
+        )
+        .order_by(CustomerEnrichmentModel.enriched_at.desc())
+    )
+    status_map: dict[int, dict] = {}
+    for row in result.all():
+        last_enriched = row.enriched_at.isoformat() if row.enriched_at else None
+        if row.next_refresh_at is not None and row.next_refresh_at <= now:
+            status = "stale"
+        else:
+            status = "enriched"
+        status_map[row.customer_id] = {"enrichment_status": status, "last_enriched_at": last_enriched}
+
+    # Mark customers with no enrichment record
+    for cid in customer_ids:
+        if cid not in status_map:
+            status_map[cid] = {"enrichment_status": "none", "last_enriched_at": None}
+
+    return status_map
+
+
 # ---------------------------------------------------------------------------
 # Request schemas (requirement 9 — Field constraints)
 # ---------------------------------------------------------------------------
@@ -155,60 +216,18 @@ async def list_customers(
         tenant_id=ctx.tenant_id,
     )
 
-    # Batch-fetch the most recent enrichment record for each customer in the page
-    customer_ids = [(c.id if hasattr(c, "id") else c["id"]) for c in items if (hasattr(c, "id") or "id" in c)]
+    # Batch-fetch enrichment status for each customer in the page
+    customer_ids = [getattr(c, "id", None) for c in items]
     customer_ids = [cid for cid in customer_ids if cid is not None]
-    enrichment_map: dict[int, CustomerEnrichmentModel] = {}
-    if customer_ids:
-        # Subquery to find the max enriched_at per customer, then fetch the full row
-        latest_subq = (
-            select(
-                CustomerEnrichmentModel.customer_id,
-                func.max(CustomerEnrichmentModel.enriched_at).label("max_enriched_at"),
-            )
-            .where(
-                and_(
-                    CustomerEnrichmentModel.customer_id.in_(customer_ids),
-                    CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
-                )
-            )
-            .group_by(CustomerEnrichmentModel.customer_id)
-            .subquery()
-        )
-        enrich_result = await session.execute(
-            select(CustomerEnrichmentModel)
-            .where(
-                and_(
-                    CustomerEnrichmentModel.customer_id.in_(customer_ids),
-                    CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
-                    tuple_(
-                        CustomerEnrichmentModel.customer_id,
-                        CustomerEnrichmentModel.enriched_at,
-                    ).in_(
-                        select(latest_subq.c.customer_id, latest_subq.c.max_enriched_at)
-                    ),
-                )
-            )
-            .limit(len(customer_ids))
-        )
-        for row in enrich_result.all():
-            enrichment_map[row.customer_id] = row
+    enrichment_status_map = await _enrichment_status(customer_ids, session, ctx.tenant_id)
 
-    now = datetime.now(UTC)
     enriched_items = []
     for customer in items:
         d = customer.to_dict() if hasattr(customer, "to_dict") else customer
-        cust_id = getattr(customer, "id", customer.get("id") if isinstance(customer, dict) else None)
-        enrich = enrichment_map.get(cust_id)
-        if enrich is None:
-            d["enrichment_status"] = "none"
-            d["last_enriched_at"] = None
-        else:
-            d["last_enriched_at"] = enrich.enriched_at.isoformat() if enrich.enriched_at else None
-            if enrich.next_refresh_at is not None and enrich.next_refresh_at <= now:
-                d["enrichment_status"] = "stale"
-            else:
-                d["enrichment_status"] = "enriched"
+        cust_id = getattr(customer, "id", None)
+        status_info = enrichment_status_map.get(cust_id, {"enrichment_status": "none", "last_enriched_at": None})
+        d["enrichment_status"] = status_info["enrichment_status"]
+        d["last_enriched_at"] = status_info["last_enriched_at"]
         enriched_items.append(d)
 
     return _paginated(enriched_items, total, page, page_size)
@@ -223,59 +242,18 @@ async def search_customers(
     service = CustomerService(session)
     items = await service.search_customers(_sanitize(keyword), tenant_id=ctx.tenant_id)
 
-    # Batch-fetch enrichment status for each result (same pattern as list_customers)
-    customer_ids = [(c.id if hasattr(c, "id") else c["id"]) for c in items if (hasattr(c, "id") or "id" in c)]
+    # Batch-fetch enrichment status for each result
+    customer_ids = [getattr(c, "id", None) for c in items]
     customer_ids = [cid for cid in customer_ids if cid is not None]
-    enrichment_map: dict[int, CustomerEnrichmentModel] = {}
-    if customer_ids:
-        latest_subq = (
-            select(
-                CustomerEnrichmentModel.customer_id,
-                func.max(CustomerEnrichmentModel.enriched_at).label("max_enriched_at"),
-            )
-            .where(
-                and_(
-                    CustomerEnrichmentModel.customer_id.in_(customer_ids),
-                    CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
-                )
-            )
-            .group_by(CustomerEnrichmentModel.customer_id)
-            .subquery()
-        )
-        enrich_result = await session.execute(
-            select(CustomerEnrichmentModel)
-            .where(
-                and_(
-                    CustomerEnrichmentModel.customer_id.in_(customer_ids),
-                    CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
-                    tuple_(
-                        CustomerEnrichmentModel.customer_id,
-                        CustomerEnrichmentModel.enriched_at,
-                    ).in_(
-                        select(latest_subq.c.customer_id, latest_subq.c.max_enriched_at)
-                    ),
-                )
-            )
-            .limit(len(customer_ids))
-        )
-        for row in enrich_result.all():
-            enrichment_map[row.customer_id] = row
+    enrichment_status_map = await _enrichment_status(customer_ids, session, ctx.tenant_id)
 
-    now = datetime.now(UTC)
     enriched_items = []
     for customer in items:
         d = customer.to_dict() if hasattr(customer, "to_dict") else customer
-        cust_id = getattr(customer, "id", customer.get("id") if isinstance(customer, dict) else None)
-        enrich = enrichment_map.get(cust_id)
-        if enrich is None:
-            d["enrichment_status"] = "none"
-            d["last_enriched_at"] = None
-        else:
-            d["last_enriched_at"] = enrich.enriched_at.isoformat() if enrich.enriched_at else None
-            if enrich.next_refresh_at is not None and enrich.next_refresh_at <= now:
-                d["enrichment_status"] = "stale"
-            else:
-                d["enrichment_status"] = "enriched"
+        cust_id = getattr(customer, "id", None)
+        status_info = enrichment_status_map.get(cust_id, {"enrichment_status": "none", "last_enriched_at": None})
+        d["enrichment_status"] = status_info["enrichment_status"]
+        d["last_enriched_at"] = status_info["last_enriched_at"]
         enriched_items.append(d)
 
     return {"success": True, "data": {"keyword": keyword, "items": enriched_items}}

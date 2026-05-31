@@ -1,5 +1,7 @@
 """Enrichment API router — ``POST /api/v1/enrichment/lookup``."""
 
+from datetime import UTC, datetime
+
 from fastapi import APIRouter, Depends, Path
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,17 +32,11 @@ async def lookup(
     the raw response to ``customer_enrichments``.
     """
     svc = EnrichmentService(session)
-    result, raw_data = await svc.lookup(
+    result, _raw_data = await svc.lookup(
         domain=request.domain,
         company_name=request.company_name,
         tenant_id=ctx.tenant_id,
         customer_id=request.customer_id,
-    )
-    # Router owns persistence: upsert the enrichment record
-    await svc._upsert_enrichment(
-        tenant_id=ctx.tenant_id,
-        customer_id=request.customer_id,
-        raw_data=raw_data,
     )
     return _success(result)
 
@@ -83,16 +79,33 @@ async def refresh_enrichment(
             "domain or company_name is required when customer has no prior enrichment record"
         )
 
-    result, raw_data = await svc.refresh(
+    result, _raw_data = await svc.refresh(
         customer_id=customer_id,
         tenant_id=ctx.tenant_id,
         domain=domain_param,
         company_name=company_name_param,
     )
-    # Router owns persistence: upsert the enrichment record
-    await svc._upsert_enrichment(
-        tenant_id=ctx.tenant_id,
-        customer_id=customer_id,
-        raw_data=raw_data,
+
+    # Fetch the written record to include derived enrichment_status fields
+    enrich_result = await session.execute(
+        select(CustomerEnrichmentModel).where(
+            and_(
+                CustomerEnrichmentModel.customer_id == customer_id,
+                CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
+            )
+        ).order_by(CustomerEnrichmentModel.enriched_at.desc()).limit(1)
     )
-    return _success(result)
+    enrichment = enrich_result.scalar_one_or_none()
+
+    data = dict(result)
+    if enrichment is None:
+        data["enrichment_status"] = "none"
+        data["last_enriched_at"] = None
+    else:
+        data["last_enriched_at"] = enrichment.enriched_at.isoformat() if enrichment.enriched_at else None
+        if enrichment.next_refresh_at is not None and enrichment.next_refresh_at <= datetime.now(UTC):
+            data["enrichment_status"] = "stale"
+        else:
+            data["enrichment_status"] = "enriched"
+
+    return _success(data)

@@ -50,18 +50,28 @@ class EnrichmentService:
         if customer_id is None:
             raise ValidationException("customer_id is required for enrichment lookup")
 
-        return await self._lookup_clearbit(
-            domain=domain,
-            company_name=company_name,
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-        )
-
-    async def _lookup_clearbit(
-        self, domain: str | None, company_name: str | None, tenant_id: int, customer_id: int
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
         raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name)
         normalised = self._normalise_clearbit(raw_data)
+
+        now = datetime.now(UTC)
+        stmt = pg_insert(CustomerEnrichmentModel).values(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider="clearbit",
+            raw_data_json=raw_data,
+            enriched_at=now,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tenant_id", "customer_id"],
+            set_={
+                "provider": "clearbit",
+                "raw_data_json": stmt.excluded.raw_data_json,
+                "enriched_at": stmt.excluded.enriched_at,
+                "updated_at": now,
+            },
+        )
+        await self.session.execute(stmt)
+
         return normalised, raw_data
 
     async def _call_clearbit_api(
@@ -109,7 +119,8 @@ class EnrichmentService:
             timeout=httpx.Timeout(
                 settings.clearbit_read_timeout,
                 connect=settings.clearbit_connect_timeout or 5.0,
-            )
+            ),
+            transport=httpx.AsyncHTTPTransport(retries=2),
         ) as client:
             response = await client.get(
                 "https://company.clearbit.com/v2/companies/find",
@@ -188,8 +199,8 @@ class EnrichmentService:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         """Re-call the enrichment provider for an existing customer.
 
-        Validates inputs, calls Clearbit, and returns a (normalised, raw) tuple;
-        caller owns persistence.
+        Validates inputs, calls Clearbit, upserts the enrichment record, and
+        returns a (normalised, raw) tuple.
         """
         # Normalise and validate inputs
         if domain:
@@ -201,4 +212,24 @@ class EnrichmentService:
 
         raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name)
         normalised = self._normalise_clearbit(raw_data)
+
+        now = datetime.now(UTC)
+        stmt = pg_insert(CustomerEnrichmentModel).values(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider="clearbit",
+            raw_data_json=raw_data,
+            enriched_at=now,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tenant_id", "customer_id"],
+            set_={
+                "provider": "clearbit",
+                "raw_data_json": stmt.excluded.raw_data_json,
+                "enriched_at": stmt.excluded.enriched_at,
+                "updated_at": now,
+            },
+        )
+        await self.session.execute(stmt)
+
         return normalised, raw_data
