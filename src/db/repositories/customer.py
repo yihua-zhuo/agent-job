@@ -341,7 +341,6 @@ class CustomerRepository(BaseRepository):
             )
             lead.recycle_history = history
             recycled_ids.append(lead.id)
-        await self.session.flush()
         return recycled_ids
 
     async def upsert_enrichment(

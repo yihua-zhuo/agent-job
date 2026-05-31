@@ -251,6 +251,22 @@ class TestSearchCustomersEndpoint:
         resp = client.get(f"/api/v1/customers/search?keyword={'x' * 201}")
         assert resp.status_code == 422
 
+    def test_sanitize_strips_html_from_keyword(self, client_with_service):
+        client, svc, _ = client_with_service
+        svc.search_customers = AsyncMock(return_value=[])
+        client.get("/api/v1/customers/search?keyword=<script>alert(1)</script>")
+        svc.search_customers.assert_called_once()
+        call_args = svc.search_customers.call_args
+        # The sanitized keyword should have HTML stripped (empty string —
+        # _sanitize removes the entire <script>...</script> as a matched pair)
+        assert call_args[0][0] == "", f"Expected empty string after HTML strip, got {call_args[0][0]!r}"
+
+    def test_keyword_exactly_200_chars_accepted(self, client_with_service):
+        client, svc, _ = client_with_service
+        svc.search_customers = AsyncMock(return_value=[])
+        resp = client.get(f"/api/v1/customers/search?keyword={'y' * 200}")
+        assert resp.status_code == 200
+
 
 class TestGetCustomerEndpoint:
     def test_success(self, client_with_service):
