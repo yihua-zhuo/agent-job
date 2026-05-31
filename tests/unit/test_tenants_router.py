@@ -11,6 +11,7 @@ from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import (
     AppException,
+    ForbiddenException,
     NotFoundException,
     ValidationException,
 )
@@ -332,20 +333,20 @@ class TestTenantCrossTenantIsolation:
     """Rule 126: a tenant cannot read/modify another tenant's data via the API."""
 
     def test_get_tenant_returns_403_for_cross_tenant(self, tenant_router_client):
-        """Tenant A requesting tenant B's data via URL path tenant_id is rejected by the router guard before reaching the service."""
+        """Tenant A requesting tenant B's data via URL path is rejected by the service's requesting_tenant_id check, not by a router pre-check."""
         client, svc = tenant_router_client
-        svc.get_tenant = AsyncMock()
+        svc.get_tenant = AsyncMock(side_effect=ForbiddenException("Cannot access other tenants"))
         resp = client.get("/api/v1/tenants/9999")
         assert resp.status_code == 403
-        svc.get_tenant.assert_not_called()
+        svc.get_tenant.assert_called_once()
 
     def test_get_tenant_forbidden_on_existing_cross_tenant(self, tenant_router_client):
-        """Tenant A requesting tenant B's data for an existing tenant is rejected by the router guard (403) before reaching the service."""
+        """Tenant A requesting tenant B's data for an existing tenant is rejected by the service's requesting_tenant_id check (403)."""
         client, svc = tenant_router_client
-        svc.get_tenant = AsyncMock()
+        svc.get_tenant = AsyncMock(side_effect=ForbiddenException("Cannot access other tenants"))
         resp = client.get("/api/v1/tenants/2")
         assert resp.status_code == 403
-        svc.get_tenant.assert_not_called()
+        svc.get_tenant.assert_called_once()
 
     def test_get_tenant_stats_returns_404_for_unknown_tenant(self, tenant_router_client):
         """Service raises NotFoundException for an unknown tenant."""

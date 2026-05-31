@@ -54,7 +54,7 @@ class NotificationService:
         the model; actual commit is owned by the router transaction boundary.
         """
         priority = kwargs.get("priority", "normal")
-        if not priority:
+        if priority is None:
             raise ValidationException("priority is required")
         if priority not in VALID_PRIORITIES:
             raise ValidationException(f"priority must be one of {sorted(VALID_PRIORITIES)}, got {priority!r}")
@@ -70,7 +70,8 @@ class NotificationService:
                 params["related_id"] = int(kwargs["related_id"])
             except (ValueError, TypeError):
                 raise ValidationException("related_id must be an integer")
-        if len(json.dumps(params, ensure_ascii=False).encode("utf-8")) > 4096:
+        params_str = json.dumps(params, ensure_ascii=False)
+        if len(params_str.encode("utf-8")) > 4096:
             raise ValidationException("notification params exceed maximum size of 4096 bytes")
         # Reject any keys beyond the allow-list before persisting — the to_dict()
         # filtering only applies at serialization time, not at insert.

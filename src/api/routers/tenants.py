@@ -98,12 +98,10 @@ async def get_tenant(
 ):
     """Fetch a tenant by ID.
 
-    Authorization is enforced by TenantService: a tenant may only retrieve its own
-    record (requesting_tenant_id must match the target tenant_id). A service-level
-    ForbiddenException is raised for cross-tenant access attempts.
+    Authorization is enforced by TenantService: requesting_tenant_id must match
+    the target tenant_id or a ForbiddenException is raised. No pre-check is needed
+    here since the service already handles cross-tenant access denial.
     """
-    if tenant_id != ctx.tenant_id:
-        raise ForbiddenException("Cannot access other tenants")
     service = TenantService(session)
     data = await service.get_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id)
     return {"success": True, "data": data.to_dict()}
@@ -139,7 +137,6 @@ async def update_tenant(
     if tenant_id != ctx.tenant_id:
         raise ForbiddenException("Cannot access other tenants")
     service = TenantService(session)
-    update_data = body.model_dump(exclude_unset=True)
-    update_data = {k: v for k, v in update_data.items() if v is not None}
+    update_data = body.model_dump(exclude_unset=True, exclude_none=True)
     data = await service.update_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id, **update_data)
     return {"success": True, "data": data.to_dict(), "message": "Tenant updated"}

@@ -274,6 +274,7 @@ class AutomationService:
         # Guard against attacker-controlled deeply nested dicts once, up-front.
         context_bytes = json.dumps(context, ensure_ascii=False).encode("utf-8")
         if len(context_bytes) > 64_000:
+            logger.warning("Automation event dropped: context size %d exceeds limit", len(context_bytes))
             return []
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id,

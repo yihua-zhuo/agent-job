@@ -46,13 +46,14 @@ class NotificationCreate(BaseModel):
     @field_validator("notification_type")
     @classmethod
     def notification_type_must_be_valid(cls, v: str) -> str:
-        if v not in VALID_NOTIFICATION_CHANNELS:
+        v_lower = v.lower()
+        if v_lower not in VALID_NOTIFICATION_CHANNELS:
             raise ValueError(f"notification_type must be one of {sorted(VALID_NOTIFICATION_CHANNELS)}, got {v!r}")
-        return v
+        return v_lower
 
     @field_validator("content")
     @classmethod
-    def content_keys_must_be_allowed(cls, v: str, info) -> str:
+    def content_keys_must_be_allowed(cls, v: str) -> str:
         # At insert time, enforce PAYLOAD_PARAMS_ALLOWED_KEYS: only 'content' and
         # 'related_type'/'related_id' (optional fields) are allowed in the payload.
         # The title field carries the template name, so any additional top-level
