@@ -134,7 +134,7 @@ class CustomerService:
             "previous_owner_id": customer.owner_id,
             "reason": reason or "manual_reassign",
         }
-        history = list(customer.recycle_history or [])
+        history = list(customer.recycle_history) if customer.recycle_history is not None else []
         history.append(entry)
         return await self.repository.reassign_lead(
             new_owner_id,

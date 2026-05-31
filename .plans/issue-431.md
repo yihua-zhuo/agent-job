@@ -38,7 +38,7 @@ Reading order followed:
        )
        return list(result.scalars().all()), total
 
-   async def get_leads_by_owner(self, owner_id: int, tenant_id: int, page: int = 1, page_size: int = 20) -> tuple[list[CustomerModel], int]:
+   async def get_leads_by_owner(self, tenant_id: int, owner_id: int, page: int = 1, page_size: int = 20) -> tuple[list[CustomerModel], int]:
        """Return leads for a specific owner."""
        conditions = [CustomerModel.tenant_id == tenant_id, CustomerModel.owner_id == owner_id, CustomerModel.status == "lead"]
        count_result = await self.session.execute(select(func.count(CustomerModel.id)).where(and_(*conditions)))

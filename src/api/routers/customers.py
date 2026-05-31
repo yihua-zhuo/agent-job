@@ -16,7 +16,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import get_db
 from db.models.customer import CustomerModel
 from db.models.customer_enrichment import CustomerEnrichmentModel
-from db.repositories import CustomerRepository  # noqa: F401 — kept for test monkeypatching
+from db.repositories import CustomerRepository
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.customer import CustomerStatus
 from pkg.errors.app_exceptions import ForbiddenException
