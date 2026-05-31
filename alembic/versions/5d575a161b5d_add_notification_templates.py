@@ -6,6 +6,9 @@ Create Date: 2026-05-31
 
 Creates the notification_templates table for the notification system
 (parent issue #646). Stores reusable notification content by channel.
+Supports channels: email, sms, push, in_app.  A CHECK constraint enforces
+the channel allow-list at the DB layer.  NOT NULL + server-default on
+created_at ensures every row has a timestamp even if the client omits it.
 """
 
 import sqlalchemy as sa
@@ -41,6 +44,12 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
+        # Channel is intentionally restricted to known values; enforcement is
+        # shared between the ORM (via service layer) and this constraint.
+        sa.CheckConstraint(
+            column("channel").in_(["email", "sms", "push", "in_app"]),
+            name="ck_notification_templates_channel",
+        ),
     )
     op.create_index(
         op.f("ix_notification_templates_tenant_id"),
@@ -53,6 +62,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Best-effort FK constraint removal.  PostgreSQL may assign the FK a
+    # auto-generated name that differs from this hardcoded value; IF EXISTS
+    # prevents a hard failure in that case.  The index and table drops are
+    # idempotent and safe regardless of whether the constraint was found.
     op.execute(
         sa.text(
             "ALTER TABLE notification_templates DROP CONSTRAINT IF EXISTS notification_templates_tenant_id_fkey"

@@ -145,8 +145,8 @@ class TestNotificationTemplateModel:
         d = model.to_dict()
         assert d["created_at"] == "2026-06-01T14:30:00"
 
-    def test_empty_name_is_accepted_by_orm(self):
-        """The ORM layer does not validate that name is non-empty; DB-level NOT NULL enforcement is exercised by integration tests."""
+    def test_name_can_be_empty_string(self):
+        """The ORM layer accepts an empty string for name; NOT NULL + length enforcement is exercised by integration tests."""
         now = datetime(2026, 6, 1, 14, 30, 0)
         model = NotificationTemplateModel(
             id=25,
@@ -158,7 +158,7 @@ class TestNotificationTemplateModel:
         assert model.to_dict()["name"] == ""
 
     def test_unknown_channel_accepted_by_orm(self):
-        """The ORM layer does not validate channel values; invalid values are accepted and silently stored. DB-level enforcement (CHECK constraint) is exercised by integration tests."""
+        """The ORM layer does not validate channel values; invalid values are silently stored. Service-layer enforcement is exercised via NotificationTemplateService or a future DB CHECK constraint."""
         now = datetime(2026, 6, 1, 14, 30, 0)
         model = NotificationTemplateModel(
             id=26,

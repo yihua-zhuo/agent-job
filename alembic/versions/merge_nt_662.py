@@ -30,8 +30,12 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     pass  # Merge-only marker — no schema changes; all DDL is in sub-revisions.
-    # Downgrade from this merge follows the first parent revision's downgrade path.
 
 
 def downgrade() -> None:
-    pass  # Each sub-revision owns its own DDL teardown; this merge revision only passes through.
+    pass
+    # Alembic downgrades through a merge revision via the first parent only:
+    # from merge_nt_662 -> 52b19ee00eaf -> ... -> base.
+    # The DDL spawned by 5d575a161b5d (the second parent) is torn down by
+    # that revision's own downgrade() when the migration chain reaches it.
+    # No additional cleanup is needed at the merge point.

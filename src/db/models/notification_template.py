@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, column, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -14,6 +14,7 @@ class NotificationTemplateModel(Base):
     __tablename__ = "notification_templates"
     __table_args__ = (
         Index("ix_notification_templates_tenant_id", "tenant_id"),
+        CheckConstraint(column("channel").in_(["email", "sms", "push", "in_app"]), name="ck_notification_templates_channel"),
         {"sqlite_autoincrement": True},
     )
 
@@ -25,7 +26,7 @@ class NotificationTemplateModel(Base):
     body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     body_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now(), default=None)
 
     def to_dict(self) -> dict:
         return {
