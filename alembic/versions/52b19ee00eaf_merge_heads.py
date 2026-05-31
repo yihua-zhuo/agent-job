@@ -34,7 +34,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "52b19ee00eaf"
-down_revision: str | None = "7b1a2c3d4e5f"
+down_revision: str | Sequence[str] | None = "7b1a2c3d4e5f"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -255,7 +255,7 @@ def upgrade() -> None:
             "DO $$ BEGIN "
             "ALTER TABLE customer_enrichments ADD CONSTRAINT fk_customer_enrichments_tenant_id "
             "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
-            "EXCEPTION WHEN duplicate_object THEN NULL; "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
             "END $$"
         )
     )

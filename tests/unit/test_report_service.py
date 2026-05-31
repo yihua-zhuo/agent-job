@@ -42,6 +42,8 @@ def mock_db_session():
 @pytest.fixture
 def mock_db_session_for_update():
     """Mock session for update tests with a pre-seeded report (id=4)."""
+    # Note: schedule_report integration tests require adding make_schedule_handler
+    # to the session's handler list alongside make_report_handler.
     state = MockState()
     state.opaque["reports"] = {"records": {}, "next_id": 21}
     state.opaque["reports"]["records"][4] = {
@@ -108,7 +110,10 @@ class TestListReports:
         # Verify exactly two calls (count + paginated fetch).
         assert mock_db_session.execute.call_count == 2
         calls = mock_db_session.execute.call_args_list
-        # The second call is the paginated SELECT; verify LIMIT=2 and OFFSET=2.
+        # First call must be the COUNT query.
+        assert sqla_inspect(calls[0].args[0]).is_select
+        assert "count(" in str(calls[0].args[0]).lower()
+        # Second call is the paginated SELECT with LIMIT=2 OFFSET=2.
         select_call_args = calls[1].args
         assert len(select_call_args) >= 1
         stmt = select_call_args[0]
@@ -224,6 +229,9 @@ class TestUpdateReport:
     async def test_partial_update_preserves_unset_fields(self, mock_db_session_for_update):
         """update_report only modifies fields present in data dict."""
         svc = ReportService(mock_db_session_for_update)
+        # Verify pre-condition: type is already 'monthly' before the update.
+        rec_before = await svc.get_report(report_id=4, tenant_id=1)
+        assert rec_before.type == "monthly"
         result = await svc.update_report(report_id=4, tenant_id=1, data={"name": "New Name"})
 
         assert result.name == "New Name"

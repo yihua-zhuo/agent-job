@@ -19,7 +19,7 @@ Reading order followed:
 
 1. **Update imports in `src/services/report_service.py`**
    - Add `from datetime import UTC, datetime` (remove duplicate `from datetime import UTC, datetime` that already exists at line 9 — consolidate to one import line)
-   - Change `from sqlalchemy import and_, select` → `from sqlalchemy import func, select`
+   - Change `from sqlalchemy import func, select` (added `func` for count queries; `and_` was never needed)
    - Add `from db.models.analytics import ReportModel`
    - Add `NotFoundException, ValidationException` to the existing `pkg.errors.app_exceptions` import
 
@@ -40,8 +40,6 @@ Reading order followed:
    - Merges `data` dict into existing row via `setattr()` for fields `name`, `type`, `config`, `date_range`, `last_run_at`
    - Calls `session.flush()` (no `updated_at` assignment — `ReportModel` has no such column; no `refresh()` call either)
 
-> **⚠️ Open follow-up (required)**: `update_report` does not set `updated_at`. `ReportModel` has no such column. A separate Alembic migration is needed to add it before the audit-field requirement (rule 79 / rule 139) can be satisfied.
-
 6. **Add `delete_report` method to `ReportService`**
    - Confirms existence via `SELECT id WHERE (id, tenant_id)`; raises `NotFoundException` if missing
    - Calls `session.delete(obj)`; calls `session.flush()`
@@ -53,13 +51,13 @@ Reading order followed:
    - **Prerequisite**: this file must exist and follow the composable handler pattern (rule 134/135) before running the unit tests in `tests/unit/test_report_service.py`
 
 8. **Create `tests/unit/test_report_service.py`** (new file)
-   - Follow the pattern of `tests/unit/test_customer_service.py` — define a `mock_db_session` fixture that uses `MockState` + `make_mock_session([make_report_handler(state)])` rather than inline `MagicMock` + `AsyncMock`; this follows the composable handler pattern required by rule 135
+   - Follow the pattern of `tests/unit/test_customer_service.py` — define a `mock_db_session` fixture that uses `MockState` + `make_mock_session([make_report_handler(state)])`; the handler is imported from `tests.unit.domain_handlers.reports`, not inlined
    - `mock_db_session` wires `session.execute` via `make_mock_session` for each test case
    - Test classes: `TestListReports`, `TestGetReport`, `TestCreateReport`, `TestUpdateReport`, `TestDeleteReport`
    - Covers: happy path, not-found (missing id), tenant-isolation (wrong tenant → `NotFoundException`), empty list, pagination offset
 
 9. **Run verification commands**
-   - `ruff check src/services/report_service.py` →0 errors
+   - `PYTHONPATH=src ruff check src/services/report_service.py` →0 errors
    - `PYTHONPATH=src python -c "from services.report_service import ReportService; import inspect; methods=['list_reports','get_report','create_report','update_report','delete_report']; [assert m in dir(ReportService) for m in methods]; print('all five present')"` → exit 0
    - `PYTHONPATH=src pytest tests/unit/test_report_service.py -v` → all cases passed
 
@@ -71,7 +69,7 @@ Reading order followed:
   - `PYTHONPATH=src python -c "from services.report_service import ReportService; assert hasattr(ReportService, 'list_reports'); assert hasattr(ReportService, 'get_report'); assert hasattr(ReportService, 'create_report'); assert hasattr(ReportService, 'update_report'); assert hasattr(ReportService, 'delete_report'); print('ok')"` → exit 0
 
 ## Acceptance Criteria
-- `ruff check src/services/report_service.py` exits 0 with no errors
+- `PYTHONPATH=src ruff check src/services/report_service.py` exits 0 with no errors
 - `ReportService` has all five methods: `list_reports`, `get_report`, `create_report`, `update_report`, `delete_report`
 - `get_report`, `update_report`, `delete_report` each raise `NotFoundException` when the report is absent or belongs to another tenant
 - `list_reports` returns `tuple[list[ReportModel], int]` with correct total count and respects pagination (`LIMIT/OFFSET`)

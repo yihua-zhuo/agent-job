@@ -124,6 +124,11 @@ def make_report_handler(state: MockState):
             rec = _reports["records"].get(report_id)
             if rec is None or rec.get("tenant_id") != tenant_id_val:
                 return MockResult([])
+            # Apply SET changes from params before returning so the mock row
+            # reflects post-update state.  Skip id and tenant_id (never updatable).
+            for k, v in params.items():
+                if k not in ("id", "tenant_id") and not k.endswith("_id"):
+                    rec[k] = v
             return MockResult([MockRow(rec.copy())])
 
         if sql_text.startswith("delete") and "reports" in sql_text:
@@ -210,23 +215,25 @@ def make_schedule_handler(state: MockState):
                 None,
             )
             if existing is not None:
-                existing.update(
-                    {
-                        "schedule": _get_mangled(params, "schedule") or existing.get("schedule", {}),
-                        "active": _get_mangled(params, "active") or existing.get("active", True),
-                        "updated_at": _get_mangled(params, "updated_at"),
-                    }
-                )
+                updates = {}
+                new_schedule = _get_mangled(params, "schedule")
+                updates["schedule"] = new_schedule if new_schedule is not None else existing.get("schedule", {})
+                new_active = _get_mangled(params, "active")
+                updates["active"] = new_active if new_active is not None else existing.get("active", True)
+                new_updated_at = _get_mangled(params, "updated_at")
+                updates["updated_at"] = new_updated_at
+                existing.update(updates)
                 return MockResult([MockRow(existing.copy())])
 
             sched_id = _schedules["next_id"]
             _schedules["next_id"] += 1
+            new_active = _get_mangled(params, "active")
             record = {
                 "id": sched_id,
                 "tenant_id": tenant_id,
                 "report_id": report_id,
                 "schedule": _get_mangled(params, "schedule") or {},
-                "active": _get_mangled(params, "active") or True,
+                "active": new_active if new_active is not None else True,
                 "created_at": _get_mangled(params, "created_at"),
                 "updated_at": _get_mangled(params, "updated_at"),
             }
