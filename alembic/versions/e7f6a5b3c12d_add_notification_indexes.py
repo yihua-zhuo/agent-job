@@ -153,11 +153,3 @@ def downgrade() -> None:
     op.drop_column("notifications", "params_")
     op.drop_column("notifications", "template")
     op.drop_column("notifications", "channel")
-
-    # Phase 5 (reversed): drop the restored old columns after the data-restoration
-    # UPDATEs complete. These were re-added and backfilled in the first half of downgrade.
-    op.drop_column("notifications", "related_id")
-    op.drop_column("notifications", "related_type")
-    op.drop_column("notifications", "content")
-    op.drop_column("notifications", "title")
-    op.drop_column("notifications", "type")

@@ -149,7 +149,7 @@ def make_notification_handler(state):
         if "update notifications" in sql_text_lower and "read_at" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
-            if n and n.get("tenant_id") == params.get("tenant_id"):
+            if n and n.get("tenant_id") == params.get("tenant_id") and n.get("user_id") == params.get("user_id"):
                 n["read_at"] = params.get("read_at")
                 n["status"] = "read"
                 return MockResult([_notification_to_row(n)])

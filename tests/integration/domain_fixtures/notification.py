@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
 
 

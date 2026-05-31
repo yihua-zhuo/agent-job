@@ -59,8 +59,7 @@ def _eval_condition(condition: dict, context: dict) -> bool:
         return False
 
     # Guard against attacker-controlled deeply nested dicts causing performance issues.
-    if len(context) > 50 or json.dumps(context).encode().__len__() > 64_000:
-        return False
+    # Size check is cached once in trigger_event before iterating over rules.
 
     op_map = {
         "eq": lambda a, e: a == e,
@@ -170,7 +169,7 @@ class AutomationService:
                 )
                 if opp_check.scalar_one_or_none() is None:
                     return {"type": action_type, "status": "skipped", "reason": "opportunity not found in tenant"}
-            return {"type": action_type, "status": "added", "note": params.get("note")}
+            return _unimplemented_action(action_type, params, "note")
         else:
             return {"type": action_type, "status": "unknown_action"}
 
@@ -301,6 +300,11 @@ class AutomationService:
         context: dict,
         executed_by: int = 0,
     ) -> list[dict]:
+        # Guard against attacker-controlled deeply nested dicts once, up-front.
+        context_size = len(context)
+        context_bytes = json.dumps(context, ensure_ascii=False).encode("utf-8")
+        if context_size > 50 or len(context_bytes) > 64_000:
+            return []
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id,
             AutomationRuleModel.trigger_event == trigger_event,

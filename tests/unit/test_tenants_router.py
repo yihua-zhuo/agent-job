@@ -296,6 +296,33 @@ class TestTenantUsageEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# Smoke tests
+# ---------------------------------------------------------------------------
+
+class TestTenantServiceSmoke:
+    def test_constructor_receives_session(self, tenant_router_client):
+        """Verify TenantService(session) is invoked with a session-like argument."""
+        client, svc = tenant_router_client
+        # The wrapper function (set as TenantService in the module) attaches
+        # captured_sessions to the mock it returns. Access it via the returned svc.
+        assert hasattr(svc, "captured_sessions"), "TenantService wrapper not attached captured_sessions"
+        # Making any HTTP call ensures the router instantiates TenantService(session).
+        svc.list_tenants = AsyncMock(return_value=([], 0))
+        resp = client.get("/api/v1/tenants")
+        assert resp.status_code == 200
+        assert len(svc.captured_sessions) >= 1, "TenantService was not instantiated during the request"
+        assert svc.captured_sessions[0] is not None
+
+    def test_tenant_service_instantiated_on_get(self, tenant_router_client):
+        """TenantService(session) is called when GET /api/v1/tenants executes."""
+        client, svc = tenant_router_client
+        svc.list_tenants = AsyncMock(return_value=([], 0))
+        resp = client.get("/api/v1/tenants")
+        assert resp.status_code == 200
+        assert len(svc.captured_sessions) >= 1
+
+
+# ---------------------------------------------------------------------------
 # Cross-tenant isolation tests (Rule 126)
 # ---------------------------------------------------------------------------
 

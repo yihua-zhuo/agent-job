@@ -292,6 +292,7 @@ class TestMarkAllRead:
             response = client.post("/api/v1/notifications/mark-all-read")
             assert response.status_code == 200
             assert response.json()["data"]["marked_count"] == 7
+            svc.mark_all_as_read.assert_called_once_with(99, tenant_id=1)
 
 
 # ---------------------------------------------------------------------------
@@ -387,7 +388,7 @@ class TestListReminders:
 # ---------------------------------------------------------------------------
 
 
-class TestDeleteNotificationEndpoint:
+class TestDeleteReminderEndpoint:
     def test_delete_notification_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
@@ -412,7 +413,7 @@ class TestDeleteNotificationEndpoint:
 # ---------------------------------------------------------------------------
 
 
-class TestCancelReminderEndpoint:
+class TestCancelNotificationEndpoint:
     def test_cancel_reminder_ok(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
             svc = svc_cls.return_value
@@ -544,4 +545,5 @@ class TestRouterPassesTenantContext:
             svc.get_user_notifications.assert_called_once()
             call_kwargs = svc.get_user_notifications.call_args.kwargs
             assert call_kwargs.get("tenant_id") == 2
+            assert call_kwargs.get("user_id") == 99
 

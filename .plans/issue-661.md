@@ -17,7 +17,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
    - Import `JSON` from `sqlalchemy.dialects.postgresql`.
    - `to_dict()` must serialize `params_` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`. The dict key should use `'params'` (without trailing underscore) — `{"params": self.payload_params, ...}` — to present a clean API contract while the Python attribute remains `payload_params`.
    - Python attribute is `payload_params` (mapped to DB column `params_`).
-   - References to the JSON field use `params_` throughout (DB column name) and `payload_params` (Python ORM attribute name) internally.
+   - Throughout the service and router layers, the Python attribute is `payload_params` and the DB column is `params_`. The field is never called `params` internally — `'params'` is the serialized API key only.
 
 2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
 
