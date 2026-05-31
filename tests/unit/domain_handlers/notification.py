@@ -308,8 +308,62 @@ def _reminder_to_row(r: dict):
     )
 
 
+def make_smart_notification_handler(state):
+    """Return a handler that manages an in-memory smart_notification store in state."""
+
+    def handler(sql_text: str, params: dict[str, Any]) -> MockResult | None:
+        if not hasattr(state, "_smart_notifications"):
+            state._smart_notifications = {}
+            state._smart_notifications_next_id = 1
+        sql_text_lower = sql_text.lower()
+
+        if "insert into smart_notifications" in sql_text_lower:
+            snid = state._smart_notifications_next_id
+            state._smart_notifications_next_id += 1
+            n = {
+                "id": snid,
+                "tenant_id": params.get("tenant_id", 0),
+                "summarized_content": params.get("summarized_content", ""),
+                "priority": params.get("priority", 1),
+                "channel": params.get("channel", 0),
+                "timing": params.get("timing", 0),
+                "recipient_filter": params.get("recipient_filter"),
+                "created_at": params.get("created_at"),
+            }
+            state._smart_notifications[snid] = n
+            return MockResult([_smart_notification_to_row(n)])
+
+        return None
+
+    return handler
+
+
+def _smart_notification_to_row(n: dict):
+    return MockRow(
+        {
+            "id": n.get("id"),
+            "tenant_id": n.get("tenant_id"),
+            "summarized_content": n.get("summarized_content"),
+            "priority": n.get("priority"),
+            "channel": n.get("channel"),
+            "timing": n.get("timing"),
+            "recipient_filter": n.get("recipient_filter"),
+            "created_at": n.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC),
+        }
+    )
+
+
 def get_handlers(state: MockState) -> list[Callable[..., MockResult | None]]:
-    return [make_notification_handler(state), make_reminder_handler(state)]
+    return [
+        make_notification_handler(state),
+        make_reminder_handler(state),
+        make_smart_notification_handler(state),
+    ]
 
 
-__all__ = ["get_handlers", "make_notification_handler", "make_reminder_handler"]
+__all__ = [
+    "get_handlers",
+    "make_notification_handler",
+    "make_reminder_handler",
+    "make_smart_notification_handler",
+]
