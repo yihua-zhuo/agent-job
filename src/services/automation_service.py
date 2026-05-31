@@ -272,9 +272,7 @@ class AutomationService:
         executed_by: int = 0,
     ) -> list[dict]:
         # Guard against attacker-controlled deeply nested dicts once, up-front.
-        def _max_depth(d, _depth=None):
-            if _depth is None:
-                _depth = 0
+        def _max_depth(d, _depth=0):
             return max((_max_depth(v, _depth + 1) for v in d.values() if isinstance(v, dict)), default=_depth)
 
         encoded = json.dumps(context, ensure_ascii=False).encode("utf-8")
