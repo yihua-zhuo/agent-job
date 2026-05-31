@@ -70,20 +70,19 @@ def make_notification_handler(state):
         sql_text_lower = sql_text.lower()
 
         if "insert into notifications" in sql_text_lower:
-            # DB column 'params_' is populated by the ORM from payload_params.
-            # SQLAlchemy resolves the bind key from the mapped_column name, not the
-            # Python attribute name.
+            if "tenant_id" not in params or params["tenant_id"] is None:
+                raise ValueError(f"insert must bind non-None tenant_id (got keys: {list(params.keys())})")
+            if "user_id" not in params or params["user_id"] is None:
+                raise ValueError(f"insert must bind non-None user_id (got keys: {list(params.keys())})")
             nid = state._notifications_next_id
             state._notifications_next_id += 1
             n = {
                 "id": nid,
-                "tenant_id": params.get("tenant_id", 0),
-                "user_id": params.get("user_id", 0),
+                "tenant_id": params.get("tenant_id"),
+                "user_id": params.get("user_id"),
                 "channel": params.get("channel"),
                 "template": params.get("template"),
                 "params_": params.get("params_"),
-                # NOTE: If NotificationModel.payload_params ever changes to a
-                # different DB column name, update this bind key accordingly.
                 "status": params.get("status", "pending"),
                 "priority": params.get("priority", "normal"),
                 "created_at": params.get("created_at"),
@@ -103,14 +102,15 @@ def make_notification_handler(state):
         if "count(" in sql_text_lower and "from notifications" in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            if user_id is None:
-                raise ValueError(f"notification count must bind user_id (got keys: {list(params.keys())})")
-            # Explicit unread_only param takes precedence; fall back to SQL text heuristic
-            # for tests using raw SQL text matching (backward compat).
-            if "_unread_only" in params:
-                unread_filter = params["_unread_only"]
-            else:
-                unread_filter = "read_at" in sql_text_lower and "null" in sql_text_lower
+            if tenant_id is None or user_id is None:
+                raise ValueError(
+                    f"notification count must bind tenant_id and user_id (got keys: {list(params.keys())})"
+                )
+            # _unread_only may be absent when SQLAlchemy uses a SQL default; fall through
+            # to the generic 'from notifications' branch rather than crashing.
+            if "_unread_only" not in params:
+                return None
+            unread_filter = params["_unread_only"]
             if unread_filter:
                 count = sum(
                     1
@@ -128,7 +128,15 @@ def make_notification_handler(state):
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
-            unread_filter = params.get("_unread_only", False)
+            if tenant_id is None or user_id is None:
+                raise ValueError(
+                    f"list-notifications must bind tenant_id and user_id (got keys: {list(params.keys())})"
+                )
+            # _unread_only may be absent when SQLAlchemy uses a SQL default; fall through
+            # to None so other handlers can respond, rather than crashing here.
+            if "_unread_only" not in params:
+                return None
+            unread_filter = params["_unread_only"]
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = sorted(
@@ -216,16 +224,30 @@ def make_reminder_handler(state):
             return MockResult([_reminder_to_row(r)])
 
         if "from reminders where id" in sql_text_lower and "delete" not in sql_text_lower:
+            if "user_id" not in params or "tenant_id" not in params:
+                raise ValueError(f"get-reminder must bind user_id and tenant_id (got keys: {list(params.keys())})")
             rid = params.get("id")
             r = state._reminders.get(rid)
-            if r and r.get("tenant_id") == params.get("tenant_id"):
+            if (
+                r
+                and r.get("tenant_id") == params.get("tenant_id")
+                and r.get("user_id") == params.get("user_id")
+            ):
                 return MockResult([_reminder_to_row(r)])
             return MockResult([])
 
         if "delete from reminders" in sql_text_lower:
+            if "user_id" not in params or "tenant_id" not in params:
+                raise ValueError(
+                    f"delete-reminder must bind user_id and tenant_id (got keys: {list(params.keys())})"
+                )
             rid = params.get("id")
             r = state._reminders.get(rid)
-            if r and r.get("tenant_id") == params.get("tenant_id"):
+            if (
+                r
+                and r.get("tenant_id") == params.get("tenant_id")
+                and r.get("user_id") == params.get("user_id")
+            ):
                 if r.get("is_completed"):
                     # Completed reminders cannot be cancelled.
                     return MockResult([], rowcount=0)

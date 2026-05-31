@@ -85,9 +85,6 @@ class TenantService:
         if unknown:
             raise ValidationException(f"Unknown fields: {', '.join(sorted(unknown))}")
 
-        if "plan" in kwargs and kwargs["plan"] not in VALID_PLANS:
-            raise ValidationException(f"plan must be one of {sorted(VALID_PLANS)}, got {kwargs['plan']!r}")
-
         new_settings = dict(tenant.settings or {})
         settings_updated = False
         if "admin_email" in kwargs:
@@ -99,8 +96,9 @@ class TenantService:
         if settings_updated:
             tenant.settings = new_settings
 
-        for key in allowed:
-            if key in kwargs and key not in ("admin_email", "settings"):
+        direct_keys = allowed - {"admin_email", "settings"}
+        for key in direct_keys:
+            if key in kwargs:
                 setattr(tenant, key, kwargs[key])
         tenant.updated_at = datetime.now(UTC)
 
@@ -126,12 +124,18 @@ class TenantService:
         if status:
             conditions.append(TenantModel.status == status)
         if search:
-            conditions.append(TenantModel.name.ilike(f"%{search}%"))
-        # Rule126: requesting_tenant_id restricts visibility to its own tenant record.
+            # Escape LIKE special characters to prevent a malicious search value from
+            # expanding the pattern (e.g. "%" matches everything, "_" matches any char).
+            escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            conditions.append(TenantModel.name.ilike(f"%{escaped}%", escape="\\"))
+        # requesting_tenant_id restricts visibility to its own tenant record.
+        # This filter guarantees at most one matching record, so pagination (page/page_size)
+        # is functionally a no-op — it is kept for API contract stability (callers that
+        # paginate other list endpoints pass these params here too) and to avoid a
+        # breaking change to the router interface.
         conditions.append(TenantModel.id == requesting_tenant_id)
 
         count_stmt = select(func.count(TenantModel.id)).where(and_(*conditions))
-
         total_result = await self.session.execute(count_stmt)
         total = total_result.scalar_one()
 
