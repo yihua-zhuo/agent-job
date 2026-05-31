@@ -18,32 +18,6 @@ from services.task_service import TaskService
 logger = logging.getLogger(__name__)
 
 
-# Supported trigger events
-TRIGGER_EVENTS: tuple[str, ...] = (
-    "ticket.created",
-    "ticket.updated",
-    "ticket.assigned",
-    "opportunity.stage_changed",
-    "opportunity.created",
-    "customer.created",
-    "customer.updated",
-    "user.login",
-    "lead.created",
-)
-
-# Supported action types
-ACTION_TYPES: tuple[str, ...] = (
-    "notification.send",
-    "ticket.assign",
-    "ticket.update_priority",
-    "opportunity.add_note",
-    "task.create",
-    "email.send",
-    "webhook.call",
-    "tag.add",
-)
-
-
 def _eval_condition(condition: dict, context: dict) -> bool:
     field = condition.get("field")
     operator = condition.get("operator")
@@ -298,9 +272,8 @@ class AutomationService:
         executed_by: int = 0,
     ) -> list[dict]:
         # Guard against attacker-controlled deeply nested dicts once, up-front.
-        context_size = len(context)
         context_bytes = json.dumps(context, ensure_ascii=False).encode("utf-8")
-        if context_size > 50 or len(context_bytes) > 64_000:
+        if len(context_bytes) > 64_000:
             return []
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id,

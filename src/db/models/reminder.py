@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func, text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -22,7 +22,7 @@ class ReminderModel(Base):
     remind_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     related_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
     related_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    is_completed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_completed: Mapped[bool] = mapped_column(Boolean, server_default=text("false"), default=False, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def to_dict(self) -> dict:

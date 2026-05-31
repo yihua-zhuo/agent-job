@@ -55,22 +55,21 @@ class NotificationModel(Base):
         CheckConstraint(column("channel").in_(["in_app", "email", "sms", "push"]), name="ck_notifications_channel"),
         CheckConstraint(column("priority").in_(["low", "normal", "high", "urgent"]), name="ck_notifications_priority"),
         CheckConstraint(
-            column("status").in_(["pending", "read", "archived", "delivered", "failed"]),
-            name="ck_notifications_status",
+            column("status").in_(["pending", "read", "archived", "delivered", "failed"]), name="ck_notifications_status"
         ),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
-    channel: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    channel: Mapped[str] = mapped_column(String(50), nullable=False)
     template: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Trailing underscore avoids collision with ORM/DB column names.
     # Serialized as 'params' in to_dict() for a cleaner API surface.
     # NOTE: If this column name changes, update _NOTIFICATION_PARAMS_KEY in
     # tests/unit/domain_handlers/notification.py accordingly.
     payload_params: Mapped[dict | None] = mapped_column("params_", JSON, nullable=True)
-    status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False)
     priority: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     # Nullable for legacy rows (pre-migration e7f6a5b3c12d). Set by the service

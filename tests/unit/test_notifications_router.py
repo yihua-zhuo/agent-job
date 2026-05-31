@@ -109,12 +109,16 @@ def _make_auth_override(tenant_id: int = 1, user_id: int = 99):
     return _make_auth_ctx(tenant_id=tenant_id, user_id=user_id)
 
 
+async def _mock_get_db():
+    yield make_mock_session([])
+
+
 def _make_test_app(auth_override):
     """Build a FastAPI app with the notifications router and given auth override."""
     app = FastAPI()
     app.include_router(notifications_router)
     app.dependency_overrides[require_auth] = auth_override
-    app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
+    app.dependency_overrides[get_db] = _mock_get_db
 
     @app.exception_handler(AppException)
     async def _handler(request, exc):
@@ -378,7 +382,13 @@ class TestCreateReminder:
             assert response.status_code == 200
             assert response.json()["data"]["title"] == "Standup"
             svc.create_reminder.assert_called_once_with(
-                user_id=99, tenant_id=1, title="Standup", content="Daily meeting", remind_at="2026-12-31T09:00:00", related_type=None, related_id=None
+                user_id=99,
+                tenant_id=1,
+                title="Standup",
+                content="Daily meeting",
+                remind_at="2026-12-31T09:00:00",
+                related_type=None,
+                related_id=None,
             )
 
     def test_create_reminder_validation_error(self):
@@ -416,6 +426,7 @@ class TestListReminders:
             response = client.get("/api/v1/reminders")
             assert response.status_code == 200
             assert len(response.json()["data"]["items"]) == 1
+            svc.get_reminders.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -433,6 +444,8 @@ class TestDeleteNotificationEndpoint:
             response = client.delete("/api/v1/notifications/1")
             assert response.status_code == 200
             assert response.json()["data"]["id"] == 1
+            call_kwargs = svc.delete_notification.call_args.kwargs
+            assert call_kwargs.get("tenant_id") == 1
 
     def test_delete_notification_not_found(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:

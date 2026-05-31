@@ -272,7 +272,7 @@ class TestTenantStatsEndpoint:
         body = resp.json()
         assert body["data"]["tenant_id"] == 1
         assert body["data"]["user_count"] == 10
-        svc.get_tenant_stats.assert_called()
+        svc.get_tenant_stats.assert_called_once()
 
 
 # ---------------------------------------------------------------------------
@@ -297,6 +297,7 @@ class TestTenantUsageEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["tenant_id"] == 1
+        svc.get_tenant_usage.assert_called_once()
 
 
 # ---------------------------------------------------------------------------

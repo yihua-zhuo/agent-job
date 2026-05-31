@@ -121,7 +121,6 @@ async def list_tenants(
 
     requesting_tenant_id is passed to the service to enforce access control:
     callers only see tenants they are permitted to access (typically their own).
-    Cross-tenant visibility is enforced at the service layer (Rule 126).
     """
     service = TenantService(session)
     items, total = await service.list_tenants(

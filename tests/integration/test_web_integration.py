@@ -10,6 +10,7 @@ Run with:
 
 Requires TEST_DATABASE_URL pointing at a live Postgres instance.
 """
+
 from __future__ import annotations
 
 import uuid
@@ -27,6 +28,7 @@ pytestmark = pytest.mark.integration
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  Health & docs endpoints
 # ──────────────────────────────────────────────────────────────────────────────────────
+
 
 class TestRootEndpoints:
     """Smoke-test the root and OpenAPI docs endpoints (no auth required)."""
@@ -49,12 +51,11 @@ class TestRootEndpoints:
 #  Customer endpoints — /api/v1/customers
 # ──────────────────────────────────────────────────────────────────────────────────────
 
+
 class TestCustomerEndpoints:
     """Full customer CRUD and search at the web layer."""
 
-    async def test_create_customer(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_create_customer(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         resp = await api_client.post(
             "/api/v1/customers",
@@ -76,9 +77,7 @@ class TestCustomerEndpoints:
         resp = await api_client.post("/api/v1/customers", json={"email": "bad"})
         assert resp.status_code == 422
 
-    async def test_get_customer(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_get_customer(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         create_resp = await api_client.post(
             "/api/v1/customers",
@@ -99,9 +98,7 @@ class TestCustomerEndpoints:
         resp = await api_client.get("/api/v1/customers/999999999")
         assert resp.status_code == 404
 
-    async def test_list_customers(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_list_customers(self, api_client: AsyncClient, tenant_id_web: int):
         for i in range(2):
             suffix = uuid.uuid4().hex[:6]
             await api_client.post(
@@ -114,9 +111,7 @@ class TestCustomerEndpoints:
         assert data["success"] is True
         assert len(data["data"]["items"]) >= 2
 
-    async def test_search_customers(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_search_customers(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         await api_client.post(
             "/api/v1/customers",
@@ -127,9 +122,7 @@ class TestCustomerEndpoints:
         data = resp.json()
         assert data["success"] is True
 
-    async def test_update_customer(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_update_customer(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         create_resp = await api_client.post(
             "/api/v1/customers",
@@ -149,9 +142,7 @@ class TestCustomerEndpoints:
         assert data["success"] is True
         assert data["data"]["name"] == "Updated Name"
 
-    async def test_delete_customer(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_delete_customer(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         create_resp = await api_client.post(
             "/api/v1/customers",
@@ -165,9 +156,7 @@ class TestCustomerEndpoints:
         get_resp = await api_client.get(f"/api/v1/customers/{customer_id}")
         assert get_resp.status_code == 404
 
-    async def test_add_and_remove_tag(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_add_and_remove_tag(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         create_resp = await api_client.post(
             "/api/v1/customers",
@@ -186,9 +175,7 @@ class TestCustomerEndpoints:
         remove_resp = await api_client.delete(f"/api/v1/customers/{customer_id}/tags/vip")
         assert remove_resp.status_code == 200, f"Body: {remove_resp.text}"
 
-    async def test_change_customer_status(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_change_customer_status(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         create_resp = await api_client.post(
             "/api/v1/customers",
@@ -202,9 +189,7 @@ class TestCustomerEndpoints:
         )
         assert resp.status_code == 200, f"Body: {resp.text}"
 
-    async def test_assign_owner(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_assign_owner(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         create_resp = await api_client.post(
             "/api/v1/customers",
@@ -254,6 +239,7 @@ class TestCustomerEndpoints:
 #  User & Auth endpoints — /api/v1/users, /api/v1/auth/*
 # ──────────────────────────────────────────────────────────────────────────────────────
 
+
 class TestUserEndpoints:
     """User CRUD, register, login at the web layer."""
 
@@ -274,9 +260,7 @@ class TestUserEndpoints:
         assert data["data"]["username"] == f"reguser_{suffix}"
         assert data["data"]["email"] == f"reg_{suffix}@example.com"
 
-    async def test_register_user_duplicate_email(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_register_user_duplicate_email(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         await api_client.post(
             "/api/v1/auth/register",
@@ -361,6 +345,7 @@ class TestUserEndpoints:
 #  Ticket endpoints — /api/v1/tickets
 # ──────────────────────────────────────────────────────────────────────────────────────
 
+
 class TestTicketEndpoints:
     """Ticket CRUD and operations at the web layer."""
 
@@ -371,9 +356,7 @@ class TestTicketEndpoints:
         )
         return resp.json()["data"]["id"]
 
-    async def test_create_ticket(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_create_ticket(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         resp = await api_client.post(
@@ -398,9 +381,7 @@ class TestTicketEndpoints:
         )
         assert resp.status_code == 422
 
-    async def test_get_ticket(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_get_ticket(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         create_resp = await api_client.post(
@@ -430,9 +411,7 @@ class TestTicketEndpoints:
         data = resp.json()
         assert data["success"] is True
 
-    async def test_update_ticket(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_update_ticket(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         create_resp = await api_client.post(
@@ -455,9 +434,7 @@ class TestTicketEndpoints:
         assert data["success"] is True
         assert data["data"]["subject"] == "Updated Subject"
 
-    async def test_assign_ticket(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_assign_ticket(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         create_resp = await api_client.post(
@@ -489,9 +466,7 @@ class TestTicketEndpoints:
         assert resp.status_code == 200, f"Body: {resp.text}"
         assert resp.json()["data"]["assigned_to"] == assignee_id
 
-    async def test_add_reply(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_add_reply(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         create_resp = await api_client.post(
@@ -511,9 +486,7 @@ class TestTicketEndpoints:
         )
         assert resp.status_code in (200, 201), f"Body: {resp.text}"
 
-    async def test_change_ticket_status(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_change_ticket_status(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         create_resp = await api_client.post(
@@ -533,9 +506,7 @@ class TestTicketEndpoints:
         )
         assert resp.status_code == 200, f"Body: {resp.text}"
 
-    async def test_get_customer_tickets(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_get_customer_tickets(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         await api_client.post(
@@ -554,6 +525,7 @@ class TestTicketEndpoints:
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  Sales endpoints — /api/v1/sales/pipelines, /api/v1/sales/opportunities
 # ──────────────────────────────────────────────────────────────────────────────────────
+
 
 class TestSalesEndpoints:
     """Pipeline and opportunity endpoints at the web layer."""
@@ -636,6 +608,7 @@ class TestSalesEndpoints:
 #  Tenant endpoints — /api/v1/tenants
 # ──────────────────────────────────────────────────────────────────────────────────────
 
+
 class TestTenantEndpoints:
     """Tenant info and management at the web layer."""
 
@@ -652,7 +625,10 @@ class TestTenantEndpoints:
         assert data["success"] is True
 
     async def test_get_tenant_stats(
-        self, api_client: AsyncClient, tenant_id_web: int, async_session: AsyncSession,
+        self,
+        api_client: AsyncClient,
+        tenant_id_web: int,
+        async_session: AsyncSession,
     ):
         # Service's get_tenant_stats calls _fetch(tenant_id), which 404s unless a
         # tenant row matches the JWT's tenant_id. Seed one with the exact id
@@ -660,28 +636,43 @@ class TestTenantEndpoints:
         from sqlalchemy import select
 
         from db.models import TenantModel
+
         result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_web))
         if result.scalar_one_or_none() is None:
-            async_session.add(TenantModel(
-                id=tenant_id_web, name=f"T{tenant_id_web}",
-                plan="pro", status="active", settings={},
-            ))
+            async_session.add(
+                TenantModel(
+                    id=tenant_id_web,
+                    name=f"T{tenant_id_web}",
+                    plan="pro",
+                    status="active",
+                    settings={},
+                )
+            )
             await async_session.commit()
         resp = await api_client.get("/api/v1/tenants/stats")
         assert resp.status_code == 200, f"Body: {resp.text}"
 
     async def test_get_tenant_usage(
-        self, api_client: AsyncClient, tenant_id_web: int, async_session: AsyncSession,
+        self,
+        api_client: AsyncClient,
+        tenant_id_web: int,
+        async_session: AsyncSession,
     ):
         from sqlalchemy import select
 
         from db.models import TenantModel
+
         result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_web))
         if result.scalar_one_or_none() is None:
-            async_session.add(TenantModel(
-                id=tenant_id_web, name=f"T{tenant_id_web}",
-                plan="pro", status="active", settings={},
-            ))
+            async_session.add(
+                TenantModel(
+                    id=tenant_id_web,
+                    name=f"T{tenant_id_web}",
+                    plan="pro",
+                    status="active",
+                    settings={},
+                )
+            )
             await async_session.commit()
         resp = await api_client.get("/api/v1/tenants/usage")
         assert resp.status_code == 200, f"Body: {resp.text}"
@@ -690,6 +681,7 @@ class TestTenantEndpoints:
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  Activity endpoints — /api/v1/activities
 # ──────────────────────────────────────────────────────────────────────────────────────
+
 
 class TestActivityEndpoints:
     """Activity log endpoints at the web layer."""
@@ -717,9 +709,7 @@ class TestActivityEndpoints:
         resp = await api_client.get("/api/v1/activities/1")
         assert resp.status_code in (200, 404)
 
-    async def test_create_activity(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_create_activity(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
 
@@ -736,9 +726,7 @@ class TestActivityEndpoints:
         data = resp.json()
         assert data["success"] is True
 
-    async def test_update_activity(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_update_activity(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         create_resp = await api_client.post(
@@ -758,9 +746,7 @@ class TestActivityEndpoints:
         )
         assert resp.status_code == 200, f"Body: {resp.text}"
 
-    async def test_delete_activity(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_delete_activity(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         create_resp = await api_client.post(
@@ -777,9 +763,7 @@ class TestActivityEndpoints:
         resp = await api_client.delete(f"/api/v1/activities/{activity_id}")
         assert resp.status_code == 200, f"Body: {resp.text}"
 
-    async def test_get_customer_activities(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_get_customer_activities(self, api_client: AsyncClient, tenant_id_web: int):
         suffix = uuid.uuid4().hex[:6]
         customer_id = await self._create_customer(api_client, suffix)
         await api_client.post(
@@ -805,6 +789,7 @@ class TestActivityEndpoints:
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  Notification & Reminder endpoints — /api/v1/notifications, /api/v1/reminders
 # ──────────────────────────────────────────────────────────────────────────────────────
+
 
 class TestNotificationEndpoints:
     """Notification, preferences, and reminder endpoints at the web layer."""
@@ -882,8 +867,9 @@ class TestNotificationEndpoints:
 #  Auth middleware — unauthenticated requests
 # ──────────────────────────────────────────────────────────────────────────────────────
 
+
 class TestAuthMiddleware:
-    """"Auth guard: endpoints that require Bearer token."""
+    """ "Auth guard: endpoints that require Bearer token."""
 
     async def test_unauthenticated_request_returns_401(self, client):
         resp = await client.get("/api/v1/customers")
@@ -905,9 +891,9 @@ class TestAuthMiddleware:
 #  Edge cases — boundary conditions, invalid inputs, cross-resource isolation
 # ──────────────────────────────────────────────────────────────────────────────────────
 
+
 class TestEdgeCases:
     """Edge cases and boundary conditions across all endpoints."""
-
 
     # ── Auth ──────────────────────────────────────────────────────────────────────────
 
@@ -916,16 +902,14 @@ class TestEdgeCases:
         resp = await api_client.get(
             "/api/v1/customers",
             headers={
-                "Authorization": (
-                    "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"
-                    ".eyJzdWIiOiIxMjM0NTY3ODkwIn0.invalid"
-                ),
+                "Authorization": ("Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.invalid"),
             },
         )
         assert resp.status_code == 401
 
     async def test_user_from_other_tenant_cannot_access_resources(
-        self, api_client: AsyncClient,
+        self,
+        api_client: AsyncClient,
         tenant_id_web: int,
     ):
         """User registered under tenant A cannot see tenant B's resources."""
@@ -944,9 +928,7 @@ class TestEdgeCases:
 
     # ── Customers ────────────────────────────────────────────────────────────────────
 
-    async def test_update_customer_duplicate_email(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_update_customer_duplicate_email(self, api_client: AsyncClient, tenant_id_web: int):
         """Updating a customer to an email already used by another customer may or may not be enforced."""
         suffix = uuid.uuid4().hex[:6]
         await api_client.post(
@@ -965,9 +947,7 @@ class TestEdgeCases:
         # Email uniqueness may or may not be enforced at router level
         assert resp.status_code in (200, 400, 409), f"Body: {resp.text}"
 
-    async def test_update_customer_invalid_status(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_update_customer_invalid_status(self, api_client: AsyncClient, tenant_id_web: int):
         """Updating a customer with an invalid status value may be accepted or rejected."""
         suffix = uuid.uuid4().hex[:6]
         create_resp = await api_client.post(
@@ -983,9 +963,7 @@ class TestEdgeCases:
         # Status may be accepted as-is or rejected — both are valid behaviours
         assert resp.status_code in (200, 400, 422)
 
-    async def test_update_nonexistent_customer_returns_404(
-        self, api_client: AsyncClient
-    ):
+    async def test_update_nonexistent_customer_returns_404(self, api_client: AsyncClient):
         """Updating a customer that does not exist returns 404."""
         resp = await api_client.put(
             "/api/v1/customers/999999999",
@@ -993,9 +971,7 @@ class TestEdgeCases:
         )
         assert resp.status_code == 404
 
-    async def test_delete_customer_twice_returns_404(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_delete_customer_twice_returns_404(self, api_client: AsyncClient, tenant_id_web: int):
         """Deleting the same customer twice returns 404 on the second call."""
         suffix = uuid.uuid4().hex[:6]
         create_resp = await api_client.post(
@@ -1007,13 +983,10 @@ class TestEdgeCases:
         del1 = await api_client.delete(f"/api/v1/customers/{cid}")
         assert del1.status_code in (200, 204)
 
-
         del2 = await api_client.delete(f"/api/v1/customers/{cid}")
         assert del2.status_code == 404
 
-    async def test_add_tag_to_nonexistent_customer(
-        self, api_client: AsyncClient
-    ):
+    async def test_add_tag_to_nonexistent_customer(self, api_client: AsyncClient):
         """Adding a tag to a non-existent customer returns 404."""
         resp = await api_client.post(
             "/api/v1/customers/999999999/tags",
@@ -1021,16 +994,12 @@ class TestEdgeCases:
         )
         assert resp.status_code == 404
 
-    async def test_search_customers_empty_keyword_returns_all(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_search_customers_empty_keyword_returns_all(self, api_client: AsyncClient, tenant_id_web: int):
         """Searching with an empty keyword returns all customers (no filter)."""
         resp = await api_client.get("/api/v1/customers/search?keyword=")
         assert resp.status_code == 200
 
-    async def test_search_customers_no_matching_results(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_search_customers_no_matching_results(self, api_client: AsyncClient, tenant_id_web: int):
         """Searching with a keyword that matches nothing returns empty list."""
         resp = await api_client.get("/api/v1/customers/search?keyword=xyzzyx_no_match_possible_12345")
         assert resp.status_code == 200
@@ -1039,9 +1008,7 @@ class TestEdgeCases:
 
     # ── Tickets ────────────────────────────────────────────────────────────────────
 
-    async def test_create_ticket_without_required_fields(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_create_ticket_without_required_fields(self, api_client: AsyncClient, tenant_id_web: int):
         """Creating a ticket without required fields returns 422."""
         resp = await api_client.post(
             "/api/v1/tickets",
@@ -1049,16 +1016,12 @@ class TestEdgeCases:
         )
         assert resp.status_code == 422
 
-    async def test_get_ticket_without_customer_id(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_get_ticket_without_customer_id(self, api_client: AsyncClient, tenant_id_web: int):
         """GET /tickets without customer_id query returns 422."""
         resp = await api_client.get("/api/v1/tickets")
         assert resp.status_code in (200, 422)
 
-    async def test_update_ticket_status_to_invalid_value(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_update_ticket_status_to_invalid_value(self, api_client: AsyncClient, tenant_id_web: int):
         """Updating a ticket status to an invalid value returns 422."""
         suffix = uuid.uuid4().hex[:6]
         customer_resp = await api_client.post(
@@ -1084,9 +1047,7 @@ class TestEdgeCases:
         )
         assert resp.status_code == 422
 
-    async def test_assign_ticket_to_nonexistent_user(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_assign_ticket_to_nonexistent_user(self, api_client: AsyncClient, tenant_id_web: int):
         """assign_ticket rejects missing users."""
         suffix = uuid.uuid4().hex[:6]
         customer_resp = await api_client.post(
@@ -1112,9 +1073,7 @@ class TestEdgeCases:
         )
         assert resp.status_code == 404
 
-    async def test_reply_to_nonexistent_ticket(
-        self, api_client: AsyncClient
-    ):
+    async def test_reply_to_nonexistent_ticket(self, api_client: AsyncClient):
         """Replying to a ticket that does not exist returns 404 or 422."""
         resp = await api_client.post(
             "/api/v1/tickets/999999999/replies",
@@ -1122,18 +1081,14 @@ class TestEdgeCases:
         )
         assert resp.status_code in (404, 422)
 
-    async def test_list_tickets_for_nonexistent_customer(
-        self, api_client: AsyncClient
-    ):
+    async def test_list_tickets_for_nonexistent_customer(self, api_client: AsyncClient):
         """Listing tickets for a non-existent customer returns 404."""
         resp = await api_client.get("/api/v1/tickets?customer_id=999999999")
         assert resp.status_code in (200, 404)
 
     # ── Activities ─────────────────────────────────────────────────────────────────────
 
-    async def test_create_activity_without_required_fields(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_create_activity_without_required_fields(self, api_client: AsyncClient, tenant_id_web: int):
         """Creating an activity without required fields returns 422."""
         resp = await api_client.post(
             "/api/v1/activities",
@@ -1141,9 +1096,7 @@ class TestEdgeCases:
         )
         assert resp.status_code == 422
 
-    async def test_update_activity_to_invalid_type(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_update_activity_to_invalid_type(self, api_client: AsyncClient, tenant_id_web: int):
         """Updating an activity type to an invalid value returns 422."""
         suffix = uuid.uuid4().hex[:6]
         customer_resp = await api_client.post(
@@ -1170,9 +1123,7 @@ class TestEdgeCases:
         # Update with unknown activity_type — service rejects → 422
         assert resp.status_code == 422
 
-    async def test_delete_activity_twice_returns_404(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_delete_activity_twice_returns_404(self, api_client: AsyncClient, tenant_id_web: int):
         """Deleting the same activity twice returns 404 on the second call."""
         suffix = uuid.uuid4().hex[:6]
         customer_resp = await api_client.post(
@@ -1198,16 +1149,12 @@ class TestEdgeCases:
         del2 = await api_client.delete(f"/api/v1/activities/{aid}")
         assert del2.status_code == 404
 
-    async def test_get_customer_activities_for_nonexistent_customer(
-        self, api_client: AsyncClient
-    ):
-        """"Getting activities for a non-existent customer returns empty or 404."""
+    async def test_get_customer_activities_for_nonexistent_customer(self, api_client: AsyncClient):
+        """ "Getting activities for a non-existent customer returns empty or 404."""
         resp = await api_client.get("/api/v1/customers/999999999/activities")
         assert resp.status_code in (200, 404)
 
-    async def test_search_activities_empty_keyword_rejected(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_search_activities_empty_keyword_rejected(self, api_client: AsyncClient, tenant_id_web: int):
         """Empty keyword fails Pydantic validation (min_length=1)."""
         resp = await api_client.post(
             "/api/v1/activities/search",
@@ -1215,9 +1162,7 @@ class TestEdgeCases:
         )
         assert resp.status_code == 422
 
-    async def test_search_activities_no_match(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_search_activities_no_match(self, api_client: AsyncClient, tenant_id_web: int):
         """Searching activities with a no-match keyword returns empty."""
         resp = await api_client.post(
             "/api/v1/activities/search",
@@ -1229,9 +1174,7 @@ class TestEdgeCases:
 
     # ── Users ─────────────────────────────────────────────────────────────────────
 
-    async def test_register_user_duplicate_username(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_register_user_duplicate_username(self, api_client: AsyncClient, tenant_id_web: int):
         """Registering with a duplicate username fails."""
         suffix = uuid.uuid4().hex[:6]
         await api_client.post(
@@ -1252,9 +1195,7 @@ class TestEdgeCases:
         )
         assert resp2.status_code in (400, 409), f"Body: {resp2.text}"
 
-    async def test_register_user_weak_password(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_register_user_weak_password(self, api_client: AsyncClient, tenant_id_web: int):
         """Registering with a weak password returns 422."""
         suffix = uuid.uuid4().hex[:6]
         resp = await api_client.post(
@@ -1267,9 +1208,7 @@ class TestEdgeCases:
         )
         assert resp.status_code == 422
 
-    async def test_login_nonexistent_user(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_login_nonexistent_user(self, api_client: AsyncClient, tenant_id_web: int):
         """Logging in with a non-existent username returns 401."""
         resp = await api_client.post(
             "/api/v1/auth/login",
@@ -1280,29 +1219,21 @@ class TestEdgeCases:
         )
         assert resp.status_code == 401
 
-    async def test_get_user_by_invalid_id(
-        self, api_client: AsyncClient
-    ):
+    async def test_get_user_by_invalid_id(self, api_client: AsyncClient):
         """Getting a user with a non-integer ID returns 422."""
         resp = await api_client.get("/api/v1/users/abc")
         assert resp.status_code == 422
 
-    async def test_list_users_empty_for_fresh_tenant(
-        self, api_client: AsyncClient
-    ):
+    async def test_list_users_empty_for_fresh_tenant(self, api_client: AsyncClient):
         """Listing users when none exist returns empty list."""
         resp = await api_client.get("/api/v1/users")
         assert resp.status_code == 200
         # May pass (empty list) or fail (auth), but must not be 5xx
         assert resp.status_code not in range(500, 600)
 
-    async def test_search_users_by_nonexistent_keyword(
-        self, api_client: AsyncClient
-    ):
+    async def test_search_users_by_nonexistent_keyword(self, api_client: AsyncClient):
         """Searching users by a non-existent name returns empty."""
-        resp = await api_client.post(
-            "/api/v1/users/search?keyword=noonehasthisname12345"
-        )
+        resp = await api_client.post("/api/v1/users/search?keyword=noonehasthisname12345")
         assert resp.status_code == 200
         data = resp.json()
         items = data.get("data", {}).get("items", [])
@@ -1310,10 +1241,7 @@ class TestEdgeCases:
 
     # ── Sales ─────────────────────────────────────────────────────────────────────
 
-
-    async def test_create_pipeline_duplicate_name(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_create_pipeline_duplicate_name(self, api_client: AsyncClient, tenant_id_web: int):
         """Creating two pipelines with the same name returns 400/409."""
         name = f"Dup Pipeline {uuid.uuid4().hex[:6]}"
         await api_client.post(
@@ -1332,9 +1260,7 @@ class TestEdgeCases:
         )
         assert resp2.status_code in (400, 409), f"Body: {resp2.text}"
 
-    async def test_create_pipeline_empty_stages(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_create_pipeline_empty_stages(self, api_client: AsyncClient, tenant_id_web: int):
         """Creating a pipeline with empty stages may fail or be normalized."""
         resp = await api_client.post(
             "/api/v1/sales/pipelines",
@@ -1342,9 +1268,7 @@ class TestEdgeCases:
         )
         assert resp.status_code in (201, 422)
 
-    async def test_create_opportunity_invalid_stage(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_create_opportunity_invalid_stage(self, api_client: AsyncClient, tenant_id_web: int):
         """Creating an opportunity with a non-existent stage name fails."""
         suffix = uuid.uuid4().hex[:6]
         customer_resp = await api_client.post(
@@ -1373,9 +1297,7 @@ class TestEdgeCases:
         )
         assert resp.status_code in (400, 422)
 
-    async def test_create_opportunity_for_nonexistent_pipeline(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_create_opportunity_for_nonexistent_pipeline(self, api_client: AsyncClient, tenant_id_web: int):
         """Creating an opportunity for a non-existent pipeline may fail with 404 or 422."""
         suffix = uuid.uuid4().hex[:6]
         customer_resp = await api_client.post(
@@ -1396,9 +1318,7 @@ class TestEdgeCases:
         # Validation error (422) or not found (404) are both acceptable
         assert resp.status_code in (404, 422), f"Body: {resp.text}"
 
-    async def test_change_opportunity_stage_to_arbitrary_string(
-        self, api_client: AsyncClient, tenant_id_web: int
-    ):
+    async def test_change_opportunity_stage_to_arbitrary_string(self, api_client: AsyncClient, tenant_id_web: int):
         """change_stage rejects stages outside the opportunity pipeline."""
         suffix = uuid.uuid4().hex[:6]
         customer_resp = await api_client.post(
@@ -1435,69 +1355,51 @@ class TestEdgeCases:
         )
         assert resp.status_code == 422
 
-    async def test_list_opportunities_for_nonexistent_pipeline(
-        self, api_client: AsyncClient
-    ):
+    async def test_list_opportunities_for_nonexistent_pipeline(self, api_client: AsyncClient):
         """Listing opportunities for a non-existent pipeline returns empty list."""
         resp = await api_client.get("/api/v1/sales/opportunities?pipeline_id=999999999")
         assert resp.status_code == 200
 
-    async def test_get_forecast_for_nonexistent_pipeline(
-        self, api_client: AsyncClient
-    ):
+    async def test_get_forecast_for_nonexistent_pipeline(self, api_client: AsyncClient):
         """Getting forecast for a non-existent pipeline returns empty or 404."""
         resp = await api_client.get("/api/v1/sales/pipelines/999999999/forecast")
         assert resp.status_code in (200, 404)
 
     # ── Tenants ────────────────────────────────────────────────────────────────────
 
-    async def test_get_nonexistent_tenant(
-        self, api_client: AsyncClient
-    ):
-        """Cross-tenant access is forbidden before existence check (no tenant enumeration)."""
+    async def test_get_nonexistent_tenant(self, api_client: AsyncClient):
+        """Cross-tenant access is forbidden — returns 403."""
         resp = await api_client.get("/api/v1/tenants/999999999")
         assert resp.status_code == 403
 
-    async def test_list_tenant_users_for_nonexistent_tenant(
-        self, api_client: AsyncClient
-    ):
+    async def test_list_tenant_users_for_nonexistent_tenant(self, api_client: AsyncClient):
         """Listing users for a non-existent tenant returns 404."""
         resp = await api_client.get("/api/v1/tenants/999999999/users")
         assert resp.status_code == 404
 
-    async def test_get_tenant_stats_for_nonexistent_tenant(
-        self, api_client: AsyncClient
-    ):
+    async def test_get_tenant_stats_for_nonexistent_tenant(self, api_client: AsyncClient):
         """Getting stats for a non-existent tenant returns 404."""
         resp = await api_client.get("/api/v1/tenants/999999999/stats")
         assert resp.status_code == 404
 
-    async def test_get_tenant_with_invalid_id_type(
-        self, api_client: AsyncClient
-    ):
+    async def test_get_tenant_with_invalid_id_type(self, api_client: AsyncClient):
         """Getting tenant with a non-integer ID returns 422."""
         resp = await api_client.get("/api/v1/tenants/abc")
         assert resp.status_code == 422
 
     # ── Notifications ─────────────────────────────────────────────────────────────
 
-    async def test_list_notifications_pagination(
-        self, api_client: AsyncClient
-    ):
+    async def test_list_notifications_pagination(self, api_client: AsyncClient):
         """Listing notifications with explicit pagination params works."""
         resp = await api_client.get("/api/v1/notifications?page=1&page_size=5")
         assert resp.status_code == 200
 
-    async def test_mark_notification_read_nonexistent(
-        self, api_client: AsyncClient
-    ):
+    async def test_mark_notification_read_nonexistent(self, api_client: AsyncClient):
         """Marking a non-existent notification as read returns 404."""
         resp = await api_client.put("/api/v1/notifications/999999999/read", json={})
         assert resp.status_code == 404
 
-    async def test_update_preferences_for_nonexistent_channel(
-        self, api_client: AsyncClient
-    ):
+    async def test_update_preferences_for_nonexistent_channel(self, api_client: AsyncClient):
         """Updating preferences for a non-existent channel returns 404."""
         resp = await api_client.patch(
             "/api/v1/notifications/preferences/channels/nonexistent_channel",
@@ -1505,9 +1407,7 @@ class TestEdgeCases:
         )
         assert resp.status_code == 404
 
-    async def test_cancel_reminder_already_cancelled(
-        self, api_client: AsyncClient
-    ):
+    async def test_cancel_reminder_already_cancelled(self, api_client: AsyncClient):
         """Cancelling a reminder that was already cancelled returns 404."""
         # Create and cancel a reminder
         create_resp = await api_client.post(
@@ -1525,7 +1425,6 @@ class TestEdgeCases:
                 # Second cancel
                 resp2 = await api_client.delete(f"/api/v1/reminders/{rid}")
                 assert resp2.status_code == 404
-
 
     async def test_list_tenants_pagination(self, api_client: AsyncClient):
         """List tenants with page and page_size params."""
@@ -1821,6 +1720,7 @@ class TestEdgeCases:
     async def test_expired_token_format_still_rejected(self, client):
         """Even a well-formed but expired token returns 401."""
         import time
+
         expired_payload = {
             "sub": "1",
             "tenant_id": 1,
@@ -1831,8 +1731,10 @@ class TestEdgeCases:
         import hashlib
         import hmac
         import json
+
         def b64enc(data):
-            return base64.urlsafe_b64encode(data).rstrip(b'=').decode()
+            return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
+
         header = b64enc(b'{"alg":"HS256","typ":"JWT"}')
         payload = b64enc(json.dumps(expired_payload).encode())
         secret = "integration-test-jwt-secret-key"

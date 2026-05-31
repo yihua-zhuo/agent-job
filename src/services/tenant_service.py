@@ -61,7 +61,7 @@ class TenantService:
         await self.session.flush()
         return tenant
 
-    async def _fetch_tenant(self, target_tenant_id: int, requesting_tenant_id: int) -> TenantModel:
+    async def _get_tenant_or_404(self, target_tenant_id: int, requesting_tenant_id: int) -> TenantModel:
         if requesting_tenant_id != target_tenant_id:
             raise ForbiddenException("Access denied")
         conditions = [TenantModel.id == target_tenant_id]
@@ -73,12 +73,12 @@ class TenantService:
 
     async def get_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
         """Fetch a tenant by ID, validating that the requester owns it."""
-        return await self._fetch_tenant(tenant_id, requesting_tenant_id)
+        return await self._get_tenant_or_404(tenant_id, requesting_tenant_id)
 
     async def update_tenant(self, tenant_id: int, requesting_tenant_id: int, **kwargs) -> TenantModel:
         if tenant_id != requesting_tenant_id:
             raise ForbiddenException("Access denied")
-        tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
+        tenant = await self._get_tenant_or_404(tenant_id, requesting_tenant_id)
 
         allowed = {"name", "plan", "status", "admin_email", "settings"}
         unknown = [k for k in kwargs if k not in allowed]
@@ -113,7 +113,7 @@ class TenantService:
     async def delete_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
         if tenant_id != requesting_tenant_id:
             raise ForbiddenException("Access denied")
-        tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
+        tenant = await self._get_tenant_or_404(tenant_id, requesting_tenant_id)
         now = datetime.now(UTC)
         new_settings = dict(tenant.settings or {})
         new_settings["deleted_at"] = now.isoformat()
@@ -150,7 +150,7 @@ class TenantService:
         return items, total
 
     async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int) -> _TenantStats:
-        tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
+        tenant = await self._get_tenant_or_404(tenant_id, requesting_tenant_id)
         user_count_result = await self.session.execute(
             select(func.count(UserModel.id)).where(UserModel.tenant_id == tenant_id)
         )

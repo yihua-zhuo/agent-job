@@ -17,10 +17,10 @@ async def _seed_notification(
     tenant_id: int,
     user_id: int,
     *,
-    # Maps to the ORM's server_default; tests use 'default' as the canonical template name.
+    # Maps to NotificationModel.template.
     template_name: str = "default",
     channel: str = "in_app",
-    payload_params: dict | None = None,
+    params_: dict | None = None,
     status: str = "pending",
     priority: str = "normal",
 ) -> NotificationModel:
@@ -30,7 +30,7 @@ async def _seed_notification(
         user_id=user_id,
         channel=channel,
         template=template_name,
-        payload_params=payload_params or {},
+        params_=params_ or {},
         status=status,
         priority=priority,
         # created_at is handled by the server_default on the ORM column.

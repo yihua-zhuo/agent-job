@@ -4,23 +4,14 @@ Services raise AppException on errors (caught by global handler in main.py).
 Router wraps service return values in success envelopes.
 """
 
-from enum import StrEnum
-
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
+from pkg.constants.notification_constants import NotificationType
 from services.notification_service import NotificationService
-
-
-class NotificationType(StrEnum):
-    EMAIL = "email"
-    IN_APP = "in_app"
-    PUSH = "push"
-    SMS = "sms"
-
 
 notifications_router = APIRouter(prefix="/api/v1", tags=["notifications"])
 
@@ -190,6 +181,7 @@ async def get_notification_preferences(
     """Get the current user's notification preferences (stored per user)."""
     if current_user.tenant_id is None or current_user.tenant_id == 0:
         raise HTTPException(status_code=401, detail="无效的租户信息")
+    # TODO: implement notification_preferences table and wire to service
     raise HTTPException(status_code=501, detail="notification_preferences table not yet implemented")
 
 
@@ -204,6 +196,7 @@ async def update_notification_preferences(
     """Update the current user's notification preferences."""
     if current_user.tenant_id is None or current_user.tenant_id == 0:
         raise HTTPException(status_code=401, detail="无效的租户信息")
+    # TODO: implement notification_preferences table and wire to service
     raise HTTPException(status_code=501, detail="notification_preferences table not yet implemented")
 
 
