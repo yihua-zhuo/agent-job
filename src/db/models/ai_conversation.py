@@ -63,8 +63,6 @@ class AIMessageModel(Base):
     __table_args__ = (
         # Index for fetching messages in order per tenant + conversation
         Index("ix_ai_messages_tenant_conv", "tenant_id", "conversation_id"),
-        # Index for queries that filter messages by tenant only
-        Index("ix_ai_messages_tenant", "tenant_id"),
         CheckConstraint("role IN ('user', 'assistant')", name="ck_ai_messages_role"),
         {"sqlite_autoincrement": True},
     )

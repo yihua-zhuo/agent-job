@@ -38,7 +38,6 @@ class AutomationLogModel(Base):
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     executed_by: Mapped[int] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
-        default=0,
         nullable=False,
         index=True,
     )

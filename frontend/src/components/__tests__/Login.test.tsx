@@ -14,7 +14,7 @@ describe("Login component", () => {
   it("renders all required form fields", () => {
     render(<Login onSubmit={mockSubmit} />);
     expect(screen.getByPlaceholderText("name@example.com")).toBeTruthy();
-    expect(screen.getByPlaceholderText("••••••••")).toBeTruthy();
+    expect(screen.getByPlaceholderText("········")).toBeTruthy();
     expect(
       screen.getByRole("checkbox", { name: /remember me/i })
     ).toBeTruthy();
@@ -27,7 +27,7 @@ describe("Login component", () => {
     fireEvent.change(screen.getByPlaceholderText("name@example.com"), {
       target: { value: "test@example.com" },
     });
-    fireEvent.change(screen.getByPlaceholderText("••••••••"), {
+    fireEvent.change(screen.getByPlaceholderText("········"), {
       target: { value: "secret123" },
     });
     fireEvent.click(screen.getByRole("checkbox", { name: /remember me/i }));
@@ -46,7 +46,7 @@ describe("Login component", () => {
     fireEvent.change(screen.getByPlaceholderText("name@example.com"), {
       target: { value: "test@example.com" },
     });
-    fireEvent.change(screen.getByPlaceholderText("••••••••"), {
+    fireEvent.change(screen.getByPlaceholderText("········"), {
       target: { value: "secret123" },
     });
     // intentionally do NOT click the "remember me" checkbox
@@ -78,6 +78,7 @@ describe("Login component", () => {
     );
     // Release the mock so the component resets for subsequent tests.
     resolve();
+    await waitFor(() => {});
   });
 
   it("disables fields and shows loading when external isLoading is true", async () => {
@@ -106,5 +107,6 @@ describe("Login component", () => {
     // External isLoading takes precedence; internal state is overridden
     expect(screen.getByPlaceholderText("name@example.com").disabled).toBe(true);
     resolve();
+    await waitFor(() => {});
   });
 });

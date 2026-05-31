@@ -42,6 +42,7 @@ Create the file with:
 // frontend/src/components/Login.tsx
 "use client";
 import React, { useState, useCallback, type FormEvent } from "react";
+import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
@@ -199,7 +200,7 @@ describe("Login component", () => {
 ```
 
 **完成判定**: ```bash
-cd frontend && npx vitest run --testPathPattern="Login.test"
+grep "@testing-library/react" frontend/package.json && cd frontend && npx vitest run --testPathPattern="Login.test"
 ``` → all 3 tests pass
 
 ### Step 4: Lint the new component

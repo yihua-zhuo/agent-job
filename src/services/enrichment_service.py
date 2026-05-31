@@ -60,27 +60,7 @@ async def _upsert_enrichment_raw(
     raw_data: dict[str, Any],
 ) -> None:
     """Upsert a CustomerEnrichmentModel record without returning it (used by lookup)."""
-    now = datetime.now(UTC)
-    next_refresh = now + timedelta(days=7)
-    stmt = pg_insert(CustomerEnrichmentModel).values(
-        tenant_id=tenant_id,
-        customer_id=customer_id,
-        provider="clearbit",
-        raw_data_json=raw_data,
-        enriched_at=now,
-        next_refresh_at=next_refresh,
-    )
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["tenant_id", "customer_id"],
-        set_={
-            "provider": "clearbit",
-            "raw_data_json": stmt.excluded.raw_data_json,
-            "enriched_at": stmt.excluded.enriched_at,
-            "next_refresh_at": next_refresh,
-            "updated_at": now,
-        },
-    )
-    await session.execute(stmt)
+    await _upsert_enrichment(session, tenant_id, customer_id, raw_data)
 
 
 class EnrichmentService:

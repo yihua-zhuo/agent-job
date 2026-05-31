@@ -103,17 +103,15 @@ class TestAutomationRuleModelDefaults:
         server_val = col.server_default.arg if col.server_default is not None else None
         assert server_val is None, "ORM model should not set server_default (migration does)"
 
-    def test_conditions_column_has_callable_default(self):
-        """The conditions column has a callable default (empty list factory)."""
+    def test_conditions_column_has_no_mutable_default(self):
+        """The conditions column uses default=None to avoid the mutable default argument bug."""
         col = AutomationRuleModel.__table__.c.conditions
-        assert col.default is not None
-        assert callable(col.default.arg)
+        assert col.default is None, "Must use default=None to avoid mutable default"
 
-    def test_actions_column_has_callable_default(self):
-        """The actions column has a callable default (empty list factory)."""
+    def test_actions_column_has_no_mutable_default(self):
+        """The actions column uses default=None to avoid the mutable default argument bug."""
         col = AutomationRuleModel.__table__.c.actions
-        assert col.default is not None
-        assert callable(col.default.arg)
+        assert col.default is None, "Must use default=None to avoid mutable default"
 
     def test_created_by_column_python_default_is_zero(self):
         """The created_by column uses Python default=0; no server_default is set."""
@@ -231,12 +229,13 @@ class TestAutomationLogModelDefaults:
         col = AutomationLogModel.__table__.c.actions_executed
         assert col.nullable is True
 
-    def test_executed_by_column_default_is_zero(self):
-        """The executed_by column defaults to 0."""
+    def test_executed_by_column_has_no_default(self):
+        """The executed_by column has no Python or server default — caller must supply a value."""
         col = AutomationLogModel.__table__.c.executed_by
         python_val = col.default.arg if col.default is not None else None
         server_val = col.server_default.arg if col.server_default is not None else None
-        assert python_val == 0 or server_val == "0"
+        assert python_val is None, "No Python default should be set"
+        assert server_val is None, "No server_default should be set"
 
 
 def _col_is_indexed(table, col_name: str) -> bool:

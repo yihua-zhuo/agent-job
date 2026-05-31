@@ -39,7 +39,7 @@ class RefreshTokenModel(Base):
             "id": self.id,
             "user_id": self.user_id,
             "tenant_id": self.tenant_id,
-            "device_fingerprint": self.device_fingerprint,
+            "device_fingerprint": self.device_fingerprint.strip() if self.device_fingerprint else None,
             "user_agent": self.user_agent,
             "ip_address": self.ip_address,
             "expires_at": self.expires_at.isoformat() if self.expires_at else None,

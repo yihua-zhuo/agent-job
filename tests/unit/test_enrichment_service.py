@@ -146,8 +146,8 @@ class TestLookupDomainSuccess:
 
             assert normalised["name"] == "Acme"
             assert raw == {"name": "Acme", "domain": "acme.com"}
-            # Two calls: customer-tenant check + upsert
-            assert mock_db_session.execute.call_count == 2
+            # Three calls: customer-tenant check + upsert statement + upsert result fetch
+            assert mock_db_session.execute.call_count == 3
             mock_db_session.add.assert_not_called()
 
 

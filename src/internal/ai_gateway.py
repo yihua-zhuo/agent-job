@@ -40,6 +40,11 @@ class AIChatGateway:
         The stub below is deterministic so unit tests are stable.  It uses a
         hash of the last user message so identical questions always produce the
         same answer.
+
+        Note: calls from CopilotService and AIService pass real CRM context data
+        (customer counts, ticket counts, etc.) via the context argument, so the
+        stub only affects reply selection logic — it is not a correctness issue
+        for the gateway itself.
         """
         last_message = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
         customer_count = int(context.get("customer_count") or 0)
