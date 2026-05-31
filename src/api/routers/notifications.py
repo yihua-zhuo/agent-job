@@ -270,19 +270,19 @@ async def track_notification_open(
     current_user: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    """Record that a notification was opened and return the open rate."""
+    """Record that a notification was opened and return the open count."""
     if current_user.tenant_id is None or current_user.tenant_id == 0:
         raise HTTPException(status_code=401, detail="无效的租户信息")
 
     svc = NotificationAnalyticsService(session)
     analytics = await svc.track_open(notification_id, tenant_id=current_user.tenant_id)
-    rate = await svc.get_open_rate(notification_id, tenant_id=current_user.tenant_id)
+    count = await svc.get_open_count(notification_id, tenant_id=current_user.tenant_id)
     return {
         "success": True,
         "data": {
             "notification_id": notification_id,
             "opened_at": analytics.opened_at.isoformat() if analytics.opened_at else None,
-            "open_rate": rate,
+            "open_count": count,
         },
     }
 

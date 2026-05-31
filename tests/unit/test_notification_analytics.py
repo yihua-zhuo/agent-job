@@ -91,14 +91,18 @@ class TestTrackOpen:
         assert result.opened_at is not None
 
 
-class TestGetOpenRate:
-    async def test_get_open_rate_no_records(self, mock_db_session, service):
-        """get_open_rate returns 0.0 when no analytics exist."""
-        rate = await service.get_open_rate(notification_id=10, tenant_id=1)
-        assert rate == 0.0
+class TestGetOpenCount:
+    async def test_get_open_count_no_records(self, mock_db_session, service):
+        """get_open_count returns 0 when no analytics exist."""
+        count = await service.get_open_count(notification_id=10, tenant_id=1)
+        assert count == 0
 
-    async def test_get_open_rate_with_records(self, mock_db_session, service):
-        """get_open_rate returns a positive float when at least one opened record exists."""
+    async def test_get_open_count_returns_count_not_rate(self, mock_db_session, service):
+        """get_open_count returns the raw opened count, not a rate.
+
+        A true open rate requires total-sent context (opened/total_sent), which is
+        not computed here — this method returns the raw count of opened records only.
+        """
         state = mock_db_session._state
         from datetime import UTC, datetime
 
@@ -113,13 +117,14 @@ class TestGetOpenRate:
             }
         }
 
-        rate = await service.get_open_rate(notification_id=10, tenant_id=1)
-        assert rate == 1.0
+        count = await service.get_open_count(notification_id=10, tenant_id=1)
+        # Returns count (1), not rate (1.0).
+        assert count == 1
 
 
 class TestCrossTenantIsolation:
-    async def test_cross_tenant_isolation(self, mock_db_session, service):
-        """track_open for tenant_id=1 does not affect get_open_rate for tenant_id=2."""
+    async def test_get_open_count_respects_tenant_isolation(self, mock_db_session, service):
+        """get_open_count for tenant_id=1 does not return records for tenant_id=2."""
         state = mock_db_session._state
         from datetime import UTC, datetime
 
@@ -134,8 +139,43 @@ class TestCrossTenantIsolation:
             }
         }
 
-        rate_tenant_1 = await service.get_open_rate(notification_id=10, tenant_id=1)
-        rate_tenant_2 = await service.get_open_rate(notification_id=10, tenant_id=2)
+        count_tenant_1 = await service.get_open_count(notification_id=10, tenant_id=1)
+        count_tenant_2 = await service.get_open_count(notification_id=10, tenant_id=2)
 
-        assert rate_tenant_1 == 1.0
-        assert rate_tenant_2 == 0.0
+        assert count_tenant_1 == 1
+        assert count_tenant_2 == 0
+
+    async def test_track_open_respects_tenant_isolation(self, mock_db_session, service):
+        """track_open for tenant_id=2 does not mutate or expose tenant_id=1's data."""
+        state = mock_db_session._state
+
+        # Seed a record for tenant 1
+        state._notification_analytics = {
+            (10, 1): {
+                "id": 1,
+                "notification_id": 10,
+                "tenant_id": 1,
+                "opened_at": None,
+                "clicked_at": None,
+                "channel": "email",
+            }
+        }
+
+        # Track open for tenant 2 — should create a new record, not mutate tenant 1's
+        result = await service.track_open(notification_id=10, tenant_id=2, channel="sms")
+
+        assert result.tenant_id == 2
+        assert result.channel == "sms"
+        assert result.opened_at is not None
+
+        # Tenant 1 record is untouched
+        tenant_1_record = state._notification_analytics.get((10, 1))
+        assert tenant_1_record is not None
+        assert tenant_1_record["tenant_id"] == 1
+        assert tenant_1_record["opened_at"] is None
+
+        # Tenant 2 record exists
+        tenant_2_record = state._notification_analytics.get((10, 2))
+        assert tenant_2_record is not None
+        assert tenant_2_record["tenant_id"] == 2
+        assert tenant_2_record["channel"] == "sms"

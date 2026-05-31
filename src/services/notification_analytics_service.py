@@ -38,8 +38,12 @@ class NotificationAnalyticsService:
             await self._session.flush()
         return existing
 
-    async def get_open_rate(self, notification_id: int, tenant_id: int) -> float:
-        """Return open rate (count of opened records) for a notification within a tenant."""
+    async def get_open_count(self, notification_id: int, tenant_id: int) -> int:
+        """Return the count of opened analytics records for a notification within a tenant.
+
+        Note: this is a raw count, not a rate. A true open rate requires the total number
+        of sent notifications (opened / total_sent), which is not computed here.
+        """
         result = await self._session.execute(
             select(func.count(NotificationAnalytics.id)).where(
                 NotificationAnalytics.notification_id == notification_id,
@@ -48,4 +52,4 @@ class NotificationAnalyticsService:
             )
         )
         count = result.scalar() or 0
-        return float(count)
+        return count

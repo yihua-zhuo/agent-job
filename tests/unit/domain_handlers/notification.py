@@ -359,46 +359,19 @@ def make_notification_analytics_handler(state):
             store = {}
             state._notification_analytics = store
 
+        # Id counter: starts at 1, never reused after deletion (Rule 31).
+        next_id = getattr(state, "_notification_analytics_next_id", None)
+        if next_id is None:
+            # Bootstrap from existing store size so pre-seeded records keep their IDs.
+            next_id = max((r.get("id", 0) for r in store.values()), default=0) + 1
+            state._notification_analytics_next_id = next_id
+
         sql_text_lower = sql_text.lower()
 
-        if "insert into notification_analytics" in sql_text_lower:
-            key = (params.get("notification_id"), params.get("tenant_id"))
-            if key in store:
-                # Upsert: update existing record
-                row = store[key]
-                row["opened_at"] = params.get("opened_at")
-                row["clicked_at"] = params.get("clicked_at")
-                return MockResult([_notification_analytics_to_row(row)])
-            nid = params.get("notification_id")
-            tid = params.get("tenant_id")
-            record = {
-                "id": len(store) + 1,
-                "notification_id": nid,
-                "tenant_id": tid,
-                "opened_at": params.get("opened_at"),
-                "clicked_at": params.get("clicked_at"),
-                "channel": params.get("channel", "email"),
-            }
-            store[key] = record
-            return MockResult([_notification_analytics_to_row(record)])
-
-        # UPDATE: must be checked before SELECT since UPDATE text also contains "from"
-        if "update notification_analytics" in sql_text_lower:
-            nid = params.get("notification_id") or params.get("notification_id_1")
-            tid = params.get("tenant_id") or params.get("tenant_id_1")
-            key = (nid, tid)
-            record = store.get(key)
-            if record:
-                record["opened_at"] = params.get("opened_at", record.get("opened_at"))
-                record["clicked_at"] = params.get("clicked_at", record.get("clicked_at"))
-                record["channel"] = params.get("channel", record.get("channel", "email"))
-                return MockResult([_notification_analytics_to_row(record)])
-            return MockResult([])
-
-        # SELECT: match table name + notification_id (with or without table prefix)
-        # NOTE: check for count(...) before the generic SELECT below — otherwise
-        # COUNT queries are caught here and return the full row instead of the count value.
-        if "count(" in sql_text_lower and "from notification_analytics" in sql_text_lower:
+        # SELECT: must be checked before INSERT/UPDATE since INSERT/UPDATE text also contains "from".
+        # NOTE: check for count(...) before the generic SELECT below — COUNT queries must
+        # return a scalar, not a row.
+        if "select" in sql_text_lower and "count(" in sql_text_lower and "from notification_analytics" in sql_text_lower:
             nid = params.get("notification_id") or params.get("notification_id_1")
             tid = params.get("tenant_id") or params.get("tenant_id_1")
             count = sum(
@@ -410,7 +383,7 @@ def make_notification_analytics_handler(state):
             )
             return MockResult([[count]])
 
-        if "from notification_analytics" in sql_text_lower and "notification_id" in sql_text_lower:
+        if "select" in sql_text_lower and "from notification_analytics" in sql_text_lower and "notification_id" in sql_text_lower:
             nid = params.get("notification_id") or params.get("notification_id_1")
             tid = params.get("tenant_id") or params.get("tenant_id_1")
             key = (nid, tid)
@@ -418,6 +391,28 @@ def make_notification_analytics_handler(state):
             if record:
                 return MockResult([_notification_analytics_to_row(record)])
             return MockResult([])
+
+        if "insert into notification_analytics" in sql_text_lower:
+            key = (params.get("notification_id"), params.get("tenant_id"))
+            if key in store:
+                # Upsert: update existing record's timestamps — id is immutable (Rule 133).
+                row = store[key]
+                row["opened_at"] = params.get("opened_at")
+                row["clicked_at"] = params.get("clicked_at")
+                return MockResult([_notification_analytics_to_row(row)])
+            nid = params.get("notification_id")
+            tid = params.get("tenant_id")
+            record = {
+                "id": next_id,
+                "notification_id": nid,
+                "tenant_id": tid,
+                "opened_at": params.get("opened_at"),
+                "clicked_at": params.get("clicked_at"),
+                "channel": params.get("channel", "email"),
+            }
+            state._notification_analytics_next_id = next_id + 1
+            store[key] = record
+            return MockResult([_notification_analytics_to_row(record)])
 
     return handler
 
@@ -431,6 +426,8 @@ def _notification_analytics_to_row(r: dict):
             "opened_at": r.get("opened_at"),
             "clicked_at": r.get("clicked_at"),
             "channel": r.get("channel", "email"),
+            "created_at": r.get("created_at"),
+            "updated_at": r.get("updated_at"),
         }
     )
 
