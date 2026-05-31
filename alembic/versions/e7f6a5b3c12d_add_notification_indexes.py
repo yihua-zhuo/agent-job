@@ -7,7 +7,7 @@ Create Date: 2026-05-23
 Transforms the notifications table from the old schema (type, title, content,
 is_read, related_type, related_id) to the new schema (channel, template,
 params_, status, priority, delivered_at, read_at) then adds:
-- composite index on (user_id, tenant_id, status)
+- composite index on (tenant_id, user_id, status)
 - partial index for unread in-app notifications
 """
 

@@ -118,6 +118,20 @@ class TestCopilotIntegration:
         data_tenant_2 = response_tenant_2.json()
         assert data_tenant_2["success"] is True
 
+        # Retrieve tenant 2's conversation from the DB (chat response doesn't include conversation_id).
+        from sqlalchemy import func, select
+
+        from db.models.conversation import ConversationModel
+
+        result = await async_session.execute(
+            select(ConversationModel)
+            .where(ConversationModel.tenant_id == tenant_id_2_web)
+            .order_by(ConversationModel.created_at.desc())
+            .limit(1)
+        )
+        conv_tenant_2 = result.scalar_one_or_none()
+        assert conv_tenant_2 is not None, "Tenant 2 should have a conversation after calling chat"
+
         # Verify tenant 2 cannot access tenant 1's conversation (cross-tenant isolation).
         history_cross = await api_client_tenant_2.get(f"/copilot/{conv_tenant_1.id}/history")
         assert history_cross.status_code == 404

@@ -129,8 +129,10 @@ class TenantService:
         if search:
             conditions.append(TenantModel.name.ilike(f"%{search}%"))
         # Rule126: requesting_tenant_id restricts visibility to its own tenant record.
-        # page/page_size are retained for API consistency despite the single-record
-        # result — the constraint is enforced server-side, not surfaced to callers.
+        # This filter guarantees at most one matching record, so pagination (page/page_size)
+        # is functionally a no-op — it is kept for API contract stability (callers that
+        # paginate other list endpoints pass these params here too) and to avoid a
+        # breaking change to the router interface.
         conditions.append(TenantModel.id == requesting_tenant_id)
 
         count_stmt = select(func.count(TenantModel.id)).where(and_(*conditions))
