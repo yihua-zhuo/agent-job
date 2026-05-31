@@ -3,7 +3,7 @@ Now I have all the context I need. Let me write the implementation plan.
 # Implementation Plan — Issue #145
 
 ## Goal
-Add a `test_get_unread_count` test method to a new unit test file for `NotificationService`. The test patches `get_unread_count` via `AsyncMock` to verify the method returns the correct unread count before and after marking a notification as read.
+Add a `test_get_unread_count` test method to a new unit test file for `NotificationService`. The test calls the real `get_unread_count` and `mark_as_read` methods on a `NotificationService` instance backed by a mock DB session, verifying the count transitions correctly without patching the service's own methods.
 
 ## Affected Files
 - `tests/unit/test_notification_service.py` — **new file**, contains the `TestNotificationService` class with `test_get_unread_count`
@@ -21,5 +21,5 @@ Add a `test_get_unread_count` test method to a new unit test file for `Notificat
 ## Acceptance Criteria
 - `pytest tests/unit/test_notification_service.py -v -k get_unread_count` — the new test passes
 - `pytest tests/unit/test_notification_service.py -q` — the full suite in that file passes
-- `grep -E "def test_get_unread_count" tests/unit/test_notification_service.py` — confirms the method exists
+- `grep -E "async def test_get_unread_count|def test_get_unread_count" tests/unit/test_notification_service.py` — confirms the method exists
 - `ruff check tests/unit/` — no lint errors in the test directory

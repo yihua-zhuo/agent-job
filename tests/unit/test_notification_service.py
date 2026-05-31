@@ -1,32 +1,55 @@
 """Unit tests for NotificationService."""
 
-from unittest.mock import AsyncMock, patch
-
 import pytest
 
 from services.notification_service import NotificationService
-from tests.unit.conftest import MockState, make_mock_session, make_notification_handler
+from tests.unit.conftest import MockState, make_mock_session
+from tests.unit.domain_handlers.notifications import make_notification_handler
 
 
 @pytest.fixture
-def notification_state():
-    return MockState()
+def mock_db_session():
+    state = MockState()
+    handler = make_notification_handler(state)
+    pending = []
 
+    async def flush_handler():
+        # Flush persists pending ORM objects via the handler so they appear in
+        # state. ID assignment is deferred to refresh so the object and state
+        # stay in sync (flush runs before refresh).
+        for obj in pending[:]:
+            handler(
+                "insert into notifications",
+                {
+                    "tenant_id": getattr(obj, "tenant_id", 0),
+                    "user_id": getattr(obj, "user_id", 0),
+                    "type": getattr(obj, "type", None),
+                    "title": getattr(obj, "title", ""),
+                    "content": getattr(obj, "content", ""),
+                    "related_type": getattr(obj, "related_type", None),
+                    "related_id": getattr(obj, "related_id", None),
+                    "created_at": getattr(obj, "created_at", None),
+                },
+            )
+        pending.clear()
 
-@pytest.fixture
-def mock_db_session(notification_state):
-    session = make_mock_session(
-        [make_notification_handler(notification_state)],
-        state=notification_state,
-    )
+    async def refresh_handler(obj):
+        # The ID was already assigned by the handler during flush (id is
+        # incremented before storing). Sync the object attribute to match.
+        nid = getattr(state, "notifications_next_id", 1) - 1
+        obj.id = nid
 
-    async def refresh_side_effect(obj):
-        if obj.id is None:
-            nid = getattr(notification_state, "notifications_next_id", 1)
-            setattr(notification_state, "notifications_next_id", nid + 1)
-            obj.id = nid
+    session = make_mock_session([handler], state=state)
 
-    session.refresh.side_effect = refresh_side_effect
+    _add = session.add
+
+    def tracked_add(obj):
+        pending.append(obj)
+        _add(obj)
+
+    session.add = tracked_add
+    session.flush = flush_handler
+    session.refresh = refresh_handler
     return session
 
 
@@ -34,39 +57,29 @@ class TestNotificationService:
     """Tests for NotificationService."""
 
     @pytest.mark.asyncio
-    async def test_get_unread_count(self, mock_db_session, notification_state):
+    async def test_get_unread_count(self, mock_db_session):
         """get_unread_count returns correct count before and after marking a notification as read."""
         svc = NotificationService(mock_db_session)
 
-        # Seed three notifications into state (ids 1, 2, 3)
-        if not hasattr(notification_state, "notifications"):
-            notification_state.notifications = {}
-        for nid in (1, 2, 3):
-            notification_state.notifications[nid] = {
-                "id": nid,
-                "tenant_id": 1,
-                "user_id": 1,
-                "type": "info",
-                "title": f"Notification {nid}",
-                "content": "Test",
-                "is_read": False,
-                "related_type": None,
-                "related_id": None,
-                "created_at": None,
-            }
-        notification_state.notifications_next_id = 4
+        # Send three notifications for user_id=99, tenant_id=1
+        created = []
+        for i in range(3):
+            notification = await svc.send_notification(
+                tenant_id=1,
+                user_id=99,
+                notification_type="info",
+                title=f"Notification {i+1}",
+                content="Test",
+            )
+            created.append(notification)
 
-        with (
-            patch.object(svc, "get_unread_count", new_callable=AsyncMock) as mock_count,
-            patch.object(svc, "mark_as_read", new_callable=AsyncMock) as mock_mark,
-        ):
-            mock_count.return_value = 3
-            count_before = await svc.get_unread_count(user_id=1, tenant_id=1)
-            assert count_before == 3
+        # Verify initial unread count is 3
+        count_before = await svc.get_unread_count(user_id=99, tenant_id=1)
+        assert count_before == 3
 
-            mock_mark.return_value = notification_state.notifications[1]
-            await svc.mark_as_read(notification_id=1, tenant_id=1)
+        # Mark the first notification as read
+        await svc.mark_as_read(notification_id=created[0].id, tenant_id=1)
 
-            mock_count.return_value = 2
-            count_after = await svc.get_unread_count(user_id=1, tenant_id=1)
-            assert count_after == 2
+        # Verify count decreased to 2
+        count_after = await svc.get_unread_count(user_id=99, tenant_id=1)
+        assert count_after == 2
