@@ -192,6 +192,11 @@ class CopilotService:
 
         All handler callables accept ``(tenant_id: int, customer_id: int)`` and
         return the tool result.  Callers MUST pass both arguments.
+
+        .. note::
+            The registry captures ``self.session`` in async closures.  The
+            registry MUST NOT outlive the service instance — the session is
+            scoped to a single request or test case.
         """
 
         async def get_customer_handler(tenant_id: int, customer_id: int):

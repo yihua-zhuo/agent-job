@@ -23,7 +23,7 @@ class ChurnPredictionModel(Base):
     )
     score: Mapped[float] = mapped_column(Float, nullable=False)
     tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    factors: Mapped[list[dict]] = mapped_column(JSONB, default=list, nullable=False)
+    factors: Mapped[list[dict]] = mapped_column(JSONB, default=[], nullable=False)
     predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

@@ -40,12 +40,12 @@ class DeviceTrustModel(Base):
     )
 
     def to_dict(self) -> dict:
+        # Omit device_fingerprint and device_name — they can act as cross-request
+        # correlation identifiers and are not needed in API responses.
         return {
             "id": self.id,
             "user_id": self.user_id,
             "tenant_id": self.tenant_id,
-            "device_fingerprint": self.device_fingerprint,
-            "device_name": self.device_name,
             "trusted_ip": self.trusted_ip,
             "last_ip": self.last_ip,
             "last_location": self.last_location,

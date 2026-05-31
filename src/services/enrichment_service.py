@@ -42,6 +42,7 @@ async def _upsert_enrichment(
         },
     )
     await session.execute(stmt)
+    await session.flush()
     result = await session.execute(
         select(CustomerEnrichmentModel).where(
             and_(

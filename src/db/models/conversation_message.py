@@ -18,7 +18,7 @@ class ConversationMessageModel(Base):
     conversation_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     role: Mapped[str] = mapped_column(String(20), nullable=False)
     content: Mapped[str] = mapped_column(Text, nullable=False)
     tool_calls_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
