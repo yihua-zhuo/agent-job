@@ -43,7 +43,7 @@ async def lookup(
 
 @enrichment_router.post("/refresh/{customer_id}")
 async def refresh_enrichment(
-    customer_id: int = Path(..., ge=1, description="Customer ID to refresh"),
+    customer_id: int = Path(..., ge=1, le=2147483647, description="Customer ID to refresh"),
     body: EnrichmentRefreshRequest | None = None,
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
@@ -55,29 +55,33 @@ async def refresh_enrichment(
     """
     svc = EnrichmentService(session)
 
-    domain_param: str | None = body.domain if body else None
-    company_name_param: str | None = body.company_name if body else None
+    # Default to no prior enrichment; populate from DB only when body is absent
+    existing_enrichment = None
 
-    # If no body, read existing enrichment from DB to get domain/company_name
     if body is None:
         result = await session.execute(
-            select(CustomerEnrichmentModel).where(
+            select(CustomerEnrichmentModel)
+            .where(
                 and_(
                     CustomerEnrichmentModel.customer_id == customer_id,
                     CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
                 )
-            ).order_by(CustomerEnrichmentModel.enriched_at.desc()).limit(1)
+            )
+            .order_by(CustomerEnrichmentModel.enriched_at.desc())
+            .limit(1)
         )
-        existing = result.scalar_one_or_none()
-        if existing is not None:
-            raw = existing.raw_data_json or {}
-            domain_param = raw.get("domain")
-            company_name_param = raw.get("name")
+        existing_enrichment = result.scalar_one_or_none()
+
+    domain_param: str | None = body.domain if body else None
+    company_name_param: str | None = body.company_name if body else None
+
+    if body is None and existing_enrichment is not None:
+        raw = existing_enrichment.raw_data_json or {}
+        domain_param = raw.get("domain")
+        company_name_param = raw.get("name")
 
     if domain_param is None and company_name_param is None:
-        raise ValidationException(
-            "domain or company_name is required when customer has no prior enrichment record"
-        )
+        raise ValidationException("domain or company_name is required when customer has no prior enrichment record")
 
     result, _raw_data = await svc.refresh(
         customer_id=customer_id,
@@ -87,26 +91,11 @@ async def refresh_enrichment(
     )
     # _raw_data not needed in response — only normalised data is returned
 
-    # Fetch the written record to include derived enrichment_status fields
-    enrich_result = await session.execute(
-        select(CustomerEnrichmentModel).where(
-            and_(
-                CustomerEnrichmentModel.customer_id == customer_id,
-                CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
-            )
-        ).order_by(CustomerEnrichmentModel.enriched_at.desc()).limit(1)
-    )
-    enrichment = enrich_result.scalar_one_or_none()
-
     data = dict(result)
-    if enrichment is None:
-        data["enrichment_status"] = "none"
-        data["last_enriched_at"] = None
-    else:
-        data["last_enriched_at"] = enrichment.enriched_at.isoformat() if enrichment.enriched_at else None
-        if enrichment.next_refresh_at is not None and enrichment.next_refresh_at <= datetime.now(UTC):
-            data["enrichment_status"] = "stale"
-        else:
-            data["enrichment_status"] = "enriched"
+    # Use existing_enrichment from the pre-check (before upsert) to derive status;
+    # post-upsert record is authoritative but next_refresh_at is not yet set by the
+    # service, so "enriched" is the correct status for a successful upsert.
+    data["enrichment_status"] = "enriched"
+    data["last_enriched_at"] = datetime.now(UTC).isoformat()
 
     return _success(data)

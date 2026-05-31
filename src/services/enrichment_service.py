@@ -14,6 +14,33 @@ from db.models.customer_enrichment import CustomerEnrichmentModel
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
+async def _upsert_enrichment(
+    session: AsyncSession,
+    tenant_id: int,
+    customer_id: int,
+    raw_data: dict[str, Any],
+) -> None:
+    """Upsert a CustomerEnrichmentModel record (insert or replace)."""
+    now = datetime.now(UTC)
+    stmt = pg_insert(CustomerEnrichmentModel).values(
+        tenant_id=tenant_id,
+        customer_id=customer_id,
+        provider="clearbit",
+        raw_data_json=raw_data,
+        enriched_at=now,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["tenant_id", "customer_id"],
+        set_={
+            "provider": "clearbit",
+            "raw_data_json": stmt.excluded.raw_data_json,
+            "enriched_at": stmt.excluded.enriched_at,
+            "updated_at": now,
+        },
+    )
+    await session.execute(stmt)
+
+
 class EnrichmentService:
     """Third-party company data enrichment."""
 
@@ -53,24 +80,7 @@ class EnrichmentService:
         raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name)
         normalised = self._normalise_clearbit(raw_data)
 
-        now = datetime.now(UTC)
-        stmt = pg_insert(CustomerEnrichmentModel).values(
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-            provider="clearbit",
-            raw_data_json=raw_data,
-            enriched_at=now,
-        )
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["tenant_id", "customer_id"],
-            set_={
-                "provider": "clearbit",
-                "raw_data_json": stmt.excluded.raw_data_json,
-                "enriched_at": stmt.excluded.enriched_at,
-                "updated_at": now,
-            },
-        )
-        await self.session.execute(stmt)
+        await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)
 
         return normalised, raw_data
 
@@ -86,9 +96,7 @@ class EnrichmentService:
         Returns the raw provider payload. Caller owns persistence.
         """
         result = await self.session.execute(
-            select(CustomerModel).where(
-                and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id)
-            )
+            select(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == tenant_id))
         )
         customer = result.scalar_one_or_none()
         if customer is None:
@@ -134,34 +142,6 @@ class EnrichmentService:
             raise ValidationException(f"Clearbit API error: {response.status_code}")
 
         return response.json()
-
-    async def _upsert_enrichment(
-        self,
-        tenant_id: int,
-        customer_id: int,
-        raw_data: dict[str, Any],
-        now: datetime | None = None,
-    ) -> None:
-        """Upsert a CustomerEnrichmentModel record (insert or replace)."""
-        if now is None:
-            now = datetime.now(UTC)
-        stmt = pg_insert(CustomerEnrichmentModel).values(
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-            provider="clearbit",
-            raw_data_json=raw_data,
-            enriched_at=now,
-        )
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["tenant_id", "customer_id"],
-            set_={
-                "provider": "clearbit",
-                "raw_data_json": stmt.excluded.raw_data_json,
-                "enriched_at": stmt.excluded.enriched_at,
-                "updated_at": now,
-            },
-        )
-        await self.session.execute(stmt)
 
     def _normalise_clearbit(self, data: dict[str, Any]) -> dict[str, Any]:
         """Flatten a Clearbit company payload into a portable dict.
@@ -213,23 +193,6 @@ class EnrichmentService:
         raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name)
         normalised = self._normalise_clearbit(raw_data)
 
-        now = datetime.now(UTC)
-        stmt = pg_insert(CustomerEnrichmentModel).values(
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-            provider="clearbit",
-            raw_data_json=raw_data,
-            enriched_at=now,
-        )
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["tenant_id", "customer_id"],
-            set_={
-                "provider": "clearbit",
-                "raw_data_json": stmt.excluded.raw_data_json,
-                "enriched_at": stmt.excluded.enriched_at,
-                "updated_at": now,
-            },
-        )
-        await self.session.execute(stmt)
+        await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)
 
         return normalised, raw_data

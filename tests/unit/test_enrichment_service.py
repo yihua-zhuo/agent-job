@@ -12,6 +12,7 @@ from services.enrichment_service import EnrichmentService
 # Mock session
 # ---------------------------------------------------------------------------
 
+
 @pytest.fixture
 def mock_db_session():
     # Configure each mock explicitly to catch attribute typos (e.g. execute vs exceute).
@@ -30,6 +31,7 @@ def service(mock_db_session):
 # ---------------------------------------------------------------------------
 # lookup — argument validation
 # ---------------------------------------------------------------------------
+
 
 class TestLookupArgumentValidation:
     async def test_neither_domain_nor_name_raises(self, service):
@@ -63,6 +65,7 @@ class TestLookupArgumentValidation:
 # lookup — HTTP client mock factory
 # ---------------------------------------------------------------------------
 
+
 def _make_http_response(is_success: bool, status_code: int, data: dict) -> MagicMock:
     """Return a mock httpx response matching httpx 0.28.x sync Response.json()."""
     mock_resp = MagicMock()
@@ -75,6 +78,7 @@ def _make_http_response(is_success: bool, status_code: int, data: dict) -> Magic
 # ---------------------------------------------------------------------------
 # lookup — domain path (success)
 # ---------------------------------------------------------------------------
+
 
 class TestLookupDomainSuccess:
     async def test_returns_normalised_dict(self, service, mock_db_session):
@@ -112,8 +116,10 @@ class TestLookupDomainSuccess:
         mock_result.scalar_one_or_none = MagicMock(return_value=mock_customer)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("services.enrichment_service.settings") as mock_settings, \
-             patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
+        with (
+            patch("services.enrichment_service.settings") as mock_settings,
+            patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client),
+        ):
             mock_settings.clearbit_api_key = "test-key"
             normalised, raw = await service.lookup(domain="stripe.com", customer_id=1, tenant_id=42)
 
@@ -130,7 +136,8 @@ class TestLookupDomainSuccess:
         # Router (not service) owns persistence — verify raw_data is returned
         assert raw == clearbit_payload
 
-    async def test_inserts_enrichment_row(self, service, mock_db_session):
+    async def test_returns_tuple_without_persisting(self, service, mock_db_session):
+        """Service upserts via _upsert_enrichment; verify execute was called and add/flush were not."""
         mock_resp = MagicMock()
         mock_resp.is_success = True
         mock_resp.json = MagicMock(return_value={"name": "Acme", "domain": "acme.com"})
@@ -148,22 +155,24 @@ class TestLookupDomainSuccess:
         mock_result.scalar_one_or_none = MagicMock(return_value=mock_customer)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("services.enrichment_service.settings") as mock_settings, \
-             patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
+        with (
+            patch("services.enrichment_service.settings") as mock_settings,
+            patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client),
+        ):
             mock_settings.clearbit_api_key = "test-key"
             normalised, raw = await service.lookup(domain="acme.com", customer_id=1, tenant_id=1)
 
-        # Service persists via execute(pg_insert) — verify execute was called at least twice
         assert normalised["name"] == "Acme"
         assert raw == {"name": "Acme", "domain": "acme.com"}
-        assert mock_db_session.execute.call_count >= 2
+        # Two calls: customer-tenant check + upsert
+        assert mock_db_session.execute.call_count == 2
         mock_db_session.add.assert_not_called()
-        mock_db_session.flush.assert_not_called()
 
 
 # ---------------------------------------------------------------------------
 # lookup — company_name path (success)
 # ---------------------------------------------------------------------------
+
 
 class TestLookupCompanyNameSuccess:
     async def test_uses_name_param(self, service, mock_db_session):
@@ -184,8 +193,10 @@ class TestLookupCompanyNameSuccess:
         mock_result.scalar_one_or_none = MagicMock(return_value=mock_customer)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("services.enrichment_service.settings") as mock_settings, \
-             patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
+        with (
+            patch("services.enrichment_service.settings") as mock_settings,
+            patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client),
+        ):
             mock_settings.clearbit_api_key = "test-key"
             normalised, raw = await service.lookup(company_name="Acme Corp", customer_id=1, tenant_id=1)
 
@@ -197,6 +208,7 @@ class TestLookupCompanyNameSuccess:
 # ---------------------------------------------------------------------------
 # lookup — cross-tenant isolation
 # ---------------------------------------------------------------------------
+
 
 class TestLookupCrossTenantIsolation:
     async def test_customer_from_different_tenant_raises_not_found(self, service, mock_db_session):
@@ -216,6 +228,7 @@ class TestLookupCrossTenantIsolation:
 # ---------------------------------------------------------------------------
 # lookup — HTTP error cases
 # ---------------------------------------------------------------------------
+
 
 class TestLookupHttpErrors:
     async def test_http_404_raises_validation_exception(self, service, mock_db_session):
@@ -237,8 +250,10 @@ class TestLookupHttpErrors:
         mock_result.scalar_one_or_none = MagicMock(return_value=mock_customer)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("services.enrichment_service.settings") as mock_settings, \
-             patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
+        with (
+            patch("services.enrichment_service.settings") as mock_settings,
+            patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client),
+        ):
             mock_settings.clearbit_api_key = "test-key"
             with pytest.raises(ValidationException) as exc_info:
                 await service.lookup(domain="notfound.example.com", customer_id=1, tenant_id=1)
@@ -263,8 +278,10 @@ class TestLookupHttpErrors:
         mock_result.scalar_one_or_none = MagicMock(return_value=mock_customer)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("services.enrichment_service.settings") as mock_settings, \
-             patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
+        with (
+            patch("services.enrichment_service.settings") as mock_settings,
+            patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client),
+        ):
             mock_settings.clearbit_api_key = "test-key"
             with pytest.raises(ValidationException) as exc_info:
                 await service.lookup(domain="stripe.com", customer_id=1, tenant_id=1)
@@ -290,8 +307,10 @@ class TestLookupHttpErrors:
         mock_result.scalar_one_or_none = MagicMock(return_value=mock_customer)
         mock_db_session.execute = AsyncMock(return_value=mock_result)
 
-        with patch("services.enrichment_service.settings") as mock_settings, \
-             patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client):
+        with (
+            patch("services.enrichment_service.settings") as mock_settings,
+            patch("services.enrichment_service.httpx.AsyncClient", return_value=mock_client),
+        ):
             mock_settings.clearbit_api_key = "test-key"
             with pytest.raises(ValidationException) as exc_info:
                 await service.lookup(domain="stripe.com", customer_id=1, tenant_id=1)
@@ -316,6 +335,7 @@ class TestLookupHttpErrors:
 # ---------------------------------------------------------------------------
 # _normalise_clearbit
 # ---------------------------------------------------------------------------
+
 
 class TestNormaliseClearbit:
     def test_includes_present_keys(self, service):

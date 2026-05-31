@@ -92,9 +92,7 @@ async def _enrichment_status(
                 tuple_(
                     CustomerEnrichmentModel.customer_id,
                     CustomerEnrichmentModel.enriched_at,
-                ).in_(
-                    select(latest_subq.c.customer_id, latest_subq.c.max_enriched_at)
-                ),
+                ).in_(select(latest_subq.c.customer_id, latest_subq.c.max_enriched_at)),
             )
         )
         .order_by(CustomerEnrichmentModel.enriched_at.desc())
@@ -401,8 +399,6 @@ async def list_sales_leads(
     elif status == "assigned":
         items, total = await service.get_leads_by_owner(ctx.tenant_id, ctx.user_id, page=page, page_size=page_size)
     else:  # recycled
-        from sqlalchemy import func, select
-
         from db.models.customer import CustomerModel
 
         conditions = and_(

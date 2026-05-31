@@ -19,6 +19,7 @@ from tests.unit.conftest import make_mock_session
 # Helpers
 # ---------------------------------------------------------------------------
 
+
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
 
@@ -91,6 +92,7 @@ def client_with_service(monkeypatch, mock_db_session):
 # POST /api/v1/enrichment/lookup
 # ---------------------------------------------------------------------------
 
+
 class TestLookupEndpoint:
     def test_returns_enriched_data_on_success(self, client_with_service):
         client, svc = client_with_service
@@ -134,7 +136,9 @@ class TestLookupEndpoint:
 
     def test_model_validator_rejects_both_fields(self, client_with_service):
         client, _svc = client_with_service
-        resp = client.post("/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com", "company_name": "Stripe"})
+        resp = client.post(
+            "/api/v1/enrichment/lookup", json={"customer_id": 42, "domain": "stripe.com", "company_name": "Stripe"}
+        )
         assert resp.status_code == 422
         body = resp.json()
         assert "Provide exactly one of domain or company_name" in body["detail"][0]["msg"]
@@ -253,6 +257,7 @@ class TestRefreshEndpoint:
         body = resp.json()
         assert body["success"] is False
         assert body["code"] == "NOT_FOUND"
+        svc.refresh.assert_awaited_once_with(customer_id=42, tenant_id=2, domain="acme.com", company_name=None)
 
     def test_refresh_customer_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
