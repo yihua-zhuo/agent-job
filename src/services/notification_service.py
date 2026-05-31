@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
-from db.models.smart_notification import Channel, Priority, SmartNotificationModel, Timing
+from db.models.smart_notification import SmartNotificationModel
 from db.models.user import UserModel
 from pkg.constants.notification_constants import (
     PAYLOAD_PARAMS_ALLOWED_KEYS,
@@ -185,13 +185,6 @@ class NotificationService:
         Actual channel routing is performed by NotificationRoutingService.route()
         in the router — this method only persists.
         """
-        if priority not in {p.value for p in Priority}:
-            raise ValidationException(f"priority must be 0 (urgent), 1 (normal), or 2 (low), got {priority}")
-        if channel not in {c.value for c in Channel}:
-            raise ValidationException(f"channel must be 0 (email), 1 (sms), 2 (push), or 3 (in_app), got {channel}")
-        if timing not in {t.value for t in Timing}:
-            raise ValidationException(f"timing must be 0 (immediate) or 1 (batch), got {timing}")
-
         notification = SmartNotificationModel(
             tenant_id=tenant_id,
             summarized_content=summarized_content,

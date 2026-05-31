@@ -10,17 +10,6 @@ Add `POST /notifications/smart` to the existing `notifications_router` at `src/a
 
 ---
 
-## Source Contract
-
-Dev-plan target: `/home/runner/work/agent-job/agent-job/docs/dev-plan/40-campaigns/0595-add-post-notifications-smart-endpoint.md`
-Template depth: `deep`
-Reading order followed:
-1. `/home/runner/work/agent-job/agent-job/docs/dev-plan/README.md`
-2. `/home/runner/work/agent-job/agent-job/docs/dev-plan/_template-deep.md`
-3. `/home/runner/work/agent-job/agent-job/docs/dev-plan/40-campaigns/0595-add-post-notifications-smart-endpoint.md`
-
----
-
 ## Affected Files
 
 - `src/api/routers/notifications.py` — add `SmartNotificationCreate` Pydantic schema and `POST /notifications/smart` endpoint

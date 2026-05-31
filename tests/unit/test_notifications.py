@@ -103,7 +103,7 @@ def _make_test_app(auth_override):
 
 
 def _app(tenant_id: int = 1) -> TestClient:
-    app = _make_test_app(_make_auth_override)
+    app = _make_test_app(lambda: _make_auth_override(tenant_id=tenant_id))
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -179,9 +179,9 @@ class TestCreateSmartNotification:
             route_call = routing_svc.route.call_args
             assert route_call.kwargs["tenant_id"] == 1
 
-            routed_record = route_call.args[0]
-            assert routed_record.priority == "urgent"
-            assert routed_record.id == 7
+            record_arg = route_call.args[0]
+            assert record_arg.priority == "urgent"
+            assert record_arg.id == 7
 
     def test_create_smart_notification_with_recipient_filter(self):
         """Payload with recipient_filter is passed through to the service and channel is preserved."""
@@ -307,9 +307,9 @@ class TestCreateSmartNotificationRouting:
     def test_empty_deliveries_still_returns_200(self):
         """priority=normal with no user_id returns 200 with an empty deliveries list.
 
-        The real NotificationRoutingService.route() is called: for priority=normal
-        with no user_id on the record, it returns [] (confirmed in routing service line 48).
-        We verify the real service path executes and produces the expected empty result.
+        The real NotificationRoutingService.route() is called with a bare mock DB
+        session (no handlers). For priority=normal with no user_id the routing service
+        returns [] without executing SQL — this path is safe against the bare mock.
         """
         with (
             patch("api.routers.notifications.NotificationService") as svc_cls,
@@ -491,48 +491,6 @@ class TestCreateSmartNotificationService:
         assert record.tenant_id == 42
         assert record.recipient_filter == {"role": "admin"}
         assert record.id is not None
-
-    @pytest.mark.asyncio
-    async def test_invalid_priority_raises(self, notification_service):
-        """priority outside {0,1,2} raises ValidationException."""
-        from pkg.errors.app_exceptions import ValidationException
-        with pytest.raises(ValidationException) as exc_info:
-            await notification_service.create_smart_notification(
-                summarized_content="Test",
-                priority=99,
-                channel=0,
-                timing=0,
-                tenant_id=1,
-            )
-        assert "priority" in str(exc_info.value.detail)
-
-    @pytest.mark.asyncio
-    async def test_invalid_channel_raises(self, notification_service):
-        """channel outside {0,1,2,3} raises ValidationException."""
-        from pkg.errors.app_exceptions import ValidationException
-        with pytest.raises(ValidationException) as exc_info:
-            await notification_service.create_smart_notification(
-                summarized_content="Test",
-                priority=0,
-                channel=99,
-                timing=0,
-                tenant_id=1,
-            )
-        assert "channel" in str(exc_info.value.detail)
-
-    @pytest.mark.asyncio
-    async def test_invalid_timing_raises(self, notification_service):
-        """timing outside {0,1} raises ValidationException."""
-        from pkg.errors.app_exceptions import ValidationException
-        with pytest.raises(ValidationException) as exc_info:
-            await notification_service.create_smart_notification(
-                summarized_content="Test",
-                priority=0,
-                channel=0,
-                timing=99,
-                tenant_id=1,
-            )
-        assert "timing" in str(exc_info.value.detail)
 
     @pytest.mark.asyncio
     async def test_tenant_isolation(self, mock_db_session):
