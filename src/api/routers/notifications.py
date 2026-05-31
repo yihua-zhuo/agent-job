@@ -143,6 +143,7 @@ class _MockRoutingRecord:
         self.summarized_content = record.summarized_content
         self.recipient_filter = record.recipient_filter
 
+
 # ---------------------------------------------------------------------------
 # Notification endpoints
 # ---------------------------------------------------------------------------
