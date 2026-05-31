@@ -52,10 +52,22 @@ class TestAgentTaskEndpoints:
         assert data["success"] is True
         assert data["data"]["id"] == created_id
         assert data["data"]["description"] == "Get Test Agent Task"
+        assert data["data"]["tenant_id"] == tenant_id_web
 
     async def test_get_agent_task_not_found(self, api_client: AsyncClient, tenant_id_web: int):
         resp = await api_client.get("/agents/tasks/999999999")
         assert resp.status_code == 404
+
+    async def test_cross_tenant_isolation(self, api_client: AsyncClient, api_client_tenant_2: AsyncClient):
+        """Tenant 2 cannot read a task created by tenant 1."""
+        create_resp = await api_client.post(
+            "/agents/tasks",
+            json={"description": "Tenant 1 private task"},
+        )
+        created_id = create_resp.json()["data"]["id"]
+
+        resp = await api_client_tenant_2.get(f"/agents/tasks/{created_id}")
+        assert resp.status_code == 404, "cross-tenant data leak: tenant 2 should not see tenant 1 task"
 
     async def test_list_agent_tasks(self, api_client: AsyncClient, tenant_id_web: int):
         # Create a few tasks

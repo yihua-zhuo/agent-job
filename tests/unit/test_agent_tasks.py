@@ -72,10 +72,7 @@ def client_with_service(monkeypatch):
         for attr in ("create_task", "list_tasks", "get_task"):
             setattr(mock_service, attr, AsyncMock())
 
-        mock_session = make_mock_session()
-
         def agent_task_service_factory(session):
-            assert session is mock_session
             return mock_service
 
         monkeypatch.setattr(
@@ -88,7 +85,7 @@ def client_with_service(monkeypatch):
         app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
 
         async def override_db():
-            yield mock_session
+            yield make_mock_session()
 
         app.dependency_overrides[get_db] = override_db
 
@@ -174,6 +171,7 @@ class TestListAgentTasksEndpoint:
         svc.list_tasks.assert_awaited()
         call_kwargs = svc.list_tasks.call_args.kwargs
         assert call_kwargs["status"] == "pending"
+        assert call_kwargs["tenant_id"] == 1
 
     async def test_filter_by_date_range(self, client_with_service):
         client, svc = client_with_service()

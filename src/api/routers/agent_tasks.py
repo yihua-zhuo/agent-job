@@ -4,7 +4,8 @@ Services raise AppException on errors (caught by global handler in main.py).
 AgentTaskModel objects have .to_dict(); router calls it before returning.
 """
 
-from datetime import date, datetime
+from datetime import date
+from datetime import datetime as dt_cls
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
@@ -41,8 +42,8 @@ class AgentTaskCreate(BaseModel):
     description: str = Field(..., min_length=1)
 
 
-def _date_to_datetime(d: date) -> datetime:
-    return datetime(d.year, d.month, d.day)
+def _date_to_datetime(d: date) -> dt_cls:
+    return dt_cls.combine(d, dt_cls.min.time())
 
 
 # ---------------------------------------------------------------------------
@@ -85,12 +86,12 @@ async def list_agent_tasks(
     return _paginated(items, total, page, page_size)
 
 
-@agent_tasks_router.get("/{task_id}")
+@agent_tasks_router.get("/{agent_task_id}")
 async def get_agent_task(
-    task_id: int,
+    agent_task_id: int,
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     service = AgentTaskService(session)
-    task = await service.get_task(task_id=task_id, tenant_id=ctx.tenant_id)
+    task = await service.get_task(task_id=agent_task_id, tenant_id=ctx.tenant_id)
     return {"success": True, "data": task.to_dict()}
