@@ -60,11 +60,9 @@ class NotificationCreate(BaseModel):
         # 'related_type'/'related_id' (optional fields) are allowed in the payload.
         # The title field carries the template name, so any additional top-level
         # keys passed via kwargs in send_notification are not relevant here.
-# NOTE: 'password' in v.lower() is an intentional rough heuristic — real
-        # credential-injection prevention belongs at the data layer.
-        # This check intentionally does NOT catch api_key, secret, token, or similar
-        # credential-adjacent strings; it only flags 'password' as a known sentinel.
-        if v and "password" in v.lower():
+# NOTE: the blocklist below is intentionally minimal — real credential-injection
+        # prevention belongs at the data layer. It only flags known sentinels.
+        if v and any(k in v.lower() for k in ("password", "api_key", "secret", "token", "auth", "credential")):
             raise ValueError("content may not contain credential-class fields")
         return v
 

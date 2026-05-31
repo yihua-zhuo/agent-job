@@ -400,8 +400,7 @@ class TestTenantCrossTenantIsolation:
 
     # TODO: Rule 126 gap — create_tenant does not enforce requesting_tenant_id,
     # allowing any authenticated tenant to create another tenant without restriction.
-    # File a GH issue at https://github.com/yihua-zhuo/agent-job/issues and replace
-    # this xfail marker with:
+    # File a GH issue and replace this xfail marker with:
     #   @pytest.mark.xfail(reason="Issue #<N>: create_tenant does not enforce requesting_tenant_id")
     @pytest.mark.xfail(reason="Rule 126 gap: create_tenant does not enforce requesting_tenant_id — fix belongs in TenantService.create_tenant")
     def test_create_tenant_uses_caller_tenant_id(self, tenant_router_client):

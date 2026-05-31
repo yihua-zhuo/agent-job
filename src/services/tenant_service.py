@@ -128,7 +128,7 @@ class TenantService:
             # expanding the pattern (e.g. "%" matches everything, "_" matches any char).
             escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
             conditions.append(TenantModel.name.ilike(f"%{escaped}%", escape="\\"))
-        # Rule126: requesting_tenant_id restricts visibility to its own tenant record.
+        # requesting_tenant_id restricts visibility to its own tenant record.
         # This filter guarantees at most one matching record, so pagination (page/page_size)
         # is functionally a no-op — it is kept for API contract stability (callers that
         # paginate other list endpoints pass these params here too) and to avoid a

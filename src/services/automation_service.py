@@ -91,13 +91,13 @@ class AutomationService:
                 )
             except AppException as e:
                 return {"type": action_type, "status": "error", "error": str(e)}
-            except BaseException as e:
+            except Exception as e:
                 logger.exception("Unexpected error in notification.send action")
                 return {"type": action_type, "status": "error", "error": str(e)}
 
         elif action_type == "task.create":
             assignee_id = params.get("assignee_id")
-            # Rule126: verify the assignee belongs to the current tenant (applies even when assignee_id is None —
+            # Verify the assignee belongs to the current tenant (applies even when assignee_id is None —
             # the check is a no-op for None but the caller's tenant_id is always enforced via the service layer).
             if assignee_id:
                 assignee_check = await self.session.execute(
@@ -116,9 +116,10 @@ class AutomationService:
                 )
             except AppException as e:
                 return {"type": action_type, "status": "error", "error": str(e)}
-            except BaseException as e:
+            except Exception as e:
                 logger.exception("Unexpected error in task.create action")
                 return {"type": action_type, "status": "error", "error": str(e)}
+            return {"type": action_type, "status": "created"}
             return {"type": action_type, "status": "created"}
 
         elif action_type == "email.send":

@@ -268,12 +268,13 @@ class CopilotService:
         """Invoke the AI chat gateway with the given message history.
 
         A 30-second timeout is applied so slow/hung AI responses do not block
-        the request event loop indefinitely (Rule 44 / Rule 131).
+        the request event loop indefinitely.
 
         Args:
             messages: List of ``{"role": "user"|"assistant", "content": "..."}`` entries.
-            tenant_id: Tenant owning this conversation (reserved for future context injection;
-                not currently used by the gateway stub).
+            tenant_id: Currently unused — reserved for future context injection into the
+                gateway. The stub does not consume this parameter; callers that need
+                tenant-scoped behavior must wire it through when replacing the stub.
 
         Returns:
             AIResponse with reply, optional suggestions, and optional actions.

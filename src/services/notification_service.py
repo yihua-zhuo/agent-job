@@ -76,7 +76,7 @@ class NotificationService:
                 f"notification params exceed maximum size of {NOTIFICATION_PARAMS_MAX_BYTES} bytes"
             )
 
-        # unknown_keys is checked against params after all conditional fields are added.
+        # validated against PAYLOAD_PARAMS_ALLOWED_KEYS after all conditional fields are added.
         # Reject any keys beyond the allow-list before persisting — the to_dict()
         # filtering only applies at serialization time, not at insert.
         unknown_keys = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
