@@ -12,6 +12,7 @@ from starlette.responses import JSONResponse
 
 from api.routers.notifications import notifications_router
 from db.connection import get_db
+from db.models.smart_notification import Priority
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.channel_delivery import ChannelDelivery
 from pkg.errors.app_exceptions import AppException
@@ -27,6 +28,9 @@ class _MockSmartNotificationModel:
 
     jsonable_encoder calls dict(obj) for non-BaseModel, non-Enum objects.
     Implementing __iter__ to yield (key, value) pairs makes dict(mock) work.
+
+    priority is stored as a Priority IntEnum so that isinstance(record.priority, Priority)
+    is True in the router, triggering _MockRoutingRecord wrapping for the routing service.
     """
 
     def __init__(self, overrides: dict | None = None):
@@ -34,7 +38,7 @@ class _MockSmartNotificationModel:
         self.id = overrides.get("id", 1)
         self.tenant_id = overrides.get("tenant_id", 1)
         self.summarized_content = overrides.get("summarized_content", "Test content")
-        self.priority = overrides.get("priority", 1)
+        self.priority = overrides.get("priority", Priority.urgent)  # IntEnum, not bare int
         self.channel = overrides.get("channel", 0)
         self.timing = overrides.get("timing", 0)
         self.recipient_filter = overrides.get("recipient_filter", None)
@@ -132,6 +136,8 @@ class TestCreateSmartNotification:
             assert "deliveries" in body["data"]
             assert body["data"]["notification"]["id"] == 7
             assert len(body["data"]["deliveries"]) == 1
+            assert body["data"]["deliveries"][0]["channel"] == "in_app"
+            assert body["data"]["deliveries"][0]["target"] == "99"
             assert body["message"] == "Smart notification created and routed"
 
             svc.create_smart_notification.assert_called_once()
@@ -146,7 +152,12 @@ class TestCreateSmartNotification:
             routing_svc.route.assert_called_once()
             route_call = routing_svc.route.call_args
             assert route_call.kwargs["tenant_id"] == 1
-            assert route_call.args[0] is mock_record
+            from api.routers.notifications import _MockRoutingRecord
+
+            routed_record = route_call.args[0]
+            assert isinstance(routed_record, _MockRoutingRecord)
+            assert routed_record.priority == "urgent"
+            assert routed_record.id == 7
 
     def test_create_smart_notification_with_recipient_filter(self):
         """Payload with recipient_filter is passed through to the service."""
@@ -204,6 +215,9 @@ class TestCreateSmartNotificationValidation:
             },
         )
         assert response.status_code == 422
+        errors = response.json().get("detail", [])
+        error_fields = {e.get("loc")[-1] for e in errors}
+        assert "priority" in error_fields
 
     def test_invalid_channel(self):
         """channel outside {0,1,2,3} returns 422."""
@@ -218,6 +232,9 @@ class TestCreateSmartNotificationValidation:
             },
         )
         assert response.status_code == 422
+        errors = response.json().get("detail", [])
+        error_fields = {e.get("loc")[-1] for e in errors}
+        assert "channel" in error_fields
 
     def test_empty_summarized_content(self):
         """Empty summarized_content string returns 422."""
@@ -232,6 +249,9 @@ class TestCreateSmartNotificationValidation:
             },
         )
         assert response.status_code == 422
+        errors = response.json().get("detail", [])
+        error_fields = {e.get("loc")[-1] for e in errors}
+        assert "summarized_content" in error_fields
 
 
 # ---------------------------------------------------------------------------
@@ -247,7 +267,7 @@ class TestCreateSmartNotificationRouting:
             patch("api.routers.notifications.NotificationRoutingService") as routing_cls,
         ):
             svc = svc_cls.return_value
-            mock_record = _MockSmartNotificationModel({"priority": 1})
+            mock_record = _MockSmartNotificationModel({"priority": Priority.normal})
             svc.create_smart_notification = AsyncMock(return_value=mock_record)
 
             routing_svc = routing_cls.return_value
@@ -265,7 +285,11 @@ class TestCreateSmartNotificationRouting:
             )
             assert response.status_code == 200
             body = response.json()
+            assert body["success"] is True
+            assert "notification" in body["data"]
             assert body["data"]["deliveries"] == []
+            routing_svc.route.assert_called_once()
+            assert routing_svc.route.call_args.kwargs["tenant_id"] == 1
 
 
 # ---------------------------------------------------------------------------
@@ -278,8 +302,8 @@ class TestCreateSmartNotificationTenantIsolation:
         app = _make_test_app(lambda: _make_auth_ctx(tenant_id=0, user_id=99))
         return TestClient(app, raise_server_exceptions=False)
 
-    def test_invalid_tenant_returns_401(self):
-        """tenant_id=0 returns 401."""
+    def test_missing_tenant_raises_401_from_override(self):
+        """tenant_id=0 is caught by the auth override before require_auth is called."""
         client = self._app_invalid_tenant()
         response = client.post(
             "/api/v1/notifications/smart",

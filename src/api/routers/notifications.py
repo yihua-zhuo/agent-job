@@ -111,6 +111,25 @@ class SmartNotificationCreate(BaseModel):
 
 _PRIORITY_MAP = {Priority.urgent: "urgent", Priority.normal: "normal", Priority.low: "low"}
 
+
+class _MockRoutingRecord:
+    """Lightweight adapter that exposes priority as a string for NotificationRoutingService.
+
+    NotificationRoutingService.route() expects priority to be a string
+    ('urgent' | 'normal' | 'low'). SmartNotificationModel stores it as a Priority IntEnum.
+    Rather than mutate the ORM object (which would corrupt in-memory state before
+    serialization), we project it into a plain adapter.
+    """
+
+    def __init__(self, record):
+        self.id = record.id
+        self.tenant_id = record.tenant_id
+        self.priority = _PRIORITY_MAP[record.priority]
+        self.channel = record.channel
+        self.timing = record.timing
+        self.summarized_content = record.summarized_content
+        self.recipient_filter = record.recipient_filter
+
 # ---------------------------------------------------------------------------
 # Notification endpoints
 # ---------------------------------------------------------------------------
@@ -196,10 +215,10 @@ async def create_smart_notification(
 
     # Route via NotificationRoutingService to determine delivery channels
     routing_svc = NotificationRoutingService(session)
-    # Map IntEnum priority to string name before routing
-    routing_priority = _PRIORITY_MAP[record.priority] if isinstance(record.priority, Priority) else record.priority
-    record.priority = routing_priority
-    deliveries = await routing_svc.route(record, tenant_id=current_user.tenant_id)
+    routing_record = record
+    if isinstance(record.priority, Priority):
+        routing_record = _MockRoutingRecord(record)
+    deliveries = await routing_svc.route(routing_record, tenant_id=current_user.tenant_id)
 
     return {
         "success": True,
