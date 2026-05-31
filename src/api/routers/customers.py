@@ -25,6 +25,16 @@ CUSTOMER_STATUS_PATTERN = "^(" + "|".join(re.escape(status.value) for status in 
 STATUS_CHANGE_PATTERN = "^(active|inactive|blocked)$"
 
 
+def _enrichment_status_value(next_refresh_at) -> str:
+    """Derive 'stale' | 'enriched' from a next_refresh_at timestamp.
+
+    Falls back to 'enriched' when next_refresh_at is None (not yet computed).
+    """
+    if next_refresh_at is not None and next_refresh_at <= datetime.now(UTC):
+        return "stale"
+    return "enriched"
+
+
 def _is_valid_email(email: str) -> bool:
     return bool(re.match(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$", email))
 
@@ -68,7 +78,6 @@ async def _enrichment_status(
     if not customer_ids:
         return {}
 
-    now = datetime.now(UTC)
     latest_subq = (
         select(
             CustomerEnrichmentModel.customer_id,
@@ -100,10 +109,7 @@ async def _enrichment_status(
     status_map: dict[int, dict] = {}
     for enrichment in result.scalars().all():
         last_enriched = enrichment.enriched_at.isoformat() if enrichment.enriched_at else None
-        if enrichment.next_refresh_at is not None and enrichment.next_refresh_at <= now:
-            status = "stale"
-        else:
-            status = "enriched"
+        status = _enrichment_status_value(enrichment.next_refresh_at)
         status_map[enrichment.customer_id] = {"enrichment_status": status, "last_enriched_at": last_enriched}
 
     # Mark customers with no enrichment record
@@ -285,10 +291,7 @@ async def get_customer(
         data["last_enriched_at"] = None
     else:
         data["last_enriched_at"] = enrichment.enriched_at.isoformat() if enrichment.enriched_at else None
-        if enrichment.next_refresh_at is not None and enrichment.next_refresh_at <= datetime.now(UTC):
-            data["enrichment_status"] = "stale"
-        else:
-            data["enrichment_status"] = "enriched"
+        data["enrichment_status"] = _enrichment_status_value(enrichment.next_refresh_at)
 
     return {"success": True, "data": data}
 

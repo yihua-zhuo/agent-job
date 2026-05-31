@@ -91,11 +91,30 @@ async def refresh_enrichment(
     )
     # _raw_data not needed in response — only normalised data is returned
 
+    # Re-fetch the upserted record to derive status from next_refresh_at.
+    upserted_result = await session.execute(
+        select(CustomerEnrichmentModel)
+        .where(
+            and_(
+                CustomerEnrichmentModel.customer_id == customer_id,
+                CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
+            )
+        )
+        .order_by(CustomerEnrichmentModel.enriched_at.desc())
+        .limit(1)
+    )
+    upserted = upserted_result.scalar_one_or_none()
+
     data = dict(result)
-    # Use existing_enrichment from the pre-check (before upsert) to derive status;
-    # post-upsert record is authoritative but next_refresh_at is not yet set by the
-    # service, so "enriched" is the correct status for a successful upsert.
-    data["enrichment_status"] = "enriched"
-    data["last_enriched_at"] = datetime.now(UTC).isoformat()
+    if upserted is not None:
+        data["last_enriched_at"] = upserted.enriched_at.isoformat() if upserted.enriched_at else None
+        if upserted.next_refresh_at is not None and upserted.next_refresh_at <= datetime.now(UTC):
+            data["enrichment_status"] = "stale"
+        else:
+            data["enrichment_status"] = "enriched"
+    else:
+        # Edge case: upsert succeeded but record vanished (shouldn't happen)
+        data["last_enriched_at"] = None
+        data["enrichment_status"] = "enriched"
 
     return _success(data)
