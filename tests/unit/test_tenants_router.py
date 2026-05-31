@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -53,9 +52,6 @@ def tenant_router_client(monkeypatch):
     Rule 135: mock_service is reset per-test to avoid cross-test state leakage
     when one test modifies the mock and another reads it.
     """
-    from starlette.requests import Request
-    from starlette.responses import JSONResponse
-
     from internal.middleware.fastapi_auth import require_auth
 
     mock_service = MagicMock()

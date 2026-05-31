@@ -22,7 +22,7 @@ def _notification_to_row(n: dict):
             "user_id": n.get("user_id"),
             "channel": n.get("channel"),
             "template": n.get("template"),
-            "payload_params": n.get("payload_params"),
+            "payload_params": n.get("params_"),
             "status": n.get("status"),
             "priority": n.get("priority"),
             "created_at": n.get("created_at") or datetime(2026, 1, 1, tzinfo=UTC),

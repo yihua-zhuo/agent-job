@@ -219,24 +219,24 @@ class TestSendNotification:
 
     def test_send_invalid_notification_type_rejected_at_schema_layer(self):
         """Rule 144: invalid notification_type returns 422 at the Pydantic validation layer (no service call)."""
-        client = _app()
-        response = client.post(
-            "/api/v1/notifications/send",
-            json={
-                "user_id": 2,
-                "notification_type": "telegram",
-                "title": "Test",
-                "content": "Test",
-            },
-        )
-        assert response.status_code == 422
-        # Pydantic rejects 'telegram' — 422 response has 'detail' list (not AppException envelope).
-        detail = response.json().get("detail", [])
-        error_types = {e.get("type") for e in (detail if isinstance(detail, list) else [])}
-        assert "enum" in error_types, f"Expected enum validation error, got {detail}"
-        # The NotificationService should never have been called.
-        # (We can verify this by checking no mock was invoked — the service is a class patch,
-        # so we check the patched class was never instantiated by checking the call list.)
+        with patch("api.routers.notifications.NotificationService") as svc_cls:
+            client = _app()
+            response = client.post(
+                "/api/v1/notifications/send",
+                json={
+                    "user_id": 2,
+                    "notification_type": "telegram",
+                    "title": "Test",
+                    "content": "Test",
+                },
+            )
+            assert response.status_code == 422
+            # Pydantic rejects 'telegram' — 422 response has 'detail' list (not AppException envelope).
+            detail = response.json().get("detail", [])
+            error_types = {e.get("type") for e in (detail if isinstance(detail, list) else [])}
+            assert "enum" in error_types, f"Expected enum validation error, got {detail}"
+            # Verify the service was never instantiated (Pydantic rejected before routing to service).
+            svc_cls.assert_not_called()
 
     def test_send_service_validation_error_returns_422(self):
         """Service layer ValidationException (e.g. from a secondary type check) is caught by the global handler and returns 422."""

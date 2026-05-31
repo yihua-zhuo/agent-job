@@ -11,8 +11,6 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
-from typing import Union
-
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
 from sqlalchemy.dialects.postgresql import JSON
 
@@ -20,8 +18,8 @@ from alembic import op
 
 revision: str = "e7f6a5b3c12d"
 down_revision: str = "82ecf4a34e34"
-branch_labels: Union[str, None] = None
-depends_on: Union[str, None] = None
+branch_labels: str | None = None
+depends_on: str | None = None
 
 
 def upgrade() -> None:

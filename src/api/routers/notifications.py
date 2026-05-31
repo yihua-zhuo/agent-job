@@ -8,7 +8,7 @@ from enum import StrEnum
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
@@ -17,8 +17,6 @@ from services.notification_service import NotificationService
 
 
 class NotificationType(StrEnum):
-    """Valid notification channel values (maps to NotificationModel.channel)."""
-
     EMAIL = "email"
     IN_APP = "in_app"
     PUSH = "push"
@@ -54,13 +52,6 @@ class NotificationCreate(BaseModel):
     content: str = Field(..., min_length=1)
     related_type: str | None = Field(None, max_length=50)
     related_id: int | None = Field(None, ge=1)
-
-    @model_validator(mode="after")
-    def validate_notification_type(self):
-        valid = {"email", "in_app", "push", "sms"}
-        if self.notification_type.value not in valid:
-            raise ValueError(f"notification_type must be one of {sorted(valid)}")
-        return self
 
 
 class PreferencesData(BaseModel):
