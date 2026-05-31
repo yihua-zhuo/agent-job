@@ -25,7 +25,7 @@ class NotificationTemplateModel(Base):
     body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     body_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, onupdate=func.now(), default=None)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     def to_dict(self) -> dict:
         # tenant_id is intentionally omitted from serialization; it is not

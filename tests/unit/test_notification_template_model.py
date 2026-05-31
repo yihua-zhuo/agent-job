@@ -88,8 +88,8 @@ class TestNotificationTemplateModel:
             "x" * 20,
         ],
     )
-    def test_channel_non_standard_values_accepted(self, channel):
-        """Non-standard channel values are accepted by the ORM; value enforcement is delegated to the service or DB layer."""
+    def test_channel_non_standard_values_accepted_by_orm_only(self, channel):
+        """ORM accepts any string value for channel; DB-level CHECK-constraint enforcement is exercised by integration tests (see migration 5d575a161b5d)."""
         now = datetime(2026, 5, 1, 12, 0, 0)
         model = NotificationTemplateModel(
             id=15,
@@ -154,15 +154,3 @@ class TestNotificationTemplateModel:
             created_at=now,
         )
         assert model.to_dict()["name"] == ""
-
-    def test_unknown_channel_accepted_by_orm(self):
-        """The ORM layer does not validate channel values; invalid values are silently stored. Service-layer enforcement is exercised via NotificationTemplateService or a future DB CHECK constraint."""
-        now = datetime(2026, 6, 1, 14, 30, 0)
-        model = NotificationTemplateModel(
-            id=26,
-            tenant_id=1,
-            name="Unknown Channel",
-            channel="telegram",
-            created_at=now,
-        )
-        assert model.to_dict()["channel"] == "telegram"

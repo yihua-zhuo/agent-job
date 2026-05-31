@@ -47,7 +47,7 @@ def upgrade() -> None:
         # Channel is intentionally restricted to known values; enforcement is
         # shared between the ORM (via service layer) and this constraint.
         sa.CheckConstraint(
-            column("channel").in_(["email", "sms", "push", "in_app"]),
+            sa.column("channel").in_(["email", "sms", "push", "in_app"]),
             name="ck_notification_templates_channel",
         ),
     )
