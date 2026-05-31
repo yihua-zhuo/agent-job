@@ -1,4 +1,4 @@
-# Implementation Plan — Issue #631 (In Progress)
+# Implementation Plan — Issue #631
 
 ## Goal
 Add five CRUD methods (`list_reports`, `get_report`, `create_report`, `update_report`, `delete_report`) to the existing `ReportService` class in `src/services/report_service.py`, enabling the service layer to manage `ReportModel` rows with full multi-tenant isolation. This unblocks the API router built in issue #632 and all downstream analytics consumers.

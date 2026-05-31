@@ -120,12 +120,10 @@ def make_report_handler(state: MockState):
                 tenant_id_val = _get_tenant_id(params)
             except _MissingTenantIdError:
                 return MockResult([])
+            assert isinstance(tenant_id_val, int)
             rec = _reports["records"].get(report_id)
             if rec is None or rec.get("tenant_id") != tenant_id_val:
                 return MockResult([])
-            for k, v in params.items():
-                if k not in ("id", "tenant_id"):
-                    rec[k] = v
             return MockResult([MockRow(rec.copy())])
 
         if sql_text.startswith("delete") and "reports" in sql_text:
@@ -201,7 +199,7 @@ def make_schedule_handler(state: MockState):
             try:
                 tenant_id = _get_tenant_id(params)
             except _MissingTenantIdError:
-                raise
+                return MockResult([])
             report_id = _get_mangled(params, "report_id")
             existing = next(
                 (
@@ -247,9 +245,6 @@ def make_schedule_handler(state: MockState):
                 return MockResult([])
             if rec is None or rec.get("tenant_id") != tenant_id:
                 return MockResult([])
-            for k, v in params.items():
-                if k not in ("id", "tenant_id"):
-                    rec[k] = v
             return MockResult([MockRow(rec.copy())])
 
         # SELECT: list schedules for a tenant (covers schedule_report's existing-record check).

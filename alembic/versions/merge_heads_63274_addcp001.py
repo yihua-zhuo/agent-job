@@ -45,22 +45,18 @@ def upgrade() -> None:
     op.execute(
         sa.text(
             "DO $$ BEGIN "
-            "IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'automation_logs') THEN "
             "ALTER TABLE automation_logs ADD CONSTRAINT fk_automation_logs_tenant_id "
             "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
-            "END IF; "
-            "EXCEPTION WHEN duplicate_object THEN NULL; "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
             "END $$"
         )
     )
     op.execute(
         sa.text(
             "DO $$ BEGIN "
-            "IF EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'automation_rules') THEN "
             "ALTER TABLE automation_rules ADD CONSTRAINT fk_automation_rules_tenant_id "
             "FOREIGN KEY (tenant_id) REFERENCES tenants(id); "
-            "END IF; "
-            "EXCEPTION WHEN duplicate_object THEN NULL; "
+            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
             "END $$"
         )
     )

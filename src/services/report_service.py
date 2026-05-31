@@ -138,7 +138,7 @@ class ReportService:
         self,
         report_id: int,
         schedule: dict,
-        tenant_id: int = 0,
+        tenant_id: int,
     ) -> ReportScheduleModel:
         """Schedule a report: upserts the schedule row for (tenant_id, report_id)."""
         result = await self.session.execute(

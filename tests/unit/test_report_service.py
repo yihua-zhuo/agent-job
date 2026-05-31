@@ -30,6 +30,12 @@ def mock_db_session():
         "type": "custom", "config": {}, "date_range": {}, "created_by": 0,
         "last_run_at": None, "created_at": None,
     }
+    # Seed a tenant-2 report to verify cross-tenant isolation in list_reports
+    state.opaque["reports"]["records"][50] = {
+        "id": 50, "tenant_id": 2, "name": "Tenant 2 Report",
+        "type": "custom", "config": {}, "date_range": {}, "created_by": 0,
+        "last_run_at": None, "created_at": None,
+    }
     return make_mock_session([make_report_handler(state)], state=state)
 
 
@@ -102,15 +108,14 @@ class TestListReports:
         # Verify exactly two calls (count + paginated fetch).
         assert mock_db_session.execute.call_count == 2
         calls = mock_db_session.execute.call_args_list
-        # The second call is the paginated SELECT; verify it received int args
-        # for LIMIT and OFFSET by checking the call args match page_size and offset.
+        # The second call is the paginated SELECT; verify LIMIT=2 and OFFSET=2.
         select_call_args = calls[1].args
         assert len(select_call_args) >= 1
         stmt = select_call_args[0]
         insp = sqla_inspect(stmt)
         assert insp.is_select
-        assert insp._limit is not None
-        assert insp._offset is not None
+        assert insp._limit == 2
+        assert insp._offset == 2
 
     async def test_enforces_limit_clause(self, mock_db_session):
         """list_reports(page=1, page_size=20) returns exactly 20 items when >20 exist."""
@@ -119,6 +124,15 @@ class TestListReports:
 
         assert total == 25
         assert len(reports) == 20
+
+    async def test_excludes_other_tenant_reports(self, mock_db_session):
+        """list_reports(tenant_id=1) excludes reports seeded for tenant_id=2."""
+        svc = ReportService(mock_db_session)
+        reports, total = await svc.list_reports(tenant_id=1)
+
+        # id=50 belongs to tenant 2 and must not appear in tenant 1 results.
+        returned_ids = {r.id for r in reports}
+        assert 50 not in returned_ids
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +148,7 @@ class TestGetReport:
         report = await svc.get_report(report_id=20, tenant_id=1)
 
         assert report.id == 20
+        assert report.tenant_id == 1
         assert report.name == "Isolated Tenant Test Report"
         # Verify serialized output has the expected keys.
         d = report.to_dict()
