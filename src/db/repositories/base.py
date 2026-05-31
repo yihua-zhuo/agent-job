@@ -68,7 +68,7 @@ class BaseRepository:
             .returning(model)
         )
         result = await self.session.execute(stmt)
-        await self.session.commit()
+        await self.session.flush()
         return result.scalar_one_or_none()
 
     async def delete_by_id(self, model: type[T], id_val: int, tenant_id: int) -> bool:
@@ -78,5 +78,5 @@ class BaseRepository:
             cast(Any, model).__table__.columns["tenant_id"] == tenant_id,
         )
         result = await self.session.execute(stmt)
-        await self.session.commit()
+        await self.session.flush()
         return cast(Any, result).rowcount > 0

@@ -536,9 +536,6 @@ class TestCustomerCountByStatusIntegration:
             )
             assert r.status_code == 201
 
-        # Ensure tenant 2's writes are visible before aggregation
-        await async_session.flush()
-
         # Verify counts via service layer using tenant sessions
         cust_svc = CustomerService(CustomerRepository(async_session))
         result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id_web)

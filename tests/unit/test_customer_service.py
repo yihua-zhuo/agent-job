@@ -242,7 +242,7 @@ class TestCreateCustomerService:
 class TestCountByStatus:
     """Unit tests for CustomerService.count_by_status — delegates to repo."""
 
-    async def test_count_by_status_empty(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_empty(self, mock_customer_repo):
         """Returns empty dict when no customers in tenant."""
         mock_customer_repo.count_by_status = AsyncMock(return_value={})
         service = CustomerService(mock_customer_repo)
@@ -250,7 +250,7 @@ class TestCountByStatus:
         assert result == {}
         mock_customer_repo.count_by_status.assert_awaited_once_with(1)
 
-    async def test_count_by_status_returns_counts(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_returns_counts(self, mock_customer_repo):
         """Returns correct count per status."""
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={
@@ -265,7 +265,7 @@ class TestCountByStatus:
         assert result[CustomerStatus.OPPORTUNITY] == 2
         assert result[CustomerStatus.CUSTOMER] == 1
 
-    async def test_count_by_status_tenant_isolation(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_tenant_isolation(self, mock_customer_repo):
         """Passes correct tenant_id to repository."""
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={CustomerStatus.LEAD: 7}
@@ -277,7 +277,7 @@ class TestCountByStatus:
         assert CustomerStatus.OPPORTUNITY not in result
         assert CustomerStatus.CUSTOMER not in result
 
-    async def test_count_by_status_single_status(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_single_status(self, mock_customer_repo):
         """Returns one entry when all customers share same status."""
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={CustomerStatus.INACTIVE: 10}
@@ -288,7 +288,7 @@ class TestCountByStatus:
         assert result[CustomerStatus.INACTIVE] == 10
 
     async def test_count_by_status_invalid_db_status_skipped(
-        self, mock_db_session, mock_customer_repo
+        self, mock_customer_repo
     ):
         """Repository returns partial counts when some DB rows have invalid status."""
         mock_customer_repo.count_by_status = AsyncMock(
@@ -322,7 +322,7 @@ class TestCountByStatus:
         assert result[CustomerStatus.ACTIVE] == 3
         assert result[CustomerStatus.INACTIVE] == 2
 
-    async def test_count_by_status_zero_tenant(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_zero_tenant(self, mock_customer_repo):
         """Delegates to repo which returns empty dict for invalid tenant_id."""
         mock_customer_repo.count_by_status = AsyncMock(return_value={})
         service = CustomerService(mock_customer_repo)

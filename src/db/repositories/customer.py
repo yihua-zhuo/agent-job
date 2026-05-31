@@ -313,20 +313,24 @@ class CustomerRepository(BaseRepository):
         leads = list(result.scalars().all())
         if not leads:
             return []
-        recycled_ids = [lead.id for lead in leads]
-        # Single bulk UPDATE for recycle_count/assigned_at/updated_at; history is
-        # appended per-row only for leads that passed the filter (no sync risk).
-        await self.session.execute(
-            update(CustomerModel)
-            .where(and_(CustomerModel.id.in_(recycled_ids), CustomerModel.tenant_id == tenant_id))
-            .values(
-                owner_id=0,
-                assigned_at=None,
-                recycle_count=CustomerModel.recycle_count + 1,
-                updated_at=now,
-            )
-        )
+        recycled_ids = []
         for lead in leads:
+            # Per-row UPDATE + flush so the refreshed lead object has the
+            # correct incremented recycle_count for history construction.
+            await self.session.execute(
+                update(CustomerModel)
+                .where(and_(CustomerModel.id == lead.id, CustomerModel.tenant_id == tenant_id))
+                .values(
+                    owner_id=0,
+                    assigned_at=None,
+                    recycle_count=CustomerModel.recycle_count + 1,
+                    updated_at=now,
+                )
+            )
+            await self.session.flush()
+            await self.session.refresh(lead)
+            # Refresh has reloaded the ORM object from DB; append the history entry
+            # after the refresh so the in-memory change is not clobbered.
             history = list(lead.recycle_history or [])
             history.append(
                 {
@@ -336,6 +340,7 @@ class CustomerRepository(BaseRepository):
                 }
             )
             lead.recycle_history = history
+            recycled_ids.append(lead.id)
         await self.session.flush()
         return recycled_ids
 

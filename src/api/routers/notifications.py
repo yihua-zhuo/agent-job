@@ -9,8 +9,10 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
+from db.models.smart_notification import Channel, Priority, Timing
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.constants.notification_constants import VALID_NOTIFICATION_CHANNELS
+from services.notification_routing_service import NotificationRoutingService
 from services.notification_service import NotificationService
 
 notifications_router = APIRouter(prefix="/api/v1", tags=["notifications"])
@@ -78,6 +80,69 @@ class ReminderCreate(BaseModel):
     related_id: int | None = Field(None, ge=1)
 
 
+class SmartNotificationCreate(BaseModel):
+    summarized_content: str = Field(..., min_length=1, max_length=1024)
+    priority: int = Field(..., ge=0, le=2, description="0=urgent, 1=normal, 2=low")
+    channel: int = Field(..., ge=0, le=3, description="0=email, 1=sms, 2=push, 3=in_app")
+    timing: int = Field(..., ge=0, le=1, description="0=immediate, 1=batch")
+    recipient_filter: dict | None = Field(None, description="Filter criteria for routing")
+
+    @field_validator("priority")
+    @classmethod
+    def priority_must_be_valid(cls, v: int) -> int:
+        if v not in {p.value for p in Priority}:
+            raise ValueError(f"priority must be 0 (urgent), 1 (normal), or 2 (low), got {v}")
+        return v
+
+    @field_validator("channel")
+    @classmethod
+    def channel_must_be_valid(cls, v: int) -> int:
+        if v not in {c.value for c in Channel}:
+            raise ValueError(f"channel must be 0 (email), 1 (sms), 2 (push), or 3 (in_app), got {v}")
+        return v
+
+    @field_validator("timing")
+    @classmethod
+    def timing_must_be_valid(cls, v: int) -> int:
+        if v not in {t.value for t in Timing}:
+            raise ValueError(f"timing must be 0 (immediate) or 1 (batch), got {v}")
+        return v
+
+
+_PRIORITY_MAP = {Priority.urgent: "urgent", Priority.normal: "normal", Priority.low: "low"}
+
+
+def _priority_to_string(priority) -> str:
+    """Convert a priority value (Priority enum, int, or string) to routing string."""
+    if isinstance(priority, Priority):
+        return _PRIORITY_MAP[priority]
+    if isinstance(priority, int):
+        # Plain int (e.g. 0, 1, 2) — convert via Priority IntEnum then map
+        try:
+            return _PRIORITY_MAP[Priority(priority)]
+        except KeyError:
+            return str(priority)
+    return str(priority)
+
+
+class _MockRoutingRecord:
+    """Lightweight adapter that exposes priority as a string for NotificationRoutingService.
+
+    NotificationRoutingService.route() expects priority to be a string
+    ('urgent' | 'normal' | 'low'). SmartNotificationModel stores it as a Priority IntEnum.
+    Rather than mutate the ORM object (which would corrupt in-memory state before
+    serialization), we project it into a plain adapter.
+    """
+
+    def __init__(self, record):
+        self.id = record.id
+        self.tenant_id = record.tenant_id
+        self.priority = _priority_to_string(record.priority)
+        self.channel = record.channel
+        self.timing = record.timing
+        self.summarized_content = record.summarized_content
+        self.recipient_filter = record.recipient_filter
+
 # ---------------------------------------------------------------------------
 # Notification endpoints
 # ---------------------------------------------------------------------------
@@ -133,6 +198,47 @@ async def send_notification(
         related_id=body.related_id,
     )
     return {"success": True, "data": data.to_dict(), "message": "通知发送成功"}
+
+
+@notifications_router.post(
+    "/notifications/smart",
+    summary="Create a smart notification with routing",
+)
+async def create_smart_notification(
+    body: SmartNotificationCreate,
+    current_user: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Accept a pre-classified event payload, persist a SmartNotification, and route it.
+
+    The LLM classification integration is tracked in issue #41.
+    """
+    if current_user.tenant_id is None or current_user.tenant_id == 0:
+        raise HTTPException(status_code=401, detail="无效的租户信息")
+
+    svc = NotificationService(session)
+    record = await svc.create_smart_notification(
+        summarized_content=body.summarized_content,
+        priority=body.priority,
+        channel=body.channel,
+        timing=body.timing,
+        tenant_id=current_user.tenant_id,
+        recipient_filter=body.recipient_filter,
+    )
+
+    # Route via NotificationRoutingService to determine delivery channels
+    routing_svc = NotificationRoutingService(session)
+    routing_record = _MockRoutingRecord(record)
+    deliveries = await routing_svc.route(routing_record, tenant_id=current_user.tenant_id)
+
+    return {
+        "success": True,
+        "data": {
+            "notification": record.to_dict(),
+            "deliveries": [d.model_dump() for d in deliveries],
+        },
+        "message": "Smart notification created and routed",
+    }
 
 
 @notifications_router.put(
