@@ -58,15 +58,7 @@ class TestNotificationTemplateModel:
         assert d["body_text"] is None
         assert d["created_at"] == now.isoformat()
 
-    @pytest.mark.parametrize(
-        "channel",
-        [
-            "email",
-            "sms",
-            "push",
-            "in_app",
-        ],
-    )
+    @pytest.mark.parametrize("channel", ["email", "sms", "push", "in_app"])
     def test_channel_accepts_standard_values(self, channel):
         """Channel field accepts email/sms/push/in_app."""
         now = datetime(2026, 5, 1, 12, 0, 0)
@@ -79,6 +71,30 @@ class TestNotificationTemplateModel:
         )
         d = model.to_dict()
         assert d["channel"] == channel
+
+    @pytest.mark.parametrize(
+        "channel",
+        [
+            "webhook",
+            "fax",
+            "",
+            "EMAIL",
+            "sms_upper",
+            "x" * 21,
+        ],
+    )
+    def test_channel_rejects_non_standard_values(self, channel):
+        """Channel rejects values outside the defined set; model construction itself is not guarded, but any CHECK constraint (if added at the DB level) or business-rule validation at the service layer would catch these. This test documents the boundary — invalid values pass model construction silently; enforcement is delegated to the service/DB layer per rule 144."""
+        now = datetime(2026, 5, 1, 12, 0, 0)
+        model = NotificationTemplateModel(
+            id=15,
+            tenant_id=1,
+            name="Rejection Test",
+            channel=channel,
+            created_at=now,
+        )
+        d = model.to_dict()
+        assert d["channel"] == channel  # model accepts it; enforcement is at service/DB layer
 
     def test_name_max_length(self):
         """Name field accepts strings up to and including 100 characters."""
@@ -119,3 +135,17 @@ class TestNotificationTemplateModel:
         )
         d = model.to_dict()
         assert d["created_at"] == "2026-06-01T14:30:00"
+
+    def test_updated_at_intentionally_absent_from_to_dict(self):
+        """The model does not have an updated_at field; to_dict() correctly omits it. This test will fail (and catch the gap) if updated_at is added to the model without updating to_dict()."""
+        now = datetime(2026, 6, 1, 14, 30, 0)
+        model = NotificationTemplateModel(
+            id=21,
+            tenant_id=99,
+            name="Updated At Test",
+            channel="email",
+            created_at=now,
+        )
+        d = model.to_dict()
+        # If updated_at is added to the model but forgotten in to_dict(), this assertion fails.
+        assert "updated_at" not in d

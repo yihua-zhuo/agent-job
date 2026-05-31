@@ -16,7 +16,7 @@ Reading order followed:
 ## Affected Files
 
 - `src/db/models/notification_template.py` — **new file** — `NotificationTemplateModel` ORM class
-- `alembic/versions/merge_heads_notification_templates_662.py` — **new file** — merge migration converging two heads (52b19ee00eaf and 5d575a161b5d) into a single timeline head
+- `alembic/versions/merge_nt_662.py` — **new file** — merge migration converging two heads (52b19ee00eaf and 5d575a161b5d) into a single timeline head
 - `tests/unit/test_notification_template_model.py` — **new file** — unit tests for the model
 - `src/db/models/__init__.py` — no changes needed (auto-discovery via `pkgutil.iter_modules`)
 - `alembic/env.py` — no changes needed (imports `db.models` which triggers auto-discovery)

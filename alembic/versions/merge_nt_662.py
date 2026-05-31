@@ -1,6 +1,6 @@
 """Merge notification_templates into the main timeline
 
-Revision ID: merge_heads_notification_templates_662
+Revision ID: merge_nt_662
 Revises: 52b19ee00eaf, 5d575a161b5d
 Create Date: 2026-05-31
 
@@ -20,7 +20,7 @@ already exist in that branch's timeline.
 from collections.abc import Sequence
 
 # revision identifiers, used by Alembic.
-revision: str = "merge_heads_notification_templates_662"
+revision: str = "merge_nt_662"
 down_revision: str | Sequence[str] | None = ("52b19ee00eaf", "5d575a161b5d")
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
