@@ -57,6 +57,11 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.execute(
+        sa.text(
+            "ALTER TABLE notification_templates DROP CONSTRAINT IF EXISTS fk_notification_templates_tenant_id"
+        )
+    )
     op.drop_index(
         op.f("ix_notification_templates_tenant_id"),
         table_name="notification_templates",

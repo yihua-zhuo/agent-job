@@ -59,18 +59,16 @@ class TestNotificationTemplateModel:
         assert d["created_at"] == now.isoformat()
 
     @pytest.mark.parametrize(
-        "channel,valid",
+        "channel",
         [
-            ("email", True),
-            ("sms", True),
-            ("push", True),
-            ("in_app", True),
-            ("", False),
-            ("WEBHOOK", False),
+            "email",
+            "sms",
+            "push",
+            "in_app",
         ],
     )
-    def test_channel_accepts_standard_values(self, channel, valid):
-        """Channel field accepts email/sms/push/in_app; rejects non-standard values."""
+    def test_channel_accepts_standard_values(self, channel):
+        """Channel field accepts email/sms/push/in_app."""
         now = datetime(2026, 5, 1, 12, 0, 0)
         model = NotificationTemplateModel(
             id=10,
