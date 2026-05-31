@@ -114,11 +114,11 @@ class AutomationService:
             return {"type": action_type, "status": "created"}
 
         elif action_type == "email.send":
-            return self._unimplemented_action(action_type, params, "template")
+            return AutomationService._unimplemented_action(action_type, params, "template")
         elif action_type == "webhook.call":
-            return self._unimplemented_action(action_type, params, "url")
+            return AutomationService._unimplemented_action(action_type, params, "url")
         elif action_type == "tag.add":
-            return self._unimplemented_action(action_type, params, "tag")
+            return AutomationService._unimplemented_action(action_type, params, "tag")
         elif action_type == "ticket.assign":
             assignee_id = params.get("assignee_id")
             if assignee_id:
@@ -140,7 +140,7 @@ class AutomationService:
                 )
                 if opp_check.scalar_one_or_none() is None:
                     return {"type": action_type, "status": "skipped", "reason": "opportunity not found in tenant"}
-            return self._unimplemented_action(action_type, params, "note")
+            return AutomationService._unimplemented_action(action_type, params, "note")
         else:
             return {"type": action_type, "status": "unknown_action"}
 

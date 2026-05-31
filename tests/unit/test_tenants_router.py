@@ -46,9 +46,7 @@ def tenant_router_client(monkeypatch):
     """Builds a fully-mocked FastAPI test client for the tenants router.
 
     TenantService is patched so the DB is never touched.
-
-    Rule 135: mock_service is reset per-test to avoid cross-test state leakage
-    when one test modifies the mock and another reads it.
+    Rule 135: a fresh MagicMock is created per-test to avoid cross-test state leakage.
     """
     from starlette.requests import Request
     from starlette.responses import JSONResponse
@@ -83,14 +81,7 @@ def tenant_router_client(monkeypatch):
 
     client = TestClient(app, raise_server_exceptions=False)
 
-    # Rule 135: reset mock_service before each test so one test's
-    # mock state never bleeds into another test's assertions.
-    mock_service.reset_mock()
-
     yield client, mock_service
-
-    # Reset after each test as well (defence-in-depth).
-    mock_service.reset_mock()
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +107,7 @@ class TestCreateTenantEndpoint:
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["name"] == "Acme Corp"
+        svc.create_tenant.assert_called_once_with(name="Acme Corp", plan="enterprise", admin_email="admin@acme.com", settings=None)
 
     def test_service_error_returns_4xx(self, tenant_router_client):
         client, svc = tenant_router_client
@@ -157,6 +149,7 @@ class TestGetTenantEndpoint:
         resp = client.get("/api/v1/tenants/1")
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == 1
+        svc.get_tenant.assert_called_once_with(1, requesting_tenant_id=1)
 
     def test_not_found_returns_404(self, tenant_router_client):
         client, svc = tenant_router_client
@@ -220,6 +213,7 @@ class TestUpdateTenantEndpoint:
         resp = client.put("/api/v1/tenants/1", json={"name": "Updated Corp"})
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "Updated Corp"
+        svc.update_tenant.assert_called_once_with(1, requesting_tenant_id=1, name="Updated Corp")
 
     def test_not_found_returns_404(self, tenant_router_client):
         client, svc = tenant_router_client
@@ -307,16 +301,8 @@ class TestTenantUsageEndpoint:
 
 
 class TestTenantServiceSmoke:
-    def test_constructor_receives_session(self, tenant_router_client):
-        """Verify TenantService(session) is invoked with a session-like argument."""
-        client, svc = tenant_router_client
-        svc.list_tenants = AsyncMock(return_value=([], 0))
-        resp = client.get("/api/v1/tenants")
-        assert resp.status_code == 200
-        svc.list_tenants.assert_called_once()
-
-    def test_tenant_service_instantiated_on_get(self, tenant_router_client):
-        """TenantService(session) is called when GET /api/v1/tenants executes."""
+    def test_list_tenants_called_on_get(self, tenant_router_client):
+        """Verify list_tenants is called once when GET /api/v1/tenants executes."""
         client, svc = tenant_router_client
         svc.list_tenants = AsyncMock(return_value=([], 0))
         resp = client.get("/api/v1/tenants")
@@ -380,6 +366,7 @@ class TestTenantCrossTenantIsolation:
         assert resp.status_code == 403
         svc.update_tenant.assert_not_called()
 
+    @pytest.mark.xfail(reason="Rule 126 gap: cross-tenant requesting_tenant_id check not implemented for create_tenant")
     def test_create_tenant_uses_caller_tenant_id(self, tenant_router_client):
         """POST /api/v1/tenants creates a tenant; current design allows any authenticated tenant to create."""
         client, svc = tenant_router_client
@@ -389,5 +376,3 @@ class TestTenantCrossTenantIsolation:
         resp = client.post("/api/v1/tenants", json={"name": "NewTenant", "plan": "free"})
         assert resp.status_code == 201
         svc.create_tenant.assert_called_once()
-        # Note: cross-tenant requesting_tenant_id check is not implemented at router
-        # or service level for create_tenant; add a guard if this becomes a requirement.

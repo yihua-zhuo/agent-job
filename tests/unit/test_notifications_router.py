@@ -335,17 +335,6 @@ class TestMarkAllRead:
 # ---------------------------------------------------------------------------
 
 
-class TestPreferences:
-    # TODO(#661): re-enable once notification_preferences table is implemented
-    @pytest.mark.skip(reason="notification_preferences table not yet implemented — see issue #661")
-    def test_get_preferences_ok(self):
-        client = _app()
-        response = client.get("/api/v1/notifications/preferences")
-        assert response.status_code == 200
-        data = response.json()["data"]
-        assert data == {"email": True, "sms": False, "in_app": True, "push": False}
-
-
 class TestNotificationPreferencesUnimplemented:
     """Stub coverage for notification_preferences endpoints — not yet implemented.
 
@@ -570,11 +559,10 @@ class TestInvalidTenant:
         assert response.status_code == 401
 
     def test_list_notifications_invalid_tenant_type(self):
-        """Non-integer tenant_id is not caught by the tenant_id guard (not None/0); preferences endpoint returns 501."""
+        """Non-integer tenant_id bypasses the integer tenant_id guard; preferences endpoint returns 501."""
         app = FastAPI()
         app.include_router(notifications_router)
-        # simulate AuthContext with non-integer tenant_id (edge case)
-        app.dependency_overrides[require_auth] = lambda: AuthContext(user_id=99, tenant_id="acme", roles=[])
+        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(user_id=99, tenant_id="acme")
         app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
         client = TestClient(app, raise_server_exceptions=False)
         response = client.get("/api/v1/notifications/preferences")

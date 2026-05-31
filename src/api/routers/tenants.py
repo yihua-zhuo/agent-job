@@ -4,7 +4,7 @@ Services raise AppException on errors (caught by global handler in main.py).
 Router wraps successful results in {"success": True, "data": ..., "message": ...}.
 """
 
-from fastapi import APIRouter, Body, Depends, Query
+from fastapi import APIRouter, Body, Depends, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -129,7 +129,7 @@ async def list_tenants(
 
 @tenants_router.put("/{tenant_id}")
 async def update_tenant(
-    tenant_id: int,
+    tenant_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
     body: TenantUpdate = Body(...),

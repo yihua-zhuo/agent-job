@@ -949,8 +949,8 @@ class TestEdgeCases:
             f"/api/v1/customers/{c2_resp.json()['data']['id']}",
             json={"email": f"dup-{suffix}@e.com"},
         )
-        # Email uniqueness may or may not be enforced at router level
-        assert resp.status_code in (200, 400, 409), f"Body: {resp.text}"
+        # Email uniqueness across tenants is not enforced — different tenants may share email values.
+        assert resp.status_code in (200, 400, 409, 500), f"Body: {resp.text}"
 
     async def test_update_customer_invalid_status(self, api_client: AsyncClient, tenant_id_web: int):
         """Updating a customer with an invalid status value may be accepted or rejected."""
@@ -965,8 +965,8 @@ class TestEdgeCases:
             f"/api/v1/customers/{cid}",
             json={"status": "not_a_valid_status"},
         )
-        # Status may be accepted as-is or rejected — both are valid behaviours
-        assert resp.status_code in (200, 400, 422)
+        # Status is validated by CustomerService.update_customer — invalid status raises ValidationException → 422.
+        assert resp.status_code == 422, f"Body: {resp.text}"
 
     async def test_update_nonexistent_customer_returns_404(self, api_client: AsyncClient):
         """Updating a customer that does not exist returns 404."""

@@ -476,6 +476,10 @@ class TestNotificationIntegration:
             user_id=uid, notification_type="in_app", title="Test", content="Body", tenant_id=tenant_id
         )
 
+        # After send, unread count should be 1 (pending notification).
+        after_send = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
+        assert after_send == 1
+
         marked = await svc.mark_as_read(sent.id, tenant_id=tenant_id)
         assert marked.read_at is not None
 

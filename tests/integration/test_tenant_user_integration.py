@@ -118,8 +118,8 @@ class TestTenantServiceIntegration:
 
         # A tenant can only see itself via list_tenants (Rule126 enforcement).
         items, total = await svc.list_tenants(requesting_tenant_id=created_a.id, page=1, page_size=20)
-        assert total >= 1
-        assert len(items) >= 1
+        assert total == 1
+        assert len(items) == 1
         assert items[0].id == created_a.id
 
     async def test_get_tenant_stats(self, db_schema, tenant_id, async_session):

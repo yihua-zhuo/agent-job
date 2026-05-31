@@ -20,7 +20,7 @@ async def _seed_notification(
     # Maps to NotificationModel.template.
     template_name: str = "default",
     channel: str = "in_app",
-    params_: dict | None = None,
+    payload_params: dict | None = None,
     status: str = "pending",
     priority: str = "normal",
 ) -> NotificationModel:
@@ -30,7 +30,7 @@ async def _seed_notification(
         user_id=user_id,
         channel=channel,
         template=template_name,
-        params_=params_ or {},
+        payload_params=payload_params or {},
         status=status,
         priority=priority,
         # created_at is handled by the server_default on the ORM column.
