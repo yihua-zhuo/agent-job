@@ -17,6 +17,7 @@ class TestNotificationTemplateModel:
     def test_to_dict_returns_all_fields(self):
         """to_dict() serializes all required and optional fields correctly."""
         now = datetime(2026, 1, 15, 10, 30, 0)
+        updated = datetime(2026, 1, 16, 11, 0, 0)
         model = NotificationTemplateModel(
             id=1,
             tenant_id=42,
@@ -26,6 +27,7 @@ class TestNotificationTemplateModel:
             body_html="<p>Hello</p>",
             body_text="Hello",
             created_at=now,
+            updated_at=updated,
         )
         d = model.to_dict()
         assert d["id"] == 1
@@ -36,6 +38,7 @@ class TestNotificationTemplateModel:
         assert d["body_html"] == "<p>Hello</p>"
         assert d["body_text"] == "Hello"
         assert d["created_at"] == now.isoformat()
+        assert d["updated_at"] == updated.isoformat()
 
     def test_to_dict_with_null_optional_fields(self):
         """to_dict() handles subject, body_html, body_text as None gracefully."""
@@ -49,6 +52,7 @@ class TestNotificationTemplateModel:
             body_html=None,
             body_text=None,
             created_at=now,
+            updated_at=None,
         )
         d = model.to_dict()
         assert d["id"] == 5
@@ -59,6 +63,7 @@ class TestNotificationTemplateModel:
         assert d["body_html"] is None
         assert d["body_text"] is None
         assert d["created_at"] == now.isoformat()
+        assert d["updated_at"] is None
 
     @pytest.mark.parametrize("channel", ["email", "sms", "push", "in_app"])
     def test_channel_accepts_standard_values(self, channel):
@@ -86,7 +91,7 @@ class TestNotificationTemplateModel:
         ],
     )
     def test_channel_non_standard_values_accepted(self, channel):
-        """Channel does not enforce a value set at the ORM layer; any CHECK constraint or business-rule validation is delegated to the service or DB layer. This test documents the current acceptance boundary."""
+        """Non-standard channel values are accepted by the ORM; value enforcement is delegated to the service or DB layer."""
         now = datetime(2026, 5, 1, 12, 0, 0)
         model = NotificationTemplateModel(
             id=15,

@@ -19,7 +19,6 @@ already exist in that branch's timeline.
 
 from collections.abc import Sequence
 
-import sqlalchemy as sa
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -31,17 +30,8 @@ depends_on: str | Sequence[str] | None = None
 
 def upgrade() -> None:
     pass  # Merge-only marker — no schema changes; all DDL is in sub-revisions.
+    # Downgrade from this merge follows the first parent revision's downgrade path.
 
 
 def downgrade() -> None:
-    op.drop_table("notification_templates", if_exists=True)
-    op.drop_index(
-        op.f("ix_notification_templates_tenant_id"),
-        table_name="notification_templates",
-        if_exists=True,
-    )
-    op.execute(
-        sa.text(
-            "ALTER TABLE notification_templates DROP CONSTRAINT IF EXISTS notification_templates_tenant_id_fkey"
-        )
-    )
+    pass  # Each sub-revision owns its own DDL teardown; this merge revision only passes through.

@@ -12,7 +12,10 @@ class NotificationTemplateModel(Base):
     """NotificationTemplate entity mapped to the `notification_templates` table."""
 
     __tablename__ = "notification_templates"
-    __table_args__ = (Index("ix_notification_templates_tenant_id", "tenant_id"),)
+    __table_args__ = (
+        Index("ix_notification_templates_tenant_id", "tenant_id"),
+        {"sqlite_autoincrement": True},
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
@@ -22,6 +25,7 @@ class NotificationTemplateModel(Base):
     body_html: Mapped[str | None] = mapped_column(Text, nullable=True)
     body_text: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True, default=None)
 
     def to_dict(self) -> dict:
         return {
@@ -33,4 +37,5 @@ class NotificationTemplateModel(Base):
             "body_html": self.body_html,
             "body_text": self.body_text,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
