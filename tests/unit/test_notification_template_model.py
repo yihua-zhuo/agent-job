@@ -83,8 +83,8 @@ class TestNotificationTemplateModel:
             "x" * 21,
         ],
     )
-    def test_channel_rejects_non_standard_values(self, channel):
-        """Channel rejects values outside the defined set; model construction itself is not guarded, but any CHECK constraint (if added at the DB level) or business-rule validation at the service layer would catch these. This test documents the boundary — invalid values pass model construction silently; enforcement is delegated to the service/DB layer per rule 144."""
+    def test_channel_accepts_non_standard_values(self, channel):
+        """Channel does not enforce a value set at the ORM layer; any CHECK constraint or business-rule validation is delegated to the service or DB layer. This test documents the current acceptance boundary."""
         now = datetime(2026, 5, 1, 12, 0, 0)
         model = NotificationTemplateModel(
             id=15,
@@ -94,7 +94,7 @@ class TestNotificationTemplateModel:
             created_at=now,
         )
         d = model.to_dict()
-        assert d["channel"] == channel  # model accepts it; enforcement is at service/DB layer
+        assert d["channel"] == channel  # ORM accepts; enforcement delegated to service/DB layer
 
     def test_name_max_length(self):
         """Name field accepts strings up to and including 100 characters."""
