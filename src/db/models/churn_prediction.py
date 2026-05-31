@@ -20,17 +20,13 @@ class ChurnPredictionModel(Base):
     score: Mapped[float] = mapped_column(Float, nullable=False)
     tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
     factors: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
-    predicted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    __table_args__ = (
-        Index("ix_churn_predictions_tenant_customer", "tenant_id", "customer_id"),
-    )
+    __table_args__ = (Index("ix_churn_predictions_tenant_customer", "tenant_id", "customer_id"),)
 
     def to_dict(self) -> dict:
         return {

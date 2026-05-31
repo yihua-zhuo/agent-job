@@ -192,6 +192,7 @@ class CopilotService:
 
         async def get_churn_risk_handler(tenant_id: int, customer_id: int):
             from services.churn_prediction import ChurnPredictionService
+
             return await ChurnPredictionService(self.session).get_churn_prediction(customer_id, tenant_id)
 
         return {

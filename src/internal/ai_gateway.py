@@ -34,9 +34,7 @@ class AIChatGateway:
         """
         return await self._call_gateway(messages, context or {})
 
-    async def _call_gateway(
-        self, messages: list[dict[str, str]], context: dict[str, Any]
-    ) -> AIResponse:
+    async def _call_gateway(self, messages: list[dict[str, str]], context: dict[str, Any]) -> AIResponse:
         """Inner call — replace this method to wire in a real MiniMax-M2.7 endpoint.
 
         The stub below is deterministic so unit tests are stable.  It uses a

@@ -92,9 +92,7 @@ async def refresh_enrichment(
 
     # Verify the customer belongs to this tenant before calling the service.
     customer_result = await session.execute(
-        select(CustomerModel).where(
-            and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == ctx.tenant_id)
-        )
+        select(CustomerModel).where(and_(CustomerModel.id == customer_id, CustomerModel.tenant_id == ctx.tenant_id))
     )
     if customer_result.scalar_one_or_none() is None:
         raise NotFoundException("Customer")

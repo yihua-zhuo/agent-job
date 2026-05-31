@@ -18,7 +18,9 @@ from api import routers
 
 def iter_routers() -> Iterator[APIRouter]:
     """Yield all APIRouter instances exported by modules in ``api.routers``."""
-    for info in sorted(pkgutil.iter_modules(routers.__path__, prefix=f"{routers.__name__}."), key=lambda item: item.name):
+    for info in sorted(
+        pkgutil.iter_modules(routers.__path__, prefix=f"{routers.__name__}."), key=lambda item: item.name
+    ):
         module = importlib.import_module(info.name)
         for name in sorted(dir(module)):
             value = getattr(module, name)

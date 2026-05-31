@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=30, ge=1)
 
     # WebAuthn
-    webauthn_rp_id: str | None = Field(default=None, description="WebAuthn Relying Party ID (e.g. localhost or your domain)")
+    webauthn_rp_id: str | None = Field(
+        default=None, description="WebAuthn Relying Party ID (e.g. localhost or your domain)"
+    )
     webauthn_rp_name: str | None = Field(default=None, description="WebAuthn Relying Party name")
 
     # CORS

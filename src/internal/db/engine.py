@@ -106,12 +106,10 @@ def _build_async_engine(url: str) -> AsyncEngine:
         credentials = url[creds_start:creds_end]
         user_part, password = credentials.rsplit(":", 1)
         password = unquote(password)
-        host_port = url[creds_end + 1:]
+        host_port = url[creds_end + 1 :]
         last_colon = host_port.rfind(":")
         if last_colon == -1:
-            raise ValueError(
-                "Invalid Supabase pooler URL: no port separator ':' found in host portion"
-            )
+            raise ValueError("Invalid Supabase pooler URL: no port separator ':' found in host portion")
         port_and_path = host_port[last_colon + 1 :]
         if "/" in port_and_path:
             port, path = port_and_path.split("/", 1)
@@ -180,12 +178,12 @@ def get_async_session_factory() -> async_sessionmaker[AsyncSession]:
         with _async_session_lock:
             if _async_session_factory is None:
                 _async_session_factory = async_sessionmaker(
-            bind=get_async_engine(),
-            class_=AsyncSession,
-            autoflush=False,
-            autocommit=False,
-            expire_on_commit=False,
-        )
+                    bind=get_async_engine(),
+                    class_=AsyncSession,
+                    autoflush=False,
+                    autocommit=False,
+                    expire_on_commit=False,
+                )
     return _async_session_factory
 
 
