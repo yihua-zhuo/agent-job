@@ -344,11 +344,100 @@ def get_handlers(state: MockState) -> list[Callable[..., MockResult | None]]:
         make_notification_handler(state),
         make_reminder_handler(state),
         make_smart_notification_handler(state),
+        make_notification_analytics_handler(state),
     ]
+
+
+def make_notification_analytics_handler(state):
+    """Return a handler that manages an in-memory notification_analytics store in state."""
+
+    def handler(sql_text: str, params: dict[str, Any]) -> MockResult | None:
+        # Initialise on first use; use getattr to avoid class-attribute shadowing
+        # when tests pre-seed state._notification_analytics before the session is built.
+        store = getattr(state, "_notification_analytics", None)
+        if store is None:
+            store = {}
+            state._notification_analytics = store
+
+        # Id counter: starts at 1, never reused after deletion (Rule 31).
+        next_id = getattr(state, "_notification_analytics_next_id", None)
+        if next_id is None:
+            # Bootstrap from existing store size so pre-seeded records keep their IDs.
+            next_id = max((r.get("id", 0) for r in store.values()), default=0) + 1
+            state._notification_analytics_next_id = next_id
+
+        sql_text_lower = sql_text.lower()
+
+        # SELECT: must be checked before INSERT/UPDATE since INSERT/UPDATE text also contains "from".
+        # NOTE: check for count(...) before the generic SELECT below — COUNT queries must
+        # return a scalar, not a row.
+        if "select" in sql_text_lower and "count(" in sql_text_lower and "from notification_analytics" in sql_text_lower:
+            nid = params.get("notification_id") or params.get("notification_id_1")
+            tid = params.get("tenant_id") or params.get("tenant_id_1")
+            count = sum(
+                1
+                for r in store.values()
+                if r.get("notification_id") == nid
+                and r.get("tenant_id") == tid
+                and r.get("opened_at") is not None
+            )
+            return MockResult([[count]])
+
+        if "select" in sql_text_lower and "from notification_analytics" in sql_text_lower and "notification_id" in sql_text_lower:
+            nid = params.get("notification_id") or params.get("notification_id_1")
+            tid = params.get("tenant_id") or params.get("tenant_id_1")
+            key = (nid, tid)
+            record = store.get(key)
+            if record:
+                return MockResult([_notification_analytics_to_row(record)])
+            return MockResult([])
+
+        if "insert into notification_analytics" in sql_text_lower:
+            key = (params.get("notification_id"), params.get("tenant_id"))
+            if key in store:
+                # Upsert: update existing record's timestamps — id is immutable (Rule 133).
+                row = store[key]
+                row["opened_at"] = params.get("opened_at")
+                row["clicked_at"] = params.get("clicked_at")
+                row["updated_at"] = params.get("opened_at") or datetime.now(UTC)
+                return MockResult([_notification_analytics_to_row(row)])
+            nid = params.get("notification_id")
+            tid = params.get("tenant_id")
+            record = {
+                "id": next_id,
+                "notification_id": nid,
+                "tenant_id": tid,
+                "opened_at": params.get("opened_at"),
+                "clicked_at": params.get("clicked_at"),
+                "channel": params.get("channel", "email"),
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
+            }
+            state._notification_analytics_next_id = next_id + 1
+            store[key] = record
+            return MockResult([_notification_analytics_to_row(record)])
+
+    return handler
+
+
+def _notification_analytics_to_row(r: dict):
+    return MockRow(
+        {
+            "id": r.get("id"),
+            "notification_id": r.get("notification_id"),
+            "tenant_id": r.get("tenant_id"),
+            "opened_at": r.get("opened_at"),
+            "clicked_at": r.get("clicked_at"),
+            "channel": r.get("channel", "email"),
+            "created_at": r.get("created_at"),
+            "updated_at": r.get("updated_at"),
+        }
+    )
 
 
 __all__ = [
     "get_handlers",
+    "make_notification_analytics_handler",
     "make_notification_handler",
     "make_reminder_handler",
     "make_smart_notification_handler",

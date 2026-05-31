@@ -12,6 +12,7 @@ from db.connection import get_db
 from db.models.smart_notification import Channel, Priority, Timing
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.constants.notification_constants import VALID_NOTIFICATION_CHANNELS
+from services.notification_analytics_service import NotificationAnalyticsService
 from services.notification_routing_service import NotificationRoutingService
 from services.notification_service import NotificationService
 
@@ -258,6 +259,32 @@ async def mark_notification_read(
     svc = NotificationService(session)
     data = await svc.mark_as_read(notification_id, tenant_id=current_user.tenant_id)
     return {"success": True, "data": data.to_dict(), "message": "通知已标记为已读"}
+
+
+@notifications_router.patch(
+    "/notifications/{notification_id}/open",
+    summary="Track a notification open event",
+)
+async def track_notification_open(
+    notification_id: int = Path(..., ge=1, description="Notification ID"),
+    current_user: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Record that a notification was opened and return the open count."""
+    if current_user.tenant_id is None or current_user.tenant_id == 0:
+        raise HTTPException(status_code=401, detail="无效的租户信息")
+
+    svc = NotificationAnalyticsService(session)
+    analytics = await svc.track_open(notification_id, tenant_id=current_user.tenant_id)
+    count = await svc.get_open_count(notification_id, tenant_id=current_user.tenant_id)
+    return {
+        "success": True,
+        "data": {
+            "notification_id": notification_id,
+            "opened_at": analytics.opened_at.isoformat() if analytics.opened_at else None,
+            "open_count": count,
+        },
+    }
 
 
 @notifications_router.post(
