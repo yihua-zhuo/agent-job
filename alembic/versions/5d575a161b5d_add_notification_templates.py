@@ -40,7 +40,7 @@ def upgrade() -> None:
             nullable=True,
         ),
         sa.PrimaryKeyConstraint("id"),
-        if_not_exists=True,
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
     )
     op.create_index(
         op.f("ix_notification_templates_tenant_id"),
@@ -49,16 +49,7 @@ def upgrade() -> None:
         unique=False,
         if_not_exists=True,
     )
-    # tenant_id FK — uses IF NOT EXISTS so existing constraints are not broken.
-    op.execute(
-        sa.text(
-            "DO $$ BEGIN "
-            "ALTER TABLE notification_templates ADD CONSTRAINT fk_notification_templates_tenant_id "
-            "FOREIGN KEY (tenant_id) REFERENCES tenants(id) ON DELETE CASCADE; "
-            "EXCEPTION WHEN duplicate_object OR undefined_object THEN NULL; "
-            "END $$"
-        )
-    )
+    # tenant_id FK is added via ForeignKeyConstraint in create_table above.
 
 
 def downgrade() -> None:

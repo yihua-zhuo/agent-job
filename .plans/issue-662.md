@@ -158,7 +158,7 @@ Inspect the generated `alembic/versions/<id>_drift_check.py` — both `up()` and
 - `src/db/models/notification_template.py` exists, defines `NotificationTemplateModel` with fields: `id`, `tenant_id`, `name`, `channel`, `subject`, `body_html`, `body_text`, `created_at`
 - `ruff check src/db/models/notification_template.py` exits 0
 - `alembic/versions/5d575a161b5d_add_notification_templates.py` exists and creates `notification_templates` table with correct column types and FK constraint on `tenant_id`
-- `alembic/versions/merge_heads_notification_templates_662.py` exists as a merge revision with `down_revision = (52b19ee00eaf, 5d575a161b5d)`, allowing `alembic upgrade head` to succeed on a fresh database
+- `alembic/versions/merge_nt_662.py` exists as a merge revision with `down_revision = (52b19ee00eaf, 5d575a161b5d)`, allowing `alembic upgrade head` to succeed on a fresh database
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` all exit 0 on the `alembic_dev` database
 - `tests/unit/test_notification_template_model.py` has 6 passing tests covering `to_dict`, null optionals, `updated_at`, `__tablename__`, length boundaries, and invalid-input acceptance
 - Drift check produces an empty migration (confirms model and DB schema are in sync)

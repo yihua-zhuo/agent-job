@@ -90,7 +90,7 @@ class TestNotificationTemplateModel:
             "x" * 21,
         ],
     )
-    def test_channel_accepts_non_standard_values(self, channel):
+    def test_channel_non_standard_values_accepted(self, channel):
         """Channel does not enforce a value set at the ORM layer; any CHECK constraint or business-rule validation is delegated to the service or DB layer. This test documents the current acceptance boundary."""
         now = datetime(2026, 5, 1, 12, 0, 0)
         model = NotificationTemplateModel(
