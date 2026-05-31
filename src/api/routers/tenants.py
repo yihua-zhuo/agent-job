@@ -4,12 +4,13 @@ Services raise AppException on errors (caught by global handler in main.py).
 Router wraps successful results in {"success": True, "data": ..., "message": ...}.
 """
 
-from fastapi import APIRouter, Body, Depends, Path, Query
+from fastapi import APIRouter, Body, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
+from pkg.errors.app_exceptions import ForbiddenException
 from services.tenant_service import TenantService
 
 tenants_router = APIRouter(prefix="/api/v1/tenants", tags=["tenants"])
@@ -91,7 +92,7 @@ async def get_tenant_usage(
 
 @tenants_router.get("/{tenant_id}")
 async def get_tenant(
-    tenant_id: int = Path(..., ge=1),
+    tenant_id: int,
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
@@ -101,6 +102,8 @@ async def get_tenant(
     record (requesting_tenant_id must match the target tenant_id). A service-level
     ForbiddenException is raised for cross-tenant access attempts.
     """
+    if tenant_id != ctx.tenant_id:
+        raise ForbiddenException("Cannot access other tenants")
     service = TenantService(session)
     data = await service.get_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id)
     return {"success": True, "data": data.to_dict()}
@@ -129,11 +132,13 @@ async def list_tenants(
 
 @tenants_router.put("/{tenant_id}")
 async def update_tenant(
-    tenant_id: int = Path(..., ge=1),
+    tenant_id: int,
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
     body: TenantUpdate = Body(...),
 ):
+    if tenant_id != ctx.tenant_id:
+        raise ForbiddenException("Cannot access other tenants")
     service = TenantService(session)
     update_data = body.model_dump(exclude_unset=True)
     update_data = {k: v for k, v in update_data.items() if v is not None}

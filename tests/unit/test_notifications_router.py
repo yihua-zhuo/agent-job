@@ -290,6 +290,7 @@ class TestMarkRead:
             client = _app()
             response = client.put("/api/v1/notifications/1/read")
             assert response.status_code == 200
+            assert response.json()["data"]["status"] == "read"
 
     def test_mark_read_not_found(self):
         with patch("api.routers.notifications.NotificationService") as svc_cls:
@@ -370,6 +371,9 @@ class TestCreateReminder:
             )
             assert response.status_code == 200
             assert response.json()["data"]["title"] == "Standup"
+            svc.create_reminder.assert_called_once_with(
+                user_id=99, tenant_id=1, title="Standup", content="Daily meeting", remind_at="2026-12-31T09:00:00", related_type=None, related_id=None
+            )
 
     def test_create_reminder_validation_error(self):
         client = _app()
@@ -378,6 +382,7 @@ class TestCreateReminder:
         errors = response.json().get("detail", [])
         error_fields = {e.get("loc")[-1] for e in errors}
         assert {"title", "remind_at"}.issubset(error_fields)
+        assert all(e.get("msg") for e in errors)
 
 
 # ---------------------------------------------------------------------------

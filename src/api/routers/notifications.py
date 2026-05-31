@@ -7,7 +7,6 @@ Router wraps service return values in success envelopes.
 from enum import StrEnum
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -191,10 +190,7 @@ async def get_notification_preferences(
     """Get the current user's notification preferences (stored per user)."""
     if current_user.tenant_id is None or current_user.tenant_id == 0:
         raise HTTPException(status_code=401, detail="无效的租户信息")
-    return JSONResponse(
-        status_code=501,
-        content={"success": False, "message": "notification_preferences table not yet implemented"},
-    )
+    raise HTTPException(status_code=501, detail="notification_preferences table not yet implemented")
 
 
 @notifications_router.put(
@@ -208,10 +204,7 @@ async def update_notification_preferences(
     """Update the current user's notification preferences."""
     if current_user.tenant_id is None or current_user.tenant_id == 0:
         raise HTTPException(status_code=401, detail="无效的租户信息")
-    return JSONResponse(
-        status_code=501,
-        content={"success": False, "message": "notification_preferences table not yet implemented"},
-    )
+    raise HTTPException(status_code=501, detail="notification_preferences table not yet implemented")
 
 
 # ---------------------------------------------------------------------------

@@ -161,6 +161,9 @@ class TestGetTenantEndpoint:
     def test_not_found_returns_404(self, tenant_router_client):
         client, svc = tenant_router_client
         svc.get_tenant = AsyncMock(side_effect=NotFoundException("Tenant"))
+        # Use matching tenant_id so the router guard passes; service raises 404.
+        app = client.app
+        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=9999)
         resp = client.get("/api/v1/tenants/9999")
         assert resp.status_code == 404
 
@@ -327,21 +330,19 @@ class TestTenantServiceSmoke:
 class TestTenantCrossTenantIsolation:
     """Rule 126: a tenant cannot read/modify another tenant's data via the API."""
 
-    def test_get_tenant_returns_404_for_unknown_tenant(self, tenant_router_client):
-        """Tenant A requesting tenant B's data via URL path tenant_id returns 404."""
+    def test_get_tenant_returns_403_for_cross_tenant(self, tenant_router_client):
+        """Tenant A requesting tenant B's data via URL path tenant_id is rejected by the router guard before reaching the service."""
         client, svc = tenant_router_client
-        svc.get_tenant = AsyncMock(side_effect=NotFoundException("Tenant"))
         resp = client.get("/api/v1/tenants/9999")
-        assert resp.status_code == 404
-        svc.get_tenant.assert_called_once_with(9999, requesting_tenant_id=1)
+        assert resp.status_code == 403
+        svc.get_tenant.assert_not_called()
 
     def test_get_tenant_forbidden_on_existing_cross_tenant(self, tenant_router_client):
-        """Tenant A requesting tenant B's data for an existing-but-inaccessible tenant returns 403."""
+        """Tenant A requesting tenant B's data for an existing tenant is rejected by the router guard (403) before reaching the service."""
         client, svc = tenant_router_client
-        svc.get_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 2"))
         resp = client.get("/api/v1/tenants/2")
         assert resp.status_code == 403
-        svc.get_tenant.assert_called_once_with(2, requesting_tenant_id=1)
+        svc.get_tenant.assert_not_called()
 
     def test_get_tenant_stats_returns_404_for_unknown_tenant(self, tenant_router_client):
         """Service raises NotFoundException for an unknown tenant."""
@@ -360,20 +361,15 @@ class TestTenantCrossTenantIsolation:
         svc.get_tenant_usage.assert_called_once()
 
     def test_update_tenant_rejects_cross_tenant_id(self, tenant_router_client):
-        """Tenant A updating tenant B's record via URL path tenant_id returns 403."""
+        """Tenant A updating tenant B's record via URL path tenant_id is rejected by the router guard (403) before reaching the service."""
         client, svc = tenant_router_client
-        svc.update_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 9999"))
         resp = client.put("/api/v1/tenants/9999", json={"name": "Stolen"})
         assert resp.status_code == 403
+        svc.update_tenant.assert_not_called()
 
-    def test_get_tenant_update_forbidden_on_cross_tenant(self, tenant_router_client):
-        """Tenant A requesting tenant B's data for an existing-but-inaccessible tenant via GET, then PUT."""
+    def test_update_tenant_forbidden_on_cross_tenant(self, tenant_router_client):
+        """Tenant A requesting tenant B's data via URL path is rejected by the router guard (403) before reaching the service."""
         client, svc = tenant_router_client
-        svc.get_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 2"))
-        resp = client.get("/api/v1/tenants/2")
-        assert resp.status_code == 403
-        svc.get_tenant.assert_called_once_with(2, requesting_tenant_id=1)
-        svc.update_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 2"))
         resp = client.put("/api/v1/tenants/2", json={"name": "Hijack"})
         assert resp.status_code == 403
-        svc.update_tenant.assert_called_once_with(2, requesting_tenant_id=1, name="Hijack")
+        svc.update_tenant.assert_not_called()

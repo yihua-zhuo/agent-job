@@ -52,12 +52,8 @@ class NotificationModel(Base):
             ),
         ),
         # DB-level enforcement of the channel, priority, and status allow-lists.
-        CheckConstraint(
-            column("channel").in_(["in_app", "email", "sms", "push"]), name="ck_notifications_channel"
-        ),
-        CheckConstraint(
-            column("priority").in_(["low", "normal", "high", "urgent"]), name="ck_notifications_priority"
-        ),
+        CheckConstraint(column("channel").in_(["in_app", "email", "sms", "push"]), name="ck_notifications_channel"),
+        CheckConstraint(column("priority").in_(["low", "normal", "high", "urgent"]), name="ck_notifications_priority"),
         CheckConstraint(
             column("status").in_(["pending", "read", "archived", "delivered", "failed"]),
             name="ck_notifications_status",
@@ -87,17 +83,12 @@ class NotificationModel(Base):
         # Allow-list filtering is applied on top-level keys via PAYLOAD_PARAMS_ALLOWED_KEYS.
         # Nested content (e.g. content field in payload_params) is intentionally exposed;
         # callers are responsible for their own PII-handling obligations.
-        if logger.isEnabledFor(logging.DEBUG):
-            params = self.payload_params
-            if params:
-                unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
-                if unknown:
-                    logger.info("Notification %d payload_params dropped keys: %s", self.id, sorted(unknown))
-                    params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
-        else:
-            params = self.payload_params
-            if params:
-                params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
+        params = self.payload_params
+        if params:
+            unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
+            if logger.isEnabledFor(logging.DEBUG) and unknown:
+                logger.info("Notification %d payload_params dropped keys: %s", self.id, sorted(unknown))
+            params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
         return {
             "id": self.id,
             "tenant_id": self.tenant_id,

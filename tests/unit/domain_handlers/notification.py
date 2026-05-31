@@ -157,7 +157,7 @@ def make_notification_handler(state):
         if "delete from notifications" in sql_text_lower:
             nid = params.get("id")
             n = state._notifications.get(nid)
-            if n and n.get("tenant_id") == params.get("tenant_id"):
+            if n and n.get("tenant_id") == params.get("tenant_id") and n.get("user_id") == params.get("user_id"):
                 del state._notifications[nid]
                 return MockResult([], rowcount=1)
             return MockResult([], rowcount=0)
@@ -182,8 +182,11 @@ def make_reminder_handler(state):
         sql_text_lower = sql_text.lower()
 
         if "insert into reminders" in sql_text_lower:
-            assert "tenant_id" in params and "user_id" in params, (
-                f"insert must bind tenant_id and user_id (got keys: {list(params.keys())})"
+            assert "tenant_id" in params and params["tenant_id"] is not None, (
+                f"insert must bind non-None tenant_id (got keys: {list(params.keys())})"
+            )
+            assert "user_id" in params and params["user_id"] is not None, (
+                f"insert must bind non-None user_id (got keys: {list(params.keys())})"
             )
             rid = state._reminders_next_id
             state._reminders_next_id += 1
@@ -238,16 +241,13 @@ def make_reminder_handler(state):
             tenant_id = params.get("tenant_id")
             user_id = params.get("user_id")
             # is_completed_filter comes from params (set by the service).
-            # Contract: upcoming_only=True → service binds is_completed=False explicitly.
-            #           upcoming_only=False → service binds no is_completed at all (None).
-            # This means upcoming_only=True produces is_completed=False and upcoming_only=False
-            # produces is_completed=None. Deriving upcoming_only via `is False` is therefore
-            # correct but fragile — it breaks if the service ever passes is_completed=False
-            # in a non-upcoming-only query. A dedicated _upcoming_only bool param would be
-            # cleaner and is worth considering if the service signature is refactored.
+            # The service always binds _upcoming_only explicitly (True for upcoming-only,
+            # False or absent for all reminders), so use it directly rather than deriving
+            # from is_completed=False — that derivation is fragile if the service ever
+            # passes is_completed=False in a non-upcoming query.
             is_completed_filter = params.get("is_completed")
             now = params.get("_now", datetime.now(UTC))
-            upcoming_only = params.get("_upcoming_only", is_completed_filter is False)
+            upcoming_only = params.get("_upcoming_only", False)
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)
             rows = [
@@ -287,16 +287,7 @@ def _reminder_to_row(r: dict):
 
 
 def get_handlers(state: MockState) -> list[Callable[[str, dict], MockResult | None]]:
-    handlers = [make_notification_handler(state), make_reminder_handler(state)]
-    # Deduplicate in case notification.py is listed alongside domain-specific modules
-    # that also export overlapping handlers (Rule 135).
-    seen_ids = set()
-    unique = []
-    for h in handlers:
-        if id(h) not in seen_ids:
-            seen_ids.add(id(h))
-            unique.append(h)
-    return unique
+    return [make_notification_handler(state), make_reminder_handler(state)]
 
 
 __all__ = ["get_handlers", "make_notification_handler", "make_reminder_handler"]
