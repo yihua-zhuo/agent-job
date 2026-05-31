@@ -8,8 +8,9 @@ from typing import Any
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
-# SQLAlchemy uses the Python attribute name as the bind parameter name for the
-# mapped `payload_params` attribute (which maps to DB column `params_`).
+# SQLAlchemy uses the Python attribute name as the bind parameter name for mapped
+# attributes; however, the ORM maps payload_params to DB column `params_`, so the
+# bind key used by the ORM is `params_`, not `payload_params`.
 _NOTIFICATION_PARAMS_KEY = "params_"
 
 
@@ -251,7 +252,7 @@ def make_reminder_handler(state):
             # in a non-upcoming-only query. A dedicated _upcoming_only bool param would be
             # cleaner and is worth considering if the service signature is refactored.
             is_completed_filter = params.get("is_completed")
-            now = params.get("_now")
+            now = params.get("_now", datetime.utcnow())
             upcoming_only = params.get("_upcoming_only", is_completed_filter is False)
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)

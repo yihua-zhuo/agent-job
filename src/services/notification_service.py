@@ -5,7 +5,6 @@ import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import and_, func, select, update
-from sqlalchemy import delete as sql_delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.notification import NotificationModel
@@ -230,9 +229,7 @@ class NotificationService:
         reminder = result.scalar_one_or_none()
         if reminder is None:
             raise NotFoundException("Reminder")
-        await self.session.execute(
-            sql_delete(ReminderModel).where(and_(ReminderModel.id == reminder_id, ReminderModel.tenant_id == tenant_id))
-        )
+        await self.session.delete(reminder)
         await self.session.flush()
         return reminder
 

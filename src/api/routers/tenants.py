@@ -115,7 +115,7 @@ async def list_tenants(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    items, total = await service.list_tenants(page=page, page_size=page_size)
+    items, total = await service.list_tenants(page=page, page_size=page_size, search=search, requesting_tenant_id=ctx.tenant_id)
     return _paginated([item.to_dict() for item in items], total, page, page_size)
 
 

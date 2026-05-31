@@ -234,6 +234,9 @@ class TestListTenantsEndpoint:
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["total"] == 1
+        svc.list_tenants.assert_called_once_with(
+            page=1, page_size=20, requesting_tenant_id=1, search=None
+        )
 
     def test_with_pagination_params(self, tenant_router_client):
         client, svc = tenant_router_client
@@ -242,6 +245,9 @@ class TestListTenantsEndpoint:
         svc.list_tenants = AsyncMock(return_value=([mock_item], 1))
         resp = client.get("/api/v1/tenants?page=2&page_size=5")
         assert resp.status_code == 200
+        svc.list_tenants.assert_called_once_with(
+            page=2, page_size=5, requesting_tenant_id=1, search=None
+        )
 
     def test_page_size_over_100_rejected(self, tenant_router_client):
         client, _ = tenant_router_client
@@ -361,7 +367,7 @@ class TestTenantCrossTenantIsolation:
     def test_get_tenant_forbidden_on_existing_cross_tenant(self, tenant_router_client):
         """Tenant A requesting tenant B's data for an existing-but-inaccessible tenant returns 403."""
         client, svc = tenant_router_client
-        svc.get_tenant = AsyncMock(side_effect=ForbiddenException("Tenant 2"))
+        svc.get_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 2"))
         resp = client.get("/api/v1/tenants/2")
         assert resp.status_code == 403
         svc.get_tenant.assert_called_once_with(2, requesting_tenant_id=1)
@@ -392,6 +398,6 @@ class TestTenantCrossTenantIsolation:
     def test_update_tenant_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant A updating tenant B's record via URL path tenant_id returns 403."""
         client, svc = tenant_router_client
-        svc.update_tenant = AsyncMock(side_effect=ForbiddenException("Tenant 9999"))
+        svc.update_tenant = AsyncMock(side_effect=ForbiddenException(detail="Tenant 9999"))
         resp = client.put("/api/v1/tenants/9999", json={"name": "Stolen"})
         assert resp.status_code == 403

@@ -33,7 +33,7 @@ async def _seed_tenant(async_session) -> int:
         plan="pro",
         admin_email=f"admin_{suffix}@example.com",
     )
-    return result["id"]
+    return result.id
 
 
 async def _seed_user(async_session, tenant_id: int = 1, **overrides) -> int:

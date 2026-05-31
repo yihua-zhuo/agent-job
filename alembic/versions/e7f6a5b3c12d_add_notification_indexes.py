@@ -11,15 +11,17 @@ params_, status, priority, delivered_at, read_at) then adds:
 - partial index for unread in-app notifications
 """
 
+from typing import Union
+
 from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
 from sqlalchemy.dialects.postgresql import JSON
 
 from alembic import op
 
-revision = "e7f6a5b3c12d"
-down_revision = "82ecf4a34e34"
-branch_labels = None
-depends_on = None
+revision: str = "e7f6a5b3c12d"
+down_revision: str = "82ecf4a34e34"
+branch_labels: Union[str, None] = None
+depends_on: Union[str, None] = None
 
 
 def upgrade() -> None:
@@ -140,7 +142,7 @@ def downgrade() -> None:
     op.drop_column("notifications", "template")
     op.drop_column("notifications", "channel")
 
-    # Phase 3 (reversed, final): drop the restored old columns after the data-restoration
+    # Phase 5 (reversed): drop the restored old columns after the data-restoration
     # UPDATEs complete. These were re-added and backfilled in the first half of downgrade.
     op.drop_column("notifications", "related_id")
     op.drop_column("notifications", "related_type")

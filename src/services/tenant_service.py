@@ -77,8 +77,8 @@ class TenantService:
             raise ForbiddenException(f"Tenant {tenant_id}")
         tenant = await self._fetch_tenant(tenant_id, requesting_tenant_id)
 
-        allowed = {"name", "plan", "status"}
-        unknown = [k for k in kwargs if k not in allowed and k not in ("admin_email", "settings")]
+        allowed = {"name", "plan", "status", "admin_email", "settings"}
+        unknown = [k for k in kwargs if k not in allowed]
         if unknown:
             raise ValidationException(f"Unknown fields: {', '.join(sorted(unknown))}")
 
@@ -120,11 +120,14 @@ class TenantService:
         page: int = 1,
         page_size: int = 20,
         status: str | None = None,
+        search: str | None = None,
         requesting_tenant_id: int = 0,
     ) -> tuple[list[TenantModel], int]:
         conditions = [TenantModel.status != "deleted"]
         if status:
             conditions.append(TenantModel.status == status)
+        if search:
+            conditions.append(TenantModel.name.ilike(f"%{search}%"))
         # Rule126: non-zero requesting_tenant_id may only see its own tenant record
         if requesting_tenant_id > 0:
             conditions.append(TenantModel.id == requesting_tenant_id)

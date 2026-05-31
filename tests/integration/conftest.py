@@ -337,9 +337,6 @@ def event_loop_policy():
 # These are imported so pytest discovers them without needing web_conftest.py
 # to be explicitly listed as a conftest.py plugin.
 
-from collections.abc import AsyncGenerator
-
-import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
 
