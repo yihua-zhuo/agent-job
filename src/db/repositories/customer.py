@@ -136,11 +136,11 @@ class CustomerRepository(BaseRepository):
         recycle_count: int,
         recycle_history: list[dict[str, Any]],
         tenant_id: int,
+        now: datetime,
         *,
         customer_id: int,
     ) -> CustomerModel:
         """Reassign a lead (update owner, increment recycle_count, append history)."""
-        now = datetime.now(UTC)
         customer = await self.get_customer(customer_id, tenant_id)
         customer.owner_id = new_owner_id
         customer.assigned_at = now
@@ -323,7 +323,7 @@ class CustomerRepository(BaseRepository):
                 .values(
                     owner_id=0,
                     assigned_at=None,
-                    recycle_count=CustomerModel.recycle_count + 1,
+                    recycle_count=lead.recycle_count + 1,
                     updated_at=now,
                 )
             )

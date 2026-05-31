@@ -79,4 +79,4 @@ class BaseRepository:
         )
         result = await self.session.execute(stmt)
         await self.session.flush()
-        return cast(Any, result).rowcount > 0
+        return result.rowcount > 0

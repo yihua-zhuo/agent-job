@@ -12,7 +12,6 @@ import uuid
 
 import pytest
 
-from db.repositories.customer import CustomerRepository
 from models.ticket import TicketChannel, TicketPriority, TicketStatus
 from pkg.errors.app_exceptions import NotFoundException
 from services.customer_service import CustomerService
@@ -22,8 +21,8 @@ from services.user_service import UserService
 
 async def _seed_customer(async_session, tenant_id: int) -> int:
     """Create a customer and return its id."""
-    repo = CustomerRepository(async_session)
-    svc = CustomerService(repo)
+    from db.repositories.customer import CustomerRepository
+    svc = CustomerService(CustomerRepository(async_session))
     result = await svc.create_customer(
         data={"name": "Test Customer", "email": f"test-{uuid.uuid4().hex[:8]}@example.com"},
         tenant_id=tenant_id,

@@ -30,9 +30,13 @@ class CustomerService:
             d = data.to_dict()
         else:
             d = data or {}
+            try:
+                CustomerCreateDTO.from_dict(d)  # validates required fields
+            except ValueError as e:
+                raise ValidationException(str(e)) from e
         customer = await self.repository.create(d, tenant_id)
 
-        if routing_service is not None and customer.status == "lead" and customer.owner_id == 0:
+        if routing_service is not None and customer.status == CustomerStatus.LEAD.value and customer.owner_id == 0:
             await routing_service.auto_assign_lead(customer.id, tenant_id)
 
         # Upsert enrichment data when present in payload
@@ -137,6 +141,7 @@ class CustomerService:
             customer.recycle_count + 1,
             history,
             tenant_id,
+            now,
             customer_id=customer_id,
         )
 

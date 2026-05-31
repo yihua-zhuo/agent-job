@@ -203,7 +203,7 @@ async def create_customer(
 ):
     repo = CustomerRepository(session)
     service = CustomerService(repo)
-    routing_svc = LeadRoutingService(session)
+    routing_svc = LeadRoutingService(repo.session)
     result = await service.create_customer(body.model_dump(), tenant_id=ctx.tenant_id, routing_service=routing_svc)
     return {"success": True, "data": result.to_dict(), "message": "客户创建成功"}
 
@@ -408,7 +408,7 @@ async def list_sales_leads(
     """Unassigned leads queue for the sales team."""
     repo = CustomerRepository(session)
     service = CustomerService(repo)
-    routing_svc = LeadRoutingService(session)
+    routing_svc = LeadRoutingService(repo.session)
 
     if status == "unassigned":
         items, total = await service.get_unassigned_leads(ctx.tenant_id, page=page, page_size=page_size)
@@ -460,7 +460,7 @@ async def get_customer_assignment(
     """Current assignment info for a customer."""
     repo = CustomerRepository(session)
     service = CustomerService(repo)
-    routing_svc = LeadRoutingService(session)
+    routing_svc = LeadRoutingService(repo.session)
     customer = await service.get_customer(customer_id, tenant_id=ctx.tenant_id)
     sla = routing_svc.get_sla_status(customer.assigned_at)
 

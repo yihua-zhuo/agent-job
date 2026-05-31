@@ -121,7 +121,7 @@ Reading order followed:
 
 5. **Update `src/api/routers/customers.py` call sites**
 
-   Replace all 17 occurrences of:
+   Replace all occurrences of:
    ```python
    service = CustomerService(session)
    ```

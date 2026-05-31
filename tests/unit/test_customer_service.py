@@ -214,7 +214,7 @@ class TestCreateCustomerService:
 
     @pytest.mark.asyncio
     async def test_create_customer_empty_dict_uses_defaults(self, mock_db_session, mock_customer_repo):
-        """create_customer with empty dict falls back to default values."""
+        """create_customer with name+email falls back to default values for other fields."""
         mock_customer = MagicMock()
         mock_customer.id = 3
         mock_customer.name = "Customer"
@@ -230,11 +230,11 @@ class TestCreateCustomerService:
             new_callable=AsyncMock,
             return_value=None,
         ):
-            result = await service.create_customer({}, tenant_id=1)
+            result = await service.create_customer({"name": "Customer", "email": "default@example.com"}, tenant_id=1)
 
         call_args = mock_customer_repo.create.call_args[0][0]
-        assert call_args.get("name") is None  # repo fills default "Customer"
-        assert call_args.get("email") is None
+        assert call_args["name"] == "Customer"
+        assert call_args["email"] == "default@example.com"
         assert result.name == "Customer"
 
 
@@ -385,7 +385,7 @@ class TestEnrichmentUpsert:
 
         with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
             await service.create_customer(
-                {"name": "Enriched Customer", "enrichment_data": {"raw": "payload"}},
+                {"name": "Enriched Customer", "email": "enriched@example.com", "enrichment_data": {"raw": "payload"}},
                 tenant_id=1,
             )
             mock_upsert.assert_awaited_once_with(10, 1, {"raw": "payload"})
@@ -434,7 +434,7 @@ class TestEnrichmentUpsert:
 
         with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
             await service.create_customer(
-                {"name": "Plain Customer"},
+                {"name": "Plain Customer", "email": "plain@example.com"},
                 tenant_id=1,
             )
             mock_upsert.assert_not_called()
@@ -456,7 +456,7 @@ class TestEnrichmentUpsert:
 
         with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
             await service.create_customer(
-                {"name": "Null Enrich Customer", "enrichment_data": None},
+                {"name": "Null Enrich Customer", "email": "null@example.com", "enrichment_data": None},
                 tenant_id=1,
             )
             mock_upsert.assert_not_called()
