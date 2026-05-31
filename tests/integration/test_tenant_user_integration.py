@@ -33,7 +33,7 @@ async def _seed_tenant(async_session) -> int:
         plan="pro",
         admin_email=f"admin_{suffix}@example.com",
     )
-    return result["id"]
+    return result.id
 
 
 async def _seed_user(async_session, tenant_id: int = 1, **overrides) -> int:
@@ -72,12 +72,12 @@ class TestTenantServiceIntegration:
             admin_email=f"ent_{suffix}@example.com",
         )
         assert result is not None
-        tid = result["id"]
+        tid = result.id
 
-        fetched = await svc.get_tenant(tid)
+        fetched = await svc.get_tenant(tid, requesting_tenant_id=tid)
         assert fetched is not None
-        assert fetched["name"] == f"Tenant Create {suffix}"
-        assert fetched["plan"] == "enterprise"
+        assert fetched.name == f"Tenant Create {suffix}"
+        assert fetched.plan == "enterprise"
 
     async def test_update_tenant(self, db_schema, tenant_id, async_session):
         svc = TenantService(async_session)
@@ -87,11 +87,11 @@ class TestTenantServiceIntegration:
             plan="free",
             admin_email=f"old_{suffix}@example.com",
         )
-        tid = created["id"]
+        tid = created.id
 
-        updated = await svc.update_tenant(tid, name=f"Tenant New {suffix}", plan="pro")
+        updated = await svc.update_tenant(tid, requesting_tenant_id=tid, name=f"Tenant New {suffix}", plan="pro")
         assert updated is not None
-        assert updated["name"] == f"Tenant New {suffix}"
+        assert updated.name == f"Tenant New {suffix}"
 
     async def test_delete_tenant(self, db_schema, tenant_id, async_session):
         svc = TenantService(async_session)
@@ -101,24 +101,26 @@ class TestTenantServiceIntegration:
             plan="free",
             admin_email=f"del_{suffix}@example.com",
         )
-        tid = created["id"]
+        tid = created.id
 
-        deleted = await svc.delete_tenant(tid)
+        deleted = await svc.delete_tenant(tid, requesting_tenant_id=tid)
         assert deleted is not None
 
         # After deletion, get_tenant should raise NotFoundException because status is "deleted"
         with pytest.raises(NotFoundException):
-            await svc.get_tenant(tid)
+            await svc.get_tenant(tid, requesting_tenant_id=tid)
 
     async def test_list_tenants(self, db_schema, tenant_id, async_session):
         svc = TenantService(async_session)
         suffix = uuid.uuid4().hex[:8]
-        for name in [f"List Ten {suffix} A", f"List Ten {suffix} B"]:
-            await svc.create_tenant(name=name, plan="free", admin_email=f"{name.lower().replace(' ', '_')}@example.com")
+        created_a = await svc.create_tenant(name=f"List Ten {suffix} A", plan="free", admin_email=f"{suffix}a@example.com")
+        await svc.create_tenant(name=f"List Ten {suffix} B", plan="free", admin_email=f"{suffix}b@example.com")
 
-        items, total = await svc.list_tenants(page=1, page_size=20)
-        assert total >= 2
-        assert len(items) >= 2
+        # A tenant can only see itself via list_tenants (Rule126 enforcement).
+        items, total = await svc.list_tenants(requesting_tenant_id=created_a.id, page=1, page_size=20)
+        assert total == 1
+        assert len(items) == 1
+        assert items[0].id == created_a.id
 
     async def test_get_tenant_stats(self, db_schema, tenant_id, async_session):
         svc = TenantService(async_session)
@@ -128,10 +130,12 @@ class TestTenantServiceIntegration:
             plan="free",
             admin_email=f"stats_{suffix}@example.com",
         )
-        tid = created["id"]
-        stats = await svc.get_tenant_stats(tid)
-        assert stats is not None
-        assert isinstance(stats, dict)
+        tid = created.id
+        stats = await svc.get_tenant_stats(tid, requesting_tenant_id=tid)
+        assert hasattr(stats, "to_dict")
+        stats_dict = stats.to_dict()
+        assert "user_count" in stats_dict
+        assert "tenant_id" in stats_dict
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

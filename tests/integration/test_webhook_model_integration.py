@@ -25,7 +25,7 @@ async def _seed_tenant(async_session, *, name: str | None = None) -> int:
         plan="pro",
         admin_email=f"webhook_admin_{suffix}@example.com",
     )
-    return result["id"]
+    return result.id
 
 
 @pytest.mark.integration

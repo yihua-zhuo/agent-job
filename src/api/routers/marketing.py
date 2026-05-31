@@ -155,3 +155,14 @@ async def delete_campaign(
     svc = MarketingService(session)
     campaign = await svc.delete_campaign(campaign_id, tenant_id=ctx.tenant_id)
     return {"success": True, "data": campaign.to_dict()}
+
+
+@marketing_router.get("/campaigns/{campaign_id}/stats")
+async def get_campaign_stats(
+    campaign_id: int,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    svc = MarketingService(session)
+    stats = await svc.get_campaign_stats(campaign_id, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": stats}

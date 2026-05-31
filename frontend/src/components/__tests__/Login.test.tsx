@@ -61,9 +61,9 @@ describe("Login component", () => {
   });
 
   it("shows loading indicator and disables fields while submitting", async () => {
-    let release: () => void = () => {};
+    let resolve: () => void = () => {};
     mockSubmit.mockImplementation(
-      () => new Promise<void>((resolve) => { release = resolve; })
+      () => new Promise<void>((r) => { resolve = r; })
     );
     render(<Login onSubmit={mockSubmit} />);
     fireEvent.click(screen.getByRole("button", { name: /sign in/i }));
@@ -77,7 +77,7 @@ describe("Login component", () => {
       { timeout: 1000 }
     );
     // Release the mock so the component resets for subsequent tests.
-    release();
+    resolve();
   });
 
   it("disables fields and shows loading when external isLoading is true", async () => {
