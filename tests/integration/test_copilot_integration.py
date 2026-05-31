@@ -52,11 +52,8 @@ class TestCopilotIntegration:
 
         result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
         user = result.scalar_one_or_none()
-        if user is None:
-            user_id = _TENANT_1_USER_ID
-            await seed_user(async_session, tenant_id_web, user_id)
-        else:
-            user_id = user.id
+        assert user is not None, f"No user found for tenant {tenant_id_web} — auth_headers_web must run first"
+        user_id = user.id
         conv = await seed_conversation(async_session, tenant_id_web, user_id=user_id)
         await seed_message(async_session, conv.id, tenant_id_web, "user", "Hello!")
         await seed_message(async_session, conv.id, tenant_id_web, "assistant", "Hi there!")
@@ -83,11 +80,8 @@ class TestCopilotIntegration:
 
         result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
         user = result.scalar_one_or_none()
-        if user is None:
-            user_id = _TENANT_1_USER_ID
-            await seed_user(async_session, tenant_id_web, user_id)
-        else:
-            user_id = user.id
+        assert user is not None, f"No user found for tenant {tenant_id_web} — auth_headers_web must run first"
+        user_id = user.id
         conv = await seed_conversation(async_session, tenant_id_web, user_id=user_id)
         for i in range(25):
             await seed_message(async_session, conv.id, tenant_id_web, "user", f"Message {i}")

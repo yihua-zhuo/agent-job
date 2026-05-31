@@ -329,7 +329,7 @@ class TestTenantCrossTenantIsolation:
         svc.get_tenant = AsyncMock(side_effect=ForbiddenException("Cannot access other tenants"))
         resp = client.get("/api/v1/tenants/9999")
         assert resp.status_code == 403
-        svc.get_tenant.assert_called_once()
+        svc.get_tenant.assert_called_once_with(9999, requesting_tenant_id=1)
 
     def test_get_tenant_forbidden_on_existing_cross_tenant(self, tenant_router_client):
         """Tenant A requesting tenant B's data for an existing tenant is rejected by the service's requesting_tenant_id check (403)."""
@@ -337,7 +337,7 @@ class TestTenantCrossTenantIsolation:
         svc.get_tenant = AsyncMock(side_effect=ForbiddenException("Cannot access other tenants"))
         resp = client.get("/api/v1/tenants/2")
         assert resp.status_code == 403
-        svc.get_tenant.assert_called_once()
+        svc.get_tenant.assert_called_once_with(2, requesting_tenant_id=1)
 
     def test_get_tenant_stats_returns_404_for_unknown_tenant(self, tenant_router_client):
         """Service raises NotFoundException for an unknown tenant."""
@@ -380,4 +380,10 @@ class TestTenantCrossTenantIsolation:
         svc.create_tenant = AsyncMock(return_value=mock_tenant)
         resp = client.post("/api/v1/tenants", json={"name": "NewTenant", "plan": "free"})
         assert resp.status_code == 201
-        svc.create_tenant.assert_called_once()
+        svc.create_tenant.assert_called_once_with(
+            name="NewTenant",
+            plan="free",
+            admin_email=None,
+            settings=None,
+            requesting_tenant_id=1,
+        )

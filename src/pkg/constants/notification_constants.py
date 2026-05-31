@@ -10,6 +10,6 @@ VALID_PRIORITIES: frozenset[str] = frozenset({"low", "normal", "high", "urgent"}
 VALID_NOTIFICATION_CHANNELS: frozenset[str] = frozenset({"in_app", "email", "sms", "push"})
 
 # Allowed keys in NotificationModel.payload_params.
-# Enforced at insert time by NotificationService.send_notification, and again
-# at serialization time by NotificationModel.to_dict().
+# Enforced at insert time by NotificationService.send_notification (lines 76-78),
+# and again at serialization time by NotificationModel.to_dict().
 PAYLOAD_PARAMS_ALLOWED_KEYS: frozenset[str] = frozenset({"content", "related_type", "related_id"})

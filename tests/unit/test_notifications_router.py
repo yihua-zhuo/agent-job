@@ -433,7 +433,9 @@ class TestListReminders:
             client = _app()
             response = client.get("/api/v1/reminders")
             assert response.status_code == 200
-            assert response.json()["data"] == {"items": [], "total": 0}
+            body = response.json()
+            assert body["success"] is True
+            assert body["data"] == {"items": [], "total": 0}
             svc.get_reminders.assert_called_once_with(user_id=99, tenant_id=1, upcoming_only=True)
 
     def test_list_reminders_with_items(self):
@@ -571,11 +573,7 @@ class TestInvalidTenant:
         assert response.status_code == 401
 
     def test_list_notifications_invalid_tenant_none(self):
-        app = FastAPI()
-        app.include_router(notifications_router)
-        app.dependency_overrides[require_auth] = lambda: AuthContext(user_id=99, tenant_id=None, roles=[])
-        app.dependency_overrides[get_db] = lambda: (yield make_mock_session([]))
-        client = TestClient(app, raise_server_exceptions=False)
+        client = self._app_invalid_tenant()
         response = client.get("/api/v1/notifications")
         assert response.status_code == 401
 

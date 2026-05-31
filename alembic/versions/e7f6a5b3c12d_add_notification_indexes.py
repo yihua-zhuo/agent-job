@@ -51,7 +51,7 @@ def upgrade() -> None:
     op.execute(
         sa.text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END WHERE status IS NULL")
     )
-    op.execute(sa.text("UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL"))
+    op.execute(sa.text("UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL AND channel = 'in_app'"))
     op.execute(sa.text("UPDATE notifications SET read_at = created_at WHERE is_read = true AND read_at IS NULL"))
     op.execute(sa.text("UPDATE notifications SET priority = 'normal' WHERE priority IS NULL"))
 
@@ -97,12 +97,13 @@ def downgrade() -> None:
     op.drop_index("ix_notifications_in_app_unread", table_name="notifications")
     op.drop_index("ix_notifications_tenant_user_status", table_name="notifications")
 
-    # Phase 4 (reversed): add back old columns first (needed before restore data step)
-    # is_read is added as nullable first to avoid constraint violations from Phase 3
-    # backfill — the NOT NULL constraint is applied after the UPDATE runs.
-    op.add_column("notifications", Column("type", String(length=50), nullable=True))
-    op.add_column("notifications", Column("title", String(length=255), nullable=True))
-    op.add_column("notifications", Column("content", String(length=2000), nullable=True))
+    # Phase 4 (reversed): add back old columns — NOT NULL constraints applied directly
+    # in add_column so no post-creation DO block is needed (no constraint-application
+    # window if the block fails). Defaults are set via server_default so existing rows
+    # satisfy NOT NULL without requiring a separate UPDATE.
+    op.add_column("notifications", Column("type", String(length=50), nullable=False, server_default=sa.text("'in_app'::character varying")))
+    op.add_column("notifications", Column("title", String(length=255), nullable=False, server_default=sa.text("''::character varying")))
+    op.add_column("notifications", Column("content", String(length=2000), nullable=False, server_default=sa.text("''::character varying")))
     op.add_column("notifications", Column("is_read", Boolean(), nullable=True, server_default=sa.text("false")))
     op.add_column("notifications", Column("related_type", String(length=50), nullable=True))
     op.add_column("notifications", Column("related_id", Integer(), nullable=True))
@@ -157,31 +158,6 @@ def downgrade() -> None:
             "END $$"
         )
     )
-    op.execute(
-        sa.text(
-            "DO $$ "
-            "BEGIN "
-            "IF NOT EXISTS ("
-            "SELECT 1 FROM information_schema.table_constraints "
-            "WHERE constraint_name = 'notifications_content_notnull' "
-            "AND table_name = 'notifications'"
-            ") THEN "
-            "ALTER TABLE notifications ALTER COLUMN content SET NOT NULL; "
-            "END IF; "
-            "END $$"
-        )
-    )
-    op.execute(
-        sa.text(
-            "DO $$ "
-            "BEGIN "
-            "IF NOT EXISTS ("
-            "SELECT 1 FROM information_schema.table_constraints "
-            "WHERE constraint_name = 'notifications_related_type_notnull' "
-            "AND table_name = 'notifications'"
-            ") THEN "
-            "ALTER TABLE notifications ALTER COLUMN related_type SET NOT NULL; "
-            "END IF; "
-            "END $$"
-        )
-    )
+    # content and title are NOT NULL via add_column (no post-creation constraint window).
+    # is_read is added as nullable, so its post-creation constraint is still needed.
+    # related_type is added as nullable; apply NOT NULL via DO block.

@@ -111,17 +111,7 @@ class TenantService:
         return await self.update_tenant(tenant_id, requesting_tenant_id=requesting_tenant_id, status="suspended")
 
     async def delete_tenant(self, tenant_id: int, requesting_tenant_id: int) -> TenantModel:
-        if tenant_id != requesting_tenant_id:
-            raise ForbiddenException("Access denied")
-        tenant = await self._get_tenant_or_404(tenant_id, requesting_tenant_id)
-        now = datetime.now(UTC)
-        new_settings = dict(tenant.settings or {})
-        new_settings["deleted_at"] = now.isoformat()
-        tenant.status = "deleted"
-        tenant.settings = new_settings
-        tenant.updated_at = now
-        await self.session.flush()
-        return tenant
+        return await self.update_tenant(tenant_id, requesting_tenant_id=requesting_tenant_id, status="deleted")
 
     async def list_tenants(
         self,
@@ -139,8 +129,12 @@ class TenantService:
         # Rule126: requesting_tenant_id restricts visibility to its own tenant record.
         conditions.append(TenantModel.id == requesting_tenant_id)
 
-        count_result = await self.session.execute(select(func.count(TenantModel.id)).where(and_(*conditions)))
-        total = count_result.scalar_one()
+        count_stmt = select(func.count(TenantModel.id)).where(and_(*conditions))
+        if search:
+            count_stmt = count_stmt.where(TenantModel.name.ilike(f"%{search}%"))
+
+        total_result = await self.session.execute(count_stmt)
+        total = total_result.scalar_one()
 
         offset = (page - 1) * page_size
         result = await self.session.execute(
