@@ -108,11 +108,23 @@ class NotificationAnalytics(Base):
     """Analytics record for a notification open/click event."""
 
     __tablename__ = "notification_analytics"
-    __table_args__ = (Index("ix_notification_analytics_notification_tenant", "notification_id", "tenant_id"),)
+    __table_args__ = (
+        Index("ix_notification_analytics_notification_tenant", "notification_id", "tenant_id"),
+        CheckConstraint(
+            column("channel").in_(["in_app", "email", "sms", "push"]),
+            name="ck_notification_analytics_channel",
+        ),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    notification_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    notification_id: Mapped[int] = mapped_column(
+        ForeignKey("notifications.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     clicked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    channel: Mapped[str] = mapped_column(String(50), nullable=False)
+    channel: Mapped[str] = mapped_column(String(50), nullable=False, server_default="email")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

@@ -382,6 +382,19 @@ def make_notification_analytics_handler(state):
             store[key] = record
             return MockResult([_notification_analytics_to_row(record)])
 
+        # UPDATE: must be checked before SELECT since UPDATE text also contains "from"
+        if "update notification_analytics" in sql_text_lower:
+            nid = params.get("notification_id") or params.get("notification_id_1")
+            tid = params.get("tenant_id") or params.get("tenant_id_1")
+            key = (nid, tid)
+            record = store.get(key)
+            if record:
+                record["opened_at"] = params.get("opened_at", record.get("opened_at"))
+                record["clicked_at"] = params.get("clicked_at", record.get("clicked_at"))
+                record["channel"] = params.get("channel", record.get("channel", "email"))
+                return MockResult([_notification_analytics_to_row(record)])
+            return MockResult([])
+
         # SELECT: match table name + notification_id (with or without table prefix)
         # NOTE: check for count(...) before the generic SELECT below — otherwise
         # COUNT queries are caught here and return the full row instead of the count value.
@@ -405,8 +418,6 @@ def make_notification_analytics_handler(state):
             if record:
                 return MockResult([_notification_analytics_to_row(record)])
             return MockResult([])
-
-        return None
 
     return handler
 

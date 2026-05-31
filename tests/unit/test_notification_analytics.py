@@ -2,7 +2,6 @@
 
 import pytest
 
-from pkg.errors.app_exceptions import NotFoundException
 from services.notification_analytics_service import NotificationAnalyticsService
 from tests.unit.conftest import MockState, make_mock_session
 from tests.unit.domain_handlers.notification import make_notification_analytics_handler
@@ -39,7 +38,10 @@ class TestTrackOpen:
 
         assert result.notification_id == 10
         assert result.tenant_id == 1
+        assert result.channel == "email"
         assert result.opened_at is not None
+        assert result.clicked_at is None
+        assert len(state._notification_analytics) == 1
 
     async def test_track_open_upsert(self, mock_db_session, service):
         """track_open called twice does not create two rows; second call updates opened_at."""
@@ -61,11 +63,32 @@ class TestTrackOpen:
         assert first.id == second.id
         assert len(state._notification_analytics) == 1
 
-    async def test_track_open_not_found(self, mock_db_session, service):
-        """track_open with unknown notification_id raises NotFoundException."""
-        with pytest.raises(NotFoundException) as exc_info:
-            await service.track_open(notification_id=9999, tenant_id=1)
-        assert "Notification" in str(exc_info.value.detail)
+    async def test_track_open_update_stamps_opened_at(self, mock_db_session, service):
+        """track_open stamps opened_at on a pre-existing record that has no opened_at yet."""
+        state = mock_db_session._state
+        state._notification_analytics = {
+            (10, 1): {
+                "id": 1,
+                "notification_id": 10,
+                "tenant_id": 1,
+                "opened_at": None,
+                "clicked_at": None,
+                "channel": "email",
+            }
+        }
+
+        result = await service.track_open(notification_id=10, tenant_id=1)
+
+        assert result.opened_at is not None
+
+    async def test_track_open_creates_when_absent(self, mock_db_session, service):
+        """track_open inserts a new record when no analytics row exists yet."""
+        result = await service.track_open(notification_id=10, tenant_id=1, channel="push")
+
+        assert result.notification_id == 10
+        assert result.tenant_id == 1
+        assert result.channel == "push"
+        assert result.opened_at is not None
 
 
 class TestGetOpenRate:
@@ -91,7 +114,7 @@ class TestGetOpenRate:
         }
 
         rate = await service.get_open_rate(notification_id=10, tenant_id=1)
-        assert rate >= 1.0
+        assert rate == 1.0
 
 
 class TestCrossTenantIsolation:
@@ -114,5 +137,5 @@ class TestCrossTenantIsolation:
         rate_tenant_1 = await service.get_open_rate(notification_id=10, tenant_id=1)
         rate_tenant_2 = await service.get_open_rate(notification_id=10, tenant_id=2)
 
-        assert rate_tenant_1 >= 1.0
+        assert rate_tenant_1 == 1.0
         assert rate_tenant_2 == 0.0

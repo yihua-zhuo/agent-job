@@ -67,10 +67,10 @@ Also add `make_notification_analytics_handler` to `__all__`.
 Create `src/services/notification_analytics_service.py` with:
 
 - Constructor: `def __init__(self, session: AsyncSession)` — no default, typed `AsyncSession`
-- `track_open(self, notification_id: int, tenant_id: int, channel: str = "email") -> NotificationAnalytics` — upsert semantics: `SELECT` by `(notification_id, tenant_id)`, update `opened_at` if found, otherwise `INSERT`. Calls `session.flush()` then returns the ORM object.
+- `track_open(self, notification_id: int, tenant_id: int, channel: str = "email") -> NotificationAnalytics` — SELECT by `(notification_id, tenant_id)`; if no row exists, INSERT a new one; if a row exists with `opened_at` unset, stamp `opened_at`; if already stamped, return unchanged. Returns the ORM object.
 - `get_open_rate(self, notification_id: int, tenant_id: int) -> float` — `SELECT COUNT(id) FROM notification_analytics WHERE notification_id=:id AND tenant_id=:tid AND opened_at IS NOT NULL`. Returns `0.0` when count is 0, otherwise returns `float(count)`.
 
-Both methods follow the multi-tenancy contract (always filter by `tenant_id`). Service raises `NotFoundException("Notification")` when the notification does not exist (SELECT returns nothing).
+Both methods follow the multi-tenancy contract (always filter by `tenant_id`).
 
 Imports from `db.models.notification import NotificationAnalytics`, `sqlalchemy.ext.asyncio.AsyncSession`, `sqlalchemy.select`, `sqlalchemy.func`, `datetime`/`timezone`, and `pkg.errors.app_exceptions.NotFoundException`.
 
@@ -210,7 +210,7 @@ Fix any errors before considering the issue complete.
 ## Acceptance Criteria
 
 - `NotificationAnalytics` ORM model exists in `src/db/models/notification.py` with fields `id`, `notification_id`, `tenant_id`, `opened_at`, `clicked_at`, `channel`
-- `NotificationAnalyticsService.track_open(notification_id, tenant_id)` returns an ORM object and follows upsert semantics
+- `NotificationAnalyticsService.track_open(notification_id, tenant_id, channel)` returns an ORM object with true upsert semantics (INSERT when absent, UPDATE when present)
 - `NotificationAnalyticsService.get_open_rate(notification_id, tenant_id)` returns `float`, returning `0.0` when no records exist
 - `PATCH /api/v1/notifications/{notification_id}/open` endpoint exists in `src/api/routers/notifications.py` and calls both service methods, returning `{"success": true, "data": {"opened_at": "...", "open_rate": float}}`
 - All SQL queries filter by `tenant_id` (multi-tenancy contract)

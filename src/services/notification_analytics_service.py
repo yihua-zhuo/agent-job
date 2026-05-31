@@ -3,21 +3,17 @@
 from datetime import UTC, datetime
 
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.notification import NotificationAnalytics
-from pkg.errors.app_exceptions import NotFoundException
 
 
 class NotificationAnalyticsService:
-    def __init__(self, session):
-        from sqlalchemy.ext.asyncio import AsyncSession
-
-        if session is None:
-            raise ValueError("session is required")
-        self._session: AsyncSession = session
+    def __init__(self, session: AsyncSession):
+        self._session = session
 
     async def track_open(self, notification_id: int, tenant_id: int, channel: str = "email") -> NotificationAnalytics:
-        """Upsert an analytics record, stamping opened_at if not already set."""
+        """Stamp opened_at on an existing analytics record, creating one if absent."""
         result = await self._session.execute(
             select(NotificationAnalytics).where(
                 NotificationAnalytics.notification_id == notification_id,
@@ -27,11 +23,19 @@ class NotificationAnalyticsService:
         existing = result.scalar_one_or_none()
 
         if existing is None:
-            raise NotFoundException("Notification")
+            record = NotificationAnalytics(
+                notification_id=notification_id,
+                tenant_id=tenant_id,
+                channel=channel,
+                opened_at=datetime.now(UTC),
+            )
+            self._session.add(record)
+            await self._session.flush()
+            return record
 
         if existing.opened_at is None:
             existing.opened_at = datetime.now(UTC)
-        await self._session.flush()
+            await self._session.flush()
         return existing
 
     async def get_open_rate(self, notification_id: int, tenant_id: int) -> float:
