@@ -228,6 +228,11 @@ async def async_session(db_schema) -> AsyncGenerator[AsyncSession, None]:
 
 @pytest.fixture(scope="function")
 def sync_session(db_schema) -> Generator[Session, None, None]:
+    """Synchronous session fixture — reserved for sync-only ORM operations.
+
+    Currently unused in tests but retained for migration scripts and ad-hoc
+    sync-backfill tooling that cannot be easily ported to async.
+    """
     SessionLocal = sessionmaker(bind=_get_test_sync_engine(), autoflush=False, autocommit=False)
     with SessionLocal() as session:
         yield session

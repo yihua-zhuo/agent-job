@@ -131,8 +131,6 @@ class TenantService:
         conditions.append(TenantModel.id == requesting_tenant_id)
 
         count_stmt = select(func.count(TenantModel.id)).where(and_(*conditions))
-        if search:
-            count_stmt = count_stmt.where(TenantModel.name.ilike(f"%{search}%"))
 
         total_result = await self.session.execute(count_stmt)
         total = total_result.scalar_one()

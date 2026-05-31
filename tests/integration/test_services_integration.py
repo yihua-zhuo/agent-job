@@ -113,8 +113,6 @@ class TestWorkflowIntegration:
 
     async def test_workflow_execute_not_found(self, db_schema, tenant_id, async_session):
         """execute_workflow with a non-existent id raises NotFoundException."""
-        from pkg.errors.app_exceptions import NotFoundException
-
         svc = WorkflowService(async_session)
         with pytest.raises(NotFoundException):
             await svc.execute_workflow(

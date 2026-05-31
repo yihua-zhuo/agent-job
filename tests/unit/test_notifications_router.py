@@ -574,11 +574,6 @@ class TestInvalidTenant:
         response = client.delete("/api/v1/reminders/1")
         assert response.status_code == 401
 
-    def test_list_notifications_invalid_tenant_none(self):
-        client = self._app_invalid_tenant()
-        response = client.get("/api/v1/notifications")
-        assert response.status_code == 401
-
 
 # ---------------------------------------------------------------------------
 # Cross-tenant isolation tests

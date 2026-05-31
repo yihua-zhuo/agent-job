@@ -98,9 +98,9 @@ async def get_tenant(
 ):
     """Fetch a tenant by ID.
 
-    Authorization is enforced by TenantService: requesting_tenant_id must match
-    the target tenant_id or a ForbiddenException is raised. No pre-check is needed
-    here since the service already handles cross-tenant access denial.
+    Authorization is enforced by TenantService._get_tenant_or_404: if
+    requesting_tenant_id does not match tenant_id, a ForbiddenException is
+    raised before any data is returned. No pre-check is needed here.
     """
     service = TenantService(session)
     data = await service.get_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id)

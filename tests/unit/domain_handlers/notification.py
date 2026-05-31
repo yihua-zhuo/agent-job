@@ -81,7 +81,9 @@ def make_notification_handler(state):
                 "user_id": params.get("user_id", 0),
                 "channel": params.get("channel"),
                 "template": params.get("template"),
-                "params_": params.get("payload_params"),
+                "params_": params.get("params_"),
+                # NOTE: If NotificationModel.payload_params ever changes to a
+                # different DB column name, update this bind key accordingly.
                 "status": params.get("status", "pending"),
                 "priority": params.get("priority", "normal"),
                 "created_at": params.get("created_at"),
@@ -142,6 +144,8 @@ def make_notification_handler(state):
             return MockResult([_notification_to_row(r) for r in rows[offset : offset + page_size]])
 
         if "update notifications" in sql_text_lower and "read_at" in sql_text_lower:
+            if "tenant_id" not in params or "user_id" not in params:
+                raise ValueError(f"update must bind tenant_id and user_id (got keys: {list(params.keys())})")
             nid = params.get("id")
             n = state._notifications.get(nid)
             # UPDATE with wrong tenant/user returns rowcount=0 — matches SQLAlchemy
@@ -154,6 +158,8 @@ def make_notification_handler(state):
             return MockResult([])
 
         if "delete from notifications" in sql_text_lower:
+            if "tenant_id" not in params or "user_id" not in params:
+                raise ValueError(f"delete must bind tenant_id and user_id (got keys: {list(params.keys())})")
             nid = params.get("id")
             n = state._notifications.get(nid)
             # DELETE with wrong tenant/user returns rowcount=0 — matches SQLAlchemy
@@ -288,7 +294,7 @@ def _reminder_to_row(r: dict):
     )
 
 
-def get_handlers(state: MockState) -> list[Callable[[str, dict], MockResult | None]]:
+def get_handlers(state: MockState) -> list[Callable[..., MockResult | None]]:
     return [make_notification_handler(state), make_reminder_handler(state)]
 
 
