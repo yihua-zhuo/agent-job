@@ -32,6 +32,17 @@ from services.workflow_service import WorkflowService
 class TestWorkflowIntegration:
     """Full workflow lifecycle via the real DB."""
 
+    async def _seed_tenant(self, async_session):
+        """Insert a tenant record so FK constraints are satisfied."""
+        svc = TenantService(async_session)
+        suffix = uuid.uuid4().hex[:8]
+        result = await svc.create_tenant(
+            name=f"WF Tenant {suffix}",
+            plan="pro",
+            admin_email=f"wf_{suffix}@example.com",
+        )
+        return result["id"]
+
     async def _seed_user(self, tenant_id: int, async_session) -> int:
         """Create a user and return their id (needed for created_by)."""
         user_svc = UserService(async_session)
@@ -45,13 +56,14 @@ class TestWorkflowIntegration:
         return reg.id
 
     async def test_create_and_get_workflow(self, db_schema, tenant_id, async_session):
-        uid = await self._seed_user(tenant_id, async_session)
+        tid = await self._seed_tenant(async_session)
+        uid = await self._seed_user(tid, async_session)
         svc = WorkflowService(async_session)
         result = await svc.create_workflow(
             name="Lead Follow-up",
             trigger_type="lead_created",
             created_by=uid,
-            tenant_id=tenant_id,
+            tenant_id=tid,
             description="Auto-follow-up on new leads",
             conditions=[{"field": "status", "operator": "==", "value": "new"}],
             actions=[{"type": "email.send", "template": "welcome"}],
@@ -59,35 +71,37 @@ class TestWorkflowIntegration:
         assert result.name == "Lead Follow-up"
         assert result.status == "draft"
 
-        fetched = await svc.get_workflow(result.id, tenant_id=tenant_id)
+        fetched = await svc.get_workflow(result.id, tenant_id=tid)
         assert fetched.name == "Lead Follow-up"
 
     async def test_workflow_activate_and_pause(self, db_schema, tenant_id, async_session):
-        uid = await self._seed_user(tenant_id, async_session)
+        tid = await self._seed_tenant(async_session)
+        uid = await self._seed_user(tid, async_session)
         svc = WorkflowService(async_session)
         created = await svc.create_workflow(
             name="Activation Test",
             trigger_type="deal_created",
             created_by=uid,
-            tenant_id=tenant_id,
+            tenant_id=tid,
             conditions=[],
             actions=[],
         )
 
-        activated = await svc.activate_workflow(created.id, tenant_id=tenant_id)
+        activated = await svc.activate_workflow(created.id, tenant_id=tid)
         assert activated.status == "active"
 
-        paused = await svc.pause_workflow(created.id, tenant_id=tenant_id)
+        paused = await svc.pause_workflow(created.id, tenant_id=tid)
         assert paused.status == "paused"
 
     async def test_workflow_evaluate_conditions(self, db_schema, tenant_id, async_session):
-        uid = await self._seed_user(tenant_id, async_session)
+        tid = await self._seed_tenant(async_session)
+        uid = await self._seed_user(tid, async_session)
         svc = WorkflowService(async_session)
         created = await svc.create_workflow(
             name="Condition Test",
             trigger_type="deal_created",
             created_by=uid,
-            tenant_id=tenant_id,
+            tenant_id=tid,
             conditions=[
                 {"field": "amount", "operator": ">=", "value": 10000},
                 {"field": "stage", "operator": "contains", "value": "qualified"},
@@ -96,12 +110,12 @@ class TestWorkflowIntegration:
         )
 
         match = await svc.evaluate_conditions(
-            created.id, {"amount": 50000, "stage": "qualified"}, tenant_id=tenant_id,
+            created.id, {"amount": 50000, "stage": "qualified"}, tenant_id=tid,
         )
         assert match is True
 
         no_match = await svc.evaluate_conditions(
-            created.id, {"amount": 500, "stage": "new"}, tenant_id=tenant_id,
+            created.id, {"amount": 500, "stage": "new"}, tenant_id=tid,
         )
         assert no_match is False
 

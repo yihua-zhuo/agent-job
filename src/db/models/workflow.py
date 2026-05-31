@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, ForeignKey, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -21,7 +21,7 @@ class WorkflowModel(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", server_default="manual", nullable=False)
-    trigger_config: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    trigger_config: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("{}"), nullable=False)
     actions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     conditions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="draft", server_default="draft", nullable=False)
