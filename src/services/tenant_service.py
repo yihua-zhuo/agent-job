@@ -85,9 +85,6 @@ class TenantService:
         if unknown:
             raise ValidationException(f"Unknown fields: {', '.join(sorted(unknown))}")
 
-        if "plan" in kwargs and kwargs["plan"] not in VALID_PLANS:
-            raise ValidationException(f"plan must be one of {sorted(VALID_PLANS)}, got {kwargs['plan']!r}")
-
         new_settings = dict(tenant.settings or {})
         settings_updated = False
         if "admin_email" in kwargs:

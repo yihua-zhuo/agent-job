@@ -28,8 +28,8 @@ async def chat(
         "data": {
             "response": ai_response.reply,
             "conversation_id": ai_response.conversation_id,
-            # tool_calls populated once the tool-calling loop is wired;
-            # get_tool_registry()['deferred'] gates availability.
+            # tool_calls is populated once the tool-calling loop is wired;
+            # each tool's 'deferred' flag in the tool registry (bool per tool) gates availability.
             "tool_calls": getattr(ai_response, "tool_calls", []) or [],
         },
     }

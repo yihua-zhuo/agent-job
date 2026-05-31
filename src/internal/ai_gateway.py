@@ -1,7 +1,7 @@
 """AI Chat Gateway — async adapter for the AI backend (stub / MiniMax-M2.7)."""
 
 import hashlib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 
@@ -13,6 +13,7 @@ class AIResponse:
     suggestions: list[str] | None = None
     actions: list[dict] | None = None
     conversation_id: int | None = None
+    tool_calls: list[dict] = field(default_factory=list)
 
 
 class AIChatGateway:

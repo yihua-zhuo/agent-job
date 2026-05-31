@@ -62,6 +62,8 @@ class NotificationCreate(BaseModel):
         # keys passed via kwargs in send_notification are not relevant here.
 # NOTE: 'password' in v.lower() is an intentional rough heuristic — real
         # credential-injection prevention belongs at the data layer.
+        # This check intentionally does NOT catch api_key, secret, token, or similar
+        # credential-adjacent strings; it only flags 'password' as a known sentinel.
         if v and "password" in v.lower():
             raise ValueError("content may not contain credential-class fields")
         return v
