@@ -148,7 +148,55 @@ async def create_smart_notification(
     }
 ```
 
-**Completion check**: `ruff check src/api/routers/notifications.py` exits 0.
+#### Priority IntEnum → string adapter (part of Step 2)
+
+`NotificationRoutingService.route()` reads `getattr(notification, "priority", None)` and expects string values (`"urgent"`, `"normal"`, `"low"`), but `SmartNotificationModel.priority` is a `Priority` IntEnum (values `0`, `1`, `2`). Directly passing the ORM object to `route()` would cause a `ValidationException`.
+
+Add the following constants and helper class before the `# Notification endpoints` comment (after `SmartNotificationCreate`):
+
+```python
+_PRIORITY_MAP = {Priority.urgent: "urgent", Priority.normal: "normal", Priority.low: "low"}
+
+
+def _priority_to_string(priority) -> str:
+    """Convert a priority value (Priority enum, int, or string) to routing string."""
+    if isinstance(priority, Priority):
+        return _PRIORITY_MAP[priority]
+    if isinstance(priority, int):
+        try:
+            return _PRIORITY_MAP[Priority(priority)]
+        except KeyError:
+            return str(priority)
+    return str(priority)
+
+
+class _MockRoutingRecord:
+    """Lightweight adapter that exposes priority as a string for NotificationRoutingService.
+
+    Rather than mutate the ORM object (which would corrupt in-memory state before
+    serialization), we project it into a plain adapter with priority converted to a string.
+    """
+
+    def __init__(self, record):
+        self.id = record.id
+        self.tenant_id = record.tenant_id
+        self.priority = _priority_to_string(record.priority)
+        self.channel = record.channel
+        self.timing = record.timing
+        self.summarized_content = record.summarized_content
+        self.recipient_filter = record.recipient_filter
+```
+
+In the endpoint, replace `deliveries = await routing_svc.route(record, ...)` with:
+
+```python
+    routing_record = _MockRoutingRecord(record)
+    deliveries = await routing_svc.route(routing_record, tenant_id=current_user.tenant_id)
+```
+
+The `isinstance` guard in `_priority_to_string` handles all three input shapes (enum, int, string), and `_MockRoutingRecord` projects the ORM object into the shape `route()` expects.
+
+**Completion check**: `ruff check src/` exits 0.
 
 ### Step 3: Add unit tests in `tests/unit/test_notifications.py`
 

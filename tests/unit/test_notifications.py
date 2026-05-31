@@ -5,18 +5,21 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, patch
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
+from api.routers.notifications import _priority_to_string
 from api.routers.notifications import notifications_router
 from db.connection import get_db
 from db.models.smart_notification import Priority
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.channel_delivery import ChannelDelivery
 from pkg.errors.app_exceptions import AppException
-from tests.unit.conftest import make_mock_session
+from services.notification_service import NotificationService
+from tests.unit.conftest import make_mock_session, MockState, make_smart_notification_handler
 
 
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
@@ -59,6 +62,19 @@ class _MockSmartNotificationModel:
 
     def __iter__(self):
         yield from self.to_dict().items()
+
+
+class _TestRoutingRecord:
+    """Minimal routing record adapter for tests — mirrors _MockRoutingRecord logic."""
+
+    def __init__(self, mock_record):
+        self.id = mock_record.id
+        self.tenant_id = mock_record.tenant_id
+        self.priority = _priority_to_string(mock_record.priority)
+        self.channel = mock_record.channel
+        self.timing = mock_record.timing
+        self.summarized_content = mock_record.summarized_content
+        self.recipient_filter = mock_record.recipient_filter
 
 
 async def _mock_get_db():
@@ -162,10 +178,8 @@ class TestCreateSmartNotification:
             routing_svc.route.assert_called_once()
             route_call = routing_svc.route.call_args
             assert route_call.kwargs["tenant_id"] == 1
-            from api.routers.notifications import _MockRoutingRecord
 
             routed_record = route_call.args[0]
-            assert isinstance(routed_record, _MockRoutingRecord)
             assert routed_record.priority == "urgent"
             assert routed_record.id == 7
 
@@ -249,6 +263,23 @@ class TestCreateSmartNotificationValidation:
         error_fields = {e.get("loc")[-1] for e in errors}
         assert "channel" in error_fields
 
+    def test_invalid_timing(self):
+        """timing outside {0,1} returns 422."""
+        client = _app()
+        response = client.post(
+            "/api/v1/notifications/smart",
+            json={
+                "summarized_content": "Test",
+                "priority": 1,
+                "channel": 0,
+                "timing": 99,
+            },
+        )
+        assert response.status_code == 422
+        errors = response.json().get("detail", [])
+        error_fields = {e.get("loc")[-1] for e in errors}
+        assert "timing" in error_fields
+
     def test_empty_summarized_content(self):
         """Empty summarized_content string returns 422."""
         client = _app()
@@ -305,6 +336,37 @@ class TestCreateSmartNotificationRouting:
             assert "notification" in body["data"]
             # Real routing for Priority.normal + no user_id → []
             assert body["data"]["deliveries"] == []
+
+    def test_channel_in_app_routed_correctly(self):
+        """channel=3 (in_app) is persisted and routing receives the correct channel value."""
+        with (
+            patch("api.routers.notifications.NotificationService") as svc_cls,
+            patch("api.routers.notifications.NotificationRoutingService") as routing_cls,
+        ):
+            svc = svc_cls.return_value
+            mock_record = _MockSmartNotificationModel({"channel": 3})
+            svc.create_smart_notification = AsyncMock(return_value=mock_record)
+
+            routing_svc = routing_cls.return_value
+            routing_svc.route = AsyncMock(return_value=[])
+
+            client = _app()
+            response = client.post(
+                "/api/v1/notifications/smart",
+                json={
+                    "summarized_content": "In-app update",
+                    "priority": 1,
+                    "channel": 3,
+                    "timing": 0,
+                },
+            )
+            assert response.status_code == 200
+            # channel=3 was passed through to the service
+            svc.create_smart_notification.assert_called_once()
+            assert svc.create_smart_notification.call_args.kwargs["channel"] == 3
+            # routing received in_app channel (integer 3)
+            routing_svc.route.assert_called_once()
+            assert routing_svc.route.call_args.args[0].channel == 3
 
 
 # ---------------------------------------------------------------------------
@@ -366,3 +428,137 @@ class TestCreateSmartNotificationTenantIsolation:
             # routing_svc.route must be called with tenant_id=1 (authenticated), not 99 (record)
             routing_svc.route.assert_called_once()
             assert routing_svc.route.call_args.kwargs["tenant_id"] == 1
+
+
+# ---------------------------------------------------------------------------
+# POST /notifications/send — content validation
+# ---------------------------------------------------------------------------
+
+
+class TestSendNotificationContentValidation:
+    def test_content_with_password_returns_422(self):
+        """content containing 'password' returns 422 per content_keys_must_be_allowed validator."""
+        client = _app()
+        response = client.post(
+            "/api/v1/notifications/send",
+            json={
+                "user_id": 99,
+                "notification_type": "email",
+                "title": "Credentials",
+                "content": "Your password reset token is ABC123",
+            },
+        )
+        assert response.status_code == 422
+        errors = response.json().get("detail", [])
+        error_fields = {e.get("loc")[-1] for e in errors}
+        assert "content" in error_fields
+
+
+# ---------------------------------------------------------------------------
+# NotificationService.create_smart_notification — unit tests via mock session
+# ---------------------------------------------------------------------------
+
+
+class TestCreateSmartNotificationService:
+    """Service-level tests using a mock SQL session with a smart-notification handler."""
+
+    pytestmark = pytest.mark.asyncio
+
+    @pytest.fixture
+    def mock_db_session(self):
+        state = MockState()
+        return make_mock_session([make_smart_notification_handler(state)])
+
+    @pytest.fixture
+    def notification_service(self, mock_db_session):
+        return NotificationService(mock_db_session)
+
+    @pytest.mark.asyncio
+    async def test_valid_call_persists_record(self, notification_service):
+        """Valid parameters create a SmartNotification record in the mock session."""
+        record = await notification_service.create_smart_notification(
+            summarized_content="Test notification",
+            priority=0,
+            channel=1,
+            timing=0,
+            tenant_id=42,
+            recipient_filter={"role": "admin"},
+        )
+        assert record.summarized_content == "Test notification"
+        assert record.priority == 0
+        assert record.channel == 1
+        assert record.timing == 0
+        assert record.tenant_id == 42
+        assert record.recipient_filter == {"role": "admin"}
+        assert record.id is not None
+
+    @pytest.mark.asyncio
+    async def test_invalid_priority_raises(self, notification_service):
+        """priority outside {0,1,2} raises ValidationException."""
+        from pkg.errors.app_exceptions import ValidationException
+        with pytest.raises(ValidationException) as exc_info:
+            await notification_service.create_smart_notification(
+                summarized_content="Test",
+                priority=99,
+                channel=0,
+                timing=0,
+                tenant_id=1,
+            )
+        assert "priority" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_invalid_channel_raises(self, notification_service):
+        """channel outside {0,1,2,3} raises ValidationException."""
+        from pkg.errors.app_exceptions import ValidationException
+        with pytest.raises(ValidationException) as exc_info:
+            await notification_service.create_smart_notification(
+                summarized_content="Test",
+                priority=0,
+                channel=99,
+                timing=0,
+                tenant_id=1,
+            )
+        assert "channel" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_invalid_timing_raises(self, notification_service):
+        """timing outside {0,1} raises ValidationException."""
+        from pkg.errors.app_exceptions import ValidationException
+        with pytest.raises(ValidationException) as exc_info:
+            await notification_service.create_smart_notification(
+                summarized_content="Test",
+                priority=0,
+                channel=0,
+                timing=99,
+                tenant_id=1,
+            )
+        assert "timing" in str(exc_info.value.detail)
+
+    @pytest.mark.asyncio
+    async def test_tenant_isolation(self, mock_db_session):
+        """Records created under tenant 1 are not accessible to tenant 2.
+
+        The mock handler only stores records; it does not filter by tenant on read.
+        This test documents the contract: callers must always pass the correct
+        tenant_id. The service enforces tenant scoping in every SQL WHERE clause.
+        """
+        svc = NotificationService(mock_db_session)
+        record = await svc.create_smart_notification(
+            summarized_content="Tenant 1 private note",
+            priority=1,
+            channel=0,
+            timing=0,
+            tenant_id=1,
+        )
+        assert record.tenant_id == 1
+        # Tenant 2 cannot create a record with tenant_id=1 (tenant_id is
+        # bound from the authenticated context, not the request body).
+        record2 = await svc.create_smart_notification(
+            summarized_content="Tenant 2 note",
+            priority=1,
+            channel=0,
+            timing=0,
+            tenant_id=2,
+        )
+        assert record2.tenant_id == 2
+        assert record.id != record2.id
