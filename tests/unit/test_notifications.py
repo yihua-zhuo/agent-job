@@ -179,9 +179,9 @@ class TestCreateSmartNotification:
             route_call = routing_svc.route.call_args
             assert route_call.kwargs["tenant_id"] == 1
 
-            record_arg = route_call.args[0]
-            assert record_arg.priority == "urgent"
-            assert record_arg.id == 7
+            routed_record = route_call.args[0]
+            assert routed_record.priority == "urgent"
+            assert routed_record.id == 7
 
     def test_create_smart_notification_with_recipient_filter(self):
         """Payload with recipient_filter is passed through to the service and channel is preserved."""
@@ -496,7 +496,6 @@ class TestCreateSmartNotificationService:
     async def test_invalid_priority_raises(self, notification_service):
         """priority outside {0,1,2} raises ValidationException."""
         from pkg.errors.app_exceptions import ValidationException
-
         with pytest.raises(ValidationException) as exc_info:
             await notification_service.create_smart_notification(
                 summarized_content="Test",
@@ -511,7 +510,6 @@ class TestCreateSmartNotificationService:
     async def test_invalid_channel_raises(self, notification_service):
         """channel outside {0,1,2,3} raises ValidationException."""
         from pkg.errors.app_exceptions import ValidationException
-
         with pytest.raises(ValidationException) as exc_info:
             await notification_service.create_smart_notification(
                 summarized_content="Test",
@@ -526,7 +524,6 @@ class TestCreateSmartNotificationService:
     async def test_invalid_timing_raises(self, notification_service):
         """timing outside {0,1} raises ValidationException."""
         from pkg.errors.app_exceptions import ValidationException
-
         with pytest.raises(ValidationException) as exc_info:
             await notification_service.create_smart_notification(
                 summarized_content="Test",
