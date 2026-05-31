@@ -229,6 +229,7 @@ class TestReportIntegration:
         await _seed_user(tenant_id, async_session, "rep")
 
         generated = await svc.generate_excel_report(
+            tenant_id=tenant_id,
             report_data={
                 "labels": ["Product A", "Product B"],
                 "datasets": [{"data": [500, 750]}],

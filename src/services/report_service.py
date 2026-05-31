@@ -7,12 +7,14 @@ import os
 import tempfile
 import uuid
 from datetime import UTC, datetime
+from typing import Any
 
-from sqlalchemy import and_, select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.analytics import ReportModel
 from db.models.report_schedule import ReportScheduleModel
-from pkg.errors.app_exceptions import ValidationException
+from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
 
 class ReportService:
@@ -37,14 +39,11 @@ class ReportService:
         config: dict | None = None,
         date_range: dict | None = None,
     ) -> dict:
-        """生成PDF报表 — sync, no DB needed."""
+        """Generate a PDF report (stub — valid PDF format, no actual content)."""
         report_data = report_data or {"config": config or {}, "date_range": date_range or {}}
         title = title or f"{report_type or 'report'} report"
-        content = (
-            "%PDF-1.4\n"
-            f"1 0 obj << /Type /Catalog >> endobj\n% {title}\n"
-            "%%EOF\n"
-        ).encode()
+        # Minimal valid PDF: header + comment + EOF marker.
+        content = (f"%PDF-1.4\n1 0 obj << /Type /Catalog >> endobj\n% {title}\n%%EOF\n").encode()
         filename = f"{report_type or 'report'}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}.pdf"
         return {
             "status": "generated",
@@ -58,24 +57,22 @@ class ReportService:
                 "labels_count": len(report_data.get("labels", [])),
                 "datasets_count": len(report_data.get("datasets", [])),
             },
+            "_is_stub": True,
         }
 
     async def generate_excel_report(
         self,
+        tenant_id: int,
         report_data: dict | None = None,
         title: str | None = None,
-        tenant_id: int = 0,
         report_type: str | None = None,
         config: dict | None = None,
         date_range: dict | None = None,
     ) -> dict:
-        """生成Excel报表 — sync, no DB needed."""
+        """Generate an Excel report (stub placeholder — no actual xlsx content)."""
         report_data = report_data or {"config": config or {}, "date_range": date_range or {}}
         title = title or f"{report_type or 'report'} report"
-        content = (
-            "PK\x03\x04"
-            f"Generated Excel placeholder for {title}\n"
-        ).encode()
+        content = (f"PK\x03\x04Generated Excel placeholder for {title}\n").encode()
         filename = f"{report_type or 'report'}-{datetime.now(UTC).strftime('%Y%m%d%H%M%S')}.xlsx"
         return {
             "status": "generated",
@@ -142,15 +139,13 @@ class ReportService:
         self,
         report_id: int,
         schedule: dict,
-        tenant_id: int = 0,
+        tenant_id: int,
     ) -> ReportScheduleModel:
-        """定时生成报表 — upserts the schedule row for (tenant_id, report_id)."""
+        """Schedule a report: upserts the schedule row for (tenant_id, report_id)."""
         result = await self.session.execute(
             select(ReportScheduleModel).where(
-                and_(
-                    ReportScheduleModel.tenant_id == tenant_id,
-                    ReportScheduleModel.report_id == report_id,
-                )
+                ReportScheduleModel.tenant_id == tenant_id,
+                ReportScheduleModel.report_id == report_id,
             )
         )
         existing = result.scalar_one_or_none()
@@ -173,5 +168,104 @@ class ReportService:
         )
         self.session.add(entry)
         await self.session.flush()
-        await self.session.refresh(entry)
         return entry
+
+    async def list_reports(
+        self,
+        tenant_id: int,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[ReportModel], int]:
+        """Return paginated reports for a tenant with total count."""
+        if page < 1:
+            raise ValidationException("page must be >= 1")
+        if page_size < 1:
+            raise ValidationException("page_size must be >= 1")
+        offset = (page - 1) * page_size
+
+        count_result = await self.session.execute(
+            select(func.count(ReportModel.id)).where(ReportModel.tenant_id == tenant_id)
+        )
+        total = count_result.scalar_one_or_none() or 0
+
+        result = await self.session.execute(
+            select(ReportModel)
+            .where(ReportModel.tenant_id == tenant_id)
+            .order_by(ReportModel.created_at.desc())
+            .limit(page_size)
+            .offset(offset)
+        )
+        reports = list(result.scalars().all())
+        return reports, total
+
+    async def get_report(self, report_id: int, tenant_id: int) -> ReportModel:
+        """Fetch a single report, enforcing tenant isolation."""
+        result = await self.session.execute(
+            select(ReportModel).where(
+                ReportModel.id == report_id,
+                ReportModel.tenant_id == tenant_id,
+            )
+        )
+        report = result.scalar_one_or_none()
+        if report is None:
+            raise NotFoundException("Report")
+        return report
+
+    async def create_report(
+        self,
+        tenant_id: int,
+        data: dict[str, Any],
+    ) -> ReportModel:
+        """Insert a new report row for the given tenant."""
+        now = datetime.now(UTC)
+        report = ReportModel(
+            tenant_id=tenant_id,
+            name=data.get("name", "Unnamed Report"),
+            type=data.get("type", "custom"),
+            config=data.get("config", {}),
+            date_range=data.get("date_range", {}),
+            created_by=data.get("created_by", 0),
+            last_run_at=None,
+            created_at=now,
+        )
+        self.session.add(report)
+        await self.session.flush()
+        return report
+
+    async def update_report(
+        self,
+        report_id: int,
+        tenant_id: int,
+        data: dict[str, Any],
+    ) -> ReportModel:
+        """Partial update of a report; raises NotFoundException if missing or wrong tenant."""
+        result = await self.session.execute(
+            select(ReportModel).where(
+                ReportModel.id == report_id,
+                ReportModel.tenant_id == tenant_id,
+            )
+        )
+        report = result.scalar_one_or_none()
+        if report is None:
+            raise NotFoundException("Report")
+
+        for field in ("name", "type", "config", "date_range", "last_run_at"):
+            if field in data:
+                setattr(report, field, data[field])
+
+        await self.session.flush()
+        return report
+
+    async def delete_report(self, report_id: int, tenant_id: int) -> None:
+        """Hard-delete a report row; raises NotFoundException if missing or wrong tenant."""
+        result = await self.session.execute(
+            select(ReportModel).where(
+                ReportModel.id == report_id,
+                ReportModel.tenant_id == tenant_id,
+            )
+        )
+        report = result.scalar_one_or_none()
+        if report is None:
+            raise NotFoundException("Report")
+        await self.session.delete(report)
+        await self.session.flush()

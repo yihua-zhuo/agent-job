@@ -77,7 +77,7 @@ function RuleDetailPageInner() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">{String(rule.name ?? "—")}</h1>
-          {rule.description && (
+          {Boolean(rule.description) && (
             <p className="text-sm text-muted-foreground mt-1">{String(rule.description)}</p>
           )}
         </div>

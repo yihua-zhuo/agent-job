@@ -1,0 +1,5 @@
+--container-architecture linux/amd64
+-P ubuntu-latest=act-runner-with-gh:latest
+--env-file .env
+--secret-file .secrets
+--pull=false

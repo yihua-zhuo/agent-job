@@ -14,7 +14,7 @@ export const qk = {
   ticketActivity: (ticketId: number) => ["ticket", ticketId, "activity"] as const,
   tasks: (page = 1, status = "") => ["tasks", page, status] as const,
   task: (id: number) => ["task", id] as const,
-  users: (page = 1, page_size = 20) => ["users", page, page_size] as const,
+  users: (page = 1, pageSize = 20, q = "", role = "") => ["users", page, pageSize, q, role] as const,
   notifications: (page = 1, unreadOnly = false) => ["notifications", page, unreadOnly] as const,
   reminders: (upcomingOnly = false) => ["reminders", upcomingOnly] as const,
   activities: (page = 1, type = "") => ["activities", page, type] as const,
@@ -36,6 +36,15 @@ interface ApiEnvelope<T> {
   success: boolean;
   message?: string;
   data: PaginatedResponse<T>;
+}
+
+// For endpoints that return a single record (e.g. /resource/{id}) rather than
+// a paginated list. ApiEnvelope wraps `data` in PaginatedResponse, which is
+// wrong for detail fetches — the server returns the record directly.
+interface ApiEnvelopeSingle<T> {
+  success: boolean;
+  message?: string;
+  data: T;
 }
 
 export interface UserSummary {
@@ -258,11 +267,14 @@ export function useAutoAssignTicket() {
 }
 
 // ── Users ───────────────────────────────────────────────────────────────────
-export function useUsers(page = 1, page_size = 20) {
+export function useUsers(page = 1, pageSize = 20, q = "", role = "") {
   const token = useAuthStore((s) => s.token);
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (q) params.set("q", q);
+  if (role) params.set("role", role);
   return useQuery({
-    queryKey: qk.users(page, page_size),
-    queryFn: () => apiClient.get<ApiEnvelope<UserSummary>>(`/api/v1/users?page=${page}&page_size=${page_size}`, token ?? undefined),
+    queryKey: qk.users(page, pageSize, q, role),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/users?${params}`, token ?? undefined),
     staleTime: 60 * 1000,
   });
 }
@@ -446,7 +458,7 @@ export function useReminders(upcomingOnly = false) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.reminders(upcomingOnly),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/reminders?upcoming_only=${upcomingOnly}`, token ?? undefined),
     staleTime: 30 * 1000,
   });
 }
@@ -486,7 +498,7 @@ export function useAutomationRule(id: number) {
   const token = useAuthStore((s) => s.token);
   return useQuery({
     queryKey: qk.automationRule(id),
-    queryFn: () => apiClient.get<ApiEnvelope<Record<string, unknown>>>(`/api/v1/automation/rules/${id}`, token ?? undefined),
+    queryFn: () => apiClient.get<ApiEnvelopeSingle<Record<string, unknown>>>(`/api/v1/automation/rules/${id}`, token ?? undefined),
     enabled: id > 0,
   });
 }

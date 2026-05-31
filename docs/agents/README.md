@@ -10,6 +10,8 @@
 > dispatch, treat that as historical context. State is no longer carried in
 > `shared-memory/`; it now lives in GitHub Issues, labels, and PRs, and roles
 > are triggered by workflow events (PRs, pushes, schedules, issue labels).
+>
+> CLI ownership is documented in [`CLI_ROLES.md`](CLI_ROLES.md).
 
 ---
 
@@ -63,6 +65,23 @@ The pipeline today is structured around GitHub Issues + labels, not in-memory or
           ▼
        Issue auto-closed via "Closes #N"
 ```
+
+## Dev-Plan Board Workflow
+
+Some issues are board-driven rather than free-form. Add this line to the issue body:
+
+```text
+Dev-Plan: docs/dev-plan/<domain>/<board>.md
+```
+
+For those issues, `scripts/ci/dev_plan_context.py` resolves the target board,
+detects the matching `_template-medium.md` or `_template-deep.md`, and injects a
+binding Source Contract into the plan. The implement and self-review stages then
+enforce the board flow: read README → template → target board, implement §5 in
+order, run §6 verification commands, and keep edits inside the board's declared
+scope unless the plan explicitly permits more.
+
+Set `DEV_PLAN_ROOT` if `docs/dev-plan` is mounted outside the workflow checkout.
 
 ## Cross-cutting workflows
 

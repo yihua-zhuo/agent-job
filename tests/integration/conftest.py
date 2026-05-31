@@ -249,6 +249,25 @@ def tenant_id_2() -> int:
     return random.randint(10_000_000, 99_999_999)
 
 
+@pytest_asyncio.fixture
+async def _seed_customer(async_session, tenant_id):
+    """Seed a customer record for the given tenant so FK constraints are satisfied.
+
+    Returns the customer_id of the inserted row.
+    """
+    from db.models.customer import CustomerModel
+
+    customer = CustomerModel(
+        tenant_id=tenant_id,
+        name="Integration Test Customer",
+        email="test-customer@example.com",
+        status="active",
+    )
+    async_session.add(customer)
+    await async_session.flush()
+    return customer.id
+
+
 # ── Per-file cleanup rule (mandatory) ───────────────────────────────────────────
 # Every integration test file must clean up all created data after its tests
 # complete. This fixture runs once per module (i.e. per test file) as the
@@ -322,6 +341,14 @@ async def auth_headers_web(db_schema, tenant_id_web) -> dict[str, str]:
 
     factory = _get_test_async_session_factory()
     async with factory() as session:
+        from db.models.tenant import TenantModel
+        from sqlalchemy import select
+        # Seed tenant only if it doesn't already exist (idempotent — prevents
+        # duplicate-key errors when another fixture already created it).
+        result = await session.execute(select(TenantModel).where(TenantModel.id == tenant_id_web))
+        if result.scalar_one_or_none() is None:
+            tenant = TenantModel(id=tenant_id_web, name=f"Tenant {tenant_id_web}", plan="free", status="active")
+            session.add(tenant)
         # Create the test user in the DB so /users/me resolves correctly.
         user_svc = UserService(session)
         await user_svc.create_user(
@@ -352,6 +379,16 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
     os.environ["JWT_SECRET"] = TEST_JWT_SECRET
     os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
     from services.auth_service import AuthService
+
+    # Seed tenant only if it doesn't already exist (idempotent — prevents
+    # duplicate-key errors when another fixture already created it).
+    from db.models.tenant import TenantModel
+    from sqlalchemy import select
+    result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_2_web))
+    if result.scalar_one_or_none() is None:
+        tenant = TenantModel(id=tenant_id_2_web, name=f"Tenant {tenant_id_2_web}", plan="free", status="active")
+        async_session.add(tenant)
+        await async_session.flush()
 
     auth_svc = AuthService(async_session, secret_key=TEST_JWT_SECRET)
     token = auth_svc.generate_token(

@@ -1,13 +1,12 @@
-"""Customer service — business logic on top of CustomerRepository."""
-
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.customer_enrichment import CustomerEnrichmentModel
 from db.repositories.customer import CustomerRepository
-from models.customer import CustomerStatus
-from models.customer_create_dto import CustomerCreateDTO
+from models.customer import CustomerCreateDTO, CustomerStatus
 from pkg.errors.app_exceptions import ValidationException
 from services.lead_routing_service import LeadRoutingService
 
@@ -36,23 +35,18 @@ class CustomerService:
         auto-assignment side-effect afterward.
         """
         if isinstance(data, CustomerCreateDTO):
-            d = {
-                "name": data.name,
-                "email": data.email,
-                "phone": data.phone,
-                "company": data.company,
-                "status": data.status,
-                "owner_id": data.owner_id,
-                "tags": data.tags,
-            }
+            d = data.to_dict()
         else:
             d = data or {}
-
         customer = await self.customer_repo.create(d, tenant_id)
 
         if customer.status == "lead" and customer.owner_id == 0:
             routing_svc = LeadRoutingService(self.session)
             await routing_svc.auto_assign_lead(customer.id, tenant_id)
+
+        # Upsert enrichment data when present in payload
+        if isinstance(data, dict) and data.get("enrichment_data") is not None:
+            await self._upsert_enrichment(customer.id, tenant_id, data["enrichment_data"])
 
         return customer
 
@@ -86,7 +80,7 @@ class CustomerService:
         """Update a customer (tenant-scoped)."""
         return await self.customer_repo.update_customer(customer_id, data, tenant_id)
 
-    async def delete_customer(self, customer_id: int, tenant_id: int) -> dict[str, int]:
+    async def delete_customer(self, customer_id: int, tenant_id: int) -> dict:
         """Delete a customer (tenant-scoped)."""
         return await self.customer_repo.delete_customer(customer_id, tenant_id)
 
@@ -264,3 +258,41 @@ class CustomerService:
             )
         await self.session.flush()
         return recycled_ids
+
+    # -------------------------------------------------------------------------
+    # Enrichment helpers
+    # -------------------------------------------------------------------------
+
+    async def _upsert_enrichment(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        enrichment_data: dict[str, Any],
+    ) -> None:
+        """Upsert a CustomerEnrichmentModel record for the given customer.
+
+        Uses INSERT … ON CONFLICT (tenant_id, customer_id) DO UPDATE so that
+        each call creates the record if absent, or updates the existing row if a
+        record for the same (tenant_id, customer_id) pair already exists.
+        """
+        now = datetime.now(UTC)
+        next_refresh = now + timedelta(days=7)
+        stmt = pg_insert(CustomerEnrichmentModel).values(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider=enrichment_data.get("provider", "clearbit"),
+            raw_data_json=enrichment_data.get("raw_data_json", enrichment_data),
+            enriched_at=enrichment_data.get("enriched_at", now),
+            next_refresh_at=next_refresh,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tenant_id", "customer_id"],
+            set_={
+                "provider": stmt.excluded.provider,
+                "raw_data_json": stmt.excluded.raw_data_json,
+                "enriched_at": stmt.excluded.enriched_at,
+                "next_refresh_at": next_refresh,
+                "updated_at": now,
+            },
+        )
+        await self.session.execute(stmt)

@@ -13,7 +13,7 @@ from api.routers.customers import (
 )
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext
-from pkg.errors.app_exceptions import NotFoundException, ValidationException
+from pkg.errors.app_exceptions import AppException, NotFoundException, ValidationException
 
 # ---------------------------------------------------------------------------
 # Helpers: build a minimal FastAPI app with overridden deps for each test
@@ -114,13 +114,17 @@ def client_with_service(monkeypatch):
     def override_customer_service(session, customer_repo):
         return mock_service
 
-    def override_get_db():
-        return MagicMock()
+    # Async-aware mock session for session.execute() calls (enrichment queries)
+    mock_session = MagicMock()
+    mock_enrich_result = MagicMock()
+    mock_enrich_result.all = MagicMock(return_value=[])
+    mock_enrich_result.scalar_one_or_none = MagicMock(return_value=None)
+    mock_session.execute = AsyncMock(return_value=mock_enrich_result)
 
     app = FastAPI()
     app.include_router(customers_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    app.dependency_overrides[get_db] = override_get_db
+    app.dependency_overrides[get_db] = lambda: mock_session
 
     # Patch CustomerService in the router's module namespace so the
     # router uses mock_service directly instead of instantiating the real class.

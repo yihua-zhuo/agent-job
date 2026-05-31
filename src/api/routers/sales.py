@@ -165,7 +165,7 @@ async def list_opportunities(
     session: AsyncSession = Depends(get_db),
 ):
     service = SalesService(session)
-    items = await service.list_opportunities(
+    result = await service.list_opportunities(
         ctx.tenant_id,
         page=page,
         page_size=page_size,
@@ -173,16 +173,7 @@ async def list_opportunities(
         stage=stage,
         owner_id=owner_id,
     )
-    # Service returns a list for list methods
-    return {
-        "success": True,
-        "data": {
-            "items": items,
-            "total": len(items),
-            "page": page,
-            "page_size": page_size,
-        },
-    }
+    return {"success": True, "data": result}
 
 
 @sales_router.get("/opportunities/{opp_id}")

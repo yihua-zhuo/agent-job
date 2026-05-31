@@ -5,7 +5,8 @@ from datetime import UTC, datetime
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.automation import AutomationLogModel, AutomationRuleModel
+from db.models.automation_log import AutomationLogModel
+from db.models.automation_rule import AutomationRuleModel
 from pkg.errors.app_exceptions import NotFoundException
 
 # Supported trigger events

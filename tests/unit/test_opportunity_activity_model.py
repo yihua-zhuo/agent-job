@@ -1,0 +1,108 @@
+"""Unit tests for OpportunityActivityModel ORM model."""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
+
+import pytest
+
+from db.models.opportunity_activity import OpportunityActivityModel
+
+
+@pytest.fixture
+def _mock_db_session_smoke_test():
+    """Lightweight mock AsyncSession for model-only (zero-SQL) smoke tests.
+
+    This fixture intentionally uses an ad-hoc MagicMock rather than the shared
+    make_mock_session pattern because these tests never exercise the SQL layer —
+    they only verify model construction and to_dict() serialization.
+    """
+    session = MagicMock(
+        spec=[
+            "execute",
+            "add",
+            "delete",
+            "commit",
+            "rollback",
+            "close",
+            "flush",
+            "refresh",
+        ]
+    )
+    session.execute = MagicMock()
+    session.add = MagicMock()
+    session.delete = MagicMock()
+    session.commit = MagicMock()
+    session.rollback = MagicMock()
+    session.close = MagicMock()
+    session.flush = MagicMock()
+    session.refresh = MagicMock()
+    return session
+
+
+class TestOpportunityActivityModel:
+    """Tests for OpportunityActivityModel."""
+
+    def test_model_fields_present(self):
+        """Model has all expected columns."""
+        assert hasattr(OpportunityActivityModel, "id")
+        assert hasattr(OpportunityActivityModel, "tenant_id")
+        assert hasattr(OpportunityActivityModel, "opportunity_id")
+        assert hasattr(OpportunityActivityModel, "event_type")
+        assert hasattr(OpportunityActivityModel, "event_timestamp")
+        assert hasattr(OpportunityActivityModel, "event_metadata")
+
+    def test_to_dict_orm_column_to_api_dict_key(self):
+        """to_dict returns an API-friendly dict: ORM column 'event_metadata' is
+        serialized as the 'metadata' key to match the plan/API contract.
+
+        The column in the database is named 'event_metadata' (SQLAlchemy reserves
+        'metadata' as a declarative name). The to_dict() method aliases it to
+        'metadata' in the output dict for API consumers.
+        """
+        now = datetime(2026, 1, 15, 10, 30, 0, tzinfo=UTC)
+        activity = OpportunityActivityModel(
+            id=1,
+            tenant_id=42,
+            opportunity_id=7,
+            event_type="stage_changed",
+            event_timestamp=now,
+            event_metadata={"old_stage": "lead", "new_stage": "qualified"},
+        )
+        d = activity.to_dict()
+        assert d["id"] == 1
+        assert d["tenant_id"] == 42
+        assert d["opportunity_id"] == 7
+        assert d["event_type"] == "stage_changed"
+        assert d["event_timestamp"] == now.isoformat()
+        assert d["metadata"] == {"old_stage": "lead", "new_stage": "qualified"}
+
+    def test_to_dict_event_metadata_default_empty_dict(self):
+        """event_metadata defaults to {} when not provided."""
+        now = datetime(2026, 2, 1, tzinfo=UTC)
+        activity = OpportunityActivityModel(
+            id=2,
+            tenant_id=10,
+            opportunity_id=3,
+            event_type="note_added",
+            event_timestamp=now,
+        )
+        d = activity.to_dict()
+        assert d["metadata"] == {}
+
+    def test_to_dict_event_timestamp_none(self):
+        """to_dict handles None event_timestamp gracefully."""
+        activity = OpportunityActivityModel(
+            id=3,
+            tenant_id=5,
+            opportunity_id=1,
+            event_type="test",
+            event_timestamp=None,
+        )
+        d = activity.to_dict()
+        assert d["event_timestamp"] is None
+
+    def test_tablename(self):
+        """Model maps to the correct table name."""
+        assert OpportunityActivityModel.__tablename__ == "opportunity_activities"

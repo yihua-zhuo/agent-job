@@ -43,6 +43,7 @@ export default function TaskListPage() {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
 
   const { data, isLoading, isError } = useTasks(page, statusFilter, priorityFilter, assigneeFilter, createdAfter, createdBefore);
+  const { data: usersData } = useUsers(1, 100);
   const items = (data?.data?.items ?? []) as Record<string, unknown>[];
   const info = data?.data;
   const users = (usersData?.data?.items ?? []) as Record<string, unknown>[];
@@ -228,10 +229,10 @@ export default function TaskListPage() {
               <th className="px-3 py-2.5 text-left font-semibold">Status</th>
               <th className="px-3 py-2.5 text-left font-semibold">Priority</th>
               <th className="px-3 py-2.5 cursor-pointer text-left font-semibold select-none" onClick={() => toggleSort("due_date")}>
-                Due Date <SortIconStatic />
+                Due Date ↕
               </th>
               <th className="px-3 py-2.5 cursor-pointer text-left font-semibold select-none" onClick={() => toggleSort("created_at")}>
-                Created <SortIconStatic />
+                Created ↕
               </th>
             </tr>
           </thead>

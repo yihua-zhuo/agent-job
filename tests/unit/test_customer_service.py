@@ -4,8 +4,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from models.customer import CustomerStatus
-from models.customer_create_dto import CustomerCreateDTO
+from models.customer import CustomerCreateDTO, CustomerStatus
+from pkg.errors.app_exceptions import ValidationException
 from services.customer_service import CustomerService
 
 
@@ -53,7 +53,7 @@ class TestCustomerCreateDTO:
         assert dto.email == "alice@example.com"
         assert dto.phone is None
         assert dto.company is None
-        assert dto.status == "lead"
+        assert dto.status == CustomerStatus.LEAD
         assert dto.owner_id == 0
         assert dto.tags == []
 
@@ -105,7 +105,7 @@ class TestCustomerCreateDTO:
             email="dave@example.com",
             phone="13700137000",
             company="Gamma",
-            status="lead",
+            status=CustomerStatus.LEAD,
             owner_id=3,
             tags=["prospect"],
         )
@@ -131,7 +131,7 @@ class TestCustomerCreateDTO:
     def test_default_status_is_lead(self):
         """Default status when not specified."""
         dto = CustomerCreateDTO(name="Eve", email="eve@example.com")
-        assert dto.status == "lead"
+        assert dto.status == CustomerStatus.LEAD
 
     def test_default_owner_id_is_zero(self):
         """Default owner_id when not specified."""
@@ -295,6 +295,30 @@ class TestCountByStatus:
         result = await service.count_by_status(tenant_id=1)
         assert result == {CustomerStatus.LEAD: 3}
 
+    async def test_count_by_status_basic(self):
+        """Returns correct counts across LEAD, ACTIVE, and INACTIVE statuses."""
+        session = MagicMock()
+        mock_result = MagicMock()
+        mock_result.all = MagicMock(return_value=[
+            ("lead", 5),
+            ("active", 3),
+            ("inactive", 2),
+        ])
+        session.execute = AsyncMock(return_value=mock_result)
+        service = CustomerService(session)
+        result = await service.count_by_status(tenant_id=1)
+        assert result[CustomerStatus.LEAD] == 5
+        assert result[CustomerStatus.ACTIVE] == 3
+        assert result[CustomerStatus.INACTIVE] == 2
+
+    async def test_count_by_status_zero_tenant(self, mock_db_session, mock_customer_repo):
+        """Delegates to repo which returns empty dict for invalid tenant_id."""
+        mock_customer_repo.count_by_status = AsyncMock(return_value={})
+        service = CustomerService(mock_db_session, mock_customer_repo)
+        result = await service.count_by_status(tenant_id=0)
+        assert result == {}
+        mock_customer_repo.count_by_status.assert_awaited_once_with(0)
+
 
 @pytest.mark.asyncio
 class TestSearchCustomers:
@@ -329,3 +353,124 @@ class TestSearchCustomers:
         )
         assert result == [mock_row]
 
+
+class TestEnrichmentUpsert:
+    """Unit tests for enrichment upsert on customer create/update."""
+
+    @pytest.mark.asyncio
+    async def test_create_customer_with_enrichment_data_calls_upsert(self, mock_db_session):
+        """create_customer calls _upsert_enrichment when enrichment_data is in the payload."""
+        service = CustomerService(mock_db_session)
+        next_id = [10]
+
+        def assign_id(obj):
+            obj.id = next_id[0]
+            next_id[0] += 1
+
+        _original_add = mock_db_session.add
+
+        def tracked_add(obj):
+            assign_id(obj)
+            return _original_add(obj)
+
+        mock_db_session.add = tracked_add
+
+        async def fake_refresh(obj):
+            pass
+
+        mock_db_session.refresh = fake_refresh
+
+        mock_customer = MagicMock()
+        mock_customer.id = 10
+        mock_customer.name = "Enriched Customer"
+        mock_customer.status = "lead"
+        mock_customer.owner_id = 1  # non-zero owner to skip auto_assign_lead
+        mock_customer.created_at = None
+        service.customer_repo.create = AsyncMock(return_value=mock_customer)
+
+        with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
+            await service.create_customer(
+                {"name": "Enriched Customer", "enrichment_data": {"raw": "payload"}},
+                tenant_id=1,
+            )
+            mock_upsert.assert_awaited_once_with(10, 1, {"raw": "payload"})
+
+    @pytest.mark.asyncio
+    async def test_update_customer_with_enrichment_data_calls_upsert(self, mock_db_session):
+        """update_customer delegates to repo with the full data dict (including enrichment_data)."""
+        service = CustomerService(mock_db_session)
+
+        fake_customer = MagicMock()
+        fake_customer.id = 7
+        fake_customer.name = "Updated Customer"
+        fake_customer.status = "lead"
+        fake_customer.owner_id = 0
+
+        service.customer_repo.update_customer = AsyncMock(return_value=fake_customer)
+
+        result = await service.update_customer(
+            7,
+            {"name": "Updated Name", "enrichment_data": {"raw": "updated"}},
+            tenant_id=1,
+        )
+        # The repo receives the data including enrichment_data; the service itself
+        # doesn't call _upsert_enrichment (that lives in the repo or is handled
+        # by the router layer via explicit calls).
+        service.customer_repo.update_customer.assert_awaited_once_with(
+            7, {"name": "Updated Name", "enrichment_data": {"raw": "updated"}}, 1
+        )
+        assert result == fake_customer
+
+    @pytest.mark.asyncio
+    async def test_create_customer_without_enrichment_data_skips_upsert(self, mock_db_session):
+        """_upsert_enrichment is NOT called when no enrichment_data key is present."""
+        service = CustomerService(mock_db_session)
+
+        async def fake_refresh(obj):
+            obj.id = 20
+            obj.name = "Plain Customer"
+            obj.status = "lead"
+
+        mock_db_session.refresh = fake_refresh
+
+        mock_customer = MagicMock()
+        mock_customer.id = 20
+        mock_customer.name = "Plain Customer"
+        mock_customer.status = "lead"
+        mock_customer.owner_id = 1  # non-zero owner skips auto_assign_lead
+        mock_customer.created_at = None
+        service.customer_repo.create = AsyncMock(return_value=mock_customer)
+
+        with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
+            await service.create_customer(
+                {"name": "Plain Customer"},
+                tenant_id=1,
+            )
+            mock_upsert.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_create_customer_with_none_enrichment_data_skips_upsert(self, mock_db_session):
+        """_upsert_enrichment is NOT called when enrichment_data is explicitly None."""
+        service = CustomerService(mock_db_session)
+
+        async def fake_refresh(obj):
+            obj.id = 21
+            obj.name = "Null Enrich Customer"
+            obj.status = "lead"
+
+        mock_db_session.refresh = fake_refresh
+
+        mock_customer = MagicMock()
+        mock_customer.id = 21
+        mock_customer.name = "Null Enrich Customer"
+        mock_customer.status = "lead"
+        mock_customer.owner_id = 1  # non-zero owner skips auto_assign_lead
+        mock_customer.created_at = None
+        service.customer_repo.create = AsyncMock(return_value=mock_customer)
+
+        with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
+            await service.create_customer(
+                {"name": "Null Enrich Customer", "enrichment_data": None},
+                tenant_id=1,
+            )
+            mock_upsert.assert_not_called()

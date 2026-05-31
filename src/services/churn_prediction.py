@@ -76,7 +76,7 @@ class ChurnPredictionService:
         )
         customer = result.scalar_one_or_none()
         if customer is None:
-            raise NotFoundException("Customer")
+            raise NotFoundException("客户")
         return customer
 
     async def _get_customer_metrics(self, customer_id: int, tenant_id: int) -> dict:
@@ -267,7 +267,18 @@ class ChurnPredictionService:
         high_risk.sort(key=lambda x: x.score, reverse=True)
         return high_risk
 
-    async def recommend_actions(self, customer_id: int, tenant_id: int = 0) -> list[ChurnAction]:
+    async def get_churn_prediction(self, customer_id: int, tenant_id: int) -> ChurnPrediction:
+        """Return a single-customer churn prediction (score + level + factors)."""
+        score = await self.calculate_churn_score(customer_id, tenant_id)
+        factors = await self.get_churn_risk_factors(customer_id, tenant_id)
+        return ChurnPrediction(
+            customer_id=customer_id,
+            score=score,
+            risk_level=self._get_risk_level(score),
+            factors=factors,
+        )
+
+    async def recommend_actions(self, customer_id: int, tenant_id: int) -> list[ChurnAction]:
         """根据流失风险推荐行动"""
         data = await self._get_customer_metrics(customer_id, tenant_id)
         score = await self.calculate_churn_score(customer_id, tenant_id)

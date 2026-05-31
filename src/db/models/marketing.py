@@ -31,6 +31,7 @@ class CampaignModel(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     events: Mapped[list["CampaignEventModel"]] = relationship(
         "CampaignEventModel",
@@ -56,6 +57,7 @@ class CampaignModel(Base):
             "click_count": self.click_count,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
+            "sent_at": self.sent_at.isoformat() if self.sent_at else None,
         }
 
 
