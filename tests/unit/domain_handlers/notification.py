@@ -399,6 +399,7 @@ def make_notification_analytics_handler(state):
                 row = store[key]
                 row["opened_at"] = params.get("opened_at")
                 row["clicked_at"] = params.get("clicked_at")
+                row["updated_at"] = params.get("opened_at") or datetime.now(UTC)
                 return MockResult([_notification_analytics_to_row(row)])
             nid = params.get("notification_id")
             tid = params.get("tenant_id")
@@ -409,6 +410,8 @@ def make_notification_analytics_handler(state):
                 "opened_at": params.get("opened_at"),
                 "clicked_at": params.get("clicked_at"),
                 "channel": params.get("channel", "email"),
+                "created_at": datetime.now(UTC),
+                "updated_at": datetime.now(UTC),
             }
             state._notification_analytics_next_id = next_id + 1
             store[key] = record

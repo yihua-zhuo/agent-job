@@ -32,6 +32,7 @@ def upgrade() -> None:
         sa.Column("channel", sa.String(length=50), nullable=False, server_default="email"),
     )
     op.create_index(op.f("ix_notification_analytics_notification_tenant"), "notification_analytics", ["notification_id", "tenant_id"], unique=False)
+    op.create_index(op.f("ix_notification_analytics_tenant_id"), "notification_analytics", ["tenant_id"])
     # tenant_id FK — catches DBs that arrived via a path that skipped this migration.
     op.execute(
         sa.text(
@@ -45,6 +46,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute(sa.text("ALTER TABLE notification_analytics DROP CONSTRAINT IF EXISTS fk_notification_analytics_tenant_id"))
+    op.execute(sa.text("DO $$ BEGIN ALTER TABLE notification_analytics DROP CONSTRAINT IF EXISTS fk_notification_analytics_tenant_id; EXCEPTION WHEN undefined_object THEN NULL; END $$"))
     op.drop_index(op.f("ix_notification_analytics_notification_tenant"), table_name="notification_analytics")
     op.drop_table("notification_analytics")

@@ -23,6 +23,7 @@ class TestTrackOpen:
         """track_open creates an analytics record with opened_at set."""
         # Pre-seed a notification analytics record in the mock DB
         state = mock_db_session._state
+        from datetime import UTC, datetime
         state._notification_analytics = {
             (10, 1): {
                 "id": 1,
@@ -31,6 +32,8 @@ class TestTrackOpen:
                 "opened_at": None,
                 "clicked_at": None,
                 "channel": "email",
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+                "updated_at": datetime(2026, 1, 1, tzinfo=UTC),
             }
         }
 
@@ -40,12 +43,14 @@ class TestTrackOpen:
         assert result.tenant_id == 1
         assert result.channel == "email"
         assert result.opened_at is not None
+        assert result.updated_at is not None
         assert result.clicked_at is None
         assert len(state._notification_analytics) == 1
 
     async def test_track_open_upsert(self, mock_db_session, service):
         """track_open called twice does not create two rows; second call updates opened_at."""
         state = mock_db_session._state
+        from datetime import UTC, datetime
         state._notification_analytics = {
             (10, 1): {
                 "id": 1,
@@ -54,6 +59,8 @@ class TestTrackOpen:
                 "opened_at": None,
                 "clicked_at": None,
                 "channel": "email",
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+                "updated_at": datetime(2026, 1, 1, tzinfo=UTC),
             }
         }
 
@@ -66,6 +73,7 @@ class TestTrackOpen:
     async def test_track_open_update_stamps_opened_at(self, mock_db_session, service):
         """track_open stamps opened_at on a pre-existing record that has no opened_at yet."""
         state = mock_db_session._state
+        from datetime import UTC, datetime
         state._notification_analytics = {
             (10, 1): {
                 "id": 1,
@@ -74,12 +82,15 @@ class TestTrackOpen:
                 "opened_at": None,
                 "clicked_at": None,
                 "channel": "email",
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+                "updated_at": datetime(2026, 1, 1, tzinfo=UTC),
             }
         }
 
         result = await service.track_open(notification_id=10, tenant_id=1)
 
         assert result.opened_at is not None
+        assert result.updated_at is not None
 
     async def test_track_open_creates_when_absent(self, mock_db_session, service):
         """track_open inserts a new record when no analytics row exists yet."""
@@ -89,6 +100,7 @@ class TestTrackOpen:
         assert result.tenant_id == 1
         assert result.channel == "push"
         assert result.opened_at is not None
+        assert result.updated_at is not None
 
 
 class TestGetOpenCount:
@@ -114,6 +126,8 @@ class TestGetOpenCount:
                 "opened_at": datetime(2026, 1, 1, tzinfo=UTC),
                 "clicked_at": None,
                 "channel": "email",
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+                "updated_at": datetime(2026, 1, 1, tzinfo=UTC),
             }
         }
 
@@ -136,6 +150,8 @@ class TestCrossTenantIsolation:
                 "opened_at": datetime(2026, 1, 1, tzinfo=UTC),
                 "clicked_at": None,
                 "channel": "email",
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+                "updated_at": datetime(2026, 1, 1, tzinfo=UTC),
             }
         }
 
@@ -148,6 +164,7 @@ class TestCrossTenantIsolation:
     async def test_track_open_respects_tenant_isolation(self, mock_db_session, service):
         """track_open for tenant_id=2 does not mutate or expose tenant_id=1's data."""
         state = mock_db_session._state
+        from datetime import UTC, datetime
 
         # Seed a record for tenant 1
         state._notification_analytics = {
@@ -158,6 +175,8 @@ class TestCrossTenantIsolation:
                 "opened_at": None,
                 "clicked_at": None,
                 "channel": "email",
+                "created_at": datetime(2026, 1, 1, tzinfo=UTC),
+                "updated_at": datetime(2026, 1, 1, tzinfo=UTC),
             }
         }
 

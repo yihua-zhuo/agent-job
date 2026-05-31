@@ -28,6 +28,7 @@ class NotificationAnalyticsService:
                 tenant_id=tenant_id,
                 channel=channel,
                 opened_at=datetime.now(UTC),
+                updated_at=datetime.now(UTC),
             )
             self._session.add(record)
             await self._session.flush()
@@ -35,6 +36,7 @@ class NotificationAnalyticsService:
 
         if existing.opened_at is None:
             existing.opened_at = datetime.now(UTC)
+            existing.updated_at = datetime.now(UTC)
             await self._session.flush()
         return existing
 
