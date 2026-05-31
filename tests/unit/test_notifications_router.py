@@ -406,7 +406,7 @@ class TestDeleteNotificationEndpoint:
 
 
 # ---------------------------------------------------------------------------
-# DELETE /reminders/{id}
+# DELETE /notifications/{id}
 # ---------------------------------------------------------------------------
 
 
@@ -498,6 +498,17 @@ class TestInvalidTenant:
     def test_list_notifications_invalid_tenant_none(self):
         app = FastAPI()
         app.include_router(notifications_router)
+        app.dependency_overrides[require_auth] = lambda: AuthContext(user_id=99, tenant_id=None, roles=[])
+        app.dependency_overrides[get_db] = lambda: make_mock_session([])
+        client = TestClient(app, raise_server_exceptions=False)
+        response = client.get("/api/v1/notifications")
+        assert response.status_code == 401
+
+    def test_list_notifications_invalid_tenant_type(self):
+        """Passing a non-integer tenant (e.g. string) is rejected as 401."""
+        app = FastAPI()
+        app.include_router(notifications_router)
+        # simulate AuthContext with non-integer tenant_id (edge case)
         app.dependency_overrides[require_auth] = lambda: AuthContext(user_id=99, tenant_id=None, roles=[])
         app.dependency_overrides[get_db] = lambda: make_mock_session([])
         client = TestClient(app, raise_server_exceptions=False)

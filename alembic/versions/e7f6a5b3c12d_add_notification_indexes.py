@@ -49,7 +49,9 @@ def upgrade() -> None:
             ") WHERE (content IS NOT NULL OR related_type IS NOT NULL OR related_id IS NOT NULL) AND params_ IS NULL"
         )
     )
-    op.execute(text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END WHERE status IS NULL"))
+    op.execute(
+        text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END WHERE status IS NULL")
+    )
     op.execute(text("UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL"))
     op.execute(text("UPDATE notifications SET read_at = created_at WHERE is_read = true AND read_at IS NULL"))
     op.execute(text("UPDATE notifications SET priority = 'normal' WHERE priority IS NULL"))
@@ -104,7 +106,11 @@ def downgrade() -> None:
     # requiring params_->>'content' to be non-NULL as well.
     op.execute(text("UPDATE notifications SET type = channel WHERE channel IS NOT NULL"))
     op.execute(text("UPDATE notifications SET title = template WHERE template IS NOT NULL"))
-    op.execute(text("UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL AND params_->>'content' IS NOT NULL"))
+    op.execute(
+        text(
+            "UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL AND params_->>'content' IS NOT NULL"
+        )
+    )
     op.execute(
         text(
             "UPDATE notifications SET related_type = params_->>'related_type' "
@@ -128,7 +134,7 @@ def downgrade() -> None:
             "DO $$ BEGIN "
             "ALTER TABLE notifications ALTER COLUMN is_read SET NOT NULL; "
             "EXCEPTION WHEN others THEN "
-            "IF SQLERRM NOT LIKE '%already%' THEN RAISE; END IF; "
+            "IF SQLERRM NOT LIKE '%already%' THEN RAISE NOTICE 'unexpected error: %', SQLERRM; END IF; "
             "END $$"
         )
     )

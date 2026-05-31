@@ -1,4 +1,16 @@
-"""Notification ORM model."""
+"""Notification ORM model.
+
+The NotificationModel maps to the `notifications` table and supports a
+template-based notification system with per-channel delivery (in_app, email,
+sms, push). Notifications are hard-deleted via the API — there is no soft-delete
+or archived column. Archived notifications use status='archived' rather than a
+deleted_at flag; this design reflects that notifications are ephemeral, low-stakes
+events where compliance/retention requirements do not apply.
+
+Schema migration (e7f6a5b3c12d) transformed the legacy columns (type, title, content,
+is_read, related_type, related_id) into the new schema (channel, template, params_,
+status, priority, delivered_at, read_at).
+"""
 
 import logging
 from datetime import datetime
@@ -51,11 +63,9 @@ class NotificationModel(Base):
     status: Mapped[str | None] = mapped_column(String(50), nullable=True)
     priority: Mapped[str | None] = mapped_column(String(20), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    # Populated by the service layer when the notification is delivered.
-    # Nullable for legacy rows (pre-migration); service layer enforces it when
-    # status transitions to 'delivered'. No DB-level NOT NULL constraint because
-    # the service cannot run a NOT NULL fill during the same transaction as the
-    # status UPDATE atomically.
+    # Nullable for legacy rows (pre-migration e7f6a5b3c12d). Set by the service
+    # layer when status transitions to 'delivered'; not populated during normal
+    # notification creation since delivery is handled asynchronously.
     delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
@@ -63,11 +73,16 @@ class NotificationModel(Base):
         # Allow-list filtering is applied on top-level keys via PAYLOAD_PARAMS_ALLOWED_KEYS.
         # Nested content (e.g. content field in payload_params) is intentionally exposed;
         # callers are responsible for their own PII-handling obligations.
-        params = self.payload_params
-        if params:
-            unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
-            if unknown:
-                logger.debug("Notification %d payload_params dropped keys: %s", self.id, sorted(unknown))
+        if logger.isEnabledFor(logging.DEBUG):
+            params = self.payload_params
+            if params:
+                unknown = set(params.keys()) - PAYLOAD_PARAMS_ALLOWED_KEYS
+                if unknown:
+                    logger.debug("Notification %d payload_params dropped keys: %s", self.id, sorted(unknown))
+                    params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
+        else:
+            params = self.payload_params
+            if params:
                 params = {k: v for k, v in params.items() if k in PAYLOAD_PARAMS_ALLOWED_KEYS}
         return {
             "id": self.id,

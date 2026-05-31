@@ -3,7 +3,8 @@
 # Valid priority levels for notifications.
 VALID_PRIORITIES = frozenset({"low", "normal", "high", "urgent"})
 
-# Valid channel/notification_type values (action categories belong in automation_constants).
+# Valid channel values for NotificationModel.channel / notification_type parameter.
+# Maps to the channel column; do NOT use to validate a general 'notification_type' concept.
 VALID_NOTIFICATION_TYPES = frozenset({"in_app", "email", "sms", "push"})
 
 # Allowed keys in NotificationModel.payload_params.

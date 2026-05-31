@@ -1,5 +1,6 @@
 """Automation rules service — DB-backed rule engine with execution logging."""
 
+import json
 import logging
 from datetime import UTC, datetime
 
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 def _unimplemented_action(action_type: str, params: dict, key: str) -> dict:
     logger.warning("%s action is not implemented: %s=%s", action_type, key, params.get(key))
     return {"type": action_type, "status": "not_implemented", key: params.get(key)}
+
 
 # Supported trigger events
 TRIGGER_EVENTS: tuple[str, ...] = (
@@ -54,6 +56,10 @@ def _eval_condition(condition: dict, context: dict) -> bool:
     actual = context.get(field)
 
     if actual is None:
+        return False
+
+    # Guard against attacker-controlled deeply nested dicts causing performance issues.
+    if len(context) > 50 or json.dumps(context).encode().__len__() > 64_000:
         return False
 
     op_map = {

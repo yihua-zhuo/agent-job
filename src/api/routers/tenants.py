@@ -66,7 +66,7 @@ async def create_tenant(
         admin_email=body.admin_email,
         **({"settings": body.settings} if body.settings else {}),
     )
-    return {"success": True, "data": data.to_dict(), "message": "租户创建成功"}
+    return {"success": True, "data": data.to_dict(), "message": "Tenant created successfully"}
 
 
 @tenants_router.get("/stats")
@@ -115,7 +115,9 @@ async def list_tenants(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    items, total = await service.list_tenants(page=page, page_size=page_size, search=search, requesting_tenant_id=ctx.tenant_id)
+    items, total = await service.list_tenants(
+        page=page, page_size=page_size, search=search, requesting_tenant_id=ctx.tenant_id
+    )
     return _paginated([item.to_dict() for item in items], total, page, page_size)
 
 

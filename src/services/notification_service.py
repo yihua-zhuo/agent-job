@@ -66,7 +66,6 @@ class NotificationService:
         )
         self.session.add(notification)
         await self.session.flush()
-        await self.session.refresh(notification)
         return notification
 
     async def get_user_notifications(
