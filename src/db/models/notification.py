@@ -36,8 +36,9 @@ class NotificationModel(Base):
 
     __tablename__ = "notifications"
     __table_args__ = (
-        # Composite index for user + tenant + status queries.
-        Index("ix_notifications_user_tenant_status", "user_id", "tenant_id", "status"),
+        # Composite index for tenant + user + status queries.
+        # tenant_id leads to support tenant-scoped queries efficiently.
+        Index("ix_notifications_tenant_user_status", "tenant_id", "user_id", "status"),
         # Partial index for unread in-app notifications lookup.
         # Uses column() (string) rather than the model attribute because the partial
         # index WHERE clause requires a SQL expression that the mapped column reference

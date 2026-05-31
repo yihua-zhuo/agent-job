@@ -102,15 +102,15 @@ class _MockReminderModel:
         yield from self.to_dict().items()
 
 
+async def _mock_get_db():
+    yield make_mock_session([])
+
+
 def _make_auth_override(tenant_id: int = 1, user_id: int = 99):
     """Mimics real JWT-based AuthContext creation: raises 401 for invalid tenants."""
     if not isinstance(tenant_id, int) or tenant_id <= 0:
         raise HTTPException(status_code=401, detail="Token is missing a valid tenant_id")
     return _make_auth_ctx(tenant_id=tenant_id, user_id=user_id)
-
-
-async def _mock_get_db():
-    yield make_mock_session([])
 
 
 def _make_test_app(auth_override):
@@ -131,7 +131,7 @@ def _app(tenant_id: int = 1) -> TestClient:
     # get_db must be overridden so FastAPI can construct the router's session dependency.
     # NotificationService is fully patched in these tests, so the real session is not used,
     # but FastAPI checks the dependency signature at startup — the override satisfies it.
-    app = _make_test_app(lambda: _make_auth_override(tenant_id=tenant_id))
+    app = _make_test_app(lambda: _make_auth_ctx(tenant_id=tenant_id))
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -245,7 +245,7 @@ class TestSendNotification:
             # Pydantic rejects 'telegram' — 422 response has 'detail' list (not AppException envelope).
             detail = response.json().get("detail", [])
             error_types = {e.get("type") for e in (detail if isinstance(detail, list) else [])}
-            assert "enum" in error_types, f"Expected enum validation error, got {detail}"
+            assert "value_error" in error_types, f"Expected value_error validation error, got {detail}"
             # Verify the service was never instantiated (Pydantic rejected before routing to service).
             svc_cls.assert_not_called()
 
@@ -345,11 +345,20 @@ class TestPreferences:
         data = response.json()["data"]
         assert data == {"email": True, "sms": False, "in_app": True, "push": False}
 
-    def test_update_preferences_ok(self):
+
+class TestNotificationPreferencesUnimplemented:
+    """Stub coverage for notification_preferences endpoints — not yet implemented.
+
+    These tests verify the router returns501 stub responses until the
+    notification_preferences table and service are wired up.
+    """
+
+    def test_update_preferences_returns_501(self):
+        """PUT /notifications/preferences returns 501 until the feature is implemented."""
         client = _app()
         response = client.put("/api/v1/notifications/preferences", json={"email": False})
-        # Returns 501 until notification_preferences table is implemented.
         assert response.status_code == 501
+        assert response.json().get("detail") == "notification_preferences table not yet implemented"
 
 
 # ---------------------------------------------------------------------------
@@ -571,6 +580,7 @@ class TestInvalidTenant:
         response = client.get("/api/v1/notifications/preferences")
         # tenant_id="acme" is not None/0, so auth check passes; preferences endpoint returns 501.
         assert response.status_code == 501
+        assert response.json().get("detail") == "notification_preferences table not yet implemented"
 
 
 # ---------------------------------------------------------------------------

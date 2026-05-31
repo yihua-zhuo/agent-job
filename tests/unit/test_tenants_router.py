@@ -1,6 +1,6 @@
 """Unit tests for src/api/routers/tenants.py — /api/v1/tenants endpoints."""
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -11,7 +11,6 @@ from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import (
     AppException,
-    ForbiddenException,
     NotFoundException,
     ValidationException,
 )

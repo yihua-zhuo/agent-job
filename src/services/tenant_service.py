@@ -18,7 +18,7 @@ class TenantService:
     """Tenant management backed by PostgreSQL via SQLAlchemy async ORM."""
 
     @dataclass
-    class _TenantStats:
+    class TenantStats:
         """Stats aggregate returned by get_tenant_stats / get_tenant_usage."""
 
         tenant: TenantModel
@@ -149,14 +149,14 @@ class TenantService:
         items = list(result.scalars().all())
         return items, total
 
-    async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int) -> _TenantStats:
+    async def get_tenant_stats(self, tenant_id: int, requesting_tenant_id: int) -> TenantStats:
         tenant = await self._get_tenant_or_404(tenant_id, requesting_tenant_id)
         user_count_result = await self.session.execute(
             select(func.count(UserModel.id)).where(UserModel.tenant_id == tenant_id)
         )
         user_count = user_count_result.scalar() or 0
-        return self._TenantStats(tenant, user_count)
+        return self.TenantStats(tenant, user_count)
 
-    async def get_tenant_usage(self, tenant_id: int, requesting_tenant_id: int) -> _TenantStats:
+    async def get_tenant_usage(self, tenant_id: int, requesting_tenant_id: int) -> TenantStats:
         """Return tenant usage data. Delegates to get_tenant_stats for real implementation."""
         return await self.get_tenant_stats(tenant_id, requesting_tenant_id)

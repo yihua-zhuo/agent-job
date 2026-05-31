@@ -13,6 +13,11 @@ Requires TEST_DATABASE_URL pointing at a live Postgres instance.
 
 from __future__ import annotations
 
+import base64
+import hashlib
+import hmac
+import json
+import time
 import uuid
 from typing import TYPE_CHECKING
 
@@ -648,7 +653,7 @@ class TestTenantEndpoints:
                     settings={},
                 )
             )
-            await async_session.commit()
+            await async_session.flush()
         resp = await api_client.get("/api/v1/tenants/stats")
         assert resp.status_code == 200, f"Body: {resp.text}"
 
@@ -673,7 +678,7 @@ class TestTenantEndpoints:
                     settings={},
                 )
             )
-            await async_session.commit()
+            await async_session.flush()
         resp = await api_client.get("/api/v1/tenants/usage")
         assert resp.status_code == 200, f"Body: {resp.text}"
 
@@ -907,12 +912,12 @@ class TestEdgeCases:
         )
         assert resp.status_code == 401
 
-    async def test_user_from_other_tenant_cannot_access_resources(
+    async def test_user_can_access_own_resources(
         self,
         api_client: AsyncClient,
         tenant_id_web: int,
     ):
-        """User registered under tenant A cannot see tenant B's resources."""
+        """User can access resources they created within their own tenant."""
         suffix = uuid.uuid4().hex[:6]
         # Create customer in tenant A
         create_resp = await api_client.post(
@@ -922,7 +927,7 @@ class TestEdgeCases:
         assert create_resp.status_code == 201
         t1_id = create_resp.json()["data"]["id"]
 
-        # Try to access it with same client (same tenant) — should work
+        # Access it with same client (same tenant) — should work
         resp = await api_client.get(f"/api/v1/customers/{t1_id}")
         assert resp.status_code == 200
 
@@ -1719,25 +1724,19 @@ class TestEdgeCases:
 
     async def test_expired_token_format_still_rejected(self, client):
         """Even a well-formed but expired token returns 401."""
-        import time
-
         expired_payload = {
             "sub": "1",
             "tenant_id": 1,
             "exp": int(time.time()) - 3600,  # expired 1 hour ago
             "iat": int(time.time()) - 7200,
         }
-        import base64
-        import hashlib
-        import hmac
-        import json
 
         def b64enc(data):
             return base64.urlsafe_b64encode(data).rstrip(b"=").decode()
 
         header = b64enc(b'{"alg":"HS256","typ":"JWT"}')
         payload = b64enc(json.dumps(expired_payload).encode())
-        secret = "integration-test-jwt-secret-key"
+        secret = "integration-test-jwt-secret-key-32"
         sig = b64enc(hmac.new(secret.encode(), f"{header}.{payload}".encode(), hashlib.sha256).digest())
         token = f"{header}.{payload}.{sig}"
         resp = await client.get("/api/v1/customers", headers={"Authorization": f"Bearer {token}"})

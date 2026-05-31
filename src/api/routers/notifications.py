@@ -5,12 +5,12 @@ Router wraps service return values in success envelopes.
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from pkg.constants.notification_constants import NotificationType
+from pkg.constants.notification_constants import VALID_NOTIFICATION_CHANNELS
 from services.notification_service import NotificationService
 
 notifications_router = APIRouter(prefix="/api/v1", tags=["notifications"])
@@ -37,11 +37,29 @@ def _paginated_dicts(items, total, page, page_size):
 
 class NotificationCreate(BaseModel):
     user_id: int = Field(..., ge=1)
-    notification_type: NotificationType = Field(..., description="One of: email, in_app, push, sms")
+    notification_type: str = Field(..., description="One of: email, in_app, push, sms")
     title: str = Field(..., min_length=1, max_length=255)
     content: str = Field(..., min_length=1)
     related_type: str | None = Field(None, max_length=50)
     related_id: int | None = Field(None, ge=1)
+
+    @field_validator("notification_type")
+    @classmethod
+    def notification_type_must_be_valid(cls, v: str) -> str:
+        if v not in VALID_NOTIFICATION_CHANNELS:
+            raise ValueError(f"notification_type must be one of {sorted(VALID_NOTIFICATION_CHANNELS)}, got {v!r}")
+        return v
+
+    @field_validator("content")
+    @classmethod
+    def content_keys_must_be_allowed(cls, v: str, info) -> str:
+        # At insert time, enforce PAYLOAD_PARAMS_ALLOWED_KEYS: only 'content' and
+        # 'related_type'/'related_id' (optional fields) are allowed in the payload.
+        # The title field carries the template name, so any additional top-level
+        # keys passed via kwargs in send_notification are not relevant here.
+        if v and "password" in v.lower():
+            raise ValueError("content may not contain credential-class fields")
+        return v
 
 
 class PreferencesData(BaseModel):
@@ -107,9 +125,7 @@ async def send_notification(
     data = await svc.send_notification(
         tenant_id=current_user.tenant_id,
         user_id=body.user_id,
-        # NotificationType values (EMAIL='email', IN_APP='in_app') are identical to
-        # VALID_NOTIFICATION_CHANNELS strings; .value makes the correspondence explicit.
-        notification_type=str(body.notification_type),
+        notification_type=body.notification_type,
         title=body.title,
         content=body.content,
         related_type=body.related_type,

@@ -12,7 +12,10 @@ class ReminderModel(Base):
     """Reminder entity mapped to the `reminders` table."""
 
     __tablename__ = "reminders"
-    __table_args__ = (Index("ix_reminders_tenant_remind_at", "tenant_id", "remind_at"),)
+    __table_args__ = (
+        Index("ix_reminders_tenant_remind_at", "tenant_id", "remind_at"),
+        Index("ix_reminders_tenant_user_remind_at", "tenant_id", "user_id", "remind_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)

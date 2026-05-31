@@ -2,24 +2,12 @@
 
 from __future__ import annotations
 
-from enum import StrEnum
-
 # Valid priority levels for notifications.
 VALID_PRIORITIES: frozenset[str] = frozenset({"low", "normal", "high", "urgent"})
 
 # Valid channel values for NotificationModel.channel / notification_type parameter.
 # Maps to the channel column; do NOT use to validate a general 'notification_type' concept.
 VALID_NOTIFICATION_CHANNELS: frozenset[str] = frozenset({"in_app", "email", "sms", "push"})
-
-
-class NotificationType(StrEnum):
-    """Valid notification channel types."""
-
-    EMAIL = "email"
-    IN_APP = "in_app"
-    PUSH = "push"
-    SMS = "sms"
-
 
 # Allowed keys in NotificationModel.payload_params.
 # Used to structurally reject credential-class or other unexpected fields in to_dict().

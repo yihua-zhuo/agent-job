@@ -50,6 +50,8 @@ class NotificationService:
         the model; actual commit is owned by the router transaction boundary.
         """
         priority = kwargs.get("priority", "normal")
+        if not priority:
+            raise ValidationException("priority is required")
         if priority not in VALID_PRIORITIES:
             raise ValidationException(f"priority must be one of {sorted(VALID_PRIORITIES)}, got {priority!r}")
         if notification_type not in VALID_NOTIFICATION_CHANNELS:

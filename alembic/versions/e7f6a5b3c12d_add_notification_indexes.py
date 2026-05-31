@@ -12,7 +12,7 @@ params_, status, priority, delivered_at, read_at) then adds:
 """
 
 import sqlalchemy as sa
-from sqlalchemy import Boolean, Column, DateTime, Integer, String, text
+from sqlalchemy import Boolean, Column, DateTime, Integer, String
 from sqlalchemy.dialects.postgresql import JSON as PG_JSON
 
 from alembic import op
@@ -37,10 +37,10 @@ def upgrade() -> None:
     # will produce {"content": "..."} with no 'related_type'/'related_id' keys (rather than
     # {"content": "...", "related_type": null, "related_id": null}). This is a minor
     # data-shape precision trade-off for the one-way migration.
-    op.execute(text("UPDATE notifications SET channel = type WHERE type IS NOT NULL AND channel IS NULL"))
-    op.execute(text("UPDATE notifications SET template = title WHERE title IS NOT NULL AND template IS NULL"))
+    op.execute(sa.text("UPDATE notifications SET channel = type WHERE type IS NOT NULL AND channel IS NULL"))
+    op.execute(sa.text("UPDATE notifications SET template = title WHERE title IS NOT NULL AND template IS NULL"))
     op.execute(
-        text(
+        sa.text(
             "UPDATE notifications SET params_ = jsonb_build_object("
             "'content', content,"
             "'related_type', related_type,"
@@ -49,11 +49,11 @@ def upgrade() -> None:
         )
     )
     op.execute(
-        text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END WHERE status IS NULL")
+        sa.text("UPDATE notifications SET status = CASE WHEN is_read THEN 'read' ELSE 'pending' END WHERE status IS NULL")
     )
-    op.execute(text("UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL"))
-    op.execute(text("UPDATE notifications SET read_at = created_at WHERE is_read = true AND read_at IS NULL"))
-    op.execute(text("UPDATE notifications SET priority = 'normal' WHERE priority IS NULL"))
+    op.execute(sa.text("UPDATE notifications SET delivered_at = created_at WHERE delivered_at IS NULL"))
+    op.execute(sa.text("UPDATE notifications SET read_at = created_at WHERE is_read = true AND read_at IS NULL"))
+    op.execute(sa.text("UPDATE notifications SET priority = 'normal' WHERE priority IS NULL"))
 
     # Phase 3: drop old columns
     op.drop_column("notifications", "related_id")
@@ -65,9 +65,9 @@ def upgrade() -> None:
 
     # Phase 4: add indexes
     op.create_index(
-        "ix_notifications_user_tenant_status",
+        "ix_notifications_tenant_user_status",
         "notifications",
-        ["user_id", "tenant_id", "status"],
+        ["tenant_id", "user_id", "status"],
     )
     # Partial index for efficient lookup of unread in-app notifications.
     # PostgreSQL partial indexes include all rows matching the WHERE clause; the two
@@ -78,7 +78,7 @@ def upgrade() -> None:
         "ix_notifications_in_app_unread",
         "notifications",
         ["user_id", "tenant_id"],
-        postgresql_where=text("channel = 'in_app' AND read_at IS NULL"),
+        postgresql_where=sa.text("channel = 'in_app' AND read_at IS NULL"),
     )
 
 
@@ -95,7 +95,7 @@ def downgrade() -> None:
 
     # Phase 4 (reversed): drop indexes created in upgrade before restoring old columns.
     op.drop_index("ix_notifications_in_app_unread", table_name="notifications")
-    op.drop_index("ix_notifications_user_tenant_status", table_name="notifications")
+    op.drop_index("ix_notifications_tenant_user_status", table_name="notifications")
 
     # Phase 4 (reversed): add back old columns first (needed before restore data step)
     # is_read is added as nullable first to avoid constraint violations from Phase 3
@@ -114,37 +114,37 @@ def downgrade() -> None:
     # downgrade — this asymmetry is an inherent limitation of the one-way migration.
     # The content-restoration UPDATE guards against writing 'NULL' strings by
     # requiring params_->>'content' to be non-NULL as well.
-    op.execute(text("UPDATE notifications SET type = channel WHERE channel IS NOT NULL"))
-    op.execute(text("UPDATE notifications SET title = template WHERE template IS NOT NULL"))
+    op.execute(sa.text("UPDATE notifications SET type = channel WHERE channel IS NOT NULL"))
+    op.execute(sa.text("UPDATE notifications SET title = template WHERE template IS NOT NULL"))
     op.execute(
-        text(
+        sa.text(
             "UPDATE notifications SET content = params_->>'content' WHERE params_ IS NOT NULL AND params_->>'content' IS NOT NULL"
         )
     )
     op.execute(
-        text(
+        sa.text(
             "UPDATE notifications SET related_type = params_->>'related_type' "
             "WHERE params_ IS NOT NULL AND params_->>'related_type' IS NOT NULL"
         )
     )
     op.execute(
-        text(
+        sa.text(
             "UPDATE notifications SET related_id = (params_->>'related_id')::bigint "
             "WHERE params_ IS NOT NULL AND params_->>'related_id' IS NOT NULL"
         )
     )
-    op.execute(text("UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL"))
-    op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL AND status IS NOT NULL"))
+    op.execute(sa.text("UPDATE notifications SET is_read = (status = 'read') WHERE status IS NOT NULL"))
+    op.execute(sa.text("UPDATE notifications SET is_read = false WHERE is_read IS NULL AND status IS NOT NULL"))
     # Catch-all for rows that had NULL status during the Phase 2 backfill —
     # these rows should have is_read=false to match the pre-migration implicit default.
-    op.execute(text("UPDATE notifications SET is_read = false WHERE is_read IS NULL"))
+    op.execute(sa.text("UPDATE notifications SET is_read = false WHERE is_read IS NULL"))
 
     # Phase 4 (reversed): apply NOT NULL constraint idempotently — check whether
     # the constraint is already present before applying it, to survive replayed
     # downgrades or prior partial downgrades. Uses information_schema rather than
     # SQLERRM pattern-matching so it works regardless of PostgreSQL locale.
     op.execute(
-        text(
+        sa.text(
             "DO $$ "
             "BEGIN "
             "IF NOT EXISTS ("
@@ -153,6 +153,34 @@ def downgrade() -> None:
             "AND table_name = 'notifications'"
             ") THEN "
             "ALTER TABLE notifications ALTER COLUMN is_read SET NOT NULL; "
+            "END IF; "
+            "END $$"
+        )
+    )
+    op.execute(
+        sa.text(
+            "DO $$ "
+            "BEGIN "
+            "IF NOT EXISTS ("
+            "SELECT 1 FROM information_schema.table_constraints "
+            "WHERE constraint_name = 'notifications_content_notnull' "
+            "AND table_name = 'notifications'"
+            ") THEN "
+            "ALTER TABLE notifications ALTER COLUMN content SET NOT NULL; "
+            "END IF; "
+            "END $$"
+        )
+    )
+    op.execute(
+        sa.text(
+            "DO $$ "
+            "BEGIN "
+            "IF NOT EXISTS ("
+            "SELECT 1 FROM information_schema.table_constraints "
+            "WHERE constraint_name = 'notifications_related_type_notnull' "
+            "AND table_name = 'notifications'"
+            ") THEN "
+            "ALTER TABLE notifications ALTER COLUMN related_type SET NOT NULL; "
             "END IF; "
             "END $$"
         )

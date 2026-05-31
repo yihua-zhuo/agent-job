@@ -8,10 +8,6 @@ from typing import Any
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
-# The ORM attribute is named payload_params, which SQLAlchemy uses as the bind
-# parameter name. The internal mock store key params_ is unrelated.
-_NOTIFICATION_PARAMS_KEY = "payload_params"
-
 
 def _notification_to_row(n: dict):
     return MockRow(

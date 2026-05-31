@@ -491,7 +491,7 @@ class TestNotificationIntegration:
         count = await svc.get_unread_count(user_id=uid, tenant_id=tenant_id)
         assert count == 2
 
-    async def test_create_and_cancel_reminder(self, db_schema, tenant_id, _seed_tenant, async_session):
+    async def test_create_and_cancel_reminder(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
         uid = await self._seed_user(tenant_id, async_session)
         result = await svc.create_reminder(
