@@ -344,11 +344,89 @@ def get_handlers(state: MockState) -> list[Callable[..., MockResult | None]]:
         make_notification_handler(state),
         make_reminder_handler(state),
         make_smart_notification_handler(state),
+        make_notification_analytics_handler(state),
     ]
+
+
+def make_notification_analytics_handler(state):
+    """Return a handler that manages an in-memory notification_analytics store in state."""
+
+    def handler(sql_text: str, params: dict[str, Any]) -> MockResult | None:
+        # Initialise on first use; use getattr to avoid class-attribute shadowing
+        # when tests pre-seed state._notification_analytics before the session is built.
+        store = getattr(state, "_notification_analytics", None)
+        if store is None:
+            store = {}
+            state._notification_analytics = store
+
+        sql_text_lower = sql_text.lower()
+
+        if "insert into notification_analytics" in sql_text_lower:
+            key = (params.get("notification_id"), params.get("tenant_id"))
+            if key in store:
+                # Upsert: update existing record
+                row = store[key]
+                row["opened_at"] = params.get("opened_at")
+                row["clicked_at"] = params.get("clicked_at")
+                return MockResult([_notification_analytics_to_row(row)])
+            nid = params.get("notification_id")
+            tid = params.get("tenant_id")
+            record = {
+                "id": len(store) + 1,
+                "notification_id": nid,
+                "tenant_id": tid,
+                "opened_at": params.get("opened_at"),
+                "clicked_at": params.get("clicked_at"),
+                "channel": params.get("channel", "email"),
+            }
+            store[key] = record
+            return MockResult([_notification_analytics_to_row(record)])
+
+        # SELECT: match table name + notification_id (with or without table prefix)
+        # NOTE: check for count(...) before the generic SELECT below — otherwise
+        # COUNT queries are caught here and return the full row instead of the count value.
+        if "count(" in sql_text_lower and "from notification_analytics" in sql_text_lower:
+            nid = params.get("notification_id") or params.get("notification_id_1")
+            tid = params.get("tenant_id") or params.get("tenant_id_1")
+            count = sum(
+                1
+                for r in store.values()
+                if r.get("notification_id") == nid
+                and r.get("tenant_id") == tid
+                and r.get("opened_at") is not None
+            )
+            return MockResult([[count]])
+
+        if "from notification_analytics" in sql_text_lower and "notification_id" in sql_text_lower:
+            nid = params.get("notification_id") or params.get("notification_id_1")
+            tid = params.get("tenant_id") or params.get("tenant_id_1")
+            key = (nid, tid)
+            record = store.get(key)
+            if record:
+                return MockResult([_notification_analytics_to_row(record)])
+            return MockResult([])
+
+        return None
+
+    return handler
+
+
+def _notification_analytics_to_row(r: dict):
+    return MockRow(
+        {
+            "id": r.get("id"),
+            "notification_id": r.get("notification_id"),
+            "tenant_id": r.get("tenant_id"),
+            "opened_at": r.get("opened_at"),
+            "clicked_at": r.get("clicked_at"),
+            "channel": r.get("channel", "email"),
+        }
+    )
 
 
 __all__ = [
     "get_handlers",
+    "make_notification_analytics_handler",
     "make_notification_handler",
     "make_reminder_handler",
     "make_smart_notification_handler",

@@ -102,3 +102,17 @@ class NotificationModel(Base):
             "delivered_at": self.delivered_at.isoformat() if self.delivered_at else None,
             "read_at": self.read_at.isoformat() if self.read_at else None,
         }
+
+
+class NotificationAnalytics(Base):
+    """Analytics record for a notification open/click event."""
+
+    __tablename__ = "notification_analytics"
+    __table_args__ = (Index("ix_notification_analytics_notification_tenant", "notification_id", "tenant_id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    notification_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    clicked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    channel: Mapped[str] = mapped_column(String(50), nullable=False)
