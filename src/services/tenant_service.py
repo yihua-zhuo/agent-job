@@ -91,9 +91,8 @@ class TenantService:
             new_settings.update(kwargs["settings"])
             settings_changed = True
 
-        for key, value in kwargs.items():
-            if key in allowed:
-                setattr(tenant, key, value)
+        for key in allowed & kwargs.keys():
+            setattr(tenant, key, kwargs[key])
         tenant.updated_at = datetime.now(UTC)
         if settings_changed:
             tenant.settings = new_settings

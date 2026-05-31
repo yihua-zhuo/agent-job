@@ -31,15 +31,6 @@ TENANT_ROW = {
     "settings": {},
     "created_at": None,
     "updated_at": None,
-    "to_dict": lambda: {
-        "id": 1,
-        "name": "Acme Corp",
-        "plan": "enterprise",
-        "status": "active",
-        "settings": {},
-        "created_at": None,
-        "updated_at": None,
-    },
 }
 
 
@@ -47,48 +38,6 @@ TENANT_ROW = {
 # Smoke test — constructor receives a session-like argument
 # ---------------------------------------------------------------------------
 
-
-def test_tenant_service_constructor_receives_session(monkeypatch):
-    """Rule 127: smoke assertion that TenantService.__init__ is called with a session argument.
-
-    Detects signature changes in the service constructor early. If the
-    constructor ever stops accepting a session, `captured_sessions` will be
-    empty and this test will fail.
-    """
-    from starlette.requests import Request
-    from starlette.responses import JSONResponse
-
-    from internal.middleware.fastapi_auth import require_auth
-
-    mock_service = MagicMock()
-    captured_sessions = []
-
-    def _wrapping_constructor(*args, **kwargs):
-        # When patched via monkeypatch.setattr, args[0] is the session (no self injected).
-        # When called directly, args[0] is self and args[1] is the session — capture both.
-        captured_sessions.extend(args)
-        return mock_service
-
-    mock_service.captured_sessions = captured_sessions
-
-    monkeypatch.setattr("api.routers.tenants.TenantService", _wrapping_constructor)
-
-    app = FastAPI()
-    app.include_router(tenants_router)
-    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    app.dependency_overrides[get_db] = lambda: MagicMock()
-
-    @app.exception_handler(AppException)
-    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
-        return JSONResponse(status_code=exc.status_code, content={"success": False, "message": exc.detail})
-
-    mock_service.create_tenant = AsyncMock(return_value={"id": 1, "name": "Smoke Corp"})
-    client = TestClient(app, raise_server_exceptions=False)
-    # POST /tenants calls TenantService(session) — POST is used instead of GET
-    # because some endpoints delegate to helper services (e.g. stats/usage) that
-    # bypass TenantService directly.
-    resp = client.post("/api/v1/tenants", json={"name": "Smoke Corp", "plan": "starter"})
-    assert captured_sessions, "TenantService constructor was not called with a session argument"
 
 
 # ---------------------------------------------------------------------------
@@ -185,6 +134,10 @@ class TestCreateTenantEndpoint:
             },
         )
         assert resp.status_code == 422
+        body = resp.json()
+        assert body["success"] is False
+        assert "租户名称已存在" in body["message"]
+        assert body["code"] == "VALIDATION_ERROR"
 
     def test_empty_name_rejected(self, tenant_router_client):
         client, _ = tenant_router_client

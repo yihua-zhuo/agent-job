@@ -136,6 +136,7 @@ class TestListNotifications:
             client = _app()
             response = client.get("/api/v1/notifications?page=1&page_size=20")
             assert response.status_code == 200
+            # Explicitly assert unread_only=False for the absent-param default contract.
             svc.get_user_notifications.assert_called_once_with(
                 user_id=99, tenant_id=1, unread_only=False, page=1, page_size=20
             )
@@ -177,7 +178,7 @@ class TestSendNotification:
                     "id": 5,
                     "tenant_id": 1,
                     "user_id": 2,
-                    "channel": "info",
+                    "channel": "in_app",
                     "template": "New deal",
                     "params_": {"content": "Deal closed!"},
                 }
@@ -237,6 +238,7 @@ class TestSendNotification:
             # AppException handler returns {"success": false, "message": ..., "code": ...}
             message = response.json().get("message", "")
             assert "in_app" in message and "email" in message
+            assert "telegram" in message
 
 
 # ---------------------------------------------------------------------------

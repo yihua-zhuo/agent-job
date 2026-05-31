@@ -252,7 +252,7 @@ def make_reminder_handler(state):
             # in a non-upcoming-only query. A dedicated _upcoming_only bool param would be
             # cleaner and is worth considering if the service signature is refactored.
             is_completed_filter = params.get("is_completed")
-            now = params.get("_now", datetime.utcnow())
+            now = params.get("_now", datetime.now(UTC))
             upcoming_only = params.get("_upcoming_only", is_completed_filter is False)
             page_size = max(params.get("limit", 20), 1)
             offset = max(params.get("offset", 0), 0)

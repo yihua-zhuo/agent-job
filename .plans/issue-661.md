@@ -7,8 +7,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - `src/db/models/notification.py` — Replace the existing model with the new field set and updated `to_dict()`
 - `src/services/notification_service.py` — Update field references to match the new model (field renames: type → channel, is_read → read_at check, title/content → template/params)
 - `alembic/versions/<new_revision>.py` — New migration (chains from `82ecf4a34e34`) adding composite + partial indexes on `notifications`
-- `tests/unit/domain_handlers/notification.py` — New handler for unit-test mock SQL engine
-- `tests/unit/domain_handlers/notification.py` — New handler for unit-test mock SQL engine; discovered automatically by `conftest.py`'s `_load_domain_handler_modules()` via `pkgutil.iter_modules` over the `tests.unit.domain_handlers` package. The handler module must export `get_handlers(state)` and `__all__` listing all exported symbols; `ORDER` controls loading sequence (handled internally by the sorted import).
+- `tests/unit/domain_handlers/notification.py` — Handler for unit-test mock SQL engine; discovered automatically by `conftest.py`'s `_load_domain_handler_modules()` via `pkgutil.iter_modules` over the `tests.unit.domain_handlers` package. The handler module must export `get_handlers(state)` and `__all__` listing all exported symbols.
 - `tests/unit/test_notifications_router.py` — Tests already use the new field names (`channel`, `template`, `params`, `status`, `read_at`); no updates required
 
 ## Implementation Steps
@@ -18,6 +17,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
    - Import `JSON` from `sqlalchemy.dialects.postgresql`.
    - `to_dict()` must serialize `payload_params` (check isinstance for JSON dict) and format all three datetime fields with `.isoformat()`. The dict key should use `'params'` (without trailing underscore) — `{"params": self.payload_params, ...}` — to present a clean API contract while the Python attribute remains `payload_params`.
    - Python attribute is `payload_params` (mapped to DB column `params_`).
+   - References to the JSON field use `params_` throughout (DB column name) and `payload_params` (Python ORM attribute name) internally.
 
 2. **Create `tests/unit/domain_handlers/notification.py`** with `NotificationMockSession`, `get_handlers(state)`, `make_notification_handler(state)`, and `ORDER = 2`. Follow the same `ORDER`-sorted module loading pattern used by `sla.py` and `counts.py`.
 
@@ -27,7 +27,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 
 4. **Update `tests/unit/test_notifications_router.py`** — `_MockNotificationModel.to_dict()` at line ~51 now outputs `"params"` (not `"params_"`) to match `NotificationModel.to_dict()`.
 
-5. **Generate the migration** (follow CLAUDE.md exactly): ✅ DONE — the migration at `alembic/versions/e7f6a5b3c12d_add_notification_indexes.py` already contains the manually written partial index (lines 70-78) and chains from base revision `82ecf4a34e34`. No autogenerate needed.
+5. **Generate the migration** (follow CLAUDE.md exactly): ✅ DONE — the migration at `alembic/versions/e7f6a5b3c12d_add_notification_indexes.py` is fully hand-written (not produced by alembic autogenerate) and chains from base revision `82ecf4a34e34`. It contains the manually written partial index (lines 70-78).
 
 6. **Write data transformation logic in the migration**:
    - In `upgrade()`: add new nullable columns → backfill via SQL UPDATE → drop old columns → add indexes
