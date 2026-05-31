@@ -61,10 +61,10 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    # Best-effort FK constraint removal.  PostgreSQL may assign the FK a
-    # auto-generated name that differs from this hardcoded value; IF EXISTS
-    # prevents a hard failure in that case.  The index and table drops are
-    # idempotent and safe regardless of whether the constraint was found.
+    # Best-effort FK constraint removal. PostgreSQL auto-generates a constraint
+    # name that may differ from 'notification_templates_tenant_id_fkey'. IF EXISTS
+    # prevents hard failure; the table drop (below) cascades the FK cleanup anyway
+    # so the DB stays consistent regardless of the hardcoded name match.
     op.execute(
         sa.text(
             "ALTER TABLE notification_templates DROP CONSTRAINT IF EXISTS notification_templates_tenant_id_fkey"
