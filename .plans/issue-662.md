@@ -124,9 +124,9 @@ PYTHONPATH=src DATABASE_URL="postgresql+asyncpg://test_user:test_pass@localhost:
 
 ### Step 3: Write unit tests
 
-Write `tests/unit/test_notification_template_model.py` covering: `test_table_name`, `test_to_dict_returns_all_fields`, `test_to_dict_with_null_optional_fields`, `test_channel_accepts_standard_values` (4 channels), `test_channel_non_standard_values_accepted` (6 channels), `test_name_accepts_100_chars`, `test_subject_accepts_255_chars`, `test_to_dict_created_at_isoformat`, `test_empty_name_is_accepted_by_orm`, `test_unknown_channel_accepted_by_orm`.
+Write `tests/unit/test_notification_template_model.py` covering: `test_table_name`, `test_to_dict_returns_all_fields`, `test_to_dict_with_null_optional_fields`, `test_channel_accepts_standard_values` (4 channels), `test_channel_non_standard_values_accepted_by_orm_only` (6 channels), `test_name_accepts_100_chars`, `test_subject_accepts_255_chars`, `test_to_dict_created_at_isoformat`, `test_name_can_be_empty_string`.
 
-**Verification**: `PYTHONPATH=src pytest tests/unit/test_notification_template_model.py -v` → 10 passed
+**Verification**: `PYTHONPATH=src pytest tests/unit/test_notification_template_model.py -v` → 9 passed
 
 ---
 
@@ -164,5 +164,5 @@ Inspect the generated `alembic/versions/<id>_drift_check.py` — both `up()` and
 - `alembic/versions/5d575a161b5d_add_notification_templates.py` exists and creates `notification_templates` table with correct column types and FK constraint on `tenant_id`
 - `alembic/versions/merge_nt_662.py` exists as a merge revision with `down_revision = (52b19ee00eaf, 5d575a161b5d)`, allowing `alembic upgrade head` to succeed on a fresh database
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` all exit 0 on the `alembic_dev` database
-- `tests/unit/test_notification_template_model.py` has 10 passing tests covering `to_dict`, null optionals, `__tablename__`, channel values, length boundaries, and invalid-input acceptance
+- `tests/unit/test_notification_template_model.py` has 9 passing tests covering `to_dict`, null optionals, `__tablename__`, channel values, length boundaries, and invalid-input acceptance
 - Drift check produces an empty migration (confirms model and DB schema are in sync)
