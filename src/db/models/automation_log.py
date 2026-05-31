@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func, text
+from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -22,17 +22,18 @@ class AutomationLogModel(Base):
         index=True,
     )
     tenant_id: Mapped[int] = mapped_column(
-        # 0-sentinel for system-owned rows (no FK constraint — constraint requires
-        # tenant_id > 0; system rows carry tenant_id=0 and bypass it via server_default).
+        # 0-sentinel for system-owned rows — no FK constraint (constraint requires
+        # tenant_id > 0; system rows carry tenant_id=0 and bypass it).
+        # Callers MUST explicitly pass tenant_id=0 for system rows; omitting the
+        # parameter will raise an IntegrityError rather than silently defaulting.
         ForeignKey("tenants.id"),
-        server_default=text("0"),
         default=0,
         nullable=False,
         index=True,
     )
     trigger_event: Mapped[str] = mapped_column(String(100), nullable=False)
-    trigger_context: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    actions_executed: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    trigger_context: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    actions_executed: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="success", nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
     executed_by: Mapped[int] = mapped_column(

@@ -184,7 +184,7 @@ def upgrade() -> None:
     # (table not present — should not occur in normal upgrade) are caught.
     # syntax_error and other SQL failures indicate a real problem and must not
     # be silently suppressed.
-    # NOTE: ix_automation_logs_tenant_id is already created at line 148.
+    # NOTE: ix_automation_logs_tenant_id is already created at line 178.
     op.execute(
         sa.text(
             "DO $$ BEGIN "

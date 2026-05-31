@@ -15,13 +15,15 @@ class ChurnPredictionModel(Base):
     __tablename__ = "churn_predictions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     customer_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True
     )
     score: Mapped[float] = mapped_column(Float, nullable=False)
     tier: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    factors: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    factors: Mapped[list[dict]] = mapped_column(JSONB, default=list, nullable=False)
     predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(

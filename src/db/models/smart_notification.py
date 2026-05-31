@@ -45,13 +45,13 @@ class SmartNotificationModel(Base):
     )
     summarized_content: Mapped[str] = mapped_column(String(1024), nullable=False)
     priority: Mapped[Priority] = mapped_column(
-        SQLEnum(Priority, name="smart_notification_priority", native_enum=True), nullable=False, default=Priority.normal
+        SQLEnum(Priority, name="smart_notification_priority", native_enum=True), nullable=False
     )
     channel: Mapped[Channel] = mapped_column(
-        SQLEnum(Channel, name="smart_notification_channel", native_enum=True), nullable=False, default=Channel.email
+        SQLEnum(Channel, name="smart_notification_channel", native_enum=True), nullable=False
     )
     timing: Mapped[Timing] = mapped_column(
-        SQLEnum(Timing, name="smart_notification_timing", native_enum=True), nullable=False, default=Timing.immediate
+        SQLEnum(Timing, name="smart_notification_timing", native_enum=True), nullable=False
     )
     recipient_filter: Mapped[dict | None] = mapped_column(JSON, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

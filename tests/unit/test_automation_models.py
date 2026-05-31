@@ -221,17 +221,15 @@ class TestAutomationLogModelDefaults:
         else:
             assert python_val == "success" or server_val == "'success'"
 
-    def test_trigger_context_column_has_callable_default(self):
-        """The trigger_context column has a callable default (empty dict factory)."""
+    def test_trigger_context_column_is_nullable(self):
+        """The trigger_context column is nullable (no server-side default)."""
         col = AutomationLogModel.__table__.c.trigger_context
-        assert col.default is not None
-        assert callable(col.default.arg)
+        assert col.nullable is True
 
-    def test_actions_executed_column_has_callable_default(self):
-        """The actions_executed column has a callable default (empty list factory)."""
+    def test_actions_executed_column_is_nullable(self):
+        """The actions_executed column is nullable (no server-side default)."""
         col = AutomationLogModel.__table__.c.actions_executed
-        assert col.default is not None
-        assert callable(col.default.arg)
+        assert col.nullable is True
 
     def test_executed_by_column_default_is_zero(self):
         """The executed_by column defaults to 0."""

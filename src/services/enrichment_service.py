@@ -19,8 +19,47 @@ async def _upsert_enrichment(
     tenant_id: int,
     customer_id: int,
     raw_data: dict[str, Any],
+) -> CustomerEnrichmentModel:
+    """Upsert a CustomerEnrichmentModel record (insert or replace) and return it."""
+    now = datetime.now(UTC)
+    next_refresh = now + timedelta(days=7)
+    stmt = pg_insert(CustomerEnrichmentModel).values(
+        tenant_id=tenant_id,
+        customer_id=customer_id,
+        provider="clearbit",
+        raw_data_json=raw_data,
+        enriched_at=now,
+        next_refresh_at=next_refresh,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=["tenant_id", "customer_id"],
+        set_={
+            "provider": "clearbit",
+            "raw_data_json": stmt.excluded.raw_data_json,
+            "enriched_at": stmt.excluded.enriched_at,
+            "next_refresh_at": next_refresh,
+            "updated_at": now,
+        },
+    )
+    await session.execute(stmt)
+    result = await session.execute(
+        select(CustomerEnrichmentModel).where(
+            and_(
+                CustomerEnrichmentModel.customer_id == customer_id,
+                CustomerEnrichmentModel.tenant_id == tenant_id,
+            )
+        )
+    )
+    return result.scalar_one()
+
+
+async def _upsert_enrichment_raw(
+    session: AsyncSession,
+    tenant_id: int,
+    customer_id: int,
+    raw_data: dict[str, Any],
 ) -> None:
-    """Upsert a CustomerEnrichmentModel record (insert or replace)."""
+    """Upsert a CustomerEnrichmentModel record without returning it (used by lookup)."""
     now = datetime.now(UTC)
     next_refresh = now + timedelta(days=7)
     stmt = pg_insert(CustomerEnrichmentModel).values(
@@ -83,7 +122,7 @@ class EnrichmentService:
         raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name)
         normalised = self._normalise_clearbit(raw_data)
 
-        await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)
+        await _upsert_enrichment_raw(self.session, tenant_id, customer_id, raw_data)
 
         return normalised, raw_data
 
@@ -114,8 +153,7 @@ class EnrichmentService:
             raise ValidationException("domain or company_name is required when customer has no prior enrichment record")
 
         # Customer existence is validated inside refresh() via _call_clearbit_api
-        result, _raw_data = await self.refresh(customer_id, tenant_id, domain=domain, company_name=company_name)
-        upserted = await self.get_latest_enrichment(customer_id, tenant_id)
+        result, upserted = await self.refresh(customer_id, tenant_id, domain=domain, company_name=company_name)
         return result, upserted
 
     async def get_latest_enrichment(
@@ -233,11 +271,11 @@ class EnrichmentService:
         tenant_id: int,
         domain: str | None = None,
         company_name: str | None = None,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+    ) -> tuple[dict[str, Any], CustomerEnrichmentModel]:
         """Re-call the enrichment provider for an existing customer.
 
         Validates inputs, calls Clearbit, upserts the enrichment record, and
-        returns a (normalised, raw) tuple.
+        returns a (normalised, upserted_model) tuple.
         """
         # Normalise and validate inputs
         if domain:
@@ -258,6 +296,6 @@ class EnrichmentService:
         raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name, customer=customer)
         normalised = self._normalise_clearbit(raw_data)
 
-        await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)
+        upserted = await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)
 
-        return normalised, raw_data
+        return normalised, upserted
