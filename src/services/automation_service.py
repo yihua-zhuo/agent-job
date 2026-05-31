@@ -91,10 +91,11 @@ class AutomationService:
                 )
             except AppException as e:
                 return {"type": action_type, "status": "error", "error": str(e)}
-            except Exception as e:
-                logger.exception("Unexpected error in notification.send action")
-                return {"type": action_type, "status": "error", "error": str(e)}
-            return {"type": action_type, "status": "sent"}
+            except BaseException as e:
+                if isinstance(e, Exception):
+                    logger.exception("Unexpected error in notification.send action")
+                    return {"type": action_type, "status": "error", "error": str(e)}
+                raise  # do not swallow CancelledError / KeyboardInterrupt
 
         elif action_type == "task.create":
             assignee_id = params.get("assignee_id")
@@ -117,8 +118,11 @@ class AutomationService:
                 )
             except AppException as e:
                 return {"type": action_type, "status": "error", "error": str(e)}
-            except Exception as e:
-                logger.exception("Unexpected error in task.create action")
+            except BaseException as e:
+                if isinstance(e, Exception):
+                    logger.exception("Unexpected error in task.create action")
+                    return {"type": action_type, "status": "error", "error": str(e)}
+                raise  # do not swallow CancelledError / KeyboardInterrupt
                 return {"type": action_type, "status": "error", "error": str(e)}
             return {"type": action_type, "status": "created"}
 
@@ -271,7 +275,7 @@ class AutomationService:
         context: dict,
         executed_by: int = 0,
     ) -> list[dict]:
-        # Guard against attacker-controlled deeply nested dicts once, up-front.
+        # Guard against attacker-controlled deeply nested dicts and lists once, up-front.
         def _max_depth(d, _depth=0):
             max_d = _depth
             for v in d.values():
@@ -285,6 +289,11 @@ class AutomationService:
             return max_d
 
         encoded = json.dumps(context, ensure_ascii=False).encode("utf-8")
+        # NOTE: these size/breadth bounds are applied only here in trigger_event, the sole
+        # public entry point that accepts a caller-supplied context dict. Other public
+        # methods (create_rule, update_rule, etc.) do not accept arbitrary context dicts
+        # and therefore do not need equivalent guards. Future additions that accept
+        # caller-supplied dicts should apply consistent depth/size limits.
         if _max_depth(context) > 16 or len(encoded) > 64_000:
             logger.warning(
                 "Automation event dropped: context size %d exceeds limit or depth exceeds 16",

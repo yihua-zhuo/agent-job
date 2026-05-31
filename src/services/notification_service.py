@@ -196,6 +196,18 @@ class NotificationService:
             raise ValidationException(f"channel must be 0 (email), 1 (sms), 2 (push), or 3 (in_app), got {channel}")
         if timing not in {t.value for t in Timing}:
             raise ValidationException(f"timing must be 0 (immediate) or 1 (batch), got {timing}")
+        # Rule126: validate recipient_filter schema — a malformed filter dict could persist
+        # but fail at routing time.
+        if recipient_filter is not None:
+            if not isinstance(recipient_filter, dict):
+                raise ValidationException("recipient_filter must be a dict")
+            for key, value in recipient_filter.items():
+                if not isinstance(key, str):
+                    raise ValidationException(f"recipient_filter keys must be str, got {type(key).__name__}")
+                if not isinstance(value, (list, str, int)):
+                    raise ValidationException(
+                        f"recipient_filter values must be list | str | int, got {type(value).__name__} for key {key!r}"
+                    )
 
         notification = SmartNotificationModel(
             tenant_id=tenant_id,
