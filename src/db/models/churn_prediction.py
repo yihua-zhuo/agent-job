@@ -26,11 +26,11 @@ class ChurnPredictionModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False)
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     tier: Mapped[ChurnTier] = mapped_column(sa.Enum(ChurnTier, name="churntier"), nullable=False)
-    factors: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
-    recommended_actions: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
+    factors: Mapped[list[dict]] = mapped_column(JSON, default=lambda: list, nullable=False)
+    recommended_actions: Mapped[list[dict]] = mapped_column(JSON, default=lambda: list, nullable=False)
     model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     predicted_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False

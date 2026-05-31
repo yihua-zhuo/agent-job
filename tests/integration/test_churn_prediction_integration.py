@@ -63,7 +63,6 @@ class TestChurnPredictionIntegration:
         async_session.add(prediction)
         await async_session.flush()
         await async_session.refresh(prediction)
-        await async_session.commit()
 
         assert prediction.id is not None
         assert prediction.tenant_id == tenant_id
@@ -87,7 +86,10 @@ class TestChurnPredictionIntegration:
             customer_id=customer_id,
             score=85,
             tier=ChurnTier.high,
-            factors=["low_engagement", "support_tickets_up"],
+            factors=[
+                {"name": "low_engagement", "weight": 0.6, "explanation": "No activity in 30 days"},
+                {"name": "support_tickets_up", "weight": 0.4, "explanation": "Tickets increased"},
+            ],
         )
         async_session.add(pred)
         await async_session.flush()
@@ -107,7 +109,7 @@ class TestChurnPredictionIntegration:
         assert fetched.customer_id == customer_id
         assert fetched.score == 85
         assert fetched.tier == ChurnTier.high
-        assert "low_engagement" in fetched.factors
+        assert fetched.factors[0]["name"] == "low_engagement"
 
     async def test_to_dict_after_insert(self, db_schema, tenant_id, async_session):
         """to_dict() returns correct values after persistence."""
@@ -117,7 +119,7 @@ class TestChurnPredictionIntegration:
             customer_id=customer_id,
             score=42,
             tier=ChurnTier.low,
-            factors=["infrequent_purchase"],
+            factors=[{"name": "infrequent_purchase", "weight": 0.7, "explanation": "Purchase frequency dropped"}],
         )
         async_session.add(pred)
         await async_session.commit()
@@ -127,7 +129,7 @@ class TestChurnPredictionIntegration:
         assert d["customer_id"] == customer_id
         assert d["score"] == 42
         assert d["tier"] == "low"
-        assert d["factors"] == ["infrequent_purchase"]
+        assert d["factors"][0]["name"] == "infrequent_purchase"
         assert d["predicted_at"] is not None
         assert d["created_at"] is not None
         assert d["updated_at"] is not None
@@ -141,12 +143,16 @@ class TestChurnPredictionIntegration:
             customer_id=customer_id_1,
             score=90,
             tier=ChurnTier.high,
+            factors=[],
+            recommended_actions=[],
         )
         pred2 = ChurnPredictionModel(
             tenant_id=tenant_id_2,
             customer_id=customer_id_2,
             score=10,
             tier=ChurnTier.low,
+            factors=[],
+            recommended_actions=[],
         )
         async_session.add(pred1)
         async_session.add(pred2)

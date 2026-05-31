@@ -7,7 +7,7 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
 ## Affected Files
 
 - `src/db/models/churn_prediction.py` — new ORM model with id, customer_id, tenant_id, score, tier enum, factors JSON, recommended_actions JSON, model_version, created_at
-- `alembic/versions/<new_revision>_add_churn_predictions.py` — new migration extending head `c94d682d4b03`
+- `alembic/versions/<new_revision>_add_churn_predictions.py` — new migration extending head `merge_heads_63274_addcp001`
 - `tests/integration/test_churn_prediction_integration.py` — new integration test file
 
 ## Implementation Steps
@@ -15,7 +15,7 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
 1. **Create `src/db/models/churn_prediction.py`** following the pattern in `customer.py` and `opportunity.py`:
    - Import `Base` from `db.base`, `Mapped`, `mapped_column` from `sqlalchemy.orm`
    - Define a local `ChurnTier` Python enum (`high`, `medium`, `low`) and a SQLAlchemy `Enum` column mapping to it
-   - Columns: `id` (Integer, PK, autoincrement), `tenant_id` (Integer, nullable=False, index), `customer_id` (Integer, nullable=False), `score` (Integer, nullable=False), `tier` (Enum, nullable=False), `factors` (JSON list — `Mapped[list[dict]]`, use `JSON` from `sqlalchemy.dialects.postgresql` with nullable=False), `recommended_actions` (JSON list), `model_version` (String(50)), `created_at` (DateTime with `server_default=func.now()`)
+   - Columns: `id` (Integer, PK, autoincrement), `tenant_id` (Integer, nullable=False, index), `customer_id` (Integer, nullable=False), `score` (Integer, nullable=False), `tier` (Enum, nullable=False), `factors` (JSON list — `Mapped[list[dict]]`, use `JSON` from `sqlalchemy.dialects.postgresql` with nullable=False), `recommended_actions` (JSON list), `model_version` (String(50)), `predicted_at`, `created_at`, `updated_at` (DateTime with `server_default=func.now()`)
    - Add composite index on `(tenant_id, customer_id)`
    - Implement `to_dict()` mirroring other models
 
@@ -52,4 +52,4 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
 
 ## Risks / Open Questions
 
-- **Enum in migration**: autogenerate sometimes emits the SQLAlchemy-side enum name rather than the PostgreSQL `CREATE TYPE` statement. If the generated migration lacks the `sa.Enum('high', 'medium', 'low', name='churntier')` backed by `op.create_enum_type` or a server-default, manually add the PostgreSQL enum type before the `create_table` call.
+- **Enum in migration**: autogenerate sometimes emits the SQLAlchemy-side enum name rather than the PostgreSQL `CREATE TYPE` statement. If the generated migration lacks the `sa.Enum('high', 'medium', 'low', name='churntier')` backed by `op.create_enum_type` or a server-default, manually add the PostgreSQL enum type before the `create_table` call. Downgrade must use `op.execute(sa.text('DROP TYPE churntier'))` — Alembic has no `op.drop_enum_type` function.
