@@ -17,8 +17,10 @@ class DeviceTrustModel(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    device_fingerprint: Mapped[str] = mapped_column(String(255), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    device_fingerprint: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     device_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     trusted_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     last_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)

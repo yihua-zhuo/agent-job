@@ -17,7 +17,9 @@ class RefreshTokenModel(Base):
     user_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     token_hash: Mapped[str] = mapped_column(String(255), unique=True, nullable=False)
     device_fingerprint: Mapped[str | None] = mapped_column(String(255), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -37,7 +39,6 @@ class RefreshTokenModel(Base):
             "id": self.id,
             "user_id": self.user_id,
             "tenant_id": self.tenant_id,
-            "token_hash": self.token_hash,
             "device_fingerprint": self.device_fingerprint,
             "user_agent": self.user_agent,
             "ip_address": self.ip_address,

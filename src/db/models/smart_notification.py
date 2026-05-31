@@ -3,7 +3,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -40,15 +40,17 @@ class SmartNotificationModel(Base):
     __tablename__ = "smart_notifications"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     summarized_content: Mapped[str] = mapped_column(String(1024), nullable=False)
-    priority: Mapped[int] = mapped_column(
+    priority: Mapped[Priority] = mapped_column(
         SQLEnum(Priority, name="smart_notification_priority", native_enum=True), nullable=False, default=Priority.normal
     )
-    channel: Mapped[int] = mapped_column(
+    channel: Mapped[Channel] = mapped_column(
         SQLEnum(Channel, name="smart_notification_channel", native_enum=True), nullable=False, default=Channel.email
     )
-    timing: Mapped[int] = mapped_column(
+    timing: Mapped[Timing] = mapped_column(
         SQLEnum(Timing, name="smart_notification_timing", native_enum=True), nullable=False, default=Timing.immediate
     )
     recipient_filter: Mapped[dict | None] = mapped_column(JSON, nullable=True)

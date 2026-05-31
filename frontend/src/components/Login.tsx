@@ -33,7 +33,7 @@ export function Login({ onSubmit, isLoading: externalLoading }: LoginProps) {
         setIsLoading(false);
       }
     },
-    [email, password, rememberMe, onSubmit, isLoading]
+    [email, password, rememberMe, onSubmit]
   );
 
   return (

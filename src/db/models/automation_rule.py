@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -16,7 +16,13 @@ class AutomationRuleModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id"), server_default=text("0"), default=0, nullable=False, index=True
+        # 0-sentinel for system-owned rows (no FK constraint — constraint requires
+        # tenant_id > 0; system rows carry tenant_id=0 and bypass it via server_default).
+        ForeignKey("tenants.id"),
+        server_default=text("0"),
+        default=0,
+        nullable=False,
+        index=True,
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
@@ -24,11 +30,18 @@ class AutomationRuleModel(Base):
     conditions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     actions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        default=0,
+        nullable=False,
+        index=True,
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    __table_args__ = (Index("ix_automation_rules_tenant_trigger", "tenant_id", "trigger_event"),)
 
     def to_dict(self) -> dict:
         return {

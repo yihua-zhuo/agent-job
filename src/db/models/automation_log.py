@@ -22,14 +22,25 @@ class AutomationLogModel(Base):
         index=True,
     )
     tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id"), server_default=text("0"), default=0, nullable=False, index=True
+        # 0-sentinel for system-owned rows (no FK constraint — constraint requires
+        # tenant_id > 0; system rows carry tenant_id=0 and bypass it via server_default).
+        ForeignKey("tenants.id"),
+        server_default=text("0"),
+        default=0,
+        nullable=False,
+        index=True,
     )
     trigger_event: Mapped[str] = mapped_column(String(100), nullable=False)
     trigger_context: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     actions_executed: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="success", nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    executed_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    executed_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        default=0,
+        nullable=False,
+        index=True,
+    )
     executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def to_dict(self) -> dict:
