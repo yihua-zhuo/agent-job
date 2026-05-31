@@ -40,7 +40,7 @@ Reading order followed:
    - Merges `data` dict into existing row via `setattr()` for fields `name`, `type`, `config`, `date_range`, `last_run_at`
    - Calls `session.flush()` (no `updated_at` assignment — `ReportModel` has no such column; no `refresh()` call either)
 
-> **⚠️ Open follow-up**: `update_report` does not set `updated_at`. `ReportModel` has no such column. A separate Alembic migration is needed to add it.
+> **⚠️ Open follow-up (required)**: `update_report` does not set `updated_at`. `ReportModel` has no such column. A separate Alembic migration is needed to add it before the audit-field requirement (rule 79 / rule 139) can be satisfied.
 
 6. **Add `delete_report` method to `ReportService`**
    - Confirms existence via `SELECT id WHERE (id, tenant_id)`; raises `NotFoundException` if missing
@@ -76,6 +76,7 @@ Reading order followed:
 - `get_report`, `update_report`, `delete_report` each raise `NotFoundException` when the report is absent or belongs to another tenant
 - `list_reports` returns `tuple[list[ReportModel], int]` with correct total count and respects pagination (`LIMIT/OFFSET`)
 - All five methods include `tenant_id` in every SQL `WHERE` clause
+- `tests/unit/domain_handlers/reports.py` must exist and follow the composable handler pattern from rule 134/135 as a prerequisite before the unit tests can run
 - `PYTHONPATH=src pytest tests/unit/test_report_service.py -v` passes all cases
 
 ## Risks / Open Questions

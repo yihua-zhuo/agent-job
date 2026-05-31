@@ -1,0 +1,61 @@
+"use client";
+
+import { useMemo } from "react";
+import { useState } from "react";
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  ColumnDef,
+  SortingState,
+} from "@tanstack/react-table";
+
+export interface UseTableStateOptions<TData> {
+  data: TData[];
+  columns: ColumnDef<TData, unknown>[];
+  /**
+   * Restricts global filtering to the given column ids.
+   * When empty (the default), all columns are included in filtering.
+   */
+  searchableKeys?: string[];
+}
+
+/**
+ * Manages global filter and sorting state for a TanStack Table instance.
+ *
+ * @param data - The row data to display in the table.
+ * @param columns - TanStack column definitions.
+ * @param searchableKeys - Optional list of column ids to restrict global filtering to.
+ *                         When empty, all columns are included in the filter.
+ * @returns A table instance and state setters.
+ */
+export function useTableState<TData>({
+  data,
+  columns,
+  searchableKeys = [],
+}: UseTableStateOptions<TData>) {
+  const [globalFilter, setGlobalFilter] = useState("");
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  const table = useReactTable<TData>({
+    data,
+    columns,
+    state: { globalFilter, sorting },
+    onGlobalFilterChange: setGlobalFilter,
+    onSortingChange: setSorting,
+    globalFilterFn: "includesString",
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getCoreRowModel: getCoreRowModel(),
+    getColumnCanGlobalFilter: (column) => {
+      if (searchableKeys.length === 0) return true;
+      return searchableKeys.includes(column.id);
+    },
+  });
+
+  return useMemo(
+    () => ({ table, globalFilter, setGlobalFilter, sorting }),
+    [table, globalFilter, sorting]
+  );
+}
