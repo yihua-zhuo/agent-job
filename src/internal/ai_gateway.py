@@ -12,6 +12,7 @@ class AIResponse:
     reply: str
     suggestions: list[str] | None = None
     actions: list[dict] | None = None
+    conversation_id: int | None = None
 
 
 class AIChatGateway:

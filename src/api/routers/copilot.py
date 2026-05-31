@@ -27,6 +27,7 @@ async def chat(
         "success": True,
         "data": {
             "response": ai_response.reply,
+            "conversation_id": ai_response.conversation_id,
             # tool_calls populated once the tool-calling loop is wired;
             # get_tool_registry()['deferred'] gates availability.
             "tool_calls": getattr(ai_response, "tool_calls", []) or [],

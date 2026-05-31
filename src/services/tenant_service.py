@@ -127,7 +127,10 @@ class TenantService:
         if status:
             conditions.append(TenantModel.status == status)
         if search:
-            conditions.append(TenantModel.name.ilike(f"%{search}%"))
+            # Escape LIKE special characters to prevent a malicious search value from
+            # expanding the pattern (e.g. "%" matches everything, "_" matches any char).
+            escaped = search.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            conditions.append(TenantModel.name.ilike(f"%{escaped}%", escape="\\"))
         # Rule126: requesting_tenant_id restricts visibility to its own tenant record.
         # This filter guarantees at most one matching record, so pagination (page/page_size)
         # is functionally a no-op — it is kept for API contract stability (callers that

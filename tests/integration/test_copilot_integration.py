@@ -117,20 +117,8 @@ class TestCopilotIntegration:
         assert response_tenant_2.status_code == 200
         data_tenant_2 = response_tenant_2.json()
         assert data_tenant_2["success"] is True
-
-        # Retrieve tenant 2's conversation from the DB (chat response doesn't include conversation_id).
-        from sqlalchemy import select
-
-        from db.models.conversation import ConversationModel
-
-        result = await async_session.execute(
-            select(ConversationModel)
-            .where(ConversationModel.tenant_id == tenant_id_2_web)
-            .order_by(ConversationModel.created_at.desc())
-            .limit(1)
-        )
-        conv_tenant_2 = result.scalar_one_or_none()
-        assert conv_tenant_2 is not None, "Tenant 2 should have a conversation after calling chat"
+        conv_tenant_2_id = data_tenant_2["data"]["conversation_id"]
+        assert conv_tenant_2_id is not None, "chat response should include conversation_id"
 
         # Verify tenant 2 cannot access tenant 1's conversation (cross-tenant isolation).
         history_cross = await api_client_tenant_2.get(f"/copilot/{conv_tenant_1.id}/history")
@@ -139,7 +127,7 @@ class TestCopilotIntegration:
         assert body["success"] is False, f"Expected success=False for cross-tenant access, got: {body}"
 
         # Verify tenant 1 cannot access tenant 2's conversation (reverse-direction isolation).
-        history_reverse = await api_client.get(f"/copilot/{conv_tenant_2.id}/history")
+        history_reverse = await api_client.get(f"/copilot/{conv_tenant_2_id}/history")
         assert history_reverse.status_code == 404
         body_reverse = history_reverse.json()
         assert body_reverse["success"] is False, f"Expected success=False for reverse cross-tenant access, got: {body_reverse}"

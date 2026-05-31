@@ -261,6 +261,7 @@ class CopilotService:
             role="assistant",
             content=ai_response.reply,
         )
+        ai_response.conversation_id = conversation.id
         return ai_response
 
     async def invoke_ai(self, messages: list[dict[str, str]], tenant_id: int | None = None) -> AIResponse:

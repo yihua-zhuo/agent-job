@@ -12,6 +12,7 @@ from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
 from db.models.user import UserModel
 from pkg.constants.notification_constants import (
+    NOTIFICATION_PARAMS_MAX_BYTES,
     PAYLOAD_PARAMS_ALLOWED_KEYS,
     VALID_NOTIFICATION_CHANNELS,
     VALID_PRIORITIES,
@@ -69,8 +70,10 @@ class NotificationService:
             except (ValueError, TypeError):
                 raise ValidationException("related_id must be an integer")
         params_str = json.dumps(params, ensure_ascii=False)
-        if len(params_str.encode("utf-8")) > 4096:
-            raise ValidationException("notification params exceed maximum size of 4096 bytes")
+        if len(params_str.encode("utf-8")) > NOTIFICATION_PARAMS_MAX_BYTES:
+            raise ValidationException(
+                f"notification params exceed maximum size of {NOTIFICATION_PARAMS_MAX_BYTES} bytes"
+            )
 
         # unknown_keys is checked against params after all conditional fields are added.
         # Reject any keys beyond the allow-list before persisting — the to_dict()

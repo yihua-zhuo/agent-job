@@ -10,6 +10,7 @@ Replace the existing `notification.py` ORM model with a new `NotificationModel` 
 - `alembic/versions/e7f6a5b3c12d_add_notification_indexes.py` — Migration (chains from `82ecf4a34e34`) adding composite + partial indexes on `notifications`
 - `tests/unit/domain_handlers/notification.py` — Handler for unit-test mock SQL engine; discovered automatically by `conftest.py`'s `_load_domain_handler_modules()` via `pkgutil.iter_modules` over the `tests.unit.domain_handlers` package. The handler module must export `get_handlers(state)` and `__all__` listing all exported symbols.
 - `tests/unit/test_notifications_router.py` — Tests already use the new field names (`channel`, `template`, `params`, `status`, `read_at`); no updates required
+- `src/api/routers/notifications.py` — `NotificationCreate` Pydantic schema intentionally retains the legacy API field names (`notification_type`, `title`, `content`) as the external contract. The router translates these to the new model field names (`channel`, `template`, `payload_params`) before calling `NotificationService.send_notification`. This preserves the API contract for existing clients while the service and model use the new schema internally.
 
 ## Implementation Steps
 1. **Replace `src/db/models/notification.py`** — DONE: model already updated with all 11 fields, `to_dict()` serializes `payload_params` as `"params"`.
