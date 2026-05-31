@@ -1,9 +1,11 @@
 """Enrichment API router — ``POST /api/v1/enrichment/lookup``."""
 
 from fastapi import APIRouter, Depends, Path
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
+from db.models.customer_enrichment import CustomerEnrichmentModel
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.enrichment import EnrichmentLookupRequest, EnrichmentRefreshRequest
 from services.enrichment_service import EnrichmentService
@@ -49,10 +51,30 @@ async def refresh_enrichment(
     otherwise falls back to the enrichment data already on record.
     """
     svc = EnrichmentService(session)
+
+    domain_param: str | None = body.domain if body else None
+    company_name_param: str | None = body.company_name if body else None
+
+    # If no body, read existing enrichment from DB to get domain/company_name
+    if body is None:
+        result = await session.execute(
+            select(CustomerEnrichmentModel).where(
+                and_(
+                    CustomerEnrichmentModel.customer_id == customer_id,
+                    CustomerEnrichmentModel.tenant_id == ctx.tenant_id,
+                )
+            ).order_by(CustomerEnrichmentModel.enriched_at.desc()).limit(1)
+        )
+        existing = result.scalar_one_or_none()
+        if existing is not None:
+            raw = existing.raw_data_json or {}
+            domain_param = raw.get("domain")
+            company_name_param = raw.get("name")
+
     result = await svc.refresh(
         customer_id=customer_id,
         tenant_id=ctx.tenant_id,
-        domain=body.domain if body else None,
-        company_name=body.company_name if body else None,
+        domain=domain_param,
+        company_name=company_name_param,
     )
     return _success(result)

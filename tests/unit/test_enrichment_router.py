@@ -30,6 +30,35 @@ def mock_db_session():
 
 
 @pytest.fixture
+def client_with_service_as_tenant_2(monkeypatch, mock_db_session):
+    """Return a TestClient authenticated as tenant_id=2."""
+    from internal.middleware.fastapi_auth import require_auth
+    from services.enrichment_service import EnrichmentService
+
+    mock_service = MagicMock()
+
+    monkeypatch.setattr(
+        "api.routers.enrichment.EnrichmentService",
+        lambda session: mock_service,
+    )
+
+    app = FastAPI()
+    app.include_router(enrichment_router)
+    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=2)
+    app.dependency_overrides[get_db] = lambda: mock_db_session
+
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    return client, mock_service
+
+
+@pytest.fixture
 def client_with_service(monkeypatch, mock_db_session):
     """Return a TestClient with EnrichmentService fully mocked."""
     from internal.middleware.fastapi_auth import require_auth
@@ -185,7 +214,7 @@ class TestRefreshEndpoint:
         )
 
     def test_refresh_passes_no_body(self, client_with_service):
-        """Refresh without request body passes None for domain and company_name."""
+        """Refresh without request body looks up existing enrichment from DB (returns nothing in mock) and passes None."""
         client, svc = client_with_service
         svc.refresh = AsyncMock(return_value={"name": "Acme Corp"})
 
@@ -197,6 +226,17 @@ class TestRefreshEndpoint:
             domain=None,
             company_name=None,
         )
+
+    def test_refresh_cross_tenant_returns_404(self, client_with_service_as_tenant_2):
+        """A tenant cannot refresh another tenant's customer's enrichment."""
+        client, svc = client_with_service_as_tenant_2
+        svc.refresh = AsyncMock(side_effect=NotFoundException("Customer"))
+
+        resp = client.post("/api/v1/enrichment/refresh/42")
+        assert resp.status_code == 404
+        body = resp.json()
+        assert body["success"] is False
+        assert body["code"] == "NOT_FOUND"
 
     def test_refresh_customer_not_found_returns_404(self, client_with_service):
         client, svc = client_with_service
@@ -217,3 +257,4 @@ class TestRefreshEndpoint:
         assert resp.status_code == 422
         body = resp.json()
         assert "No company found" in body["message"]
+        assert body["code"] == "VALIDATION_ERROR"

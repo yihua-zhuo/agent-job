@@ -46,6 +46,7 @@ class EnrichmentRefreshRequest(BaseModel):
     def strip_whitespace(cls, v: str | None) -> str | None:
         if v is not None:
             v = v.strip()
+            v = v if v else None
         return v
 
     @model_validator(mode="after")

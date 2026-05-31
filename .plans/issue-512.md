@@ -10,7 +10,7 @@ Wire third-party enrichment data into the `CustomerService` create/update flow b
 
 ## Source Contract
 
-Dev-plan target: `/home/runner/work/agent-job/agent-job/docs/dev-plan/10-customers/0512-wire-enrichment-data-into-customer-create-update-and-add-sta.md`
+Dev-plan target: `docs/dev-plan/10-customers/0512-wire-enrichment-data-into-customer-create-update-and-add-sta.md`
 Template depth: `deep`
 Reading order followed:
 1. `/home/runner/work/agent-job/agent-job/docs/dev-plan/README.md`
@@ -72,7 +72,7 @@ Add a `TestRefreshEndpoint` class with:
 
 ## Test Plan
 
-- Unit tests in `tests/unit/test_customer_service.py`: add `TestEnrichmentUpsert` covering create/update with and without enrichment payload (Step 6).
+- Unit tests in `tests/unit/test_customer_service.py`: add `TestEnrichmentUpsert` covering create/update with and without enrichment payload, using file-local fixtures (no changes to `tests/unit/conftest.py` per rule 149).
 - Unit tests in `tests/unit/test_enrichment_router.py`: add `TestRefreshEndpoint` covering success, arg-passing, and 404 cases (Step 7).
 - Integration tests: not required by the issue; enrichment external call is mocked in unit tests and verified manually via `POST /api/v1/enrichment/refresh/{id}` in staging.
 - Dev-plan verification: `PYTHONPATH=src ruff check src/services/customer_service.py src/api/routers/enrichment.py` must exit 0; `PYTHONPATH=src pytest tests/unit/test_customer_service.py tests/unit/test_enrichment_router.py -v` must pass all new and existing tests.
