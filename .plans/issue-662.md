@@ -1,5 +1,3 @@
-Now I have everything needed to write the plan. The `__init__.py` uses `pkgutil.iter_modules` for auto-discovery (no manual import needed), and the most recent migration head is `e7f6a5b3c12d`.
-
 # Implementation Plan — Issue #662
 
 ## Goal
@@ -18,7 +16,7 @@ Reading order followed:
 ## Affected Files
 
 - `src/db/models/notification_template.py` — **new file** — `NotificationTemplateModel` ORM class
-- `alembic/versions/<id>_add_notification_templates.py` — **new file** — Alembic migration (auto-generated)
+- `alembic/versions/merge_heads_notification_templates_662.py` — **new file** — merge migration converging two heads (52b19ee00eaf and 5d575a161b5d) into a single timeline head
 - `tests/unit/test_notification_template_model.py` — **new file** — unit tests for the model
 - `src/db/models/__init__.py` — no changes needed (auto-discovery via `pkgutil.iter_modules`)
 - `alembic/env.py` — no changes needed (imports `db.models` which triggers auto-discovery)
@@ -34,7 +32,7 @@ Write `src/db/models/notification_template.py` with the exact content specified 
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, Text, func
+from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -50,7 +48,7 @@ class NotificationTemplateModel(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
     subject: Mapped[str | None] = mapped_column(String(255), nullable=True)
@@ -159,7 +157,8 @@ Inspect the generated `alembic/versions/<id>_drift_check.py` — both `up()` and
 
 - `src/db/models/notification_template.py` exists, defines `NotificationTemplateModel` with fields: `id`, `tenant_id`, `name`, `channel`, `subject`, `body_html`, `body_text`, `created_at`
 - `ruff check src/db/models/notification_template.py` exits 0
-- `alembic/versions/<id>_add_notification_templates.py` exists and creates `notification_templates` table with correct column types
+- `alembic/versions/5d575a161b5d_add_notification_templates.py` exists and creates `notification_templates` table with correct column types and FK constraint on `tenant_id`
+- `alembic/versions/merge_heads_notification_templates_662.py` exists as a merge revision with `down_revision = (52b19ee00eaf, 5d575a161b5d)`, allowing `alembic upgrade head` to succeed on a fresh database
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` all exit 0 on the `alembic_dev` database
 - `tests/unit/test_notification_template_model.py` has 3 passing tests covering `to_dict`, null optionals, and `__tablename__`
 - Drift check produces an empty migration (confirms model and DB schema are in sync)

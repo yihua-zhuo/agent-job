@@ -19,7 +19,7 @@ class NotificationTemplateModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     channel: Mapped[str] = mapped_column(String(20), nullable=False)
