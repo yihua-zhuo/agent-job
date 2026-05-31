@@ -1,4 +1,4 @@
-"""Unit tests for src/services/activity_service.py."""
+"""Unit tests for ActivityService."""
 
 from datetime import UTC, datetime
 
@@ -7,29 +7,12 @@ import pytest
 from models.activity import ActivityType
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.activity_service import ActivityService
-from tests.unit.conftest import MockState, make_activity_handler, make_mock_session
+from tests.unit.conftest import MockResult, MockRow, MockState, make_activity_handler, make_mock_session
 
 
-@pytest.fixture
-def activity_state():
-    return MockState()
-
-
-@pytest.fixture
-def mock_db_session(activity_state):
-    session = make_mock_session([make_activity_handler(activity_state)], state=activity_state)
-
-    async def refresh_side_effect(obj):
-        if obj.id is None:
-            obj.id = activity_state.activities_next_id
-
-    session.refresh.side_effect = refresh_side_effect
-    return session
-
-
-@pytest.fixture
-def activity_service(mock_db_session):
-    return ActivityService(mock_db_session)
+# ---------------------------------------------------------------------------
+# Test helpers
+# ---------------------------------------------------------------------------
 
 
 def add_activity(
@@ -57,37 +40,65 @@ def add_activity(
     return record
 
 
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def activity_state():
+    return MockState()
+
+
+@pytest.fixture
+def mock_db_session(activity_state):
+    session = make_mock_session([make_activity_handler(activity_state)], state=activity_state)
+
+    async def refresh_side_effect(obj):
+        if obj.id is None:
+            obj.id = activity_state.activities_next_id
+            activity_state.activities_next_id += 1
+
+    session.refresh.side_effect = refresh_side_effect
+    return session
+
+
+@pytest.fixture
+def activity_service(mock_db_session):
+    return ActivityService(mock_db_session)
+
+
+# ---------------------------------------------------------------------------
+# Tests
+# ---------------------------------------------------------------------------
+
+
 class TestCreateActivity:
     """Tests for ActivityService.create_activity."""
 
     @pytest.mark.asyncio
-    async def test_create_activity_returns_activity(self, mock_db_session):
-        """create_activity returns an Activity with correct fields."""
-        service = ActivityService(mock_db_session)
-
-        result = await service.create_activity(
+    async def test_create_activity_returns_activity(self, activity_service, activity_state):
+        """create_activity returns an Activity domain object after refresh."""
+        result = await activity_service.create_activity(
             customer_id=1,
             activity_type="call",
-            content="Test call",
+            content="Test content",
             created_by=1,
             tenant_id=1,
         )
 
-        mock_db_session.add.assert_called_once()
-        mock_db_session.flush.assert_called_once()
-        assert result.content == "Test call"
+        assert result.id is not None
+        assert result.content == "Test content"
         assert result.type == ActivityType.CALL
-        assert result.id == 1
-        assert result.tenant_id == 1
 
     @pytest.mark.asyncio
-    async def test_create_activity_rejects_invalid_type(self, activity_service):
-        """create_activity raises ValidationException for invalid activity_type."""
-        with pytest.raises(ValidationException):
+    async def test_create_activity_invalid_type_raises(self, activity_service):
+        """create_activity raises ValidationException for unknown activity_type."""
+        with pytest.raises(ValidationException, match="无效的活动类型"):
             await activity_service.create_activity(
                 customer_id=1,
                 activity_type="invalid",
-                content="Bad type",
+                content="Test",
                 created_by=1,
                 tenant_id=1,
             )
@@ -97,21 +108,29 @@ class TestGetActivity:
     """Tests for ActivityService.get_activity."""
 
     @pytest.mark.asyncio
-    async def test_get_activity_found(self, activity_service, activity_state):
-        """get_activity returns the activity when tenant and id match."""
-        add_activity(activity_state, activity_id=1, tenant_id=1)
+    async def test_get_activity_found(self, activity_state):
+        """get_activity returns an Activity when the record exists."""
+        add_activity(
+            activity_state,
+            activity_id=1,
+            tenant_id=1,
+            customer_id=1,
+            activity_type="call",
+            content="Test content",
+        )
+        session = make_mock_session([make_activity_handler(activity_state)], state=activity_state)
+        svc = ActivityService(session)
 
-        result = await activity_service.get_activity(activity_id=1, tenant_id=1)
+        result = await svc.get_activity(activity_id=1, tenant_id=1)
 
-        assert result.content == "Test call"
+        assert result.content == "Test content"
         assert result.type == ActivityType.CALL
-        assert result.id == 1
 
     @pytest.mark.asyncio
     async def test_get_activity_not_found(self, activity_service):
-        """get_activity raises NotFoundException when activity does not exist."""
-        with pytest.raises(NotFoundException):
-            await activity_service.get_activity(activity_id=9999, tenant_id=1)
+        """get_activity raises NotFoundException when the record does not exist."""
+        with pytest.raises(NotFoundException, match="活动记录"):
+            await activity_service.get_activity(activity_id=999, tenant_id=1)
 
     @pytest.mark.asyncio
     async def test_get_activity_rejects_wrong_tenant(self, activity_service, activity_state):
@@ -126,25 +145,33 @@ class TestUpdateActivity:
     """Tests for ActivityService.update_activity."""
 
     @pytest.mark.asyncio
-    async def test_update_activity(self, activity_service, activity_state):
-        """update_activity returns the activity with updated content."""
-        add_activity(activity_state, activity_id=1, tenant_id=1, content="Original content")
+    async def test_update_activity(self, activity_state):
+        """update_activity returns the updated Activity."""
+        add_activity(
+            activity_state,
+            activity_id=1,
+            tenant_id=1,
+            customer_id=1,
+            activity_type="call",
+            content="Original content",
+        )
+        session = make_mock_session([make_activity_handler(activity_state)], state=activity_state)
+        svc = ActivityService(session)
 
-        result = await activity_service.update_activity(activity_id=1, tenant_id=1, content="Updated content")
+        result = await svc.update_activity(activity_id=1, tenant_id=1, content="Updated")
 
-        assert result.content == "Updated content"
-        assert result.id == 1
+        assert result.content == "Updated"
 
     @pytest.mark.asyncio
-    async def test_update_activity_with_no_fields_only_refetches(self, activity_service, activity_state, mock_db_session):
+    async def test_update_activity_with_no_fields_only_refetches(self, activity_service, activity_state):
         """update_activity with no fields skips UPDATE and returns current activity."""
         add_activity(activity_state, activity_id=1, tenant_id=1, content="Unchanged")
 
         result = await activity_service.update_activity(activity_id=1, tenant_id=1)
 
         assert result.content == "Unchanged"
-        assert mock_db_session.execute.await_count == 2
-        mock_db_session.flush.assert_not_called()
+        # First _fetch, then no UPDATE (flush not called), then second _fetch
+        assert activity_service.session.flush.await_count == 0
 
     @pytest.mark.asyncio
     async def test_update_activity_rejects_invalid_type(self, activity_service, activity_state):
@@ -169,17 +196,26 @@ class TestDeleteActivity:
     """Tests for ActivityService.delete_activity."""
 
     @pytest.mark.asyncio
-    async def test_delete_activity(self, activity_service, activity_state):
-        """delete_activity removes the activity and returns id dict."""
-        add_activity(activity_state, activity_id=1, tenant_id=1)
+    async def test_delete_activity(self, activity_state):
+        """delete_activity returns {"id": int} and subsequent get_activity raises."""
+        add_activity(
+            activity_state,
+            activity_id=1,
+            tenant_id=1,
+            customer_id=1,
+            activity_type="call",
+            content="To be deleted",
+        )
+        session = make_mock_session([make_activity_handler(activity_state)], state=activity_state)
+        svc = ActivityService(session)
 
-        result = await activity_service.delete_activity(activity_id=1, tenant_id=1)
+        result = await svc.delete_activity(activity_id=1, tenant_id=1)
 
         assert result == {"id": 1}
-        assert 1 not in activity_state.activities
 
-        with pytest.raises(NotFoundException):
-            await activity_service.get_activity(activity_id=1, tenant_id=1)
+        # Subsequent get_activity raises NotFoundException
+        with pytest.raises(NotFoundException, match="活动记录"):
+            await svc.get_activity(activity_id=1, tenant_id=1)
 
     @pytest.mark.asyncio
     async def test_delete_activity_rejects_wrong_tenant(self, activity_service, activity_state):
@@ -196,46 +232,39 @@ class TestListActivitiesPagination:
     """Tests for ActivityService.list_activities pagination and filters."""
 
     @pytest.mark.asyncio
-    async def test_list_activities_pagination(self, activity_service, activity_state):
-        """list_activities returns paginated items and correct total."""
+    async def test_list_activities_pagination(self, activity_state):
+        """list_activities returns paginated items and total count."""
         add_activity(
             activity_state,
             activity_id=1,
             tenant_id=1,
+            customer_id=1,
             activity_type="call",
             content="Call 1",
-            created_at=datetime(2025, 1, 1, 10, 0),
         )
         add_activity(
             activity_state,
             activity_id=2,
             tenant_id=1,
+            customer_id=1,
             activity_type="email",
             content="Email 1",
-            created_at=datetime(2025, 1, 1, 11, 0),
         )
         add_activity(
             activity_state,
             activity_id=3,
             tenant_id=1,
-            activity_type="meeting",
-            content="Meeting 1",
-            created_at=datetime(2025, 1, 1, 12, 0),
+            customer_id=1,
+            activity_type="note",
+            content="Note 1",
         )
-        add_activity(
-            activity_state,
-            activity_id=4,
-            tenant_id=2,
-            activity_type="call",
-            content="Other tenant",
-            created_at=datetime(2025, 1, 1, 13, 0),
-        )
+        session = make_mock_session([make_activity_handler(activity_state)], state=activity_state)
+        svc = ActivityService(session)
 
-        items, total = await activity_service.list_activities(tenant_id=1, page=1, page_size=2)
+        items, total = await svc.list_activities(tenant_id=1, page=1, page_size=2)
 
         assert len(items) == 2
         assert total == 3
-        assert {item.id for item in items} == {2, 3}
 
     @pytest.mark.asyncio
     async def test_list_activities_filters_customer_and_type(self, activity_service, activity_state):

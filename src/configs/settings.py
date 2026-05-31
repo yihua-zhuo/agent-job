@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     database_max_overflow: int = Field(default=10, ge=0)
 
     # JWT
-    jwt_secret: str | None = Field(default=None)
+    jwt_secret: str | None = Field(default=None, alias="JWT_SECRET_KEY")
     jwt_algorithm: str = Field(default="HS256")
     access_token_expire_minutes: int = Field(default=30, ge=1)
 
@@ -32,6 +32,11 @@ class Settings(BaseSettings):
 
     # OpenAPI
     openapi_enabled: bool = Field(default=True)
+
+    # Third-party enrichment
+    clearbit_api_key: str | None = Field(default=None, description="Clearbit Company API key")
+    clearbit_connect_timeout: float = Field(default=5.0, ge=0.1, description="Clearbit connect timeout in seconds")
+    clearbit_read_timeout: float = Field(default=10.0, ge=0.1, description="Clearbit read timeout in seconds")
 
     model_config = SettingsConfigDict(
         env_file=".env",

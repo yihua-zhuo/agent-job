@@ -20,6 +20,60 @@ class CustomerStatus(Enum):
 
 
 @dataclass
+class CustomerCreateDTO:
+    """DTO for customer creation — dataclass version for direct field access."""
+
+    name: str
+    email: str | None = None
+    phone: str | None = None
+    company: str | None = None
+    status: str | CustomerStatus = CustomerStatus.LEAD
+    owner_id: int = 0
+    tags: list[str] = field(default_factory=list)
+
+    @property
+    def status_value(self) -> str:
+        """Return status as a plain string for CustomerModel (string column)."""
+        return self.status.value if isinstance(self.status, CustomerStatus) else self.status
+
+    def to_dict(self) -> dict[str, Any]:
+        """Render as a plain dict."""
+        return {
+            "name": self.name,
+            "email": self.email,
+            "phone": self.phone,
+            "company": self.company,
+            "status": self.status_value,
+            "owner_id": self.owner_id,
+            "tags": self.tags,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "CustomerCreateDTO":
+        """Reconstruct from a raw dict."""
+        name = data.get("name")
+        email = data.get("email")
+        if not name:
+            raise ValueError("name is required and must be non-empty")
+        if not email:
+            raise ValueError("email is required and must be non-empty")
+        status_raw = data.get("status")
+        if isinstance(status_raw, str):
+            status = CustomerStatus(status_raw)
+        else:
+            status = status_raw or CustomerStatus.LEAD
+        return cls(
+            name=name,
+            email=email,
+            phone=data.get("phone"),
+            company=data.get("company"),
+            status=status,
+            owner_id=data.get("owner_id", 0),
+            tags=data.get("tags") or [],
+        )
+
+
+@dataclass
 class Customer:
     """Customer entity representing a lead, opportunity, or actual customer."""
 

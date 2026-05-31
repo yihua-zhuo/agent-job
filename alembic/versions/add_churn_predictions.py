@@ -46,6 +46,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.PrimaryKeyConstraint("id"),
+        sa.CheckConstraint("score >= 0 AND score <= 100", name="ck_churn_predictions_score_range"),
     )
     op.create_index(
         op.f("ix_churn_predictions_tenant_id"),
@@ -64,5 +65,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_index(op.f("ix_churn_predictions_tenant_customer"), table_name="churn_predictions")
     op.drop_index(op.f("ix_churn_predictions_tenant_id"), table_name="churn_predictions")
+    op.drop_constraint("ck_churn_predictions_score_range", table_name="churn_predictions", type_="check")
     op.drop_table("churn_predictions")
     op.drop_enum_type("churntier")

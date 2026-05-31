@@ -4,7 +4,7 @@ from datetime import datetime
 from enum import StrEnum
 
 import sqlalchemy as sa
-from sqlalchemy import DateTime, Index, Integer, String, func
+from sqlalchemy import CheckConstraint, DateTime, Index, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSON
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -26,15 +26,24 @@ class ChurnPredictionModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    customer_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    customer_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
     score: Mapped[int] = mapped_column(Integer, nullable=False)
     tier: Mapped[ChurnTier] = mapped_column(sa.Enum(ChurnTier, name="churntier"), nullable=False)
     factors: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
     recommended_actions: Mapped[list[dict]] = mapped_column(JSON, default=list, nullable=False)
     model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    predicted_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
-    __table_args__ = (Index("ix_churn_predictions_tenant_customer", "tenant_id", "customer_id"),)
+    __table_args__ = (
+        CheckConstraint("score >= 0 AND score <= 100", name="ck_churn_predictions_score_range"),
+        Index("ix_churn_predictions_tenant_customer", "tenant_id", "customer_id"),
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -46,5 +55,7 @@ class ChurnPredictionModel(Base):
             "factors": self.factors or [],
             "recommended_actions": self.recommended_actions or [],
             "model_version": self.model_version,
+            "predicted_at": self.predicted_at.isoformat() if self.predicted_at else None,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
