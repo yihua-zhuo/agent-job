@@ -193,6 +193,7 @@ class TestCreateTenantEndpoint:
             json={"name": "", "plan": "basic"},
         )
         assert resp.status_code == 422
+        assert "detail" in resp.json()
 
 
 # ---------------------------------------------------------------------------
@@ -202,7 +203,9 @@ class TestCreateTenantEndpoint:
 class TestGetTenantEndpoint:
     def test_success(self, tenant_router_client):
         client, svc = tenant_router_client
-        svc.get_tenant = AsyncMock(return_value=TENANT_ROW)
+        mock_tenant = MagicMock()
+        mock_tenant.to_dict.return_value = TENANT_ROW
+        svc.get_tenant = AsyncMock(return_value=mock_tenant)
         resp = client.get("/api/v1/tenants/1")
         assert resp.status_code == 200
         assert resp.json()["data"]["id"] == 1
@@ -223,7 +226,9 @@ class TestGetTenantEndpoint:
 class TestListTenantsEndpoint:
     def test_success(self, tenant_router_client):
         client, svc = tenant_router_client
-        svc.list_tenants = AsyncMock(return_value=([TENANT_ROW], 1))
+        mock_item = MagicMock()
+        mock_item.to_dict.return_value = TENANT_ROW
+        svc.list_tenants = AsyncMock(return_value=([mock_item], 1))
         resp = client.get("/api/v1/tenants")
         assert resp.status_code == 200
         body = resp.json()
@@ -232,7 +237,9 @@ class TestListTenantsEndpoint:
 
     def test_with_pagination_params(self, tenant_router_client):
         client, svc = tenant_router_client
-        svc.list_tenants = AsyncMock(return_value=([TENANT_ROW], 1))
+        mock_item = MagicMock()
+        mock_item.to_dict.return_value = TENANT_ROW
+        svc.list_tenants = AsyncMock(return_value=([mock_item], 1))
         resp = client.get("/api/v1/tenants?page=2&page_size=5")
         assert resp.status_code == 200
 
@@ -250,7 +257,9 @@ class TestUpdateTenantEndpoint:
     def test_success(self, tenant_router_client):
         client, svc = tenant_router_client
         updated = {**TENANT_ROW, "name": "Updated Corp"}
-        svc.update_tenant = AsyncMock(return_value=updated)
+        mock_updated = MagicMock()
+        mock_updated.to_dict.return_value = updated
+        svc.update_tenant = AsyncMock(return_value=mock_updated)
         resp = client.put("/api/v1/tenants/1", json={"name": "Updated Corp"})
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "Updated Corp"
@@ -370,6 +379,7 @@ class TestTenantCrossTenantIsolation:
         svc.get_tenant_stats = AsyncMock(side_effect=NotFoundException("Tenant"))
         resp = client.get("/api/v1/tenants/stats")
         assert resp.status_code == 404
+        svc.get_tenant_stats.assert_called_once_with(tenant_id=1, requesting_tenant_id=1)
 
     def test_get_tenant_usage_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant A cannot access tenant B's usage; service layer returns 404 for unknown tenant."""
@@ -377,6 +387,7 @@ class TestTenantCrossTenantIsolation:
         svc.get_tenant_usage = AsyncMock(side_effect=NotFoundException("Tenant"))
         resp = client.get("/api/v1/tenants/usage")
         assert resp.status_code == 404
+        svc.get_tenant_usage.assert_called_once_with(tenant_id=1, requesting_tenant_id=1)
 
     def test_update_tenant_rejects_cross_tenant_id(self, tenant_router_client):
         """Tenant A updating tenant B's record via URL path tenant_id returns 403."""

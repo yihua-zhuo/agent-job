@@ -173,15 +173,7 @@ async def list_opportunities(
         stage=stage,
         owner_id=owner_id,
     )
-    return {
-        "success": True,
-        "data": {
-            "items": result.get("items", []),
-            "total": result.get("total", 0),
-            "page": result.get("page", page),
-            "page_size": result.get("page_size", page_size),
-        },
-    }
+    return {"success": True, "data": result}
 
 
 @sales_router.get("/opportunities/{opp_id}")

@@ -103,7 +103,7 @@ async def get_tenant(
     """
     service = TenantService(session)
     data = await service.get_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id)
-    return {"success": True, "data": data}
+    return {"success": True, "data": data.to_dict()}
 
 
 @tenants_router.get("")
@@ -116,7 +116,7 @@ async def list_tenants(
 ):
     service = TenantService(session)
     items, total = await service.list_tenants(page=page, page_size=page_size)
-    return _paginated(items, total, page, page_size)
+    return _paginated([item.to_dict() for item in items], total, page, page_size)
 
 
 @tenants_router.put("/{tenant_id}")
@@ -131,4 +131,4 @@ async def update_tenant(
     # Strip None values so the service's merge logic handles omitted fields.
     update_data = {k: v for k, v in update_data.items() if v is not None}
     data = await service.update_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id, **update_data)
-    return {"success": True, "data": data, "message": "Tenant updated"}
+    return {"success": True, "data": data.to_dict(), "message": "Tenant updated"}

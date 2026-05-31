@@ -385,7 +385,11 @@ def tenant_id_2_web() -> int:
 
 @pytest_asyncio.fixture(scope="function")
 async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str, str]:
-    """Return a valid JWT Authorization header for the test tenant."""
+    """Return a valid JWT Authorization header for the test tenant.
+
+    db_schema consumed transitively via async_session to establish test isolation
+    before auth setup.
+    """
     os.environ["JWT_SECRET"] = TEST_JWT_SECRET
     os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
     # Seed tenant only if it doesn't already exist (idempotent — prevents
