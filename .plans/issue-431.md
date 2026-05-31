@@ -1,5 +1,3 @@
-Now I have a thorough understanding of the codebase. Let me write the plan.
-
 # Implementation Plan — Issue #431
 
 ## Goal
@@ -125,7 +123,7 @@ Reading order followed:
 
    Replace all 17 occurrences of:
    ```python
-   service = CustomerService(session, CustomerRepository(session))
+   service = CustomerService(session)
    ```
    with a pre-constructed repository near the top of each handler function (or per-endpoint), e.g.:
    ```python
@@ -183,4 +181,4 @@ Reading order followed:
 - `ruff check src/services/customer_service.py src/db/repositories/customer.py src/api/routers/customers.py` → 0 errors
 - `PYTHONPATH=src pytest tests/unit/test_customer_service.py -v` → all tests pass
 - `PYTHONPATH=src pytest tests/unit/ -v` → no regressions (exit 0)
-- All 17 router call sites updated to `CustomerService(repo)` form
+- All router endpoints use `CustomerService(repo)` form

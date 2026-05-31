@@ -539,7 +539,6 @@ class TestCustomerCountByStatusIntegration:
         # Verify counts via service layer using tenant sessions
         cust_svc = CustomerService(CustomerRepository(async_session))
         result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id_web)
-        await async_session.commit()
         result_t2 = await cust_svc.count_by_status(tenant_id=tenant_id_2_web)
 
         assert result_t1[CustomerStatus.LEAD] == 2
