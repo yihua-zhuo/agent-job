@@ -1,11 +1,13 @@
 """Customer data-access layer — SQLAlchemy async ORM."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.models.customer import CustomerModel
+from db.models.customer_enrichment import CustomerEnrichmentModel
 from db.repositories.base import BaseRepository
 from models.customer import CustomerStatus
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
@@ -311,17 +313,12 @@ class CustomerRepository(BaseRepository):
         leads = list(result.scalars().all())
         if not leads:
             return []
-        # Build per-lead history entries for each lead's previous owner
         recycled_ids = [lead.id for lead in leads]
-        # Use a single bulk UPDATE with the id IN clause
+        # Single bulk UPDATE for recycle_count/assigned_at/updated_at; history is
+        # appended per-row only for leads that passed the filter (no sync risk).
         await self.session.execute(
             update(CustomerModel)
-            .where(
-                and_(
-                    CustomerModel.id.in_(recycled_ids),
-                    CustomerModel.tenant_id == tenant_id,
-                )
-            )
+            .where(and_(CustomerModel.id.in_(recycled_ids), CustomerModel.tenant_id == tenant_id))
             .values(
                 owner_id=0,
                 assigned_at=None,
@@ -329,7 +326,6 @@ class CustomerRepository(BaseRepository):
                 updated_at=now,
             )
         )
-        # Append history entries individually (requires per-row values)
         for lead in leads:
             history = list(lead.recycle_history or [])
             history.append(
@@ -342,3 +338,37 @@ class CustomerRepository(BaseRepository):
             lead.recycle_history = history
         await self.session.flush()
         return recycled_ids
+
+    async def upsert_enrichment(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        enrichment_data: dict[str, Any],
+    ) -> None:
+        """Upsert a CustomerEnrichmentModel record for the given customer.
+
+        Uses INSERT … ON CONFLICT (tenant_id, customer_id) DO UPDATE so that
+        each call creates the record if absent, or updates the existing row if a
+        record for the same (tenant_id, customer_id) pair already exists.
+        """
+        now = datetime.now(UTC)
+        next_refresh = now + timedelta(days=7)
+        stmt = pg_insert(CustomerEnrichmentModel).values(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider=enrichment_data.get("provider", "clearbit"),
+            raw_data_json=enrichment_data.get("raw_data_json", enrichment_data),
+            enriched_at=enrichment_data.get("enriched_at", now),
+            next_refresh_at=next_refresh,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tenant_id", "customer_id"],
+            set_={
+                "provider": stmt.excluded.provider,
+                "raw_data_json": stmt.excluded.raw_data_json,
+                "enriched_at": stmt.excluded.enriched_at,
+                "next_refresh_at": next_refresh,
+                "updated_at": now,
+            },
+        )
+        await self.session.execute(stmt)

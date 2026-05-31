@@ -294,13 +294,14 @@ class TestRoutingRuleMatching:
 
         from db.models.routing_rule import RoutingRuleModel
 
+        uid = await _seed_user(async_session, tenant_id, role="sales")
         for priority, name in [(50, "Low Priority"), (200, "High Priority")]:
             rule = RoutingRuleModel(
                 tenant_id=tenant_id,
                 name=name,
                 conditions_json=[{"field": "region", "operator": "equals", "value": "APAC"}],
                 assignee_type="user",
-                assignee_id=1,
+                assignee_id=uid,
                 priority=priority,
                 is_active=True,
                 created_at=datetime.now(UTC),
@@ -319,12 +320,13 @@ class TestRoutingRuleMatching:
 
         from db.models.routing_rule import RoutingRuleModel
 
+        uid = await _seed_user(async_session, tenant_id, role="sales")
         rule = RoutingRuleModel(
             tenant_id=tenant_id,
             name="APAC Only",
             conditions_json=[{"field": "region", "operator": "in", "value": ["APAC"]}],
             assignee_type="user",
-            assignee_id=1,
+            assignee_id=uid,
             priority=100,
             is_active=True,
             created_at=datetime.now(UTC),

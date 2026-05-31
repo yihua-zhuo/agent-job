@@ -1,9 +1,6 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import Any
 
-from sqlalchemy.dialects.postgresql import insert as pg_insert
-
-from db.models.customer_enrichment import CustomerEnrichmentModel
 from db.repositories.customer import CustomerRepository
 from models.customer import CustomerCreateDTO, CustomerStatus
 from pkg.errors.app_exceptions import ValidationException
@@ -182,24 +179,4 @@ class CustomerService:
         each call creates the record if absent, or updates the existing row if a
         record for the same (tenant_id, customer_id) pair already exists.
         """
-        now = datetime.now(UTC)
-        next_refresh = now + timedelta(days=7)
-        stmt = pg_insert(CustomerEnrichmentModel).values(
-            tenant_id=tenant_id,
-            customer_id=customer_id,
-            provider=enrichment_data.get("provider", "clearbit"),
-            raw_data_json=enrichment_data.get("raw_data_json", enrichment_data),
-            enriched_at=enrichment_data.get("enriched_at", now),
-            next_refresh_at=next_refresh,
-        )
-        stmt = stmt.on_conflict_do_update(
-            index_elements=["tenant_id", "customer_id"],
-            set_={
-                "provider": stmt.excluded.provider,
-                "raw_data_json": stmt.excluded.raw_data_json,
-                "enriched_at": stmt.excluded.enriched_at,
-                "next_refresh_at": next_refresh,
-                "updated_at": now,
-            },
-        )
-        await self.repository.session.execute(stmt)
+        await self.repository.upsert_enrichment(customer_id, tenant_id, enrichment_data)

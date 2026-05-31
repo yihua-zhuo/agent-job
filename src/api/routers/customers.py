@@ -19,6 +19,7 @@ from db.models.customer_enrichment import CustomerEnrichmentModel
 from db.repositories import CustomerRepository  # noqa: F401 — kept for test monkeypatching
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.customer import CustomerStatus
+from pkg.errors.app_exceptions import ForbiddenException
 from services.customer_service import CustomerService
 from services.lead_routing_service import LeadRoutingService
 
@@ -532,8 +533,6 @@ async def trigger_lead_recycle(
 ):
     """Manually trigger lead recycle (admin/manager only)."""
     if "admin" not in ctx.roles and "manager" not in ctx.roles:
-        from pkg.errors.app_exceptions import ForbiddenException
-
         raise ForbiddenException("需要 admin 或 manager 角色")
     repo = CustomerRepository(session)
     service = CustomerService(repo)

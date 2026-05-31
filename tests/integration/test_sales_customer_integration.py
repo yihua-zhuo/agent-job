@@ -85,7 +85,7 @@ class TestCustomerServiceIntegration:
         )
         assert result is not None
         assert result.company == "Acme Corp"
-        assert result.status == "customer"
+        assert result.status == CustomerStatus.CUSTOMER.value
 
     async def test_update_customer(self, db_schema, tenant_id, async_session):
         cust_svc = CustomerService(CustomerRepository(async_session))

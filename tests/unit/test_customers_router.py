@@ -107,10 +107,12 @@ def client_with_service(monkeypatch):
 
     from internal.middleware.fastapi_auth import require_auth
 
-    mock_service = MagicMock()
+    # Create mock eagerly so the fixture can return it before any request is made.
+    # Each test gets its own fresh mock (no module-level singleton = no cross-test pollution).
+    _mock = MagicMock()
 
     def override_customer_service(repository):
-        return mock_service
+        return _mock
 
     # Async-aware mock session for session.execute() calls (enrichment queries)
     mock_session = MagicMock()
@@ -148,7 +150,7 @@ def client_with_service(monkeypatch):
         )
 
     client = TestClient(app, raise_server_exceptions=False)
-    return client, mock_service
+    return client, _mock
 
 
 class TestCreateCustomerEndpoint:

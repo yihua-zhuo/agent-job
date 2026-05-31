@@ -283,6 +283,9 @@ def make_mock_session(handlers=None, state=None):
             # bind-param extraction time; others (KeyboardInterrupt, SystemExit)
             # must not be silently swallowed.
             raise RuntimeError(f"mock session: SQL compilation failed: {exc}") from exc
+        except Exception as exc:
+            # Re-raise any unexpected exception type — never silently swallow it.
+            raise
         bound_params.update(params or {})
         for h in handlers:
             # Pass lowercased tablename so "INSERT INTO Agent_Tasks" matches
