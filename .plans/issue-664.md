@@ -57,7 +57,7 @@ Reading order followed:
    - Confirm `op.create_index(op.f('ix_notification_logs_notification_id'), ...)` exists.
    - Confirm `created_at` uses `server_default=sa.text('now()')` (not bare `nullable=False`).
    - Confirm `sa.DateTime(timezone=True)` for `created_at` (not plain `sa.DateTime`).
-   - Confirm `down_revision` points to `c94d682d4b03` (current HEAD of this branch).
+   - Confirm `down_revision` points to `c94d682d4b04` (the merge-head after report_definitions and ai_conversations). Do NOT use `c94d682d4b03` — that was the pre-merge tip; `c94d682d4b04` is the correct parent for new migrations on this branch.
    - If autogen omitted `server_default`, add it manually: `server_default=sa.text('now()')` in the column call.
 
 6. **Verify the migration applies and rolls back cleanly**
@@ -75,7 +75,7 @@ Reading order followed:
    If the new file contains only `pass` in both `upgrade()` and `downgrade()`, delete it. If it shows real diff, investigate and fix Step 6.
 
 8. **Create `tests/unit/test_notification_log_model.py`**
-   - Three test methods: `test_to_dict_returns_all_fields`, `test_to_dict_with_error_field`, `test_table_name`.
+   - Three test methods: `test_to_dict_returns_all_fields`, `test_to_dict_with_error_field`, `test_tablename`.
    - Mirror the style of `tests/unit/test_notification_preference_model.py` exactly.
    - Run `PYTHONPATH=src pytest tests/unit/test_notification_log_model.py -v` — expect `3 passed`.
 
@@ -102,7 +102,7 @@ Reading order followed:
   - `test_to_dict_returns_all_fields` — constructs a model instance with all non-null fields, asserts `to_dict()` contains every key
   - `test_to_dict_with_error_field` — constructs with a non-null `error` string, asserts it is present in dict output
   - `test_table_name` — asserts `NotificationLogModel.__tablename__ == "notification_logs"`
-- **Integration test**: none for this issue (model-only, no service/router layer)
+- **Integration test**: none for this issue (model-only, no service/router layer). Deferred to #646 (service layer). Rule 144 gap acknowledged and tracked.
 - **Dev-plan §6 verification commands**:
   - `ruff check src/db/models/notification_log.py` → 0 errors
   - `ruff check alembic/versions/<new_id>_add_notification_logs.py` → 0 errors
