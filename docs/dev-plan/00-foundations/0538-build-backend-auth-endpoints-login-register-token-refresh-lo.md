@@ -327,4 +327,4 @@ gh pr create --base master --title "feat(auth): backend auth endpoints (#538)" -
 
 ---
 
-**修复说明**：三处 broken link 均无法从上下文推导出正确路径（文件名未知、路径片段 `...` 为占位符），故全部按选项 (b) 降级为 plain text `TBD - 待验证` 占位符，与文档其余 `TBD - 待验证` 用法保持一致。
+**修复说明**：三处 broken link 均无法从上下文推导出正确路径（#537 文件不存在；`20-sales/` 和 `30-tickets/` 目录存在但无可关联的 auth 中间件 / 权限体系文档），故全部按选项 (b) 降级为 plain text `TBD - 待验证` 占位符，与文档其余 `TBD - 待验证` 用法保持一致。

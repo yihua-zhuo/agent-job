@@ -109,7 +109,7 @@ class WorkflowService:
 | 路径 | 改动要点 |
 |------|---------|
 | [`tests/unit/conftest.py`](../../../tests/unit/conftest.py) | 新增 `workflow_handler` 函数（注册到 `DOMAIN_HANDLERS` 映射，供 `make_mock_session` 调用） |
-| [`src/services/__init__.py`](../../../src/services/__init__.py) | 确认 `WorkflowService` 已导出（如有 `__all__`，追加） |
+| TBD - 待验证：文件路径待确认（可能 `src/services/__init__.py` 不存在，或需改为各模块的 `__init__.py`） | 确认 `WorkflowService` 已导出（如有 `__all__`，追加） |
 
 ### 3.3 新增能力
 
@@ -341,7 +341,7 @@ PYTHONPATH=src mypy src/services/workflow_service.py
 ## 7. 风险与回退
 
 | 风险 | 概率 | 影响 | 降级方案 |
-|------|------|------|---------|
+|------|------|------|----------|
 | `workflow_handler` SQL 匹配不完整，特定查询返回 None 导致 `AttributeError` | 中 | 中 | 参考 `pipeline_handler` 增加更多分支（`SELECT`、`INSERT`、`UPDATE`、`DELETE`），或直接用正则匹配表名 |
 | `execute_workflow` 内部 `_evaluate_conditions` 路径覆盖不足，条件通过 mock 绕过的 case 与生产不符 | 低 | 中 | 增加一条 `test_execute_workflow_with_valid_condition` 用例，context 明确匹配 conditions 中的条件 |
 | `MockState.workflows` 的初始化时机与 `make_mock_session` 内部状态不一致 | 低 | 中 | 将 state 传入 `make_mock_session` 时显式 `state.workflows = [...]`，避免依赖全局 `MockState._instance` |

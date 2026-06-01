@@ -71,7 +71,7 @@ TBD - 待验证：`src/db/models/churn_prediction.py` — 需确认 `ChurnPredic
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/api/routers/churn_risk.py` | ChurnPredictionService 的 REST 封装，提供两个 API 端点 |
 | `tests/unit/test_churn_risk_router.py` | 对两个端点的单元测试（正常 + 异常场景） |
 
@@ -297,8 +297,3 @@ gh pr create --base master --title "feat(analytics): add churn risk API endpoint
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
-
----
-
-**Changes made** (lines 9 and 10 only):
-- Line 9: replaced broken link `[0573-add-churn-prediction-service](../0573-add-churn-prediction-service/README.md)` with plain `TBD - 待验证：` text matching the format used in section 2.1- Line 10: replaced broken link `[0580-churn-risk-dashboard-widget](../0580-churn-risk-dashboard-widget/README.md)` with plain `TBD - 待验证：` text
