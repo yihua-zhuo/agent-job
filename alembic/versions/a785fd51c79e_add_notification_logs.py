@@ -23,8 +23,8 @@ def upgrade() -> None:
     op.create_table(
         "notification_logs",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("tenant_id", sa.Integer(), nullable=False),
-        sa.Column("notification_id", sa.Integer(), nullable=False),
+        sa.Column("tenant_id", sa.Integer(), sa.ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("notification_id", sa.Integer(), sa.ForeignKey("notifications.id", ondelete="CASCADE"), nullable=False),
         sa.Column("channel", sa.String(length=50), nullable=False),
         sa.Column("status", sa.String(length=50), nullable=False),
         sa.Column("attempts", sa.Integer(), nullable=False),
