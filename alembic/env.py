@@ -17,6 +17,9 @@ from db.base import Base
 from db.models.notification_preference import (
     NotificationPreferenceModel,  # noqa: F401 - explicit import for autogenerate
 )
+from db.models.notification_log import (
+    NotificationLogModel,  # noqa: F401 - explicit import for autogenerate
+)
 
 config = context.config
 
