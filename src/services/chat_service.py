@@ -62,6 +62,9 @@ class ChatService:
                 return intent
 
         # Keyword fallback: longest keyword wins.
+        # When multiple intents have keywords of equal length in text, the winner
+        # is the first intent encountered in dict iteration order
+        # (customer_lookup → ticket_query → sales_summary).
         lower_text = text.lower()
         best_intent: Intent = "general"
         best_len = 0
@@ -77,7 +80,7 @@ class ChatService:
         tenant_id: int,
         keyword: str | None = None,
         limit: int = 10,
-    ) -> list[CustomerModel]:
+    ) -> list[dict]:
         """Search customers by name/email within a tenant.
 
         Args:
@@ -86,7 +89,7 @@ class ChatService:
             limit: Maximum rows to return (1–200).
 
         Returns:
-            List of CustomerModel instances ordered by created_at descending.
+            List of dict representations of CustomerModel ordered by created_at descending.
 
         Raises:
             ValidationException: If limit is out of range.
@@ -117,7 +120,7 @@ class ChatService:
         tenant_id: int,
         keyword: str | None = None,
         limit: int = 10,
-    ) -> list[OpportunityModel]:
+    ) -> list[dict]:
         """Search opportunities by name (and numeric customer_id) within a tenant.
 
         Args:
@@ -127,7 +130,7 @@ class ChatService:
             limit: Maximum rows to return (1–200).
 
         Returns:
-            List of OpportunityModel instances ordered by created_at descending.
+            List of dict representations of OpportunityModel ordered by created_at descending.
 
         Raises:
             ValidationException: If limit is out of range.
@@ -160,7 +163,7 @@ class ChatService:
         keyword: str | None = None,
         status: str | None = None,
         limit: int = 10,
-    ) -> list[TicketModel]:
+    ) -> list[dict]:
         """Search tickets by subject/description (and optional status) within a tenant.
 
         Args:
@@ -170,7 +173,7 @@ class ChatService:
             limit: Maximum rows to return (1–200).
 
         Returns:
-            List of TicketModel instances ordered by created_at descending.
+            List of dict representations of TicketModel ordered by created_at descending.
 
         Raises:
             ValidationException: If limit is out of range.

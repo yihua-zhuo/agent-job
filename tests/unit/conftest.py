@@ -129,10 +129,17 @@ class MockResult:
         return MappingResult(self._rows)
 
     def scalars(self):
-        return MagicMock(
-            first=MagicMock(return_value=self._rows[0] if self._rows else None),
-            all=MagicMock(return_value=self._rows),
-        )
+        class _Scalars:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def first(self):
+                return self._rows[0] if self._rows else None
+
+            def all(self):
+                return self._rows
+
+        return _Scalars(self._rows)
 
     def scalar_one_or_none(self):
         return self._rows[0] if self._rows else None
