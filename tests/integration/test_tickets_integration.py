@@ -21,7 +21,8 @@ from services.user_service import UserService
 
 async def _seed_customer(async_session, tenant_id: int) -> int:
     """Create a customer and return its id."""
-    svc = CustomerService(async_session)
+    from db.repositories.customer import CustomerRepository
+    svc = CustomerService(CustomerRepository(async_session))
     result = await svc.create_customer(
         data={"name": "Test Customer", "email": f"test-{uuid.uuid4().hex[:8]}@example.com"},
         tenant_id=tenant_id,

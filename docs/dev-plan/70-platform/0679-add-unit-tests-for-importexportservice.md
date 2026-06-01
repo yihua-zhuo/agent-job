@@ -402,7 +402,7 @@ echo "=== ALL DONE ==="
 - [ ] `pytest tests/unit/test_import_export_service.py::TestImportExportServiceFileValidation -v` 输出 `3 passed`
 - [ ] `pytest tests/unit/test_import_export_service.py::TestImportExportServiceDBIntegration -v` 输出 `2 passed`
 - [ ] `pytest tests/unit/test_import_export_service.py::TestImportExportServiceErrorCapture -v` 输出 `3 passed`
-- [ ] `bash docs/dev-plan/70-platform/verify/0679_test_import_export_service.sh` 全绿
+- [ ] `bash TBD - 待验证：verify script path` 全绿
 
 ---
 
@@ -460,13 +460,3 @@ git push
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | github-actions[bot] |
-
------ END CORRECTED BOARD -----
-
-**Changes made:**
-
-1. **Line 9 (metadata table "启用后赋能")**: Replaced the broken forward link to the non-existent `#0688` board with `TBD - 待验证：integration tests for full rule lifecycle (#0688)` — the referenced board doesn't exist yet.
-
-2. **Line 74 (Section 3.1 table "路径" for the verify script)**: Replaced the broken `[field](row[field])` "link" (a Python variable accidentally rendered as a broken markdown link) with `TBD - 待验证：verify script path` — the verify script path in `docs/dev-plan/70-platform/verify/` is not yet confirmed.
-
-3. **Line 471 (Section 6 acceptance checklist)**: Same fix — the same Python variable fragment appeared again in the acceptance checklist, replaced with `TBD - 待验证：verify script path`.

@@ -11,10 +11,11 @@ Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import pytest
 
+from db.repositories.customer import CustomerRepository
 from models.marketing import CampaignType, TriggerType
 from pkg.errors.app_exceptions import NotFoundException
 from services.activity_service import ActivityService
@@ -340,7 +341,7 @@ class TestActivityIntegration:
         return reg.id
 
     async def _seed_customer(self, tenant_id: int, async_session) -> int:
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         suffix = uuid.uuid4().hex[:8]
         result = await cust_svc.create_customer(
             data={"name": f"Activity Cust {suffix}", "email": f"act_{suffix}@example.com"},
@@ -515,7 +516,7 @@ class TestNotificationIntegration:
             tenant_id=tenant_id,
             title="Team standup",
             content="Daily standup meeting",
-            remind_at=datetime(2099, 12, 31, 10, 0, 0, tzinfo=timezone.utc),
+            remind_at=datetime(2099, 12, 31, 10, 0, 0, tzinfo=UTC),
         )
 
         cancelled = await svc.cancel_reminder(result.id, tenant_id=tenant_id)

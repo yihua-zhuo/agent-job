@@ -5,7 +5,7 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from pkg.errors.app_exceptions import NotFoundException
+from db.repositories.customer import CustomerRepository
 from services.customer_service import CustomerService
 from services.lead_routing_service import LeadRoutingService
 from services.user_service import UserService
@@ -63,12 +63,22 @@ class TestLeadRoutingServiceIntegration:
 
     async def test_auto_assign_lead_no_rules_round_robin(self, db_schema, tenant_id, async_session):
         """Without any routing rules, a lead should still get a round-robin assignee."""
+        from db.models.customer import CustomerModel
+
         uid = await _seed_user(async_session, tenant_id, role="sales")
-        cust_svc = CustomerService(async_session)
-        lead = await cust_svc.create_customer(
-            {"name": "RoundRobin Lead", "status": "lead", "owner_id": 0},
+        # Insert directly so owner_id=0 survives — create_customer already runs
+        # auto-assignment, so bypassing it tests the full auto_assign_lead path.
+        async_session.add(CustomerModel(
             tenant_id=tenant_id,
-        )
+            name="RoundRobin Lead",
+            status="lead",
+            owner_id=0,
+        ))
+        await async_session.flush()
+        cust_svc = CustomerService(CustomerRepository(async_session))
+        # Fetch the lead we just inserted (id was auto-assigned by the ORM)
+        items, _ = await cust_svc.get_unassigned_leads(tenant_id=tenant_id)
+        lead = next(c for c in items if c.name == "RoundRobin Lead")
         routing_svc = LeadRoutingService(async_session)
         assigned_id = await routing_svc.auto_assign_lead(lead.id, tenant_id=tenant_id)
         # Should have selected the active sales user
@@ -81,6 +91,7 @@ class TestLeadRoutingServiceIntegration:
         """With a matching rule, the lead should be assigned to the rule's assignee."""
         uid = await _seed_user(async_session, tenant_id, role="sales")
         from datetime import UTC, datetime
+
         from db.models.routing_rule import RoutingRuleModel
 
         rule = RoutingRuleModel(
@@ -97,9 +108,9 @@ class TestLeadRoutingServiceIntegration:
         async_session.add(rule)
         await async_session.flush()
 
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         lead = await cust_svc.create_customer(
-            {"name": "ACME Lead", "status": "lead", "owner_id": 0, "company": "ACME Corp"},
+            {"name": "ACME Lead", "email": "acme@example.com", "status": "lead", "owner_id": 0, "company": "ACME Corp"},
             tenant_id=tenant_id,
         )
         routing_svc = LeadRoutingService(async_session)
@@ -110,6 +121,7 @@ class TestLeadRoutingServiceIntegration:
         """Inactive rules should be skipped during auto-assignment."""
         uid = await _seed_user(async_session, tenant_id, role="sales")
         from datetime import UTC, datetime
+
         from db.models.routing_rule import RoutingRuleModel
 
         rule = RoutingRuleModel(
@@ -126,9 +138,9 @@ class TestLeadRoutingServiceIntegration:
         async_session.add(rule)
         await async_session.flush()
 
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         lead = await cust_svc.create_customer(
-            {"name": "ACME Inactive Lead", "status": "lead", "owner_id": 0, "company": "ACME Corp"},
+            {"name": "ACME Inactive Lead", "email": "acme-inactive@example.com", "status": "lead", "owner_id": 0, "company": "ACME Corp"},
             tenant_id=tenant_id,
         )
         routing_svc = LeadRoutingService(async_session)
@@ -138,9 +150,9 @@ class TestLeadRoutingServiceIntegration:
 
     async def test_reassign_lead_logs_history(self, db_schema, tenant_id, async_session):
         """Reassigning a lead should increment recycle_count and log history."""
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         lead = await cust_svc.create_customer(
-            {"name": "Reassign Test", "status": "lead", "owner_id": 1},
+            {"name": "Reassign Test", "email": "reassign@example.com", "status": "lead", "owner_id": 1},
             tenant_id=tenant_id,
         )
         new_owner_id = await _seed_user(async_session, tenant_id)
@@ -185,7 +197,7 @@ class TestLeadRoutingServiceIntegration:
         ))
         await async_session.flush()
 
-        items, total = await CustomerService(async_session).get_unassigned_leads(tenant_id=tenant_id)
+        items, total = await CustomerService(CustomerRepository(async_session)).get_unassigned_leads(tenant_id=tenant_id)
         names = [c.name for c in items]
         assert "Unassigned 1" in names
         assert "Unassigned 2" in names
@@ -196,7 +208,7 @@ class TestLeadRoutingServiceIntegration:
         """Leads at max recycle count should be disqualified."""
         from db.models.customer import CustomerModel
 
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         lead = CustomerModel(
             tenant_id=tenant_id,
             name="Overcycled",
@@ -248,15 +260,15 @@ class TestLeadRoutingServiceIntegration:
 
     async def test_bulk_recycle(self, db_schema, tenant_id, async_session):
         """bulk_recycle should reset multiple leads at once."""
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         uid = await _seed_user(async_session, tenant_id)
 
         lead1 = await cust_svc.create_customer(
-            {"name": "Bulk 1", "status": "lead", "owner_id": uid},
+            {"name": "Bulk 1", "email": "bulk1@example.com", "status": "lead", "owner_id": uid},
             tenant_id=tenant_id,
         )
         lead2 = await cust_svc.create_customer(
-            {"name": "Bulk 2", "status": "lead", "owner_id": uid},
+            {"name": "Bulk 2", "email": "bulk2@example.com", "status": "lead", "owner_id": uid},
             tenant_id=tenant_id,
         )
 
@@ -269,10 +281,10 @@ class TestLeadRoutingServiceIntegration:
 
     async def test_assign_owner_sets_assigned_at(self, db_schema, tenant_id, async_session):
         """assign_owner should set assigned_at on first assignment."""
-        cust_svc = CustomerService(async_session)
+        cust_svc = CustomerService(CustomerRepository(async_session))
         uid = await _seed_user(async_session, tenant_id)
         lead = await cust_svc.create_customer(
-            {"name": "Assign Test", "status": "lead", "owner_id": 0},
+            {"name": "Assign Test", "email": "assign@example.com", "status": "lead", "owner_id": 0},
             tenant_id=tenant_id,
         )
         result = await cust_svc.assign_owner(lead.id, uid, tenant_id=tenant_id)
@@ -289,15 +301,17 @@ class TestRoutingRuleMatching:
 
     async def test_highest_priority_rule_wins(self, db_schema, tenant_id, async_session):
         from datetime import UTC, datetime
+
         from db.models.routing_rule import RoutingRuleModel
 
+        uid = await _seed_user(async_session, tenant_id, role="sales")
         for priority, name in [(50, "Low Priority"), (200, "High Priority")]:
             rule = RoutingRuleModel(
                 tenant_id=tenant_id,
                 name=name,
                 conditions_json=[{"field": "region", "operator": "equals", "value": "APAC"}],
                 assignee_type="user",
-                assignee_id=1,
+                assignee_id=uid,
                 priority=priority,
                 is_active=True,
                 created_at=datetime.now(UTC),
@@ -313,14 +327,16 @@ class TestRoutingRuleMatching:
 
     async def test_no_matching_conditions_returns_none(self, db_schema, tenant_id, async_session):
         from datetime import UTC, datetime
+
         from db.models.routing_rule import RoutingRuleModel
 
+        uid = await _seed_user(async_session, tenant_id, role="sales")
         rule = RoutingRuleModel(
             tenant_id=tenant_id,
             name="APAC Only",
             conditions_json=[{"field": "region", "operator": "in", "value": ["APAC"]}],
             assignee_type="user",
-            assignee_id=1,
+            assignee_id=uid,
             priority=100,
             is_active=True,
             created_at=datetime.now(UTC),
@@ -335,6 +351,7 @@ class TestRoutingRuleMatching:
 
     async def test_empty_conditions_matches_all_leads(self, db_schema, tenant_id, async_session):
         from datetime import UTC, datetime
+
         from db.models.routing_rule import RoutingRuleModel
 
         rule = RoutingRuleModel(

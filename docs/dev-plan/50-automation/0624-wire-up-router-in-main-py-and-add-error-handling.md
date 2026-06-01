@@ -49,15 +49,15 @@ TBD - 待验证：`src/api/routers/agent_tasks.py` L? — 由 #623 新建，需�
 
 - 要改：
   - `src/main.py` — 注册 agent_tasks router，挂载到 /agents；全局 AppException handler 新增 ConflictException 分支
-  - `src/services/agent_tasks_service.py` — 新增 `mark_stale_tasks_failed()` 方法（由 #623 建初版）
-  - `src/api/routers/agent_tasks.py` — GET /{task_id} 在返回前调用 `mark_stale_tasks_failed()`
+  - TBD - 待验证：`src/services/agent_tasks_service.py` — 新增 `mark_stale_tasks_failed()` 方法（由 #623 建初版）
+  - TBD - 待验证：`src/api/routers/agent_tasks.py` — GET /{task_id} 在返回前调用 `mark_stale_tasks_failed()`
 - 要建：
   - `tests/unit/test_agent_tasks_service.py` — 单元测试（含 stale-timeout 场景）
   - `tests/integration/test_agent_tasks_integration.py` —集成测试（如 #623 已建则补充）
 
 ### 2.3 缺什么
 
-- [ ] `src/main.py` 没有 `agent_tasks` router 的 `include_router` 调用 — endpoints unreachable。
+- [ ] `src/main.py` 没有 `agent_tasks` router 的 `include_router` 调用 — endpoints unreachable.
 - [ ] 没有 timeout 检测逻辑 — stale tasks remain `submitted` indefinitely.
 - [ ] 全局 AppException handler 没有 ConflictException 分支 — duplicate `task_id` returns generic 500 instead of 409 or a Retry-After 500.
 - [ ] Dispatch failures do not return `Retry-After` header — client cannot back-off predictably.
@@ -200,7 +200,8 @@ async def app_exception_handler(request: Request, exc: AppException):
 操作：
 - a) 在 `src/services/agent_tasks_service.py` 的 `AgentTasksService` 类中添加方法：
   ```python
-  from datetime import datetime, timezone, timedelta  async def mark_stale_tasks_failed(self, tenant_id: int) -> list[AgentTask]:
+  from datetime import datetime, timezone, timedelta
+  async def mark_stale_tasks_failed(self, tenant_id: int) -> list[AgentTask]:
       cutoff = datetime.now(timezone.utc) - timedelta(minutes=5)
       result = await self.session.execute(
           select(AgentTask).where(
@@ -213,7 +214,7 @@ async def app_exception_handler(request: Request, exc: AppException):
       for task in stale:
           task.status = AgentTaskStatus.FAILED
           task.last_updated_at = datetime.now(timezone.utc)
- if stale:
+      if stale:
           await self.session.commit()
       return stale
   ```
@@ -227,8 +228,10 @@ async def app_exception_handler(request: Request, exc: AppException):
 
 操作：
 - a) 在 `src/api/routers/agent_tasks.py` GET /{task_id} handler 中，在 `svc.get_task(...)` 之后、`return` 之前插入：
-  ```python stale = await svc.mark_stale_tasks_failed(ctx.tenant_id)
-  _ = stale  # 副作用已体现到 DB；不影响本请求的返回  ```
+  ```python
+  stale = await svc.mark_stale_tasks_failed(ctx.tenant_id)
+  _ = stale  # 副作用已体现到 DB；不影响本请求的返回
+  ```
 - b) 同理在 GET `/` (list) handler 中也调用一次（复用同一次调用，减少 DB 查询）。
 
 示例代码：
@@ -260,7 +263,7 @@ async def get_agent_task(
   1. `test_mark_stale_tasks_failed` — mock 一个超过5 分钟的 `submitted` 任务，验证状态变为 `failed`
   2. `test_mark_stale_tasks_no_op_when_fresh` — mock 刚更新的任务，验证不变化
   3. `test_mark_stale_tasks_failed_only_affects_submitted` — mock 已是 `failed` 状态的任务，验证状态不变
- 4. `test_dispatch_conflict_returns_503_with_retry_after` — patch `svc.dispatch` 抛出 conflict，验证 HTTP response 状态码和 header
+  4. `test_dispatch_conflict_returns_503_with_retry_after` — patch `svc.dispatch` 抛出 conflict，验证 HTTP response 状态码和 header
 
 **完成判定**：`PYTHONPATH=src pytest tests/unit/test_agent_tasks_service.py -v` → all passed; `ruff check tests/unit/test_agent_tasks_service.py` → 0 errors
 
@@ -316,4 +319,4 @@ gh pr create --base master --title "feat(#624): wire agent_tasks router in main.
 
 ---
 
-**修复说明**：第 80–81 行的两处 `[text](path)` 链接指向了文档目录树之外的错误路径，且对应的两个文件已在 §2.1 中标注为 `TBD - 待验证`（存在性未确认），因此均降级为纯文本并保留 `TBD - 待验证` 前缀。`src/main.py` 的链接路径 `../../../src/main.py` 经验证可正确解析，予以保留。
+**修复说明**：第 319 行的 `[text](path)` 链接使用了字面值 `path` 作为目标，无法解析为任何有效文件。由于 `src/services/agent_tasks_service.py` 和 `src/api/routers/agent_tasks.py` 均标注为 `TBD - 待验证`（存在性未确认），该处链接按选项 (b) 降级为纯文本。第 80–81 行原有的两处 `[text](path)` 链接同样替换为 `TBD - 待验证` 文本，`src/main.py` 的链接路径 `../../../src/main.py` 经验证可正确解析，予以保留。

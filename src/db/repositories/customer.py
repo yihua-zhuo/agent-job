@@ -1,11 +1,13 @@
 """Customer data-access layer — SQLAlchemy async ORM."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
-from sqlalchemy import and_, delete, func, or_, select
+from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from db.models.customer import CustomerModel
+from db.models.customer_enrichment import CustomerEnrichmentModel
 from db.repositories.base import BaseRepository
 from models.customer import CustomerStatus
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
@@ -130,14 +132,15 @@ class CustomerRepository(BaseRepository):
 
     async def reassign_lead(
         self,
-        customer_id: int,
         new_owner_id: int,
         recycle_count: int,
         recycle_history: list[dict[str, Any]],
         tenant_id: int,
+        now: datetime,
+        *,
+        customer_id: int,
     ) -> CustomerModel:
         """Reassign a lead (update owner, increment recycle_count, append history)."""
-        now = datetime.now(UTC)
         customer = await self.get_customer(customer_id, tenant_id)
         customer.owner_id = new_owner_id
         customer.assigned_at = now
@@ -242,3 +245,134 @@ class CustomerRepository(BaseRepository):
         self.session.add_all(rows)
         await self.session.flush()
         return len(rows)
+
+    async def get_unassigned_leads(
+        self,
+        tenant_id: int,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[CustomerModel], int]:
+        """Return leads with owner_id=0 and status=lead, ordered by created_at."""
+        conditions = [
+            CustomerModel.tenant_id == tenant_id,
+            CustomerModel.owner_id == 0,
+            CustomerModel.status == "lead",
+        ]
+        count_result = await self.session.execute(select(func.count(CustomerModel.id)).where(and_(*conditions)))
+        total = count_result.scalar() or 0
+        offset = (page - 1) * page_size
+        result = await self.session.execute(
+            select(CustomerModel)
+            .where(and_(*conditions))
+            .order_by(CustomerModel.created_at.asc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        return list(result.scalars().all()), total
+
+    async def get_leads_by_owner(
+        self,
+        owner_id: int,
+        tenant_id: int,
+        page: int = 1,
+        page_size: int = 20,
+    ) -> tuple[list[CustomerModel], int]:
+        """Return leads for a specific owner."""
+        conditions = [
+            CustomerModel.tenant_id == tenant_id,
+            CustomerModel.owner_id == owner_id,
+            CustomerModel.status == "lead",
+        ]
+        count_result = await self.session.execute(select(func.count(CustomerModel.id)).where(and_(*conditions)))
+        total = count_result.scalar() or 0
+        offset = (page - 1) * page_size
+        result = await self.session.execute(
+            select(CustomerModel)
+            .where(and_(*conditions))
+            .order_by(CustomerModel.created_at.asc())
+            .offset(offset)
+            .limit(page_size)
+        )
+        return list(result.scalars().all()), total
+
+    async def bulk_recycle(self, customer_ids: list[int], tenant_id: int) -> list[int]:
+        """Set owner_id=0, increment recycle_count, append history for matching leads. Returns recycled IDs."""
+        if not customer_ids:
+            return []
+        now = datetime.now(UTC)
+        result = await self.session.execute(
+            select(CustomerModel).where(
+                and_(
+                    CustomerModel.tenant_id == tenant_id,
+                    CustomerModel.id.in_(customer_ids),
+                    CustomerModel.status == "lead",
+                    CustomerModel.owner_id != 0,
+                )
+            )
+        )
+        leads = list(result.scalars().all())
+        if not leads:
+            return []
+        recycled_ids = []
+        for lead in leads:
+            # Per-row UPDATE + flush so the refreshed lead object has the
+            # correct incremented recycle_count for history construction.
+            await self.session.execute(
+                update(CustomerModel)
+                .where(and_(CustomerModel.id == lead.id, CustomerModel.tenant_id == tenant_id))
+                .values(
+                    owner_id=0,
+                    assigned_at=None,
+                    recycle_count=lead.recycle_count + 1,
+                    updated_at=now,
+                )
+            )
+            await self.session.flush()
+            await self.session.refresh(lead)
+            # Refresh has reloaded the ORM object from DB; append the history entry
+            # after the refresh so the in-memory change is not clobbered.
+            history = list(lead.recycle_history or [])
+            history.append(
+                {
+                    "recycled_at": now.isoformat(),
+                    "previous_owner_id": lead.owner_id,
+                    "reason": "manual_bulk_recycle",
+                }
+            )
+            lead.recycle_history = history
+            recycled_ids.append(lead.id)
+        return recycled_ids
+
+    async def upsert_enrichment(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        enrichment_data: dict[str, Any],
+    ) -> None:
+        """Upsert a CustomerEnrichmentModel record for the given customer.
+
+        Uses INSERT … ON CONFLICT (tenant_id, customer_id) DO UPDATE so that
+        each call creates the record if absent, or updates the existing row if a
+        record for the same (tenant_id, customer_id) pair already exists.
+        """
+        now = datetime.now(UTC)
+        next_refresh = now + timedelta(days=7)
+        stmt = pg_insert(CustomerEnrichmentModel).values(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            provider=enrichment_data.get("provider", "clearbit"),
+            raw_data_json=enrichment_data.get("raw_data_json", enrichment_data),
+            enriched_at=enrichment_data.get("enriched_at", now),
+            next_refresh_at=next_refresh,
+        )
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["tenant_id", "customer_id"],
+            set_={
+                "provider": stmt.excluded.provider,
+                "raw_data_json": stmt.excluded.raw_data_json,
+                "enriched_at": stmt.excluded.enriched_at,
+                "next_refresh_at": next_refresh,
+                "updated_at": now,
+            },
+        )
+        await self.session.execute(stmt)

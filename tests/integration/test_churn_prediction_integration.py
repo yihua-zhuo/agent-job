@@ -10,8 +10,39 @@ Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 
 from db.models.churn_prediction import ChurnPredictionModel
+from db.models.tenant import TenantModel
+
+
+# ── Seed tenants and customers so FK constraints on churn_predictions are satisfied ──
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_tenant(async_session, tenant_id: int) -> int:
+    from db.models.customer import CustomerModel
+
+    tenant = TenantModel(id=tenant_id, name="Churn Integration Test Tenant", plan="free", status="active")
+    async_session.add(tenant)
+    await async_session.flush()
+    for cid in range(1, 201):
+        customer = CustomerModel(id=cid, tenant_id=tenant_id, name=f"Churn Customer {cid}", email=f"churn_cust{cid}@test.example.com", status="active")
+        async_session.add(customer)
+    await async_session.flush()
+    return tenant_id
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
+    from db.models.customer import CustomerModel
+
+    tenant = TenantModel(id=tenant_id_2, name="Churn Integration Test Tenant 2", plan="free", status="active")
+    async_session.add(tenant)
+    await async_session.flush()
+    for cid in range(201, 401):
+        customer = CustomerModel(id=cid, tenant_id=tenant_id_2, name=f"Churn Customer 2 {cid}", email=f"churn_cust2_{cid}@test.example.com", status="active")
+        async_session.add(customer)
+    await async_session.flush()
+    return tenant_id_2
 
 
 @pytest.mark.integration

@@ -47,7 +47,7 @@ TBD - 待验证：确认 #641 是否已提交 Role / Permission ORM 模型至 `s
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/api/routers/__init__.py`](../../../src/api/routers/__init__.py) — 注册 rbac router 到 main app
+  - TBD - 待验证：注册 rbac router 到 main app（确认 router 初始化文件路径）
   - `src/main.py` — 可选，如需在此注册新 router
 - 要建：
   - `src/services/role_service.py` — RoleService 业务逻辑
@@ -80,7 +80,7 @@ TBD - 待验证：确认 #641 是否已提交 Role / Permission ORM 模型至 `s
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/api/routers/__init__.py`](../../../src/api/routers/__init__.py) | 注册 RBAC router（`router.include_router(rbac_router, prefix="/rbac", tags=["RBAC"])`） |
+| TBD - 待验证：注册 RBAC router（确认 router 初始化文件路径） | 注册 RBAC router（`router.include_router(rbac_router, prefix="/rbac", tags=["RBAC"])`） |
 
 ### 3.3 新增能力
 
@@ -366,7 +366,7 @@ async def list_permissions(
 
 ### Step 4: 注册 RBAC router
 
-在 `src/api/routers/__init__.py` 添加：
+在 TBD - 待验证：注册 RBAC router（确认 router 初始化文件路径） 添加：
 
 ```python
 from src.api.routers import rbac
@@ -374,7 +374,7 @@ from src.api.routers import rbac
 app_router.include_router(rbac.router, prefix="/rbac", tags=["RBAC"])
 ```
 
-**完成判定**：`ruff check src/api/routers/__init__.py` → exit 0
+**完成判定**：`ruff check <target_file>` → exit 0
 
 ---
 
@@ -412,7 +412,7 @@ app_router.include_router(rbac.router, prefix="/rbac", tags=["RBAC"])
 
 ## 6. 验收
 
-- [ ] `ruff check src/services/role_service.py src/api/routers/rbac.py src/api/routers/__init__.py` → 0 errors
+- [ ] `ruff check src/services/role_service.py src/api/routers/rbac.py <target_file>` → 0 errors
 - [ ] `PYTHONPATH=src pytest tests/unit/test_role_service.py -v` → 6 passed
 - [ ] `PYTHONPATH=src pytest tests/integration/test_rbac_integration.py -v` → 6 passed
 - [ ] `PYTHONPATH=src mypy src/services/role_service.py src/api/routers/rbac.py` → 0 errors（如 mypy 配置存在）
@@ -434,7 +434,7 @@ app_router.include_router(rbac.router, prefix="/rbac", tags=["RBAC"])
 
 ```bash
 # 1. commit + PR
-git add src/services/role_service.py src/api/routers/rbac.py src/api/routers/__init__.py tests/unit/test_role_service.py tests/integration/test_rbac_integration.py
+git add src/services/role_service.py src/api/routers/rbac.py <target_file> tests/unit/test_role_service.py tests/integration/test_rbac_integration.py
 git commit -m "feat(rbac): add role and permission management API endpoints"
 git push -u origin "$(git branch --show-current)"
 gh pr create --base master --title "feat(rbac): add role and permission management API endpoints" --body "Closes #642"
@@ -455,3 +455,5 @@ gh pr create --base master --title "feat(rbac): add role and permission manageme
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | YYYY-MM-DD | 创建 | TBD |
+
+---

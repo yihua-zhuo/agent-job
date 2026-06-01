@@ -11,8 +11,28 @@ Run with:
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
+
+from db.models.tenant import TenantModel
 
 pytestmark = pytest.mark.integration
+
+
+# ── Seed tenants so FK constraints on automation_logs are satisfied ──
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_tenant(async_session, tenant_id_web: int) -> int:
+    tenant = TenantModel(id=tenant_id_web, name="Automation Integration Test Tenant", plan="free", status="active")
+    async_session.add(tenant)
+    await async_session.flush()
+    return tenant_id_web
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_tenant_2(async_session, tenant_id_2_web: int) -> int:
+    tenant = TenantModel(id=tenant_id_2_web, name="Automation Integration Test Tenant 2", plan="free", status="active")
+    async_session.add(tenant)
+    await async_session.flush()
+    return tenant_id_2_web
 
 
 class TestAutomationRulesUIIntegration:

@@ -24,7 +24,7 @@ class SmartCategorizationService:
         "hot_lead",  # 高质量线索
         "warm_lead",  # 中等质量线索
         "cold_lead",  # 低质量线索
-        " disqualified",  # 不合格线索
+        "disqualified",  # 不合格线索
     ]
 
     # RFM 分群标签

@@ -15,7 +15,7 @@
 
 ### 1.1 为什么做
 
-`AutomationRuleModel` and `AutomationLogModel` are already defined in [`src/db/models/automation.py`](../../../src/db/models/automation.py) L12-L77. However, no Alembic migration exists to create the `automation_rules` and `automation_logs` tables in PostgreSQL. Without the migration, downstream boards (#685 service, #686 router, #687 execution engine) have no persistent storage to build against. This board creates the migration, registers the models in `alembic/env.py`, and adds unit tests to protect the model contract.
+`AutomationRuleModel` and `AutomationLogModel` are already defined in TBD - 待验证：src/db/models/automation_rule.py 和 automation_log.py L12-L77. However, no Alembic migration exists to create the `automation_rules` and `automation_logs` tables in PostgreSQL. Without the migration, downstream boards (#685 service, #686 router, #687 execution engine) have no persistent storage to build against. This board creates the migration, registers the models in `alembic/env.py`, and adds unit tests to protect the model contract.
 
 ### 1.2 做完后
 
@@ -33,7 +33,7 @@
 
 - `alembic upgrade head` → `automation_rules` and `automation_logs` tables present in `alembic_dev`.
 - `alembic downgrade -1` → both tables dropped cleanly.
-- `ruff check src/db/models/automation.py` → zero warnings/errors.
+- `ruff check src/db/models/` → zero warnings/errors.
 - `PYTHONPATH=src pytest tests/unit/test_automation_models.py -v` → ≥ 6 passed (3 models × 2 cases minimum).
 
 ---
@@ -44,9 +44,9 @@
 
 ORM models exist but no migration. `alembic/env.py` already imports the models via `import db.models` (line 14), so autogenerate will pick them up.
 
-主入口：[`src/db/models/automation.py`](../../../src/db/models/automation.py) L12-L77
+主入口：TBD - 待验证：src/db/models/automation_rule.py 和 automation_log.py L12-L77
 
-```startLine:12:src/db/models/automation.py
+```startLine:12:src/db/models/automation_rule.py
 class AutomationRuleModel(Base):
     """User-defined automation rules stored in DB."""
 
@@ -282,7 +282,8 @@ from datetime import datetime, timezone
 from tests.unit.conftest import MockRow, MockResult, MockState
 
 # Directly instantiate ORM model field descriptors to verify their contract
-from src.db.models.automation import AutomationRuleModel, AutomationLogModel
+from src.db.models.automation_rule import AutomationRuleModel
+from src.db.models.automation_log import AutomationLogModel
 
 
 class TestAutomationRuleModel:
@@ -348,13 +349,13 @@ class TestAutomationLogModel:
   export PYTHONPATH=src
 
   echo "=== ruff check models ==="
-  ruff check src/db/models/automation.py
+  ruff check src/db/models/automation_rule.py src/db/models/automation_log.py
 
   echo "=== ruff check tests ==="
   ruff check tests/unit/test_automation_models.py
 
   echo "=== mypy models ==="
-  mypy src/db/models/automation.py
+  mypy src/db/models/automation_rule.py src/db/models/automation_log.py
 
   echo "=== pytest unit ==="
   PYTHONPATH=src pytest tests/unit/test_automation_models.py -v
@@ -370,9 +371,9 @@ class TestAutomationLogModel:
 
 ## 6. 验收
 
-- [ ] `ruff check src/db/models/automation.py` → zero warnings/errors
+- [ ] `ruff check src/db/models/automation_rule.py src/db/models/automation_log.py` → zero warnings/errors
 - [ ] `ruff check tests/unit/test_automation_models.py` → zero warnings/errors
-- [ ] `mypy src/db/models/automation.py` → zero errors
+- [ ] `mypy src/db/models/automation_rule.py src/db/models/automation_log.py` → zero errors
 - [ ] `PYTHONPATH=src pytest tests/unit/test_automation_models.py -v` → `6 passed` (or actual count, all passed)
 - [ ] `docker exec configs-test-db-1 psql -U test_user -d alembic_dev -c "\\dt automation_*"` shows both `automation_rules` and `automation_logs` tables after `alembic upgrade head`
 - [ ] `bash docs/dev-plan/50-automation/0684_verify.sh` → `ALL CHECKS PASSED`
@@ -419,7 +420,7 @@ git push
 
 ## 9. 参考
 
-- ORM models：[`src/db/models/automation.py`](../../../src/db/models/automation.py) L1-L77
+- ORM models：TBD - 待验证：src/db/models/automation_rule.py 和 automation_log.py L1-L77
 - Test handlers：[`tests/unit/domain_handlers/automation.py`](../../../tests/unit/domain_handlers/automation.py) L1-L101
 - Alembic env（already imports models）：[`alembic/env.py`](../../../alembic/env.py) L14
 - Example migration：[`alembic/versions/c94d682d4b03_add_ai_conversations.py`](../../../alembic/versions/c94d682d4b03_add_ai_conversations.py) L1-L59

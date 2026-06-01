@@ -131,7 +131,7 @@ N/A — 新建模块：`src/api/routers/workflow.py` 不存在。
 ## 5. 实现步骤（按顺序）
 
 ### Step 1: 创建 `src/api/routers/workflow.py`骨架
-参照 `src/api/routers/` 下现有 router 文件（如 `ticket_router.py` 或 `customer_router.py`）的格式，新建 `workflow.py`：
+参照 `src/api/routers/` 下现有 router 文件（如 `tickets.py` 或 `customers.py`）的格式，新建 `workflow.py`：
 
 ```python
 from fastapi import APIRouter, Depends
@@ -257,7 +257,7 @@ gh pr create --base master --title "feat(automation): add Workflow API router (#
 
 ## 9. 参考
 
-- 同类参考实现（existing router pattern）：[`src/api/routers/ticket_router.py`](../../../src/api/routers/ticket_router.py) — `require_auth` + `Depends(get_db)` + `WorkflowService` 调用模式参照
+- 同类参考实现（existing router pattern）：[`src/api/routers/tickets.py`](../../../src/api/routers/tickets.py) — `require_auth` + `Depends(get_db)` + `WorkflowService` 调用模式参照
 - 同类参考实现（service layer）：[`src/services/workflow_service.py`](../../../src/services/workflow_service.py) — 由 #652 提供，本板块调用其方法
 - 父 issue / 关联：#37（Automation Rules System 顶层）、#652（WorkflowService 实现）
 - 依赖 issue：#652
