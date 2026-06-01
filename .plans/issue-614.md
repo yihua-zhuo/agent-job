@@ -4,7 +4,8 @@ Now I have enough context. Let me write the implementation plan.
 
 # Implementation Plan — Issue #614
 
-## GoalCreate `src/services/chat_service.py` providing a `ChatService` class with keyword/regex intent classification (`customer_lookup | sales_summary | ticket_query | general`) and three DB query helpers (`query_customers`, `query_opportunities`, `query_tickets`) that filter by `tenant_id` and return structured dicts. This is pure service-layer infrastructure with no router changes.
+## Goal
+Create `src/services/chat_service.py` providing a `ChatService` class with keyword/regex intent classification (`customer_lookup | sales_summary | ticket_query | general`) and three DB query helpers (`query_customers`, `query_opportunities`, `query_tickets`) that filter by `tenant_id` and return ORM model instances. This is pure service-layer infrastructure with no router changes.
 
 ## Source Contract
 
@@ -62,7 +63,7 @@ Reading order followed:
 
 6. **Implement `handle_message`**  
    - Guard empty text → `{"intent": "general", "query_results": None, "error": "empty message"}`
-   - Call `classify_intent(text)`, then `match`/`if` dispatching to appropriate helper:
+   - Call `classify_intent(text)`, then if/elif dispatching to appropriate helper:
      - `customer_lookup` → `query_customers(tenant_id, keyword=text)`
      - `sales_summary` → `query_opportunities(tenant_id, keyword=text)`
      - `ticket_query` → `query_tickets(tenant_id, keyword=text)`
@@ -99,7 +100,7 @@ Reading order followed:
 ## Acceptance Criteria
 
 - `ChatService.__init__` accepts a single required `AsyncSession` argument with no default
-- `classify_intent` returns `"customer_lookup"` for messages containing `customer`/`ticket`/`deal`/`revenue`, returns `"ticket_query"` for `ticket`/`support`/`issue`/`bug`, returns `"sales_summary"` for `deal`/`opportunity`/`forecast`/`revenue`/`pipeline`, returns `"general"` when no pattern matches
+- `classify_intent` returns `"customer_lookup"` for messages containing `customer`/`customers` (not `ticket`), returns `"ticket_query"` for `ticket`/`support`/`issue`/`bug`, returns `"sales_summary"` for `deal`/`opportunity`/`forecast`/`revenue`/`pipeline`, returns `"general"` when no pattern matches
 - `classify_intent("")` and `classify_intent("   ")` raise `ValidationException`
 - `query_customers(tenant_id, keyword=None, limit=10)` returns `list[dict]` with all items having `tenant_id == tenant_id` and name/email ILIKE-matched when keyword is provided
 - `query_opportunities(tenant_id, keyword=None, limit=10)` returns `list[dict]` filtered by `tenant_id`

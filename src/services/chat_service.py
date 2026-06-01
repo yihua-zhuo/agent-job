@@ -110,7 +110,7 @@ class ChatService:
             .order_by(CustomerModel.created_at.desc())
             .limit(limit)
         )
-        return [r.to_dict() for r in result.scalars().all()]
+        return list(result.scalars().all())
 
     async def query_opportunities(
         self,
@@ -152,7 +152,7 @@ class ChatService:
             .order_by(OpportunityModel.created_at.desc())
             .limit(limit)
         )
-        return [r.to_dict() for r in result.scalars().all()]
+        return list(result.scalars().all())
 
     async def query_tickets(
         self,
@@ -196,7 +196,7 @@ class ChatService:
             .order_by(TicketModel.created_at.desc())
             .limit(limit)
         )
-        return [r.to_dict() for r in result.scalars().all()]
+        return list(result.scalars().all())
 
     async def handle_message(self, text: str, tenant_id: int) -> dict:
         """Classify a message, dispatch to the appropriate query helper, and return structured result.

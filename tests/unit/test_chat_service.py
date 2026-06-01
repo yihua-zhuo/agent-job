@@ -6,7 +6,8 @@ import pytest
 
 from pkg.errors.app_exceptions import ValidationException
 from services.chat_service import ChatService
-from tests.unit.conftest import MockResult, MockRow
+from tests.unit.conftest import MockResult, MockRow, MockState, make_mock_session
+from tests.unit.domain_handlers.customers import make_customer_handler
 
 
 # ---------------------------------------------------------------------------
@@ -87,15 +88,30 @@ def _customer_dict(
 
 
 # ---------------------------------------------------------------------------
-# Handlers — use conftest.MockResult/MockRow, read tenant_id from params dict
+# Custom handlers — SQL text pattern-matching, require tenant_id in params
 # ---------------------------------------------------------------------------
 
+
 def _make_customer_handler(tenant_filter_rows=None):
-    """Return a handler for customer SELECT queries."""
+    """Return a handler for customer SELECT queries using SQL text pattern-matching."""
 
     def handler(sql_text, params):
-        if "select" in sql_text and "from customers" in sql_text and "where id" not in sql_text:
-            tenant_id = params.get("tenant_id") or params.get("tenant_id_1") or 0
+        # Use word-boundary-aware match for COUNT to avoid matching "recycle_count"
+        if "select" in sql_text and (" from customers " in sql_text or "\nfrom customers " in sql_text or " from customers\n" in sql_text or "\nfrom customers\n" in sql_text):
+            if "count(" in sql_text:
+                tenant_id = params.get("tenant_id_1") or params.get("tenant_id")
+                if tenant_id is None:
+                    raise KeyError("tenant_id not found in params for customer COUNT query")
+                count_val = 3 if tenant_id == 1 else 7
+                return MockResult([[count_val]])
+
+            # Exclude "where id" rows (single customer lookups handled elsewhere)
+            if (" where id " in sql_text or " where id\n" in sql_text or "\nwhere id " in sql_text):
+                return None
+
+            tenant_id = params.get("tenant_id_1") or params.get("tenant_id")
+            if tenant_id is None:
+                raise KeyError("tenant_id not found in params for customer SELECT query")
             if tenant_filter_rows and tenant_id in tenant_filter_rows:
                 rows = [MockRow(r) for r in tenant_filter_rows[tenant_id].get("customers", [])]
             else:
@@ -110,11 +126,13 @@ def _make_customer_handler(tenant_filter_rows=None):
 
 
 def _make_opportunity_handler(tenant_filter_rows=None):
-    """Return a handler for opportunity SELECT queries."""
+    """Return a handler for opportunity SELECT queries using SQL text pattern-matching."""
 
     def handler(sql_text, params):
-        if "select" in sql_text and "opportunities" in sql_text:
-            tenant_id = params.get("tenant_id") or params.get("tenant_id_1") or 0
+        if "select" in sql_text and (" from opportunities " in sql_text or "\nfrom opportunities " in sql_text or " from opportunities\n" in sql_text or "\nfrom opportunities\n" in sql_text):
+            tenant_id = params.get("tenant_id_1") or params.get("tenant_id")
+            if tenant_id is None:
+                raise KeyError("tenant_id not found in params for opportunities query")
             if tenant_filter_rows and tenant_id in tenant_filter_rows:
                 rows = [MockRow(r) for r in tenant_filter_rows[tenant_id].get("opportunities", [])]
             else:
@@ -129,11 +147,13 @@ def _make_opportunity_handler(tenant_filter_rows=None):
 
 
 def _make_ticket_handler(tenant_filter_rows=None):
-    """Return a handler for ticket SELECT queries."""
+    """Return a handler for ticket SELECT queries using SQL text pattern-matching."""
 
     def handler(sql_text, params):
-        if "select" in sql_text and "tickets" in sql_text:
-            tenant_id = params.get("tenant_id") or params.get("tenant_id_1") or 0
+        if "select" in sql_text and (" from tickets " in sql_text or "\nfrom tickets " in sql_text or " from tickets\n" in sql_text or "\nfrom tickets\n" in sql_text):
+            tenant_id = params.get("tenant_id_1") or params.get("tenant_id")
+            if tenant_id is None:
+                raise KeyError("tenant_id not found in params for tickets query")
             if tenant_filter_rows and tenant_id in tenant_filter_rows:
                 rows = [MockRow(r) for r in tenant_filter_rows[tenant_id].get("tickets", [])]
             else:
@@ -148,36 +168,26 @@ def _make_ticket_handler(tenant_filter_rows=None):
 
 
 def make_chat_mock_session(tenant_filter_rows=None):
-    """Build a mock AsyncSession using conftest.MockResult/MockRow."""
-    from unittest.mock import AsyncMock, MagicMock
+    """Build a mock AsyncSession using conftest.make_mock_session + domain handlers.
 
-    session = MagicMock()
+    Uses SQL text pattern-matching (not compiled-param extraction) to route queries.
+    """
+    state = MockState()
+    # Seed opaque state for domain handlers that support it
+    state.opaque["tenant_filter_rows"] = tenant_filter_rows
 
-    async def _execute(sql, params=None):
-        sql_text = str(sql).lower().strip()
-        bound_params = {}
-        try:
-            from sqlalchemy.sql.elements import ClauseElement
-            if isinstance(sql, ClauseElement):
-                bound_params.update(getattr(sql.compile(), "params", {}) or {})
-        except Exception:
-            pass
-        bound_params.update(params or {})
-
-        return (
-            _make_customer_handler(tenant_filter_rows)(sql_text, bound_params) or
-            _make_opportunity_handler(tenant_filter_rows)(sql_text, bound_params) or
-            _make_ticket_handler(tenant_filter_rows)(sql_text, bound_params) or
-            MockResult([])
-        )
-
-    session.execute = AsyncMock(side_effect=_execute)
-    return session
+    handlers = [
+        _make_customer_handler(tenant_filter_rows),
+        _make_opportunity_handler(tenant_filter_rows),
+        _make_ticket_handler(tenant_filter_rows),
+    ]
+    return make_mock_session(handlers, state=state)
 
 
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
+
 
 @pytest.fixture
 def mock_db_session():
@@ -226,6 +236,7 @@ def seeded_session(tenant_filter_rows):
 # classify_intent tests
 # ---------------------------------------------------------------------------
 
+
 class TestClassifyIntent:
     """Tests for classify_intent()."""
 
@@ -238,6 +249,16 @@ class TestClassifyIntent:
     async def test_ticket_query_regex(self, mock_db_session):
         svc = ChatService(mock_db_session)
         assert await svc.classify_intent("I have a ticket about billing") == "ticket_query"
+
+    @pytest.mark.asyncio
+    async def test_ticket_query_only_ticket_word(self, mock_db_session):
+        """Test that 'ticket' alone classifies as ticket_query (not customer_lookup).
+
+        The customer_lookup regex checks 'customer'/'customers' only, so 'ticket'
+        alone hits the ticket_query pattern without needing the keyword fallback.
+        """
+        svc = ChatService(mock_db_session)
+        assert await svc.classify_intent("open my ticket") == "ticket_query"
 
     @pytest.mark.asyncio
     async def test_sales_summary_regex_deal(self, mock_db_session):
@@ -300,6 +321,7 @@ class TestClassifyIntent:
 # query_customers tests
 # ---------------------------------------------------------------------------
 
+
 class TestQueryCustomers:
     """Tests for query_customers()."""
 
@@ -308,24 +330,26 @@ class TestQueryCustomers:
         svc = ChatService(seeded_session)
         result = await svc.query_customers(tenant_id=1)
         assert isinstance(result, list)
-        assert all(isinstance(r, dict) for r in result)
+        # Service returns ORM model instances (MockRow in tests) with to_dict()
+        assert all(hasattr(r, "to_dict") for r in result)
 
     @pytest.mark.asyncio
     async def test_has_expected_keys(self, seeded_session):
         svc = ChatService(seeded_session)
         result = await svc.query_customers(tenant_id=1)
         for r in result:
-            assert "name" in r
-            assert "email" in r
-            assert "tenant_id" in r
+            d = r.to_dict()
+            assert "name" in d
+            assert "email" in d
+            assert "tenant_id" in d
 
     @pytest.mark.asyncio
     async def test_tenant_isolation(self, seeded_session):
         svc = ChatService(seeded_session)
         result_1 = await svc.query_customers(tenant_id=1)
         result_2 = await svc.query_customers(tenant_id=2)
-        names_1 = {r["name"] for r in result_1}
-        names_2 = {r["name"] for r in result_2}
+        names_1 = {r.to_dict()["name"] for r in result_1}
+        names_2 = {r.to_dict()["name"] for r in result_2}
         assert "Alpha" in names_1
         assert "Gamma" in names_2
         assert names_1 != names_2
@@ -365,6 +389,7 @@ class TestQueryCustomers:
 # query_opportunities tests
 # ---------------------------------------------------------------------------
 
+
 class TestQueryOpportunities:
     """Tests for query_opportunities()."""
 
@@ -373,16 +398,18 @@ class TestQueryOpportunities:
         svc = ChatService(seeded_session)
         result = await svc.query_opportunities(tenant_id=1)
         assert isinstance(result, list)
-        assert all(isinstance(r, dict) for r in result)
+        # Service returns ORM model instances (MockRow in tests) with to_dict()
+        assert all(hasattr(r, "to_dict") for r in result)
 
     @pytest.mark.asyncio
     async def test_has_expected_keys(self, seeded_session):
         svc = ChatService(seeded_session)
         result = await svc.query_opportunities(tenant_id=1)
         for r in result:
-            assert "name" in r
-            assert "stage" in r
-            assert "tenant_id" in r
+            d = r.to_dict()
+            assert "name" in d
+            assert "stage" in d
+            assert "tenant_id" in d
 
     @pytest.mark.asyncio
     async def test_with_keyword(self, seeded_session):
@@ -391,18 +418,24 @@ class TestQueryOpportunities:
         assert isinstance(result, list)
 
     @pytest.mark.asyncio
-    async def test_numeric_keyword_matches_customer_id(self, seeded_session):
-        svc = ChatService(seeded_session)
+    async def test_numeric_keyword_matches_customer_id(self, mock_db_session):
+        """Numeric keyword '1' matches opportunities with customer_id=1 by id or name."""
+        svc = ChatService(mock_db_session)
         result = await svc.query_opportunities(tenant_id=1, keyword="1")
         assert isinstance(result, list)
+        # Default mock rows: (opp_id=1, customer_id=1) and (opp_id=2, customer_id=2)
+        # Numeric '1' should include the row with customer_id=1
+        if result:
+            customer_ids = {r.to_dict()["customer_id"] for r in result}
+            assert 1 in customer_ids
 
     @pytest.mark.asyncio
     async def test_tenant_isolation(self, seeded_session):
         svc = ChatService(seeded_session)
         result_1 = await svc.query_opportunities(tenant_id=1)
         result_2 = await svc.query_opportunities(tenant_id=2)
-        names_1 = {r["name"] for r in result_1}
-        names_2 = {r["name"] for r in result_2}
+        names_1 = {r.to_dict()["name"] for r in result_1}
+        names_2 = {r.to_dict()["name"] for r in result_2}
         assert "Opp Alpha" in names_1
         assert "Opp Gamma" in names_2
         assert names_1 != names_2
@@ -430,6 +463,7 @@ class TestQueryOpportunities:
 # query_tickets tests
 # ---------------------------------------------------------------------------
 
+
 class TestQueryTickets:
     """Tests for query_tickets()."""
 
@@ -438,16 +472,18 @@ class TestQueryTickets:
         svc = ChatService(seeded_session)
         result = await svc.query_tickets(tenant_id=1)
         assert isinstance(result, list)
-        assert all(isinstance(r, dict) for r in result)
+        # Service returns ORM model instances (MockRow in tests) with to_dict()
+        assert all(hasattr(r, "to_dict") for r in result)
 
     @pytest.mark.asyncio
     async def test_has_expected_keys(self, seeded_session):
         svc = ChatService(seeded_session)
         result = await svc.query_tickets(tenant_id=1)
         for r in result:
-            assert "subject" in r
-            assert "status" in r
-            assert "tenant_id" in r
+            d = r.to_dict()
+            assert "subject" in d
+            assert "status" in d
+            assert "tenant_id" in d
 
     @pytest.mark.asyncio
     async def test_with_keyword(self, seeded_session):
@@ -466,8 +502,8 @@ class TestQueryTickets:
         svc = ChatService(seeded_session)
         result_1 = await svc.query_tickets(tenant_id=1)
         result_2 = await svc.query_tickets(tenant_id=2)
-        subjects_1 = {r["subject"] for r in result_1}
-        subjects_2 = {r["subject"] for r in result_2}
+        subjects_1 = {r.to_dict()["subject"] for r in result_1}
+        subjects_2 = {r.to_dict()["subject"] for r in result_2}
         assert "Ticket Alpha" in subjects_1
         assert "Ticket Gamma" in subjects_2
         assert subjects_1 != subjects_2
@@ -494,6 +530,7 @@ class TestQueryTickets:
 # ---------------------------------------------------------------------------
 # handle_message tests
 # ---------------------------------------------------------------------------
+
 
 class TestHandleMessage:
     """Tests for handle_message()."""
