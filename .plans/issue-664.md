@@ -18,7 +18,7 @@ Reading order followed:
 - `src/db/models/notification_log.py` — **new file** — `NotificationLogModel` ORM class mapped to `notification_logs` table
 - `alembic/versions/<new_id>_add_notification_logs.py` — **new file** — Alembic migration creating the table (auto-generated then corrected)
 - `src/db/models/__init__.py` — no changes required; `pkgutil.iter_modules` auto-discovers the new model
-- `alembic/env.py` — no changes required; `import db.models` already triggers auto-discovery via `globals()` registration
+- `alembic/env.py` — updated with explicit model imports (`NotificationPreferenceModel`, `NotificationLogModel`) for Alembic autogenerate visibility — done to ensure models appear in `Base.metadata` during migration generation
 - `tests/unit/test_notification_log_model.py` — **new file** — ORM unit tests for `to_dict()` and field definitions
 
 ## Implementation Steps
@@ -57,7 +57,7 @@ Reading order followed:
    - Confirm `op.create_index(op.f('ix_notification_logs_notification_id'), ...)` exists.
    - Confirm `created_at` uses `server_default=sa.text('now()')` (not bare `nullable=False`).
    - Confirm `sa.DateTime(timezone=True)` for `created_at` (not plain `sa.DateTime`).
-   - Confirm `down_revision` points to `c94d682d4b04` (the merge-head after report_definitions and ai_conversations). Do NOT use `c94d682d4b03` — that was the pre-merge tip; `c94d682d4b04` is the correct parent for new migrations on this branch.
+   - Confirm `down_revision` points to `52b19ee00eaf` (the merge head after report_definitions and ai_conversations). Do NOT use `c94d682d4b04` — that was a pre-merge tip; `52b19ee00eaf` is the correct parent for new migrations on this branch.
    - If autogen omitted `server_default`, add it manually: `server_default=sa.text('now()')` in the column call.
 
 6. **Verify the migration applies and rolls back cleanly**
