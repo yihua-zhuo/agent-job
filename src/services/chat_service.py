@@ -138,9 +138,13 @@ class ChatService:
         conditions = [OpportunityModel.tenant_id == tenant_id]
         if keyword:
             escaped = _escape_like(keyword)
-            conditions.append(OpportunityModel.name.ilike(f"%{escaped}%", escape="\\"))
+            name_condition = OpportunityModel.name.ilike(f"%{escaped}%", escape="\\")
             if keyword.isdigit():
-                conditions.append(OpportunityModel.customer_id == int(keyword))
+                conditions.append(
+                    or_(name_condition, OpportunityModel.customer_id == int(keyword))
+                )
+            else:
+                conditions.append(name_condition)
 
         result = await self.session.execute(
             select(OpportunityModel)

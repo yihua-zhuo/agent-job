@@ -18,7 +18,7 @@ Reading order followed:
 ## Affected Files
 
 - `src/services/chat_service.py` — **new** — `ChatService` with `classify_intent`, `query_customers`, `query_opportunities`, `query_tickets`, and `handle_message`
-- `tests/unit/test_chat_service.py` — **new** — unit tests covering all 4 intent paths, all3 helpers, and error/edge cases
+- `tests/unit/test_chat_service.py` — **new** — unit tests covering all 4 intent paths, all 3 helpers, and error/edge cases
 - `src/db/models/customer.py` — read-only (ORM model the service queries)
 - `src/db/models/opportunity.py` — read-only (ORM model the service queries)
 - `src/db/models/ticket.py` — read-only (ORM model the service queries)
@@ -69,7 +69,9 @@ Reading order followed:
      - `general` → no DB query
    - Catch `NotFoundException` / `ValidationException`, set `error` str
    - Return `{"intent": intent, "query_results": results, "error": error}`
-   - **Verify**: `ruff check src/services/chat_service.py && mypy src/services/chat_service.py` → 0 errors each7. **Create `tests/unit/test_chat_service.py`**   - Build a `mock_db_session` fixture: use `MockState` + `make_mock_session` with handlers for `customers`, `opportunities`, and `tickets` from `tests/unit/domain_handlers/`
+   - **Verify**: `ruff check src/services/chat_service.py && mypy src/services/chat_service.py` → 0 errors each
+
+7. **Create `tests/unit/test_chat_service.py`**   - Build a `mock_db_session` fixture: use `MockState` + `make_mock_session` with handlers for `customers`, `opportunities`, and `tickets` from `tests/unit/domain_handlers/`
    - Instantiate `ChatService(mock_db_session)` in each test
    - Test intent classification: one test per intent (regex hit), one for keyword fallback (longest-match), one for empty text (`ValidationException`)
    - Test each helper: success with keyword, success without keyword, `limit` validation error, tenant isolation
@@ -104,5 +106,5 @@ Reading order followed:
 - `query_tickets(tenant_id, keyword=None, status=None, limit=10)` returns `list[dict]` filtered by `tenant_id` and optionally by `status`
 - All three helpers raise `ValidationException` when `limit <= 0 or limit > 200`
 - `handle_message(text, tenant_id)` returns `dict` with keys `intent`, `query_results`, `error`
-- `ruff ruff check src/services/chat_service.py` and `mypy src/services/chat_service.py` both pass with0 errors
+- `ruff check src/services/chat_service.py` and `mypy src/services/chat_service.py` both pass with 0 errors
 - `PYTHONPATH=src pytest tests/unit/test_chat_service.py -v` runs ≥ 8 passed tests
