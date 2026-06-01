@@ -77,7 +77,7 @@ class ChatService:
         tenant_id: int,
         keyword: str | None = None,
         limit: int = 10,
-    ) -> list[dict]:
+    ) -> list[CustomerModel]:
         """Search customers by name/email within a tenant.
 
         Args:
@@ -86,7 +86,7 @@ class ChatService:
             limit: Maximum rows to return (1–200).
 
         Returns:
-            List of customer dicts ordered by created_at descending.
+            List of CustomerModel instances ordered by created_at descending.
 
         Raises:
             ValidationException: If limit is out of range.
@@ -110,14 +110,14 @@ class ChatService:
             .order_by(CustomerModel.created_at.desc())
             .limit(limit)
         )
-        return list(result.scalars().all())
+        return [r.to_dict() for r in result.scalars().all()]
 
     async def query_opportunities(
         self,
         tenant_id: int,
         keyword: str | None = None,
         limit: int = 10,
-    ) -> list[dict]:
+    ) -> list[OpportunityModel]:
         """Search opportunities by name (and numeric customer_id) within a tenant.
 
         Args:
@@ -127,7 +127,7 @@ class ChatService:
             limit: Maximum rows to return (1–200).
 
         Returns:
-            List of opportunity dicts ordered by created_at descending.
+            List of OpportunityModel instances ordered by created_at descending.
 
         Raises:
             ValidationException: If limit is out of range.
@@ -152,7 +152,7 @@ class ChatService:
             .order_by(OpportunityModel.created_at.desc())
             .limit(limit)
         )
-        return list(result.scalars().all())
+        return [r.to_dict() for r in result.scalars().all()]
 
     async def query_tickets(
         self,
@@ -160,7 +160,7 @@ class ChatService:
         keyword: str | None = None,
         status: str | None = None,
         limit: int = 10,
-    ) -> list[dict]:
+    ) -> list[TicketModel]:
         """Search tickets by subject/description (and optional status) within a tenant.
 
         Args:
@@ -170,7 +170,7 @@ class ChatService:
             limit: Maximum rows to return (1–200).
 
         Returns:
-            List of ticket dicts ordered by created_at descending.
+            List of TicketModel instances ordered by created_at descending.
 
         Raises:
             ValidationException: If limit is out of range.
@@ -196,7 +196,7 @@ class ChatService:
             .order_by(TicketModel.created_at.desc())
             .limit(limit)
         )
-        return list(result.scalars().all())
+        return [r.to_dict() for r in result.scalars().all()]
 
     async def handle_message(self, text: str, tenant_id: int) -> dict:
         """Classify a message, dispatch to the appropriate query helper, and return structured result.

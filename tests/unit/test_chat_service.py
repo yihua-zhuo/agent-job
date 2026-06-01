@@ -7,7 +7,6 @@ import pytest
 from pkg.errors.app_exceptions import ValidationException
 from services.chat_service import ChatService
 from tests.unit.conftest import MockResult, MockRow, MockState, make_mock_session
-from tests.unit.domain_handlers.customers import make_customer_handler
 
 
 # ---------------------------------------------------------------------------
@@ -330,26 +329,25 @@ class TestQueryCustomers:
         svc = ChatService(seeded_session)
         result = await svc.query_customers(tenant_id=1)
         assert isinstance(result, list)
-        # Service returns ORM model instances (MockRow in tests) with to_dict()
-        assert all(hasattr(r, "to_dict") for r in result)
+        assert all(isinstance(r, dict) for r in result)
 
     @pytest.mark.asyncio
     async def test_has_expected_keys(self, seeded_session):
         svc = ChatService(seeded_session)
         result = await svc.query_customers(tenant_id=1)
         for r in result:
-            d = r.to_dict()
-            assert "name" in d
-            assert "email" in d
-            assert "tenant_id" in d
+            assert isinstance(r, dict)
+            assert "name" in r
+            assert "email" in r
+            assert "tenant_id" in r
 
     @pytest.mark.asyncio
     async def test_tenant_isolation(self, seeded_session):
         svc = ChatService(seeded_session)
         result_1 = await svc.query_customers(tenant_id=1)
         result_2 = await svc.query_customers(tenant_id=2)
-        names_1 = {r.to_dict()["name"] for r in result_1}
-        names_2 = {r.to_dict()["name"] for r in result_2}
+        names_1 = {r["name"] for r in result_1}
+        names_2 = {r["name"] for r in result_2}
         assert "Alpha" in names_1
         assert "Gamma" in names_2
         assert names_1 != names_2
@@ -398,18 +396,17 @@ class TestQueryOpportunities:
         svc = ChatService(seeded_session)
         result = await svc.query_opportunities(tenant_id=1)
         assert isinstance(result, list)
-        # Service returns ORM model instances (MockRow in tests) with to_dict()
-        assert all(hasattr(r, "to_dict") for r in result)
+        assert all(isinstance(r, dict) for r in result)
 
     @pytest.mark.asyncio
     async def test_has_expected_keys(self, seeded_session):
         svc = ChatService(seeded_session)
         result = await svc.query_opportunities(tenant_id=1)
         for r in result:
-            d = r.to_dict()
-            assert "name" in d
-            assert "stage" in d
-            assert "tenant_id" in d
+            assert isinstance(r, dict)
+            assert "name" in r
+            assert "stage" in r
+            assert "tenant_id" in r
 
     @pytest.mark.asyncio
     async def test_with_keyword(self, seeded_session):
@@ -425,17 +422,17 @@ class TestQueryOpportunities:
         assert isinstance(result, list)
         # Default mock rows: (opp_id=1, customer_id=1) and (opp_id=2, customer_id=2)
         # Numeric '1' should include the row with customer_id=1
-        if result:
-            customer_ids = {r.to_dict()["customer_id"] for r in result}
-            assert 1 in customer_ids
+        assert len(result) >= 1, "numeric keyword should match at least one opportunity"
+        customer_ids = {r["customer_id"] for r in result}
+        assert 1 in customer_ids
 
     @pytest.mark.asyncio
     async def test_tenant_isolation(self, seeded_session):
         svc = ChatService(seeded_session)
         result_1 = await svc.query_opportunities(tenant_id=1)
         result_2 = await svc.query_opportunities(tenant_id=2)
-        names_1 = {r.to_dict()["name"] for r in result_1}
-        names_2 = {r.to_dict()["name"] for r in result_2}
+        names_1 = {r["name"] for r in result_1}
+        names_2 = {r["name"] for r in result_2}
         assert "Opp Alpha" in names_1
         assert "Opp Gamma" in names_2
         assert names_1 != names_2
@@ -472,18 +469,17 @@ class TestQueryTickets:
         svc = ChatService(seeded_session)
         result = await svc.query_tickets(tenant_id=1)
         assert isinstance(result, list)
-        # Service returns ORM model instances (MockRow in tests) with to_dict()
-        assert all(hasattr(r, "to_dict") for r in result)
+        assert all(isinstance(r, dict) for r in result)
 
     @pytest.mark.asyncio
     async def test_has_expected_keys(self, seeded_session):
         svc = ChatService(seeded_session)
         result = await svc.query_tickets(tenant_id=1)
         for r in result:
-            d = r.to_dict()
-            assert "subject" in d
-            assert "status" in d
-            assert "tenant_id" in d
+            assert isinstance(r, dict)
+            assert "subject" in r
+            assert "status" in r
+            assert "tenant_id" in r
 
     @pytest.mark.asyncio
     async def test_with_keyword(self, seeded_session):
@@ -502,8 +498,8 @@ class TestQueryTickets:
         svc = ChatService(seeded_session)
         result_1 = await svc.query_tickets(tenant_id=1)
         result_2 = await svc.query_tickets(tenant_id=2)
-        subjects_1 = {r.to_dict()["subject"] for r in result_1}
-        subjects_2 = {r.to_dict()["subject"] for r in result_2}
+        subjects_1 = {r["subject"] for r in result_1}
+        subjects_2 = {r["subject"] for r in result_2}
         assert "Ticket Alpha" in subjects_1
         assert "Ticket Gamma" in subjects_2
         assert subjects_1 != subjects_2
