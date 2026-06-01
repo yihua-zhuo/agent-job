@@ -14,6 +14,9 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 import db.models  # noqa: F401 - imports all model modules for Base.metadata
 from alembic import context
 from db.base import Base
+from db.models.notification_preference import (
+    NotificationPreferenceModel,  # noqa: F401 - explicit import for autogenerate
+)
 
 config = context.config
 
