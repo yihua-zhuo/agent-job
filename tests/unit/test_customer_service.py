@@ -30,16 +30,15 @@ def _make_mock_customer_repo():
 
 @pytest.fixture
 def mock_db_session():
+    """SQL mock session for tests that need seeded DB state via domain handlers.
+
+    Only used by TestSearchCustomers. Most tests pass mock_customer_repo
+    directly to CustomerService and need no SQL mock.
+    """
     from tests.unit.conftest import MockState, make_mock_session
-    from tests.unit.domain_handlers.counts import make_count_handler
-    from tests.unit.domain_handlers.customers import make_customer_handler, make_customer_repository_handler
 
     state = MockState()
-    return make_mock_session([
-        make_customer_handler(state),
-        make_customer_repository_handler(state),
-        make_count_handler(state),
-    ])
+    return make_mock_session(state=state)
 
 
 @pytest.fixture
