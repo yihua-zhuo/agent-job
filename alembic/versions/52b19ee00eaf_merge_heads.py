@@ -1,8 +1,18 @@
-"""Merge nine parallel heads into one.
+"""Merge 10 heads produced by parallel migration work.
+
+Merges the following revisions (all non-no-op, with real schema operations):
+  a52e1317da90  — add import_export_jobs
+  63274a8b98b3c — add webhook tables
+  e646948c549a  — create automation_rules and automation_logs
+  add_agent_tasks_001 — add_agent_tasks
+  afa7c3f333bd  — add_sent_at_to_campaigns
+  c94d682d4b04  — add_report_definitions
+  db63fcd03ab9  — add_conversations_and_messages
+  e1f2a3b4c5d6  — create_opportunity_activities
+  f18b406b982a  — create_customer_enrichments
 
 Revision ID: 52b19ee00eaf
-Revises: 7b1a2c3d4e5f
-Create Date: 2026-05-30 11:03:03.754025
+down_revision: str | Sequence[str] | None = '82ecf4a34e34'
 
 Converges all nine branches that descend from merge_heads_63274_addcp001
 into a single linear head.  All structural DDL from the nine branches is
@@ -20,9 +30,7 @@ The nine branches are:
 - e1f2a3b4c5d6: opportunity_activities
 - f18b406b982a: customer_enrichments
 
-downgrade() is intentionally empty: the tables created by these branches
-are dropped by the downgrade() of merge_heads_63274_addcp001, which is
-this migration's single parent.
+downgrade() drops all 10 tables created by upgrade(), in reverse dependency order.
 """
 
 from collections.abc import Sequence
@@ -34,7 +42,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "52b19ee00eaf"
-down_revision: str | Sequence[str] | None = "7b1a2c3d4e5f"
+down_revision: str | Sequence[str] | None = "82ecf4a34e34"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
@@ -168,7 +176,7 @@ def upgrade() -> None:
     # (table not present — should not occur in normal upgrade) are caught.
     # syntax_error and other SQL failures indicate a real problem and must not
     # be silently suppressed.
-    # NOTE: ix_automation_logs_tenant_id is already created at line 148.
+    # NOTE: ix_automation_logs_tenant_id is already created at line 178.
     op.execute(
         sa.text(
             "DO $$ BEGIN "

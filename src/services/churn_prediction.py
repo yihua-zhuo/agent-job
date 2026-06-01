@@ -302,9 +302,7 @@ class ChurnPredictionService:
                 )
             )
         if data["revenue_trend"] < -0.2:
-            actions.append(
-                ChurnAction(action="提供升级方案", priority="medium", reason="收入呈下降趋势")
-            )
+            actions.append(ChurnAction(action="提供升级方案", priority="medium", reason="收入呈下降趋势"))
         if data["support_tickets_count"] > 5:
             actions.append(
                 ChurnAction(
@@ -315,8 +313,6 @@ class ChurnPredictionService:
             )
 
         if not actions:
-            actions.append(
-                ChurnAction(action="定期维护关系", priority="low", reason="客户状态正常，保持常规维护")
-            )
+            actions.append(ChurnAction(action="定期维护关系", priority="low", reason="客户状态正常，保持常规维护"))
 
         return actions

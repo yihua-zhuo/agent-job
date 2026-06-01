@@ -132,6 +132,7 @@ def reset_engine(database_url: str):
 # FastAPI dependency — use this in route handlers via Depends(get_session)
 # ---------------------------------------------------------------------------
 
+
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency that provides an async SQLAlchemy session.
 

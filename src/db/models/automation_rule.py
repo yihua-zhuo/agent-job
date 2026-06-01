@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, func, text
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -15,20 +15,35 @@ class AutomationRuleModel(Base):
     __tablename__ = "automation_rules"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), server_default=text("0"), default=0, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        # 0-sentinel for system-owned rows — no FK constraint (constraint requires
+        # tenant_id > 0; system rows carry tenant_id=0 and bypass it via server_default).
+        # System-row creation is gated at the service/application layer; never insert
+        # a tenant_id=0 row without explicit service-level authorization.
+        ForeignKey("tenants.id"),
+        server_default=text("0"),
+        default=0,
+        nullable=False,
+        index=True,
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(512), nullable=True)
     trigger_event: Mapped[str] = mapped_column(String(100), nullable=False, index=True)
-    conditions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
-    actions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    conditions: Mapped[list[dict]] = mapped_column(JSONB, default=[], nullable=False)
+    actions: Mapped[list[dict]] = mapped_column(JSONB, default=[], nullable=False)
     enabled: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
-    created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+    created_by: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        default=0,
+        nullable=False,
+        index=True,
     )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
+
+    __table_args__ = (Index("ix_automation_rules_tenant_trigger", "tenant_id", "trigger_event"),)
 
     def to_dict(self) -> dict:
         return {
@@ -37,8 +52,8 @@ class AutomationRuleModel(Base):
             "name": self.name,
             "description": self.description,
             "trigger_event": self.trigger_event,
-            "conditions": self.conditions or [],
-            "actions": self.actions or [],
+            "conditions": self.conditions if self.conditions is not None else [],
+            "actions": self.actions if self.actions is not None else [],
             "enabled": self.enabled,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,

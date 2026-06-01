@@ -179,7 +179,25 @@ class CopilotService:
         return messages, total
 
     def get_tool_registry(self) -> dict[str, dict]:
-        """Return the copilot tool registry dict."""
+        """Return the copilot tool registry dict.
+
+        Each tool descriptor has the shape::
+
+            {
+                "description": str,
+                "handler": Callable,  # async (tenant_id: int, customer_id: int) -> ...
+                "parameters": dict,   # OpenAI function-call schema
+                "deferred": bool,
+            }
+
+        All handler callables accept ``(tenant_id: int, customer_id: int)`` and
+        return the tool result.  Callers MUST pass both arguments.
+
+        .. note::
+            The registry captures ``self.session`` in async closures.  The
+            registry MUST NOT outlive the service instance — the session is
+            scoped to a single request or test case.
+        """
 
         async def get_customer_handler(tenant_id: int, customer_id: int):
             return await self._get_customer(tenant_id, customer_id)
@@ -192,37 +210,44 @@ class CopilotService:
 
         async def get_churn_risk_handler(tenant_id: int, customer_id: int):
             from services.churn_prediction import ChurnPredictionService
+
             return await ChurnPredictionService(self.session).get_churn_prediction(customer_id, tenant_id)
 
         return {
             "get_customer": {
                 "description": "Retrieve a customer record by customer_id",
                 "handler": get_customer_handler,
+                "parameters": {"tenant_id": "int", "customer_id": "int"},
                 "deferred": False,
             },
             "get_opportunities": {
                 "description": "List all opportunities for a customer",
                 "handler": get_opportunities_handler,
+                "parameters": {"tenant_id": "int", "customer_id": "int"},
                 "deferred": False,
             },
             "get_recent_activities": {
                 "description": "List recent activities for a customer",
                 "handler": get_recent_activities_handler,
+                "parameters": {"tenant_id": "int", "customer_id": "int"},
                 "deferred": False,
             },
             "get_churn_risk": {
                 "description": "Get churn risk prediction for a customer",
                 "handler": get_churn_risk_handler,
+                "parameters": {"tenant_id": "int", "customer_id": "int"},
                 "deferred": False,
             },
             "send_email": {
                 "description": "TBD — deferred: email sending tool not yet implemented",
                 "handler": None,
+                "parameters": {},
                 "deferred": True,
             },
             "create_task": {
                 "description": "TBD — deferred: task creation tool not yet implemented",
                 "handler": None,
+                "parameters": {},
                 "deferred": True,
             },
         }

@@ -70,9 +70,7 @@ class SLAService:
             TicketModel.response_deadline.is_not(None),
             TicketModel.response_deadline < now,
         )
-        breached_count = await self._session.scalar(
-            select(func.count(TicketModel.id)).where(breached_filter)
-        )
+        breached_count = await self._session.scalar(select(func.count(TicketModel.id)).where(breached_filter))
 
         # at_risk
         at_risk_filter = and_(
@@ -82,14 +80,10 @@ class SLAService:
             TicketModel.response_deadline >= now,
             TicketModel.response_deadline <= at_risk_threshold,
         )
-        at_risk_count = await self._session.scalar(
-            select(func.count(TicketModel.id)).where(at_risk_filter)
-        )
+        at_risk_count = await self._session.scalar(select(func.count(TicketModel.id)).where(at_risk_filter))
 
         # total
-        total_count = await self._session.scalar(
-            select(func.count(TicketModel.id)).where(base_filter)
-        )
+        total_count = await self._session.scalar(select(func.count(TicketModel.id)).where(base_filter))
 
         on_track_count = (total_count or 0) - (breached_count or 0) - (at_risk_count or 0)
 

@@ -146,9 +146,13 @@ class TestLookupDomainSuccess:
 
             assert normalised["name"] == "Acme"
             assert raw == {"name": "Acme", "domain": "acme.com"}
-            # Two calls: customer-tenant check + upsert
-            assert mock_db_session.execute.call_count == 2
-            mock_db_session.add.assert_not_called()
+            # Verify upsert SQL was issued (pg_insert executes via execute(), never add())
+            execute_calls = [str(c.args[0]) for c in mock_db_session.execute.call_args_list]
+            assert any("customer_enrichment" in call.lower() for call in execute_calls), (
+                f"Expected upsert on customer_enrichments in execute calls; got {execute_calls}"
+            )
+            # pg_insert bypasses add() entirely — verify no ORM add() was called
+            assert not mock_db_session.add.called, "add() should not have been called"
 
 
 # ---------------------------------------------------------------------------

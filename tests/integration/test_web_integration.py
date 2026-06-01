@@ -30,6 +30,28 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.integration
 
 
+# ── Seed system tenant (id=0) so refresh_token FK constraint is satisfied ──
+@pytest.fixture(scope="function", autouse=True)
+def _seed_system_tenant(db_schema):
+    """Create the system tenant (id=0) that newly-registered users reference.
+
+    When a user registers via the public /auth/register endpoint, they are
+    assigned tenant_id=0 in the users table.  The refresh_tokens table has a FK
+    on tenant_id referencing tenants.id, so the system tenant must exist before
+    the login step can insert a refresh token.
+
+    Runs after db_schema to re-seed after TRUNCATE CASCADE between tests.
+    """
+    from sqlalchemy import text
+
+    from tests.integration.conftest import _get_test_sync_engine
+
+    sync_engine = _get_test_sync_engine()
+    with sync_engine.connect() as conn:
+        conn.execute(text("INSERT INTO tenants (id, name, slug, plan, status) VALUES (0, 'System', 'system', 'free', 'active') ON CONFLICT DO NOTHING"))
+        conn.commit()
+
+
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  Health & docs endpoints
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -285,7 +307,7 @@ class TestUserEndpoints:
         )
         assert resp2.status_code in (400, 409), f"Body: {resp2.text}"
 
-    async def test_login_user(self, api_client: AsyncClient, tenant_id_web: int):
+    async def test_login_user(self, api_client: AsyncClient, tenant_id_web: int, _seed_tenant):
         suffix = uuid.uuid4().hex[:6]
         await api_client.post(
             "/api/v1/auth/register",

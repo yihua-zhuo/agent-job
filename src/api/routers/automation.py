@@ -185,6 +185,7 @@ async def trigger_event(
         tenant_id=ctx.tenant_id,
         trigger_event=body.event_type,
         context=body.context,
+        executed_by=ctx.user_id,
     )
     return {"success": True, "data": results}
 

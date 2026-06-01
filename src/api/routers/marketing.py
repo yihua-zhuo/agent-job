@@ -3,6 +3,7 @@
 Services raise AppException subclasses on errors (caught by global handler in main.py).
 Router wraps successful returns in {"success": True, "data": ...} dicts.
 """
+
 import math
 
 from fastapi import APIRouter, Depends, Query
