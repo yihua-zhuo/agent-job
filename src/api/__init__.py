@@ -8,12 +8,15 @@ this package discovers it without requiring a central import update.
 from __future__ import annotations
 
 import importlib
+import logging
 import pkgutil
 from collections.abc import Iterator
 
 from fastapi import APIRouter
 
 from api import routers
+
+_logger = logging.getLogger(__name__)
 
 
 def iter_routers() -> Iterator[APIRouter]:
@@ -31,8 +34,17 @@ def iter_routers() -> Iterator[APIRouter]:
         module = importlib.import_module(info.name)
         for name in sorted(dir(module)):
             value = getattr(module, name, None)
-            if isinstance(value, APIRouter) and (name == "router" or name.endswith("_router")):
+            if not isinstance(value, APIRouter):
+                continue
+            if name == "router" or name.endswith("_router"):
                 yield value
+            else:
+                _logger.debug(
+                    "Skipping non-conforming APIRouter %r in %s; "
+                    "rename to 'router' or '_router' suffix to include it.",
+                    name,
+                    info.name,
+                )
 
 
 __all__ = ["iter_routers"]

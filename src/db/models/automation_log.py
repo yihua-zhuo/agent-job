@@ -41,9 +41,9 @@ class AutomationLogModel(Base):
     actions_executed: Mapped[list] = mapped_column(JSONB, default=[], nullable=False)
     status: Mapped[str] = mapped_column(String(50), server_default="success", nullable=False)
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
-    executed_by: Mapped[int] = mapped_column(
+    executed_by: Mapped[int | None] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     executed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

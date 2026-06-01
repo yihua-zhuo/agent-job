@@ -11,12 +11,6 @@ Merges the following revisions (all non-no-op, with real schema operations):
   e1f2a3b4c5d6  — create_opportunity_activities
   f18b406b982a  — create_customer_enrichments
 
-Each merged revision contains its own upgrade/downgrade operations; this
-merge revision is a head-marker only and does not re-state those ops.
-The down_revision tuple lists all merged heads; downgrade is a no-op
-because there is no single linear revision to step back to — each
-constituent migration must be downgraded individually.
-
 Revision ID: 52b19ee00eaf
 down_revision: str | Sequence[str] | None = '82ecf4a34e34'
 
@@ -36,9 +30,7 @@ The nine branches are:
 - e1f2a3b4c5d6: opportunity_activities
 - f18b406b982a: customer_enrichments
 
-downgrade() is intentionally empty: the tables created by these branches
-are dropped by the downgrade() of merge_heads_63274_addcp001, which is
-this migration's single parent.
+downgrade() drops all 10 tables created by upgrade(), in reverse dependency order.
 """
 
 from collections.abc import Sequence

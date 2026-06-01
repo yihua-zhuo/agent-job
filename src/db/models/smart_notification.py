@@ -3,7 +3,7 @@
 import enum
 from datetime import datetime
 
-from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func
+from sqlalchemy import JSON, DateTime, ForeignKey, Integer, String, func, text
 from sqlalchemy import Enum as SQLEnum
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -43,15 +43,21 @@ class SmartNotificationModel(Base):
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     summarized_content: Mapped[str] = mapped_column(String(1024), nullable=False)
     priority: Mapped[Priority] = mapped_column(
-        SQLEnum(Priority, name="smart_notification_priority_v1", native_enum=True), nullable=False
+        SQLEnum(Priority, name="smart_notification_priority_v1", native_enum=True),
+        nullable=False,
+        server_default=text("'urgent'"),
     )
     channel: Mapped[Channel] = mapped_column(
-        SQLEnum(Channel, name="smart_notification_channel_v1", native_enum=True), nullable=False
+        SQLEnum(Channel, name="smart_notification_channel_v1", native_enum=True),
+        nullable=False,
+        server_default=text("'email'"),
     )
     timing: Mapped[Timing] = mapped_column(
-        SQLEnum(Timing, name="smart_notification_timing_v1", native_enum=True), nullable=False
+        SQLEnum(Timing, name="smart_notification_timing_v1", native_enum=True),
+        nullable=False,
+        server_default=text("'immediate'"),
     )
-    recipient_filter: Mapped[dict | None] = mapped_column(JSON, nullable=True)
+    recipient_filter: Mapped[dict | None] = mapped_column(JSON, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     def to_dict(self) -> dict:

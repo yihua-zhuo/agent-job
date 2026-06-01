@@ -74,7 +74,7 @@ class AIMessageModel(Base):
         index=True,  # indexed via composite ix_ai_messages_tenant_conv; explicit index redundant but harmless
     )
     tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    role: Mapped[MessageRole] = mapped_column(String(20), nullable=False)  # "user" | "assistant"
+    role: Mapped[MessageRole] = mapped_column(String(20), nullable=False)  # "user" | "assistant"; StrEnum enforces the value set at the service/ORM layer
     content: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
