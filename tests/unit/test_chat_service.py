@@ -6,11 +6,42 @@ import pytest
 
 from pkg.errors.app_exceptions import ValidationException
 from services.chat_service import ChatService
-from tests.unit.conftest import MockResult, MockRow, MockState, make_mock_session
+from tests.unit.conftest import MockResult, MockState, make_mock_session
 
 
 # ---------------------------------------------------------------------------
-# Row factories — produce dicts that MockRow accepts
+# ORM-like mock objects — used in place of MockRow so that r.to_dict()
+# (called by chat_service on scalars) returns a dict rather than crashing.
+# ---------------------------------------------------------------------------
+
+
+class _MockChatEntity(dict):
+    """Dict subclass that quacks like an ORM model for ChatService tests.
+
+    .to_dict() returns a plain dict (copy of stored fields), matching what
+    CustomerModel / OpportunityModel / TicketModel return.
+    """
+
+    __slots__ = ()
+
+    def to_dict(self) -> dict:
+        return dict(self)
+
+
+class _MockCustomer(_MockChatEntity):
+    pass
+
+
+class _MockOpportunity(_MockChatEntity):
+    pass
+
+
+class _MockTicket(_MockChatEntity):
+    pass
+
+
+# ---------------------------------------------------------------------------
+# Row factories — produce dicts accepted by the ORM-like mock classes above
 # ---------------------------------------------------------------------------
 
 
@@ -20,11 +51,14 @@ def _opportunity_dict(
     name: str = "Opportunity A",
     customer_id: int = 1,
 ) -> dict:
+    # NOTE: _opportunity_dict uses field 'name' to match OpportunityModel.
+    # The opportunity_handler in tests/unit/domain_handlers/sales.py uses
+    # 'title' instead — a field-name mismatch with the ORM model.
     return {
         "id": opp_id,
         "tenant_id": tenant_id,
         "customer_id": customer_id,
-        "name": name,
+        "name": name,  # aligns with OpportunityModel.name
         "stage": "qualification",
         "amount": "1000.00",
         "probability": 20,
@@ -97,44 +131,60 @@ def _make_chat_handler(tenant_filter_rows=None):
     Uses table-name detection (not exact SQL text matching) to keep routing stable
     across minor ORM query-form changes. Falls back to default fixtures when no
     tenant-specific seed data is provided.
+
+    Bound-param naming contract: ORM may emit tenant_id as "tenant_id",
+    "tenant_id_1", or "tenant_id_2" depending on how many aliases are in the
+    query. _get_tenant_id checks all three; if all are None it silently falls
+    back to tenant 1 — print a warning to catch naming mismatches in dev.
     """
 
     def _get_tenant_id(params):
         """Extract tenant_id from params, handling ORM-generated numbered variants."""
-        return params.get("tenant_id") or params.get("tenant_id_1") or params.get("tenant_id_2")
+        val = params.get("tenant_id") or params.get("tenant_id_1") or params.get("tenant_id_2")
+        if val is None:
+            # Warn early when tenant_id binding fails — most likely cause is
+            # SQLAlchemy emitting a differently-named bind (e.g. "p_tenant_id").
+            import warnings
+            warnings.warn(f"[chat_service test] tenant_id is None in params {list(params.keys())}")
+        return val or 1
 
     def handler(sql_text, params):
         if "from customers" in sql_text:
             tenant_id = _get_tenant_id(params)
             if tenant_filter_rows and tenant_id in tenant_filter_rows:
-                rows = [MockRow(r) for r in tenant_filter_rows[tenant_id].get("customers", [])]
+                rows = [_MockCustomer(r) for r in tenant_filter_rows[tenant_id].get("customers", [])]
             else:
                 rows = [
-                    MockRow(_customer_dict(tenant_id=tenant_id or 1, customer_id=1, name="Customer A", email="a@test.com")),
-                    MockRow(_customer_dict(tenant_id=tenant_id or 1, customer_id=2, name="Customer B", email="b@test.com")),
+                    _MockCustomer(_customer_dict(tenant_id=tenant_id, customer_id=1, name="Customer A", email="a@test.com")),
+                    _MockCustomer(_customer_dict(tenant_id=tenant_id, customer_id=2, name="Customer B", email="b@test.com")),
                 ]
             return MockResult(rows)
 
         if "from opportunities" in sql_text:
             tenant_id = _get_tenant_id(params)
             if tenant_filter_rows and tenant_id in tenant_filter_rows:
-                rows = [MockRow(r) for r in tenant_filter_rows[tenant_id].get("opportunities", [])]
+                rows = [_MockOpportunity(r) for r in tenant_filter_rows[tenant_id].get("opportunities", [])]
             else:
                 rows = [
-                    MockRow(_opportunity_dict(tenant_id=tenant_id or 1, opp_id=1, name="Opportunity A", customer_id=1)),
-                    MockRow(_opportunity_dict(tenant_id=tenant_id or 1, opp_id=2, name="Opportunity B", customer_id=2)),
+                    _MockOpportunity(_opportunity_dict(tenant_id=tenant_id, opp_id=1, name="Opportunity A", customer_id=1)),
+                    _MockOpportunity(_opportunity_dict(tenant_id=tenant_id, opp_id=2, name="Opportunity B", customer_id=2)),
                 ]
             return MockResult(rows)
 
         if "from tickets" in sql_text:
             tenant_id = _get_tenant_id(params)
             if tenant_filter_rows and tenant_id in tenant_filter_rows:
-                rows = [MockRow(r) for r in tenant_filter_rows[tenant_id].get("tickets", [])]
+                rows = [_MockTicket(r) for r in tenant_filter_rows[tenant_id].get("tickets", [])]
             else:
                 rows = [
-                    MockRow(_ticket_dict(tenant_id=tenant_id or 1, ticket_id=1, subject="Issue A", status="open")),
-                    MockRow(_ticket_dict(tenant_id=tenant_id or 1, ticket_id=2, subject="Issue B", status="resolved")),
+                    _MockTicket(_ticket_dict(tenant_id=tenant_id, ticket_id=1, subject="Issue A", status="open")),
+                    _MockTicket(_ticket_dict(tenant_id=tenant_id, ticket_id=2, subject="Issue B", status="resolved")),
                 ]
+            # Respect status filter from params — params["status_1"] (ORM-qualified)
+            # is present when a status condition is in the WHERE clause.
+            if params.get("status") or params.get("status_1"):
+                status_filter = params.get("status") or params.get("status_1")
+                rows = [r for r in rows if r["status"] == status_filter]
             return MockResult(rows)
 
         return None
@@ -328,6 +378,8 @@ class TestQueryCustomers:
         svc = ChatService(seeded_session)
         result = await svc.query_customers(tenant_id=1, keyword="Alpha")
         assert isinstance(result, list)
+        names = {r["name"] for r in result}
+        assert "Alpha" in names, f"keyword='Alpha' should match customer 'Alpha', got names={names}"
 
     @pytest.mark.asyncio
     async def test_limit_validation_zero(self, mock_db_session):
@@ -382,8 +434,10 @@ class TestQueryOpportunities:
     @pytest.mark.asyncio
     async def test_with_keyword(self, seeded_session):
         svc = ChatService(seeded_session)
-        result = await svc.query_opportunities(tenant_id=1, keyword="Opp")
+        result = await svc.query_opportunities(tenant_id=1, keyword="Alpha")
         assert isinstance(result, list)
+        names = {r["name"] for r in result}
+        assert "Opp Alpha" in names, f"keyword='Alpha' should match 'Opp Alpha', got names={names}"
 
     @pytest.mark.asyncio
     async def test_numeric_keyword_matches_customer_id(self, mock_db_session):
@@ -455,14 +509,19 @@ class TestQueryTickets:
     @pytest.mark.asyncio
     async def test_with_keyword(self, seeded_session):
         svc = ChatService(seeded_session)
-        result = await svc.query_tickets(tenant_id=1, keyword="Issue")
+        result = await svc.query_tickets(tenant_id=1, keyword="Alpha")
         assert isinstance(result, list)
+        subjects = {r["subject"] for r in result}
+        assert "Ticket Alpha" in subjects, f"keyword='Alpha' should match 'Ticket Alpha', got subjects={subjects}"
 
     @pytest.mark.asyncio
     async def test_status_filter(self, seeded_session):
         svc = ChatService(seeded_session)
         result = await svc.query_tickets(tenant_id=1, status="open")
         assert isinstance(result, list)
+        statuses = {r["status"] for r in result}
+        assert "open" in statuses, f"status='open' filter should include 'open' tickets, got statuses={statuses}"
+        assert "resolved" not in statuses, f"status='open' filter should exclude 'resolved' tickets, got statuses={statuses}"
 
     @pytest.mark.asyncio
     async def test_tenant_isolation(self, seeded_session):
