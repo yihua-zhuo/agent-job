@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from db.models import NotificationPreferenceModel
+from db.models.notification_preference import NotificationPreferenceModel
 
 
 class TestNotificationPreferenceModel:
@@ -37,14 +37,16 @@ class TestNotificationPreferenceModel:
         assert result["updated_at"] == updated.isoformat()
 
     def test_to_dict_disabled_preference(self):
+        now = datetime(2026, 6, 1, 12, 0, 0)
         pref = NotificationPreferenceModel(
             id=2,
             user_id=20,
             tenant_id=8,
             channel="sms",
             enabled=False,
-            created_at=None,
+            created_at=now,
+            updated_at=None,
         )
         result = pref.to_dict()
         assert result["enabled"] is False
-        assert result["created_at"] is None
+        assert result["updated_at"] is None

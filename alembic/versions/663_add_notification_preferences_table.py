@@ -44,7 +44,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    op.drop_index(op.f("ix_notification_preferences_tenant_user_channel"), table_name="notification_preferences", if_exists=True)
     op.drop_index(op.f("ix_notification_preferences_user_id"), table_name="notification_preferences", if_exists=True)
     op.drop_index(op.f("ix_notification_preferences_tenant_id"), table_name="notification_preferences", if_exists=True)
-    op.drop_index(op.f("ix_notification_preferences_tenant_user_channel"), table_name="notification_preferences", if_exists=True)
     op.drop_table("notification_preferences")
