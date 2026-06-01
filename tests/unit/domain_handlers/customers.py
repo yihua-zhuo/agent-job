@@ -151,8 +151,90 @@ def make_customer_handler(state: MockState):
     return handler
 
 
+ORDER = 20
+
+
+def make_customer_repository_handler(state: MockState):
+    """Handle CustomerRepository SQL patterns: enrichment upsert/select, group-by status."""
+
+    def handler(sql_text, params):
+        # INSERT INTO customer_enrichment … ON CONFLICT (upsert)
+        if "insert into customer_enrichment" in sql_text:
+            record = {
+                "tenant_id": params.get("tenant_id"),
+                "customer_id": params.get("customer_id"),
+                "provider": params.get("provider", "clearbit"),
+                "raw_data_json": params.get("raw_data_json"),
+                "enriched_at": params.get("enriched_at"),
+                "next_refresh_at": params.get("next_refresh_at"),
+                "updated_at": params.get("updated_at"),
+            }
+            return MockResult([MockRow(record.copy())])
+
+        # SELECT FROM customer_enrichment WHERE customer_id = :customer_id AND tenant_id = :tenant_id
+        if "select" in sql_text and "from customer_enrichment" in sql_text and "where customer_id" in sql_text:
+            customer_id = params.get("customer_id")
+            tenant_id = params.get("tenant_id")
+            key = (tenant_id, customer_id)
+            enrichment_state = state.opaque.get("customer_enrichment", {})
+            record = enrichment_state.get(key, {
+                "tenant_id": tenant_id,
+                "customer_id": customer_id,
+                "provider": "clearbit",
+                "raw_data_json": {},
+                "enriched_at": None,
+                "next_refresh_at": None,
+                "updated_at": None,
+            })
+            return MockResult([MockRow(record.copy())])
+
+        # SELECT status, count(id) FROM customers WHERE tenant_id = :tenant_id GROUP BY status
+        if (
+            "select" in sql_text
+            and "status" in sql_text
+            and "count" in sql_text
+            and "from customers" in sql_text
+            and "group by" in sql_text
+        ):
+            tenant_id = params.get("tenant_id")
+            status_counts: dict[str, int] = {}
+            for rec in state.customers.values():
+                if rec.get("tenant_id") == tenant_id:
+                    s = rec.get("status", "lead")
+                    status_counts[s] = status_counts.get(s, 0) + 1
+            rows = [[s, c] for s, c in status_counts.items()]
+            if not rows:
+                rows = [["lead", 0]]
+            return MockResult(rows)
+
+        # SELECT FROM customers WHERE tenant_id = :tenant_id AND (name ILIKE OR email ILIKE) — search
+        if (
+            "select" in sql_text
+            and "from customers" in sql_text
+            and ("ilike" in sql_text or "like" in sql_text)
+            and "where tenant_id" in sql_text
+            and "group by" not in sql_text
+            and "order by" not in sql_text
+            and "limit" not in sql_text
+        ):
+            tenant_id = params.get("tenant_id")
+            rows = []
+            for rec in state.customers.values():
+                if rec.get("tenant_id") == tenant_id:
+                    rows.append(MockRow(rec.copy()))
+            return MockResult(rows)
+
+        return None
+
+    return handler
+
+
 def get_handlers(state: MockState):
-    return [make_customer_handler(state)]
+    return [make_customer_handler(state), make_customer_repository_handler(state)]
 
 
-__all__ = ["get_handlers", "make_customer_handler"]
+__all__ = [
+    "get_handlers",
+    "make_customer_handler",
+    "make_customer_repository_handler",
+]

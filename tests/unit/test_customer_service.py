@@ -30,15 +30,16 @@ def _make_mock_customer_repo():
 
 @pytest.fixture
 def mock_db_session():
-    """Async mock session."""
-    session = MagicMock()
-    session.add = MagicMock()
-    session.flush = AsyncMock()
-    session.refresh = AsyncMock()
-    session.execute = AsyncMock()
-    session.get = AsyncMock(return_value=None)
-    session.delete = MagicMock()
-    return session
+    from tests.unit.conftest import MockState, make_mock_session
+    from tests.unit.domain_handlers.counts import make_count_handler
+    from tests.unit.domain_handlers.customers import make_customer_handler, make_customer_repository_handler
+
+    state = MockState()
+    return make_mock_session([
+        make_customer_handler(state),
+        make_customer_repository_handler(state),
+        make_count_handler(state),
+    ])
 
 
 @pytest.fixture
