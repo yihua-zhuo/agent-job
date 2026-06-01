@@ -1,7 +1,7 @@
 """add_notification_logs
 
 Revision ID: a785fd51c79e
-Revises: c94d682d4b04
+Revises: 52b19ee00eaf
 Create Date: 2026-06-01
 
 """
@@ -14,7 +14,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "a785fd51c79e"
-down_revision: str | None = "c94d682d4b04"
+down_revision: str | None = "52b19ee00eaf"
 branch_labels: Sequence[str] | None = None
 depends_on: Sequence[str] | None = None
 
@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("notification_id", sa.Integer(), sa.ForeignKey("notifications.id", ondelete="CASCADE"), nullable=False),
         sa.Column("channel", sa.String(length=50), nullable=False),
         sa.Column("status", sa.String(length=50), nullable=False),
-        sa.Column("attempts", sa.Integer(), nullable=False),
+        sa.Column("attempts", sa.Integer(), server_default=sa.text('1'), nullable=False),
         sa.Column("error", sa.Text(), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.text("now()"), nullable=False),
         sa.PrimaryKeyConstraint("id"),

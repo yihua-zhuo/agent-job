@@ -24,6 +24,7 @@ class TestNotificationLogModel:
             created_at=now,
         )
         d = log.to_dict()
+        assert "created_at" in d
         assert d["id"] == 1
         assert d["tenant_id"] == 10
         assert d["notification_id"] == 100
@@ -46,6 +47,7 @@ class TestNotificationLogModel:
             created_at=now,
         )
         d = log.to_dict()
+        assert "created_at" in d
         assert d["error"] == "Connection timeout after 30s"
         assert d["id"] == 2
         assert d["channel"] == "sms"
