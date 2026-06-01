@@ -166,4 +166,8 @@ async def get_campaign_stats(
 ):
     svc = MarketingService(session)
     stats = await svc.get_campaign_stats(campaign_id, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": stats}
+    return {
+        "success": True,
+        "data": stats,
+        "message": "Campaign stats retrieved successfully",
+    }

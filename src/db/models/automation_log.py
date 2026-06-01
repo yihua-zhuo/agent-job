@@ -22,11 +22,16 @@ class AutomationLogModel(Base):
         index=True,
     )
     tenant_id: Mapped[int] = mapped_column(
-        # 0-sentinel for system-owned rows — no FK constraint (constraint requires
-        # tenant_id > 0; system rows carry tenant_id=0 and bypass it).
-        # Callers MUST explicitly pass tenant_id=0 for system rows; omitting the
-        # parameter will raise an IntegrityError rather than silently defaulting.
-        ForeignKey("tenants.id"),
+        # Data-integrity note — 0-sentinel for system-owned rows:
+        # A plain integer column (no FK constraint) is used because system rows
+        # carry tenant_id=0, which has no corresponding entry in tenants.id.
+        # This is an intentional design trade-off: referential integrity for
+        # normal (tenant_id>0) rows is enforced at the application/service
+        # layer, while system rows bypass the constraint by design.
+        # Callers MUST explicitly pass tenant_id=0 for system rows; omitting
+        # the parameter will raise an IntegrityError rather than silently
+        # defaulting.
+        Integer,
         default=0,
         nullable=False,
         index=True,

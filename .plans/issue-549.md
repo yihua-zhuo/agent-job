@@ -239,5 +239,4 @@ cd frontend && npx prettier --write src/components/Login.tsx src/components/__te
 - The existing login page at `frontend/src/app/(auth)/login/page.tsx` is **not modified** by this component — architectural wiring to the page is left to #550
 
 ## Risks / Open Questions
-- **No `@testing-library/react` in frontend `package.json`**: vitest is present but `@testing-library/react` is not listed as a direct dependency. If tests fail on import, the library may need to be added via `npm install --save-dev @testing-library/react`, which may need a separate PR or a check with the project owner.
 - **No `eslint` config file confirmed**: `frontend/eslint.config.mjs` exists (from glob), so linting with `eslint` should work; if not, fall back to `ruff check` or skip this step.

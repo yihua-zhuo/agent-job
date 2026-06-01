@@ -151,7 +151,8 @@ class TestLookupDomainSuccess:
             assert any("customer_enrichment" in call.lower() for call in execute_calls), (
                 f"Expected upsert on customer_enrichments in execute calls; got {execute_calls}"
             )
-            mock_db_session.add.assert_not_called()
+            # pg_insert bypasses add() entirely — verify no ORM add() was called
+            assert not mock_db_session.add.called, "add() should not have been called"
 
 
 # ---------------------------------------------------------------------------

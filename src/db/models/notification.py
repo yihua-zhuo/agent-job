@@ -120,7 +120,9 @@ class NotificationAnalytics(Base):
     notification_id: Mapped[int] = mapped_column(
         ForeignKey("notifications.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     opened_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     clicked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     channel: Mapped[str] = mapped_column(String(50), nullable=False, server_default="email")
