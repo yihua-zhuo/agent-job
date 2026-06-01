@@ -285,7 +285,7 @@ gh pr create --base master --title "feat(automation): add AgentTask ORM model an
 
 ## 9. 参考
 
-- 同类参考实现：[`src/db/models/customers.py`](../../../src/db/models/customers.py) — 参照 ORM model 结构 + enum 列写法
+- 同类参考实现：TBD - 待验证：参照已有 ORM model 文件结构 + enum 列写法
 - 父 issue / 关联：#42
 
 ---

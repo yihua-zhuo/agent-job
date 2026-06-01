@@ -6,7 +6,8 @@
 | 分类 | 40-campaigns |
 | 优先级 | 推荐 |
 | 工作量 | 2 工作日 |
-| 依赖 | [#533](../0333-xxx.md)（AI agent endpoint）, [50-automation/0041-ai-agent-core](../50-automation/0041-ai-agent-core.md)（AI endpoint wire target） |
+| 依赖 | #533（AI agent endpoint）— TBD - 待验证：正确的父 issue 文档路径 |
+| 依赖 | 50-automation/0041-ai-agent-core（AI endpoint wire target）— TBD - 待验证：正确的相对路径 |
 | 启用后赋能 | TBD - 待验证：campaigns/suggest-audience router |
 | 状态 | 📋 待开始 |
 
@@ -69,8 +70,8 @@ TBD - 待验证：`src/ui/pages/marketing/CampaignBuilder.tsx L? — 现有 Camp
 
 - 要改：
   - `src/services/marketing_service.py` — 新增 `suggest_audience` 方法
-  - `src/api/routers/campaigns.py` — 新增 `POST /campaigns/suggest-audience` 路由
-  - `src/config/feature_flags.py` — 新增 `campaigns.ai_audience_suggestions` 布尔标志
+  - `src/api/routers/campaigns.py` — 新增 `POST /campaigns/suggest-audience` 路由（TBD - 待验证：正确路径）
+  - `src/config/feature_flags.py` — 新增 `campaigns.ai_audience_suggestions` 布尔标志（TBD - 待验证：正确路径）
   - `src/ui/pages/marketing/CampaignBuilder.tsx` — 添加 "Suggest audience" 按钮
   - `tests/unit/test_marketing_service.py` — 新增 `suggest_audience` 用例
 - 要建：
@@ -102,8 +103,8 @@ TBD - 待验证：`src/ui/pages/marketing/CampaignBuilder.tsx L? — 现有 Camp
 | 路径 | 改动要点 |
 |------|---------|
 | [`src/services/marketing_service.py`](../../../src/services/marketing_service.py) | 新增 `suggest_audience(campaign_type, description, tenant_id)` 方法，调用 `ai_agent_client` |
-| [`src/api/routers/campaigns.py`](../../../src/api/routers/campaigns.py) | 新增 `POST /campaigns/suggest-audience` 路由，读取 feature flag，透传 tenant_id |
-| [`src/config/feature_flags.py`](../../../src/config/feature_flags.py) | 新增 `campaigns.ai_audience_suggestions: bool = False` |
+| `src/api/routers/campaigns.py` | 新增 `POST /campaigns/suggest-audience` 路由，读取 feature flag，透传 tenant_id（TBD - 待验证：正确路径） |
+| `src/config/feature_flags.py` | 新增 `campaigns.ai_audience_suggestions: bool = False`（TBD - 待验证：正确路径） |
 | `src/ui/pages/marketing/CampaignBuilder.tsx` | 添加 "Suggest audience" 按钮，调用 `POST /campaigns/suggest-audience` |
 
 ### 3.3 新增能力

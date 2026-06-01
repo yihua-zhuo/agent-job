@@ -18,10 +18,7 @@
 
 当前的商机推荐数据（成交概率、相似商机、下一步行动）每次 API 调用都重新计算，频繁访问时造成多余的开销。商机阶段变更时旧推荐数据不会被清除，导致决策依据滞后。#597 已引入推荐结果存储 ORM models，本板块需要为推荐结果访问构建统一的缓存抽象，避免重复查询数据库或重复计算。
 
-### 1.2 做完后
-
-- **用户视角**：`GET /sales/opportunities/{id}/recommendations` 在缓存新鲜（<1h）时直接返回缓存数据，响应更快。无用户可见的功能变化。
-- **开发者视角**：`RecommendationService` 提供 `get_recommendations(opportunity_id, tenant_id)` 和 `invalidate_cache(opportunity_id, tenant_id)`，服务可注入到 router 或 automation engine 中调用。缓存 TTL = 3600s，清除策略由调用方在 stage 变更时触发。
+### 1.2 做完后实现 `get_recommendations` 和 `invalidate_cache` 接口，缓存 TTL = 3600s，stage 变更时触发清除。
 
 ### 1.3 不做什么（剔除）
 
@@ -70,7 +67,7 @@ class SalesRecommendationService:
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`src/services/__init__.py`](../../../src/services/__init__.py) —导出新 `RecommendationService`
+  - TBD - 待验证：导出 `RecommendationService` 的正确模块路径（`src/services/__init__.py` 不存在）
 - 要建：
   - `src/services/recommendation_service.py` — 缓存封装 service
   - `tests/unit/test_recommendation_service.py` — 缓存行为单元测试
@@ -98,7 +95,7 @@ class SalesRecommendationService:
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/__init__.py`](../../../src/services/__init__.py) | 新增 `RecommendationService` 到模块导出 |
+| TBD - 待验证：导出 `RecommendationService` 的正确模块路径（`src/services/__init__.py` 不存在） | 新增 `RecommendationService` 到模块导出 |
 
 ### 3.3 新增能力
 
@@ -288,12 +285,12 @@ async def test_not_found_raises(svc, mock_db_session):
 
 **完成判定**：`PYTHONPATH=src pytest tests/unit/test_recommendation_service.py -v` → 5 passed
 
-### Step 3:导出 `RecommendationService` 到 `src/services/__init__.py`
+### Step 3:导出 `RecommendationService` 到模块
 
 操作：
-- a) 在 `src/services/__init__.py` 中新增 `from services.recommendation_service import RecommendationService`
+- a) 在 TBD - 待验证：导出 `RecommendationService` 的正确模块路径（`src/services/__init__.py` 不存在）中新增 `from services.recommendation_service import RecommendationService`
 
-**完成判定**：`PYTHONPATH=src ruff check src/services/__init__.py` → 0 errors
+**完成判定**：`PYTHONPATH=src ruff check <path>` → 0 errors
 
 ### Step 4: Lint 全量验证
 
@@ -310,7 +307,7 @@ async def test_not_found_raises(svc, mock_db_session):
 - [ ] `PYTHONPATH=src ruff format --check src/services/recommendation_service.py tests/unit/test_recommendation_service.py` → 全 pass- [ ] `PYTHONPATH=src pytest tests/unit/test_recommendation_service.py -v` → 5 passed
 - [ ] `PYTHONPATH=src pytest tests/unit/test_sales_router.py -v` → 全 passed（回归）
 - [ ] `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → 三次 exit 0（依赖 #597 migration 可用）
-- [ ] `PYTHONPATH=src mypy src/services/recommendation_service.py` → 0 errors
+- [ ] `__PYTHPATH=src mypy src/services/recommendation_service.py` → 0 errors
 
 ---
 
@@ -327,7 +324,7 @@ async def test_not_found_raises(svc, mock_db_session):
 ## 8. 完成后必做
 
 ```bash
-git add src/services/recommendation_service.py src/services/__init__.py tests/unit/test_recommendation_service.py
+git add src/services/recommendation_service.py <services-init-path> tests/unit/test_recommendation_service.py
 git commit -m "feat(sales): add RecommendationService with in-memory TTL cache (closes #598)"
 git push -u origin "$(git branch --show-current)"
 gh pr create --base master --title "feat(sales): add RecommendationService with in-memory TTL cache (closes #598)" --body "Closes #598## Summary
