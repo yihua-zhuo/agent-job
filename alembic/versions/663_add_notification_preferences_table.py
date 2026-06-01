@@ -30,12 +30,21 @@ def upgrade() -> None:
         sa.Column("channel", sa.String(length=50), nullable=False),
         sa.Column("enabled", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=True),
     )
-    op.create_index(op.f("ix_notification_preferences_tenant_id"), "notification_preferences", ["tenant_id"])
-    op.create_index(op.f("ix_notification_preferences_user_id"), "notification_preferences", ["user_id"])
+    op.create_index(op.f("ix_notification_preferences_tenant_id"), "notification_preferences", ["tenant_id"], if_not_exists=True)
+    op.create_index(op.f("ix_notification_preferences_user_id"), "notification_preferences", ["user_id"], if_not_exists=True)
+    op.create_index(
+        op.f("ix_notification_preferences_tenant_user_channel"),
+        "notification_preferences",
+        ["tenant_id", "user_id", "channel"],
+        unique=True,
+        if_not_exists=True,
+    )
 
 
 def downgrade() -> None:
-    op.drop_index(op.f("ix_notification_preferences_user_id"), table_name="notification_preferences")
-    op.drop_index(op.f("ix_notification_preferences_tenant_id"), table_name="notification_preferences")
+    op.drop_index(op.f("ix_notification_preferences_user_id"), table_name="notification_preferences", if_exists=True)
+    op.drop_index(op.f("ix_notification_preferences_tenant_id"), table_name="notification_preferences", if_exists=True)
+    op.drop_index(op.f("ix_notification_preferences_tenant_user_channel"), table_name="notification_preferences", if_exists=True)
     op.drop_table("notification_preferences")

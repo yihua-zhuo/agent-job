@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -15,6 +15,7 @@ class NotificationPreferenceModel(Base):
     __table_args__ = (
         Index("ix_notification_preferences_tenant_id", "tenant_id"),
         Index("ix_notification_preferences_user_id", "user_id"),
+        UniqueConstraint("tenant_id", "user_id", "channel", name="uq_notification_preferences_tenant_user_channel"),
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -27,6 +28,11 @@ class NotificationPreferenceModel(Base):
         server_default=func.now(),
         nullable=False,
     )
+    updated_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True),
+        onupdate=func.now(),
+        nullable=True,
+    )
 
     def to_dict(self) -> dict:
         return {
@@ -36,4 +42,5 @@ class NotificationPreferenceModel(Base):
             "channel": self.channel,
             "enabled": self.enabled,
             "created_at": self.created_at.isoformat() if self.created_at else None,
+            "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }

@@ -13,10 +13,11 @@ class TestNotificationPreferenceModel:
 
     def test_columns_exist(self):
         column_names = {c.name for c in NotificationPreferenceModel.__table__.columns}
-        assert column_names == {"id", "user_id", "tenant_id", "channel", "enabled", "created_at"}
+        assert column_names == {"id", "user_id", "tenant_id", "channel", "enabled", "created_at", "updated_at"}
 
     def test_to_dict_returns_all_fields(self):
         now = datetime(2026, 6, 1, 12, 0, 0)
+        updated = datetime(2026, 6, 1, 13, 0, 0)
         pref = NotificationPreferenceModel(
             id=1,
             user_id=10,
@@ -24,6 +25,7 @@ class TestNotificationPreferenceModel:
             channel="email",
             enabled=True,
             created_at=now,
+            updated_at=updated,
         )
         result = pref.to_dict()
         assert result["id"] == 1
@@ -32,6 +34,7 @@ class TestNotificationPreferenceModel:
         assert result["channel"] == "email"
         assert result["enabled"] is True
         assert result["created_at"] == now.isoformat()
+        assert result["updated_at"] == updated.isoformat()
 
     def test_to_dict_disabled_preference(self):
         pref = NotificationPreferenceModel(
