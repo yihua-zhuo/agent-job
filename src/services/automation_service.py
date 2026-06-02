@@ -1,5 +1,7 @@
 """Automation rules service — DB-backed rule engine with execution logging."""
 
+import json
+import logging
 from datetime import UTC, datetime
 
 from sqlalchemy import delete, func, select, update
@@ -7,32 +9,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.automation_log import AutomationLogModel
 from db.models.automation_rule import AutomationRuleModel
-from pkg.errors.app_exceptions import NotFoundException
+from db.models.user import UserModel
+from pkg.errors.app_exceptions import AppException, NotFoundException
+from services.notification_service import NotificationService
+from services.task_service import TaskService
 
-# Supported trigger events
-TRIGGER_EVENTS = [
-    "ticket.created",
-    "ticket.updated",
-    "ticket.assigned",
-    "opportunity.stage_changed",
-    "opportunity.created",
-    "customer.created",
-    "customer.updated",
-    "user.login",
-    "lead.created",
-]
-
-# Supported action types
-ACTION_TYPES = [
-    "notification.send",
-    "ticket.assign",
-    "ticket.update_priority",
-    "opportunity.add_note",
-    "task.create",
-    "email.send",
-    "webhook.call",
-    "tag.add",
-]
+logger = logging.getLogger(__name__)
 
 
 def _eval_condition(condition: dict, context: dict) -> bool:
@@ -71,65 +53,96 @@ def _match_conditions(conditions: list, context: dict) -> bool:
     return all(_eval_condition(c, context) for c in conditions)
 
 
-async def _execute_action(
-    action: dict,
-    context: dict,
-    session: AsyncSession,
-    tenant_id: int,
-    executed_by: int,
-) -> dict:
-    action_type = action.get("type")
-    params = action.get("params", {})
-
-    if action_type == "notification.send":
-        from services.notification_service import NotificationService
-
-        svc = NotificationService(session)
-        result = await svc.send_notification(
-            user_id=params.get("user_id", context.get("user_id", 0)),
-            notification_type="automation",
-            title=params.get("title", "Automation triggered"),
-            content=params.get("message", f"Automation rule triggered: {context.get('rule_name')}"),
-            tenant_id=tenant_id,
-            related_type=context.get("entity_type"),
-            related_id=context.get("entity_id"),
-        )
-        return {"type": action_type, "status": "sent" if result else "failed"}
-
-    elif action_type == "task.create":
-        from services.task_service import TaskService
-
-        svc = TaskService(session)
-        task_result = await svc.create_task(
-            tenant_id=tenant_id,
-            title=params.get("title", "Automated task"),
-            description=params.get("description", ""),
-            assigned_to=params.get("assignee_id"),
-            created_by=executed_by,
-        )
-        return {"type": action_type, "status": "created" if task_result else "failed"}
-
-    elif action_type == "email.send":
-        return {"type": action_type, "status": "queued", "template": params.get("template")}
-    elif action_type == "webhook.call":
-        return {"type": action_type, "status": "queued", "url": params.get("url")}
-    elif action_type == "tag.add":
-        return {"type": action_type, "status": "added", "tag": params.get("tag")}
-    elif action_type == "ticket.assign":
-        return {"type": action_type, "status": "assigned", "assignee_id": params.get("assignee_id")}
-    elif action_type == "ticket.update_priority":
-        return {"type": action_type, "status": "updated", "priority": params.get("priority")}
-    elif action_type == "opportunity.add_note":
-        return {"type": action_type, "status": "added", "note": params.get("note")}
-    else:
-        return {"type": action_type, "status": "unknown_action"}
-
-
 class AutomationService:
     """DB-backed automation rule engine."""
 
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    @staticmethod
+    def _unimplemented_action(action_type: str, params: dict, key: str) -> dict:
+        logger.warning("%s action is not implemented: %s=%s", action_type, key, params.get(key))
+        return {"type": action_type, "status": "not_implemented", key: params.get(key)}
+
+    async def _execute_action(self, action: dict, context: dict, tenant_id: int, executed_by: int) -> dict:
+        action_type = action.get("type")
+        params = action.get("params", {})
+
+        if action_type == "notification.send":
+            recipient_user_id = params["user_id"] if "user_id" in params else context.get("user_id")
+            if not recipient_user_id:
+                return {"type": action_type, "status": "skipped", "reason": "no user_id in context or params"}
+            # Rule126: verify the recipient belongs to the current tenant
+            user_check = await self.session.execute(
+                select(UserModel).where(UserModel.id == recipient_user_id, UserModel.tenant_id == tenant_id)
+            )
+            if user_check.scalar_one_or_none() is None:
+                return {"type": action_type, "status": "skipped", "reason": "recipient user not found in tenant"}
+            svc = NotificationService(self.session)
+            try:
+                await svc.send_notification(
+                    user_id=recipient_user_id,
+                    notification_type=params.get("channel", "in_app"),
+                    title=params.get("title", "Automation triggered"),
+                    content=params.get("message", f"Automation rule triggered: {context.get('rule_name')}"),
+                    tenant_id=tenant_id,
+                    related_type=context.get("entity_type"),
+                    related_id=context.get("entity_id"),
+                )
+            except AppException as e:
+                return {"type": action_type, "status": "error", "error": str(e)}
+            except Exception as e:
+                logger.exception("Unexpected error in notification.send action")
+                return {"type": action_type, "status": "error", "error": str(e)}
+
+        elif action_type == "task.create":
+            assignee_id = params.get("assignee_id")
+            # Verify the assignee belongs to the current tenant (applies even when assignee_id is None —
+            # the check is a no-op for None but the caller's tenant_id is always enforced via the service layer).
+            if assignee_id:
+                assignee_check = await self.session.execute(
+                    select(UserModel).where(UserModel.id == assignee_id, UserModel.tenant_id == tenant_id)
+                )
+                if assignee_check.scalar_one_or_none() is None:
+                    return {"type": action_type, "status": "skipped", "reason": "assignee not found in tenant"}
+            svc = TaskService(self.session)
+            try:
+                await svc.create_task(
+                    tenant_id=tenant_id,
+                    title=params.get("title", "Automated task"),
+                    description=params.get("description", ""),
+                    assigned_to=assignee_id,
+                    created_by=executed_by,
+                )
+            except AppException as e:
+                return {"type": action_type, "status": "error", "error": str(e)}
+            except Exception as e:
+                logger.exception("Unexpected error in task.create action")
+                return {"type": action_type, "status": "error", "error": str(e)}
+            return {"type": action_type, "status": "created"}
+            return {"type": action_type, "status": "created"}
+
+        elif action_type == "email.send":
+            return AutomationService._unimplemented_action(action_type, params, "template")
+        elif action_type == "webhook.call":
+            return AutomationService._unimplemented_action(action_type, params, "url")
+        elif action_type == "tag.add":
+            return AutomationService._unimplemented_action(action_type, params, "tag")
+        elif action_type == "ticket.assign":
+            assignee_id = params.get("assignee_id")
+            if assignee_id:
+                assignee_check = await self.session.execute(
+                    select(UserModel).where(UserModel.id == assignee_id, UserModel.tenant_id == tenant_id)
+                )
+                if assignee_check.scalar_one_or_none() is None:
+                    return {"type": action_type, "status": "skipped", "reason": "assignee not found in tenant"}
+            return {"type": action_type, "status": "assigned", "assignee_id": assignee_id}
+        elif action_type == "ticket.update_priority":
+            return {"type": action_type, "status": "updated", "priority": params.get("priority")}
+        elif action_type == "opportunity.add_note":
+            return AutomationService._unimplemented_action(action_type, params, "note")
+        else:
+            return {"type": action_type, "status": "unknown_action"}
 
     # -------------------------------------------------------------------------
     # Rule CRUD
@@ -240,7 +253,7 @@ class AutomationService:
         new_enabled = not row.enabled
         update_stmt = (
             update(AutomationRuleModel)
-            .where(AutomationRuleModel.id == rule_id)
+            .where(AutomationRuleModel.id == rule_id, AutomationRuleModel.tenant_id == tenant_id)
             .values(enabled=new_enabled, updated_at=datetime.now(UTC))
             .returning(AutomationRuleModel)
         )
@@ -258,10 +271,35 @@ class AutomationService:
         context: dict,
         executed_by: int = 0,
     ) -> list[dict]:
+        # Guard against attacker-controlled deeply nested dicts and lists once, up-front.
+        def _max_depth(d, _depth=0):
+            max_d = _depth
+            for v in d.values():
+                if isinstance(v, dict):
+                    max_d = max(max_d, _max_depth(v, _depth + 1))
+                elif isinstance(v, list):
+                    max_d = max(
+                        max_d,
+                        max((_max_depth(i, _depth + 1) for i in v if isinstance(i, dict)), default=_depth),
+                    )
+            return max_d
+
+        encoded = json.dumps(context, ensure_ascii=False).encode("utf-8")
+        # NOTE: these size/breadth bounds are applied only here in trigger_event, the sole
+        # public entry point that accepts a caller-supplied context dict. Other public
+        # methods (create_rule, update_rule, etc.) do not accept arbitrary context dicts
+        # and therefore do not need equivalent guards. Future additions that accept
+        # caller-supplied dicts should apply consistent depth/size limits.
+        if _max_depth(context) > 16 or len(encoded) > 64_000:
+            logger.warning(
+                "Automation event dropped: context size %d exceeds limit or depth exceeds 16",
+                len(encoded),
+            )
+            return []
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id,
             AutomationRuleModel.trigger_event == trigger_event,
-            AutomationRuleModel.enabled == True,  # noqa: E712
+            AutomationRuleModel.enabled,
         )
         result = await self.session.execute(stmt)
         rules = result.scalars().all()
@@ -275,15 +313,14 @@ class AutomationService:
             errors = []
             for action in rule.actions:
                 try:
-                    action_result = await _execute_action(
+                    action_result = await self._execute_action(
                         action,
                         {**context, "rule_name": rule.name},
-                        self.session,
                         tenant_id,
                         executed_by,
                     )
                     executed_actions.append(action_result)
-                except Exception as e:
+                except AppException as e:
                     executed_actions.append(
                         {
                             "type": action.get("type"),

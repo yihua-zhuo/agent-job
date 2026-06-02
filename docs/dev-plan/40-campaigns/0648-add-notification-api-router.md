@@ -41,7 +41,7 @@
 
 - [`ruff check src/api/routers/notifications.py`](../../../src/api/routers/notifications.py) → 0 errors
 - [`PYTHONPATH=src pytest tests/unit/test_notifications_router.py -v`](../../../tests/unit/test_notifications_router.py) → ≥ 7 passed（每端点 1 个测试 + 额外边界测试）
-- [`PYTHONPATH=src pytest tests/integration/test_notifications_integration.py -v`](../../../tests/integration/test_notifications_integration.py) → ≥ 5 passed
+- `PYTHONPATH=src pytest tests/integration/test_notifications_integration.py -v` — TBD - 待验证：tests/integration/test_notifications_integration.py 存在性
 - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → exit 0（如有 migration 文件）
 - 端到端：`curl -s http://localhost:8000/api/v1/notifications` 返回 `{"success": true, "data": {...}}`
 
@@ -101,7 +101,7 @@ TBD — 待验证：#647 完成后 `NotificationService` 的确切方法签名�
 ### 3.1 新文件
 
 | 路径 | 用途 |
-|------|------|
+|------|---------|
 | `src/api/routers/notifications.py` | 通知模块路由：7 个 HTTP 端点，统一返回 `ApiResponse` 封装 |
 | `tests/unit/test_notifications_router.py` | 单元测试：mock NotificationService + mock session，验证每端点响应格式 |
 | `tests/integration/test_notifications_integration.py` | 集成测试：真实 DB 操作，覆盖租户隔离、边界条件 |
@@ -420,7 +420,7 @@ gh pr create --base master --title "feat(#648): add notification API router" --b
 ## 9. 参考
 
 - 同类参考实现：[`src/api/routers/customers.py`](../../../src/api/routers/customers.py) — 路由模式、依赖注入、返回封装参考
-- 同类参考实现：[`src/api/routers/opportunities.py`](../../../src/api/routers/opportunities.py) — 分页 + 过滤列表端点参考
+- 同类参考实现：TBD - 待验证：src/api/routers/opportunities.py 存在性 — 分页 + 过滤列表端点参考
 - 第三方文档：[FastAPI - Router](https://fastapi.tiangolo.com/tutorial/bigger-applications/)
 - 第三方文档：[FastAPI - Depends](https://fastapi.tiangolo.com/tutorial/dependencies/)
 - 父 issue：#39

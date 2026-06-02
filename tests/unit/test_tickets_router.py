@@ -623,7 +623,6 @@ class TestGetSlaSummaryEndpoint:
 
     def test_requires_auth(self, monkeypatch):
         """Without auth override the endpoint returns 401/403."""
-        from internal.middleware.fastapi_auth import require_auth
 
         mock_sla_service = MagicMock()
 

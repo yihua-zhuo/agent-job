@@ -6,13 +6,12 @@ from pydantic import ValidationError
 from models.routing import (
     ConditionOperator,
     LeadAssignPreview,
-    RecycleHistoryEntry,
+    LeadRecycleRequest,
     RoutingRuleCreate,
-    RoutingRuleUpdate,
     RoutingRulePriorityUpdate,
+    RoutingRuleUpdate,
     RuleCondition,
     RuleTestRequest,
-    LeadRecycleRequest,
 )
 
 

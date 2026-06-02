@@ -70,7 +70,7 @@ jobs:
       - if: always()
         run: docker compose -f configs/docker-compose.test.yml down
 
-  migration-drift:
+migration-drift:
     name: Migration Drift Check
     runs-on: ubuntu-latest
     needs: unit-test
@@ -136,7 +136,7 @@ jobs:
           echo "       - FK re-creations that silently drop ondelete=CASCADE"
           echo "       - unrelated index churn"
           echo "  3. The new migration's down_revision must point to the"
-          echo "     current head ($(alembic current 2>/dev/null | tail -1 | awk '{print $1}'))."
+          echo "     current head (obtain with: alembic current)."
           echo "  4. Verify both directions work:"
           echo "       alembic upgrade head && alembic downgrade -1 && alembic upgrade head"
           echo "  5. Re-run this job by pushing — the second autogen should"
@@ -151,12 +151,10 @@ jobs:
       - name: Tear down Postgres
         if: always()
         run: docker compose -f configs/docker-compose.test.yml down -v || true
-
-  code-review:
+code-review:
     name: Code Review
     runs-on: ubuntu-latest
     needs: [coordinator, unit-test]
-    if: false
     steps:
       - uses: actions/checkout@v4
         with:
@@ -169,7 +167,7 @@ jobs:
   quality-check:
     name: Quality Control
     runs-on: ubuntu-latest
-    needs: code-review
+    needs: [unit-test]
     continue-on-error: false
     steps:
       - uses: actions/checkout@v4
@@ -181,7 +179,7 @@ jobs:
   build:
     name: Build & Package
     runs-on: ubuntu-latest
-    needs: [unit-test, quality-check]
+    needs: [unit-test, quality-check, migration-drift]
     steps:
       - uses: actions/checkout@v4
       - run: python3 -m py_compile src/**/*.py

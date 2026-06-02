@@ -1,9 +1,5 @@
 """Tests for response model."""
-import pytest
-from datetime import datetime
-from models.response import (
-    ApiResponse, ApiError, PaginatedData, ResponseStatus, ErrorCode
-)
+from models.response import ApiError, ApiResponse, PaginatedData, ResponseStatus
 
 
 class TestPaginatedData:
@@ -38,7 +34,7 @@ class TestApiResponseToDict:
         class MockData:
             def to_dict(self):
                 return {"key": "value"}
-        
+
         response = ApiResponse(
             status=ResponseStatus.SUCCESS,
             data=MockData()

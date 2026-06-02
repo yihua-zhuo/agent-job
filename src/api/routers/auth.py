@@ -584,9 +584,7 @@ async def check_suspicious(
 
     tenant_id = _require_tenant_id(current_user)
     device_svc = DeviceTrustService(session)
-    requires_reauth, reasons = await device_svc.check_suspicious_activity(
-        current_user.user_id, tenant_id, fp, ip
-    )
+    requires_reauth, reasons = await device_svc.check_suspicious_activity(current_user.user_id, tenant_id, fp, ip)
 
     return {
         "requires_reauth": requires_reauth,

@@ -70,7 +70,8 @@ class ImportExportService:
         }
 ```
 
-```startLine:375:endLine:399:src/services/import_export_service.py def validate_import_data(self, data: list[dict], entity_type: str) -> dict:
+```startLine:375:endLine:399:src/services/import_export_service.py
+def validate_import_data(self, data: list[dict], entity_type: str) -> dict:
         errors = []
         required = self.required_fields.get(entity_type, [])
         if not data:
@@ -330,7 +331,7 @@ async def validate_file(self, file_bytes: bytes, file_format: str) -> list[str]:
             if rows and isinstance(rows, list) and isinstance(rows[0], dict):
                 return list(rows[0].keys())
             raise ValidationException("JSON file contains no object array to extract headers from")
- except UnicodeDecodeError as e:
+    except UnicodeDecodeError as e:
         raise ValidationException(f"Unsupported file encoding: {e.encoding}")
     except json.JSONDecodeError:
         raise ValidationException("Invalid JSON: file cannot be parsed")
@@ -360,9 +361,11 @@ async def parse_and_preview(
     """
     from pkg.errors.app_exceptions import ValidationException
 
-    # Re-use validate_file for format/size guard    await self.validate_file(file_bytes, file_format)
+    # Re-use validate_file for format/size guard
+    await self.validate_file(file_bytes, file_format)
 
-    # Parse    try:
+    # Parse
+    try:
         if file_format == self.FORMAT_CSV:
             rows = self.file_helper.read_csv(file_bytes)
         elif file_format == self.FORMAT_EXCEL:
@@ -469,7 +472,7 @@ async def execute_import(
                         tenant_id=tenant_id,
                         name=row.get("name"),
                         email=row.get("email"),
- phone=row.get("phone"),
+                        phone=row.get("phone"),
                         company=row.get("company"),
                         status="lead",
                         tags=[],
@@ -478,7 +481,7 @@ async def execute_import(
                     )
                 )
                 success_count += 1
- elif entity_type == "opportunity":
+        elif entity_type == "opportunity":
             for idx, row in enumerate(rows):
                 row_num = idx + 2
                 if row_num in errors_by_idx:
@@ -517,8 +520,7 @@ async def execute_import(
     else:
         # No session: return a mock ImportJob with id=0 (for unit tests)
         mock_job = ImportJob.__new__(ImportJob)
-        for attr in ("id", "tenant_id", "status", "entity_type", "file_name",
- "total_rows", "success_count", "error_count", "error_log",
+        for attr in ("id", "tenant_id", "status", "entity_type", "file_name", "total_rows", "success_count", "error_count", "error_log",
                     "created_at", "updated_at"):
             setattr(mock_job, attr, None)
         mock_job.id = 0

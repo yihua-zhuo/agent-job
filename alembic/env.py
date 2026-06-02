@@ -12,8 +12,16 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 import db.models  # noqa: F401 - imports all model modules for Base.metadata
+import db.models.workflow_definition  # noqa: F401
+import db.models.workflow_instance  # noqa: F401
 from alembic import context
 from db.base import Base
+from db.models.notification_preference import (
+    NotificationPreferenceModel,  # noqa: F401 - explicit import for autogenerate
+)
+from db.models.notification_log import (
+    NotificationLogModel,  # noqa: F401 - explicit import for autogenerate
+)
 
 config = context.config
 

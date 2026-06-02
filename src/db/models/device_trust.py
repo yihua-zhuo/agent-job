@@ -14,9 +14,13 @@ class DeviceTrustModel(Base):
     __tablename__ = "device_trust"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    user_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    device_fingerprint: Mapped[str] = mapped_column(String(255), nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    device_fingerprint: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     device_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     trusted_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
     last_ip: Mapped[str | None] = mapped_column(String(45), nullable=True)
@@ -36,12 +40,12 @@ class DeviceTrustModel(Base):
     )
 
     def to_dict(self) -> dict:
+        # Omit device_fingerprint and device_name — they can act as cross-request
+        # correlation identifiers and are not needed in API responses.
         return {
             "id": self.id,
             "user_id": self.user_id,
             "tenant_id": self.tenant_id,
-            "device_fingerprint": self.device_fingerprint,
-            "device_name": self.device_name,
             "trusted_ip": self.trusted_ip,
             "last_ip": self.last_ip,
             "last_location": self.last_location,

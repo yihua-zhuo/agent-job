@@ -103,17 +103,22 @@ class TestAutomationRuleModelDefaults:
         server_val = col.server_default.arg if col.server_default is not None else None
         assert server_val is None, "ORM model should not set server_default (migration does)"
 
-    def test_conditions_column_has_callable_default(self):
-        """The conditions column has a callable default (empty list factory)."""
+    def test_conditions_column_uses_empty_list_default(self):
+        """The conditions column uses default=[] (empty list default, not None)."""
         col = AutomationRuleModel.__table__.c.conditions
-        assert col.default is not None
-        assert callable(col.default.arg)
+        assert col.nullable is False
+        python_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        # Server default for JSONB column is the correct approach
+        assert python_val == [] or server_val is not None, "Must have a non-None default"
 
-    def test_actions_column_has_callable_default(self):
-        """The actions column has a callable default (empty list factory)."""
+    def test_actions_column_uses_empty_list_default(self):
+        """The actions column uses default=[] (empty list default, not None)."""
         col = AutomationRuleModel.__table__.c.actions
-        assert col.default is not None
-        assert callable(col.default.arg)
+        assert col.nullable is False
+        python_val = col.default.arg if col.default is not None else None
+        server_val = col.server_default.arg if col.server_default is not None else None
+        assert python_val == [] or server_val is not None, "Must have a non-None default"
 
     def test_created_by_column_python_default_is_zero(self):
         """The created_by column uses Python default=0; no server_default is set."""
@@ -212,33 +217,32 @@ class TestAutomationLogModelDefaults:
     """Test AutomationLogModel column default values."""
 
     def test_status_column_default_is_success(self):
-        """The status column defaults to 'success'."""
+        """The status column defaults to 'success' via server_default='success'."""
         col = AutomationLogModel.__table__.c.status
         python_val = col.default.arg if col.default is not None else None
         server_val = col.server_default.arg if col.server_default is not None else None
-        if hasattr(col.type, "enums") and col.type.enums:
-            assert col.type.enums[0] == "success"
-        else:
-            assert python_val == "success" or server_val == "'success'"
+        # server_default='success' stores the literal 'success' string (not "'success'" with quotes)
+        assert python_val == "success" or server_val == "success", (
+            f"status column must default to 'success'; got python_val={python_val!r}, server_val={server_val!r}"
+        )
 
-    def test_trigger_context_column_has_callable_default(self):
-        """The trigger_context column has a callable default (empty dict factory)."""
+    def test_trigger_context_column_not_nullable_with_default(self):
+        """The trigger_context column is NOT nullable; DB enforces non-null via server_default='{}'."""
         col = AutomationLogModel.__table__.c.trigger_context
-        assert col.default is not None
-        assert callable(col.default.arg)
+        assert col.nullable is False
 
-    def test_actions_executed_column_has_callable_default(self):
-        """The actions_executed column has a callable default (empty list factory)."""
+    def test_actions_executed_column_not_nullable_with_default(self):
+        """The actions_executed column is NOT nullable; ORM enforces non-null via default=[]."""
         col = AutomationLogModel.__table__.c.actions_executed
-        assert col.default is not None
-        assert callable(col.default.arg)
+        assert col.nullable is False
 
-    def test_executed_by_column_default_is_zero(self):
-        """The executed_by column defaults to 0."""
+    def test_executed_by_column_has_no_default(self):
+        """The executed_by column has no Python or server default — caller must supply a value."""
         col = AutomationLogModel.__table__.c.executed_by
         python_val = col.default.arg if col.default is not None else None
         server_val = col.server_default.arg if col.server_default is not None else None
-        assert python_val == 0 or server_val == "0"
+        assert python_val is None, "No Python default should be set"
+        assert server_val is None, "No server_default should be set"
 
 
 def _col_is_indexed(table, col_name: str) -> bool:

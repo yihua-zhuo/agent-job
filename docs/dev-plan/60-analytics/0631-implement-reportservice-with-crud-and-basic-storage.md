@@ -64,7 +64,7 @@ class ReportService:
 
 - 要改：
   - [`src/services/report_service.py`](../../../src/services/report_service.py) — add five CRUD methods + exception imports
-  - [`tests/unit/test_report_service.py`](../../tests/unit/test_report_service.py) — add unit tests for CRUD methods
+  - [`tests/unit/test_report_service.py`](../../../tests/unit/test_report_service.py) — add unit tests for CRUD methods
 - 要建：
   - 无
 
@@ -93,7 +93,7 @@ class ReportService:
 | 路径 | 改动要点 |
 |------|---------|
 | [`src/services/report_service.py`](../../../src/services/report_service.py) | 新增 `list_reports`, `get_report`, `create_report`, `update_report`, `delete_report` 五个 async 方法；更新 import 添加 `NotFoundException`, `ForbiddenException`, `ReportModel`, `and_`, `select`, `update`, `delete` |
-| [`tests/unit/test_report_service.py`](../../tests/unit/test_report_service.py) | 新增 CRUD 方法的单元测试：正常路径、report 不存在、tenant 隔离 |
+| [`tests/unit/test_report_service.py`](../../../tests/unit/test_report_service.py) | 新增 CRUD 方法的单元测试：正常路径、report 不存在、tenant 隔离 |
 
 ### 3.3 新增能力
 
@@ -312,7 +312,7 @@ async def delete_report(self, report_id: int, tenant_id: int) -> None:
 
 ### Step 7: Write unit tests
 
-在 [`tests/unit/test_report_service.py`](../../tests/unit/test_report_service.py)（新建文件）中添加测试用例：
+在 [`tests/unit/test_report_service.py`](../../../tests/unit/test_report_service.py)（新建文件）中添加测试用例：
 
 ```python
 """Unit tests for ReportService CRUD methods."""

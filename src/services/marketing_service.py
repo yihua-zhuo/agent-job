@@ -91,7 +91,9 @@ class MarketingService:
 
     async def launch_campaign(self, campaign_id: int, tenant_id: int) -> CampaignModel:
         """启动活动"""
-        return await self.update_campaign(campaign_id, tenant_id, status=CampaignStatus.ACTIVE, sent_at=datetime.now(UTC))
+        return await self.update_campaign(
+            campaign_id, tenant_id, status=CampaignStatus.ACTIVE, sent_at=datetime.now(UTC)
+        )
 
     async def pause_campaign(self, campaign_id: int, tenant_id: int) -> CampaignModel:
         """暂停活动"""

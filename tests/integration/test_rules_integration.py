@@ -13,7 +13,9 @@ from __future__ import annotations
 import uuid
 
 import pytest
+import pytest_asyncio
 
+from db.models.tenant import TenantModel
 from models.marketing import CampaignType, TriggerType
 from models.ticket import (
     SLALevel,
@@ -23,6 +25,35 @@ from models.ticket import (
     TicketStatus,
 )
 from services.automation_rules import AutomationRules
+
+
+# ── Seed tenants and customers so FK constraints on campaign_events are satisfied ──
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_tenant(async_session, tenant_id: int) -> int:
+    from db.models.customer import CustomerModel
+
+    tenant = TenantModel(id=tenant_id, name="Rules Integration Test Tenant", plan="free", status="active")
+    async_session.add(tenant)
+    await async_session.flush()
+    for cid in range(1, 201):
+        customer = CustomerModel(id=cid, tenant_id=tenant_id, name=f"Rules Customer {cid}", email=f"rules_cust{cid}@test.example.com", status="active")
+        async_session.add(customer)
+    await async_session.flush()
+    return tenant_id
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
+    from db.models.customer import CustomerModel
+
+    tenant = TenantModel(id=tenant_id_2, name="Rules Integration Test Tenant 2", plan="free", status="active")
+    async_session.add(tenant)
+    await async_session.flush()
+    for cid in range(201, 401):
+        customer = CustomerModel(id=cid, tenant_id=tenant_id_2, name=f"Rules Customer 2 {cid}", email=f"rules_cust2_{cid}@test.example.com", status="active")
+        async_session.add(customer)
+    await async_session.flush()
+    return tenant_id_2
 from services.data_isolation import (
     DataIsolationError,
     TenantScope,

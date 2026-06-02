@@ -198,8 +198,8 @@ class WebAuthnService:
                 "displayName": username,
             },
             "pubKeyCredParams": [
-                {"alg": -7, "type": "public-key"},   # ES256 (recommended)
-                {"alg": -257, "type": "public-key"}, # RS256 (fallback)
+                {"alg": -7, "type": "public-key"},  # ES256 (recommended)
+                {"alg": -257, "type": "public-key"},  # RS256 (fallback)
             ],
             "authenticatorSelection": {
                 "authenticatorAttachment": "platform",

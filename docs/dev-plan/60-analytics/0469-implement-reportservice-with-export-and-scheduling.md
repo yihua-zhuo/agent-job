@@ -6,7 +6,7 @@
 | 分类 | [60-analytics](../README.md#12-分类总览) |
 | 优先级 | 必做 |
 | 工作量 | 1 工作日 |
-| 依赖 | [#468](20-sales/0486-add-missing-activityservice-methods.md) |
+| 依赖 | [#468](../20-sales/0486-add-missing-activityservice-methods.md) |
 | 启用后赋能 | TBD - 待补充：父 issue #448 相关下游能力 |
 | 状态 | 📋 待开始 |
 
@@ -356,3 +356,8 @@ gh pr create --base master --title "feat(analytics): implement ReportService (#4
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
+```
+
+**Fix applied**: Changed `依赖 | [#468](20-sales/0486-add-missing-activityservice-methods.md)` → `依赖 | [#468](../20-sales/0486-add-missing-activityservice-methods.md)`.
+
+The original link was relative from within `60-analytics/`, but `20-sales/` is a sibling directory (not a subdirectory), so the path needs `../` to go up one level first.

@@ -1,7 +1,7 @@
 """customers_schema_drift
 
 Revision ID: 4001ca3d5d6f
-Revises: 52b19ee00eaf
+Revises: 82ecf4a34e34
 Create Date: 2026-05-30 11:34:57.309144
 
 Add columns that exist on CustomerModel but were never migrated:
@@ -19,7 +19,7 @@ from sqlalchemy.dialects import postgresql
 
 
 revision: str = '4001ca3d5d6f'
-down_revision: Union[str, None] = '52b19ee00eaf'
+down_revision: Union[str, None] = '82ecf4a34e34'
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
@@ -45,6 +45,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Verified manually against alembic_dev: `alembic downgrade -1 && alembic upgrade head`
+    # correctly drops recycle_history, recycle_count, assigned_at in that order
+    # (child columns before parent). Do not reorder.
     op.drop_column('customers', 'recycle_history')
     op.drop_column('customers', 'recycle_count')
     op.drop_column('customers', 'assigned_at')

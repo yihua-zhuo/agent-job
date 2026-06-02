@@ -6,8 +6,8 @@
 | 分类 | 10-automation |
 | 优先级 | 必做 |
 | 工作量 | 0.5-1 工作日 |
-| 依赖 | [0449-workflow-service](../0449-workflow-service/0449-add-workflow-service.md), [0464-workflow-db-model](../0464-workflow-db-model/0464-add-workflow-db-model.md) |
-| 启用后赋能 | [0466-workflow-cli-commands](../0466-workflow-cli-commands/0466-add-workflow-cli-commands.md) |
+| 依赖 | TBD - 待验证：workflow-service (issue #449) |
+| 启用后赋能 | TBD - 待验证：workflow-cli-commands (issue #466) |
 | 状态 | 📋 待开始 |
 
 ---

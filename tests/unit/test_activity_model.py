@@ -1,6 +1,6 @@
 """Unit tests for Activity model."""
-import pytest
-from datetime import datetime, UTC
+from datetime import UTC, datetime
+
 from models.activity import Activity, ActivityType
 
 

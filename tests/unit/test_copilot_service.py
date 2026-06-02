@@ -1,10 +1,19 @@
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.copilot_service import CopilotService
 from tests.unit.conftest import MockState, make_mock_session
+from tests.unit.domain_handlers.tasks import task_handler
+
+
+def _mock_ctx(tenant_id: int = 1, user_id: int = 1) -> MagicMock:
+    ctx = MagicMock()
+    ctx.tenant_id = tenant_id
+    ctx.user_id = user_id
+    ctx.roles = []
+    return ctx
 
 
 @pytest.fixture
@@ -14,19 +23,7 @@ def mock_db_session():
 
 @pytest.fixture
 def mock_db_session_for_tasks():
-    # Wires all domain handlers so task_handler handles the INSERT and SELECT
-    # by-id queries. Overrides session.refresh() to simulate the ORM populating
-    # the auto-generated id field after flush().
-    session = make_mock_session(None)
-
-    async def _refresh(obj):
-        # Simulate what session.refresh() does in SQLAlchemy: load db-generated
-        # fields back onto the ORM object. Here the only such field is `id`.
-        if hasattr(obj, "id") and obj.id is None:
-            obj.id = 1
-
-    session.refresh = AsyncMock(side_effect=_refresh)
-    return session
+    return make_mock_session([task_handler])
 
 
 @pytest.fixture
@@ -129,10 +126,11 @@ async def test_create_task_tool_valid(mock_db_session_for_tasks):
     )
     assert result["success"] is True
     assert "task" in result
-    assert result["task"]["id"] == 1
-    assert isinstance(result["task"]["id"], int)
-    assert result["task"]["title"] == "Fix the bug"
-    assert result["task"]["description"] == "Investigate and resolve"
+    task = result["task"]
+    assert task.id == 1
+    assert isinstance(task.id, int)
+    assert task.title == "Fix the bug"
+    assert task.description == "Investigate and resolve"
 
 
 @pytest.mark.asyncio
