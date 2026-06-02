@@ -10,7 +10,7 @@ import { Providers } from "@/lib/components/providers";
 import { Input } from "@/components/ui/input";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  username: z.string().min(1, "Username is required").email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
 type LoginForm = z.infer<typeof loginSchema>;
@@ -39,7 +39,7 @@ function LoginForm() {
       router.push("/customers");
     },
     onError: (err: Error) => {
-      form.setError("password", { message: err.message });
+      form.setError("root.serverError", { message: err.message });
     },
   });
 
@@ -79,6 +79,9 @@ function LoginForm() {
           >
             {mutation.isPending ? "Signing in…" : "Sign In"}
           </button>
+          {form.formState.errors.root?.serverError && (
+            <p className="text-sm text-destructive">{form.formState.errors.root.serverError.message}</p>
+          )}
         </form>
       </div>
     </div>
