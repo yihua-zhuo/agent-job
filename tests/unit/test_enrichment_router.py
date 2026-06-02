@@ -1,20 +1,19 @@
 """Unit tests for src/api/routers/enrichment.py."""
 
-from unittest.mock import AsyncMock, patch
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from pydantic import ValidationError
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
 from api.routers.enrichment import enrichment_router
-from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
+from internal.middleware.fastapi_auth import AuthContext
 from pkg.errors.app_exceptions import AppException, NotFoundException, ValidationException
-from pydantic import ValidationError
-from tests.unit.conftest import make_mock_session, make_customer_handler, MockState
-
+from tests.unit.conftest import MockState, make_customer_handler, make_mock_session
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -38,7 +37,6 @@ def mock_db_session():
 def client_with_service_as_tenant_2(monkeypatch, mock_db_session):
     """Return a TestClient authenticated as tenant_id=2."""
     from internal.middleware.fastapi_auth import require_auth
-    from services.enrichment_service import EnrichmentService
 
     mock_service = AsyncMock()
 
@@ -79,7 +77,6 @@ def client_with_service_as_tenant_2(monkeypatch, mock_db_session):
 def client_with_service(monkeypatch, mock_db_session):
     """Return a TestClient with EnrichmentService fully mocked."""
     from internal.middleware.fastapi_auth import require_auth
-    from services.enrichment_service import EnrichmentService
 
     mock_service = AsyncMock()
 

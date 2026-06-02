@@ -9,7 +9,6 @@ from internal.ai_gateway import AIResponse
 from pkg.errors.app_exceptions import NotFoundException
 from services.ai_service import AIService
 
-
 # ---------------------------------------------------------------------------
 # Mock ORM objects
 # ---------------------------------------------------------------------------

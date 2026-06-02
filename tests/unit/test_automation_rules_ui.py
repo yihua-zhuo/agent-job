@@ -13,9 +13,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from services.automation_service import AutomationService
 from pkg.errors.app_exceptions import NotFoundException
-from tests.unit.conftest import make_mock_session, make_automation_handler, MockState
+from services.automation_service import AutomationService
+from tests.unit.conftest import MockState, make_automation_handler, make_mock_session
 
 
 @pytest.fixture

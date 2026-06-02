@@ -1,7 +1,6 @@
 """Unit tests for Pipeline model."""
-import pytest
-from models.pipeline import Pipeline
 from models.opportunity import Stage
+from models.pipeline import Pipeline
 
 
 class TestPipelineInit:

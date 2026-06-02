@@ -1,8 +1,9 @@
 """Unit tests for src/api/routers/sales.py — router endpoint tests."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from fastapi.testclient import TestClient
+
+import pytest
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from api.routers.sales import sales_router
 from db.connection import get_db
@@ -12,7 +13,6 @@ from pkg.errors.app_exceptions import (
     NotFoundException,
     ValidationException,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -51,9 +51,10 @@ OPPORTUNITY_ROW = {
 @pytest.fixture
 def client_with_service(monkeypatch):
     """Return a TestClient with SalesService fully mocked."""
-    from internal.middleware.fastapi_auth import require_auth
     from starlette.requests import Request
     from starlette.responses import JSONResponse
+
+    from internal.middleware.fastapi_auth import require_auth
 
     mock_service = MagicMock()
 

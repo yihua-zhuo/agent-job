@@ -1,9 +1,9 @@
 """
 Unit tests for Opportunity model.
 """
-import pytest
 from datetime import datetime
 from decimal import Decimal
+
 from src.models.opportunity import Opportunity, Stage
 
 
@@ -21,7 +21,7 @@ class TestOpportunityModel:
             expected_close_date=datetime(2024, 12, 31),
             owner_id=1
         )
-        
+
         assert opp.customer_id == 1
         assert opp.name == "Test Opportunity"
         assert opp.stage == Stage.LEAD
@@ -52,7 +52,7 @@ class TestOpportunityModel:
             owner_id=1
         )
         assert opp_neg.probability == 0
-        
+
         # Test probability over 100 clamped to 100
         opp_over = Opportunity(
             customer_id=1,
@@ -64,7 +64,7 @@ class TestOpportunityModel:
             owner_id=1
         )
         assert opp_over.probability == 100
-        
+
         # Test valid probability stays same
         opp_valid = Opportunity(
             customer_id=1,
@@ -89,9 +89,9 @@ class TestOpportunityModel:
             expected_close_date=datetime(2024, 12, 31),
             owner_id=1
         )
-        
+
         result = opp.to_dict()
-        
+
         assert result["id"] == 1
         assert result["customer_id"] == 1
         assert result["name"] == "Test Opportunity"
