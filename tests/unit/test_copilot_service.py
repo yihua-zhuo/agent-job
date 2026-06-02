@@ -75,7 +75,14 @@ def test_tool_registry_returns_six_tools(copilot_service):
     assert len(registry) == 6
     active = [k for k, v in registry.items() if not v["deferred"]]
     deferred = [k for k, v in registry.items() if v["deferred"]]
-    assert set(active) == {"get_customer", "get_opportunities", "get_recent_activities", "get_churn_risk", "send_email", "create_task"}
+    assert set(active) == {
+        "get_customer",
+        "get_opportunities",
+        "get_recent_activities",
+        "get_churn_risk",
+        "send_email",
+        "create_task",
+    }
     assert set(deferred) == set()
 
 
@@ -127,10 +134,10 @@ async def test_create_task_tool_valid(mock_db_session_for_tasks):
     assert result["success"] is True
     assert "task" in result
     task = result["task"]
-    assert task.id == 1
-    assert isinstance(task.id, int)
-    assert task.title == "Fix the bug"
-    assert task.description == "Investigate and resolve"
+    assert isinstance(task, dict)
+    assert task["id"] == 1
+    assert task["title"] == "Fix the bug"
+    assert task["description"] == "Investigate and resolve"
 
 
 @pytest.mark.asyncio

@@ -259,7 +259,7 @@ Expected: exit 0 on both files.
 ## Acceptance Criteria
 
 - `ruff check src/services/copilot_service.py tests/unit/test_copilot_service.py` exits 0 on both files
-- `PYTHONPATH=src pytest tests/unit/test_copilot_service.py -v` passes with all tests including 4 new cases
+- `PYTHONPATH=src pytest tests/unit/test_copilot_service.py -v` passes with all tests including 6 new cases (3 email + 3 task)
 - `get_tool_registry()` returns `"send_email"` and `"create_task"` both with `deferred: False` and a non-`None` handler
 - `send_email_tool` raises `ValidationException` when `recipients` is empty or contains an invalid address
 - `create_task_tool` raises `ValidationException` when `title` is empty/whitespace or `assignee_id <= 0`

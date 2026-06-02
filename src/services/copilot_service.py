@@ -93,7 +93,7 @@ class CopilotService:
             assigned_to=assignee_id,
             tenant_id=tenant_id,
         )
-        return {"success": True, "task": task}
+        return {"success": True, "task": task.to_dict()}
 
     # ------------------------------------------------------------------
     # Conversation management
