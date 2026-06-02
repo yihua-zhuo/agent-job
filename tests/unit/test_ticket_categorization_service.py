@@ -80,9 +80,5 @@ class TestCategorizeTicket:
 
     async def test_empty_reply_raises_validation(self, service, mock_gateway):
         mock_gateway.chat.return_value = AIResponse(reply="", suggestions=[], actions=[])
-        try:
+        with pytest.raises(ValidationException):
             await service.categorize_ticket(ticket_id=10, tenant_id=1)
-        except ValidationException:
-            pass  # expected
-        else:
-            pytest.fail("Expected ValidationException to be raised")

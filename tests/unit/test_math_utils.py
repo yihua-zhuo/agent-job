@@ -1,19 +1,16 @@
-"""
-math_utils 单元测试
-"""
+"""Unit tests for math_utils."""
+
 import sys
 from pathlib import Path
 
 import pytest
 
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from math_utils import add, divide, multiply, power, sqrt, subtract
 
 
 class TestBasicOperations:
-    """基础运算测试"""
-
     def test_add(self):
         assert add(2, 3) == 5
         assert add(-1, 1) == 0
@@ -40,8 +37,6 @@ class TestBasicOperations:
 
 
 class TestAdvancedOperations:
-    """高级运算测试"""
-
     def test_power(self):
         assert power(2, 3) == 8
         assert power(2, 0) == 1

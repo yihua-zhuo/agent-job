@@ -7,7 +7,7 @@ from datetime import UTC, datetime
 
 from tests.unit.conftest import MockResult, MockRow, MockState
 
-ORDER = 55
+_MANGLED_RE = re.compile(r"^(id|tenant_id|ticket_id)(?:_\d+)$")
 
 _TICKET_ID_RE = re.compile(r"\bticket_categorizations\.ticket_id\s*=\s*(\d+)", re.IGNORECASE)
 _TENANT_ID_RE = re.compile(r"\bticket_categorizations\.tenant_id\s*=\s*(\d+)", re.IGNORECASE)
@@ -41,17 +41,13 @@ def make_ticket_categorization_handler(state: MockState) -> callable:
 
         if "from ticket_categorizations" in sql_text:
             rows = state.opaque["ticket_categorizations"]
-            id_val = params.get("id")
-            ticket_id_val = params.get("ticket_id")
-            tenant_id_val = params.get("tenant_id")
-            if not id_val:
-                for row in rows:
-                    if (
-                        ticket_id_val
-                        and row["ticket_id"] == ticket_id_val
-                        and (tenant_id_val is None or row["tenant_id"] == tenant_id_val)
-                    ):
-                        return MockResult([MockRow(row)])
+            norm = {}
+            for k, v in params.items():
+                m = _MANGLED_RE.match(k)
+                norm[m.group(1) if m else k] = v
+            id_val = norm.get("id")
+            ticket_id_val = norm.get("ticket_id")
+            tenant_id_val = norm.get("tenant_id")
             for row in rows:
                 if id_val and row["id"] == id_val:
                     return MockResult([MockRow(row)])

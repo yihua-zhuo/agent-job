@@ -75,8 +75,6 @@ class TicketCategorizationService:
             reasons={"reasoning": ai_response.reply[:500]} if ai_response.reply else None,
             human_override=False,
             categorized_at=now,
-            created_at=now,
-            updated_at=now,
         )
         self.session.add(record)
         await self.session.flush()
