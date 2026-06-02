@@ -1,4 +1,5 @@
 """Unit tests for src/api/routers/tickets.py — /api/v1/tickets and /api/v1/sla endpoints."""
+from decimal import Decimal
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -117,6 +118,7 @@ def client_with_service(monkeypatch):
     mock_service = MagicMock()
     mock_sla_service = MagicMock()
     mock_user_service = MagicMock()
+    mock_categorization_service = MagicMock()
     mock_user_service.get_user_by_id = AsyncMock(return_value=object())
 
     monkeypatch.setattr(
@@ -130,6 +132,10 @@ def client_with_service(monkeypatch):
     monkeypatch.setattr(
         "api.routers.tickets.UserService",
         lambda session: mock_user_service,
+    )
+    monkeypatch.setattr(
+        "api.routers.tickets.TicketCategorizationService",
+        lambda session: mock_categorization_service,
     )
 
     app = FastAPI()
@@ -146,7 +152,7 @@ def client_with_service(monkeypatch):
 
     # raise_server_exceptions=False so 500s surface as HTTP responses, not exceptions
     client = TestClient(app, raise_server_exceptions=False)
-    return client, mock_service, mock_sla_service
+    return client, mock_service, mock_sla_service, mock_categorization_service
 
 
 # ---------------------------------------------------------------------------
@@ -155,7 +161,7 @@ def client_with_service(monkeypatch):
 
 class TestCreateTicketEndpoint:
     def test_success_returns_201(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_ticket = MockTicket(TICKET_ROW)
         svc.create_ticket = AsyncMock(return_value=mock_ticket)
         resp = client.post(
@@ -175,7 +181,7 @@ class TestCreateTicketEndpoint:
         assert body["data"]["subject"] == "Help needed"
 
     def test_service_error_returns_4xx(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         svc.create_ticket = AsyncMock(
             side_effect=ValidationException("客户不存在")
         )
@@ -191,7 +197,7 @@ class TestCreateTicketEndpoint:
         assert resp.status_code == 422
 
     def test_invalid_channel_rejected(self, client_with_service):
-        client, _, _ = client_with_service
+        client, _, _, _ = client_with_service
         resp = client.post(
             "/api/v1/tickets",
             json={
@@ -204,7 +210,7 @@ class TestCreateTicketEndpoint:
         assert resp.status_code == 422
 
     def test_invalid_priority_rejected(self, client_with_service):
-        client, _, _ = client_with_service
+        client, _, _, _ = client_with_service
         resp = client.post(
             "/api/v1/tickets",
             json={
@@ -217,6 +223,40 @@ class TestCreateTicketEndpoint:
         )
         assert resp.status_code == 422
 
+    def test_auto_categorize_on_create_field_accepted(self, client_with_service):
+        client, svc, _, _ = client_with_service
+        mock_ticket = MockTicket(TICKET_ROW)
+        svc.create_ticket = AsyncMock(return_value=mock_ticket)
+        resp = client.post(
+            "/api/v1/tickets",
+            json={
+                "subject": "Help needed",
+                "description": "I need assistance",
+                "customer_id": 1,
+                "channel": "email",
+                "priority": "medium",
+                "auto_categorize_on_create": True,
+            },
+        )
+        assert resp.status_code == 201
+        body = resp.json()
+        assert body["success"] is True
+
+    def test_auto_categorize_on_create_field_default_false(self, client_with_service):
+        client, svc, _, _ = client_with_service
+        mock_ticket = MockTicket(TICKET_ROW)
+        svc.create_ticket = AsyncMock(return_value=mock_ticket)
+        resp = client.post(
+            "/api/v1/tickets",
+            json={
+                "subject": "Help needed",
+                "description": "I need assistance",
+                "customer_id": 1,
+                "channel": "email",
+            },
+        )
+        assert resp.status_code == 201
+
 
 # ---------------------------------------------------------------------------
 # GET /api/v1/tickets — list tickets
@@ -224,7 +264,7 @@ class TestCreateTicketEndpoint:
 
 class TestListTicketsEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_ticket = MockTicket(TICKET_ROW)
         svc.list_tickets = AsyncMock(return_value=([mock_ticket], 1))
         resp = client.get("/api/v1/tickets")
@@ -234,7 +274,7 @@ class TestListTicketsEndpoint:
         assert body["data"]["total"] == 1
 
     def test_page_size_over_100_rejected(self, client_with_service):
-        client, _, _ = client_with_service
+        client, _, _, _ = client_with_service
         resp = client.get("/api/v1/tickets?page_size=101")
         assert resp.status_code == 422
 
@@ -245,7 +285,7 @@ class TestListTicketsEndpoint:
 
 class TestGetTicketEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_ticket = MockTicket(TICKET_ROW)
         svc.get_ticket = AsyncMock(return_value=mock_ticket)
         resp = client.get("/api/v1/tickets/1")
@@ -253,7 +293,7 @@ class TestGetTicketEndpoint:
         assert resp.json()["data"]["id"] == 1
 
     def test_not_found_returns_404(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         svc.get_ticket = AsyncMock(
             side_effect=NotFoundException("Ticket")
         )
@@ -267,7 +307,7 @@ class TestGetTicketEndpoint:
 
 class TestUpdateTicketEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         updated_row = {**TICKET_ROW, "subject": "Updated subject"}
         mock_ticket = MockTicket(updated_row)
         svc.update_ticket = AsyncMock(return_value=mock_ticket)
@@ -276,7 +316,7 @@ class TestUpdateTicketEndpoint:
         assert resp.json()["data"]["subject"] == "Updated subject"
 
     def test_not_found_returns_404(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         svc.update_ticket = AsyncMock(
             side_effect=NotFoundException("Ticket")
         )
@@ -290,7 +330,7 @@ class TestUpdateTicketEndpoint:
 
 class TestAssignTicketEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_ticket = MockTicket({**TICKET_ROW, "assigned_to": 5})
         svc.assign_ticket = AsyncMock(return_value=mock_ticket)
         resp = client.put(
@@ -300,7 +340,7 @@ class TestAssignTicketEndpoint:
         assert resp.status_code == 200
 
     def test_not_found_returns_404(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         svc.assign_ticket = AsyncMock(
             side_effect=NotFoundException("Ticket")
         )
@@ -308,7 +348,7 @@ class TestAssignTicketEndpoint:
         assert resp.status_code == 404
 
     def test_assignee_id_zero_rejected(self, client_with_service):
-        client, _, _ = client_with_service
+        client, _, _, _ = client_with_service
         resp = client.put("/api/v1/tickets/1/assign", json={"assignee_id": 0})
         assert resp.status_code == 422
 
@@ -319,7 +359,7 @@ class TestAssignTicketEndpoint:
 
 class TestAddReplyEndpoint:
     def test_success_returns_201(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_reply = MockReply(REPLY_ROW)
         svc.add_reply = AsyncMock(return_value=mock_reply)
         resp = client.post(
@@ -335,7 +375,7 @@ class TestAddReplyEndpoint:
         assert body["data"]["content"] == "Here is the response"
 
     def test_not_found_returns_404(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         svc.add_reply = AsyncMock(
             side_effect=NotFoundException("Ticket")
         )
@@ -346,7 +386,7 @@ class TestAddReplyEndpoint:
         assert resp.status_code == 404
 
     def test_empty_content_rejected(self, client_with_service):
-        client, _, _ = client_with_service
+        client, _, _, _ = client_with_service
         resp = client.post(
             "/api/v1/tickets/1/replies",
             json={"content": "", "created_by": 99},
@@ -360,7 +400,7 @@ class TestAddReplyEndpoint:
 
 class TestChangeTicketStatusEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         updated_row = {**TICKET_ROW, "status": TicketStatus.RESOLVED}
         mock_ticket = MockTicket(updated_row)
         svc.change_status = AsyncMock(return_value=mock_ticket)
@@ -371,7 +411,7 @@ class TestChangeTicketStatusEndpoint:
         assert resp.status_code == 200
 
     def test_invalid_status_rejected(self, client_with_service):
-        client, _, _ = client_with_service
+        client, _, _, _ = client_with_service
         resp = client.put("/api/v1/tickets/1/status", json={"new_status": "invalid"})
         assert resp.status_code == 422
 
@@ -382,7 +422,7 @@ class TestChangeTicketStatusEndpoint:
 
 class TestGetCustomerTicketsEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_ticket = MockTicket(TICKET_ROW)
         svc.get_customer_tickets = AsyncMock(return_value=[mock_ticket])
         resp = client.get("/api/v1/tickets/customer/1")
@@ -397,7 +437,7 @@ class TestGetCustomerTicketsEndpoint:
 
 class TestSlaBreachesEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_ticket = MockTicket(TICKET_ROW)
         svc.get_sla_breaches = AsyncMock(return_value=[mock_ticket])
         resp = client.get("/api/v1/tickets/sla/breaches")
@@ -412,14 +452,14 @@ class TestSlaBreachesEndpoint:
 
 class TestAutoAssignEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_ticket = MockTicket({**TICKET_ROW, "assigned_to": 3})
         svc.auto_assign = AsyncMock(return_value=mock_ticket)
         resp = client.post("/api/v1/tickets/1/auto-assign")
         assert resp.status_code == 200
 
     def test_not_found_returns_404(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         svc.auto_assign = AsyncMock(
             side_effect=NotFoundException("Ticket")
         )
@@ -428,12 +468,45 @@ class TestAutoAssignEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# POST /api/v1/tickets/{ticket_id}/categorize — classify ticket
+# ---------------------------------------------------------------------------
+
+class TestCategorizeTicketEndpoint:
+    def test_success_returns_200(self, client_with_service):
+        client, _, _, cat_svc = client_with_service
+        mock_cat = MockCategorization(CATEGORIZATION_ROW)
+        cat_svc.categorize_ticket = AsyncMock(return_value=mock_cat)
+        resp = client.post("/api/v1/tickets/1/categorize")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["category_type"] == "technical"
+        assert body["message"] == "分类完成"
+
+    def test_not_found_returns_404(self, client_with_service):
+        client, _, _, cat_svc = client_with_service
+        cat_svc.categorize_ticket = AsyncMock(
+            side_effect=NotFoundException("Ticket")
+        )
+        resp = client.post("/api/v1/tickets/9999/categorize")
+        assert resp.status_code == 404
+
+    def test_validation_error_returns_422(self, client_with_service):
+        client, _, _, cat_svc = client_with_service
+        cat_svc.categorize_ticket = AsyncMock(
+            side_effect=ValidationException("AI gateway returned empty response")
+        )
+        resp = client.post("/api/v1/tickets/1/categorize")
+        assert resp.status_code == 422
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/sla/status/{ticket_id} — SLA status
 # ---------------------------------------------------------------------------
 
 class TestSLAStatusEndpoint:
     def test_success(self, client_with_service):
-        client, svc, sla_svc = client_with_service
+        client, svc, sla_svc, _ = client_with_service
         mock_ticket = MockTicket(TICKET_ROW)
         svc.get_ticket = AsyncMock(return_value=mock_ticket)
         sla_svc.check_sla_status = AsyncMock(return_value="ok")
@@ -453,7 +526,7 @@ class TestSLAStatusEndpoint:
 
 class TestSlaBreachTicketsEndpoint:
     def test_success(self, client_with_service):
-        client, svc, sla_svc = client_with_service
+        client, svc, sla_svc, _ = client_with_service
         mock_ticket = MockTicket(TICKET_ROW)
         sla_svc.get_breach_tickets = AsyncMock(return_value=[mock_ticket])
         resp = client.get("/api/v1/sla/breaches")
@@ -468,7 +541,7 @@ class TestSlaBreachTicketsEndpoint:
 
 class TestGetTicketRepliesEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_reply = MockReply(REPLY_ROW)
         svc.get_ticket_replies = AsyncMock(return_value=[mock_reply])
         resp = client.get("/api/v1/tickets/1/replies")
@@ -479,7 +552,7 @@ class TestGetTicketRepliesEndpoint:
         assert body["data"][0]["content"] == "Here is the response"
 
     def test_not_found_returns_404(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         svc.get_ticket_replies = AsyncMock(
             side_effect=NotFoundException("Ticket")
         )
@@ -521,9 +594,49 @@ ACTIVITY_ROW = {
 }
 
 
+class MockCategorization:
+    def __init__(self, data=None):
+        for k, v in (data or {}).items():
+            setattr(self, k, v)
+
+    def to_dict(self):
+        return {
+            "id": getattr(self, "id", None),
+            "tenant_id": getattr(self, "tenant_id", None),
+            "ticket_id": getattr(self, "ticket_id", None),
+            "category_type": getattr(self, "category_type", None),
+            "priority": getattr(self, "priority", None),
+            "confidence": getattr(self, "confidence", None),
+            "reasons": getattr(self, "reasons", None),
+            "suggested_assignee_id": getattr(self, "suggested_assignee_id", None),
+            "suggested_team": getattr(self, "suggested_team", None),
+            "human_override": getattr(self, "human_override", False),
+            "categorized_at": getattr(self, "categorized_at", None),
+            "created_at": getattr(self, "created_at", None),
+            "updated_at": getattr(self, "updated_at", None),
+        }
+
+
+CATEGORIZATION_ROW = {
+    "id": 1,
+    "tenant_id": 1,
+    "ticket_id": 1,
+    "category_type": "technical",
+    "priority": "high",
+    "confidence": Decimal("0.85"),
+    "reasons": {"reasoning": "Issue involves system error and crash"},
+    "suggested_assignee_id": None,
+    "suggested_team": None,
+    "human_override": False,
+    "categorized_at": None,
+    "created_at": None,
+    "updated_at": None,
+}
+
+
 class TestGetTicketActivityEndpoint:
     def test_success(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         mock_activity = MockActivity(ACTIVITY_ROW)
         svc.get_ticket_activity = AsyncMock(return_value=[mock_activity])
         resp = client.get("/api/v1/tickets/1/activity")
@@ -534,7 +647,7 @@ class TestGetTicketActivityEndpoint:
         assert body["data"][0]["type"] == "comment"
 
     def test_not_found_returns_404(self, client_with_service):
-        client, svc, _ = client_with_service
+        client, svc, _, _ = client_with_service
         svc.get_ticket_activity = AsyncMock(
             side_effect=NotFoundException("Ticket")
         )
@@ -550,7 +663,7 @@ class TestGetTicketActivityEndpoint:
 class TestGetSlaSummaryEndpoint:
     def test_success_returns_all_counts(self, client_with_service):
         """Happy path: service returns counts, endpoint serialises as SLAStatCard."""
-        client, _, sla_svc = client_with_service
+        client, _, sla_svc, _ = client_with_service
         sla_svc.get_sla_summary = AsyncMock(
             return_value={"breached": 3, "at_risk": 2, "on_track": 5, "total_tickets": 10}
         )
@@ -566,7 +679,7 @@ class TestGetSlaSummaryEndpoint:
 
     def test_response_contains_all_stat_card_fields(self, client_with_service):
         """SLAStatCard schema exposes exactly breached/at_risk/on_track/total_tickets."""
-        client, _, sla_svc = client_with_service
+        client, _, sla_svc, _ = client_with_service
         sla_svc.get_sla_summary = AsyncMock(
             return_value={"breached": 0, "at_risk": 0, "on_track": 0, "total_tickets": 0}
         )
@@ -577,7 +690,7 @@ class TestGetSlaSummaryEndpoint:
 
     def test_all_zeros_when_no_tickets(self, client_with_service):
         """Empty dataset → all counts zero, endpoint still returns 200."""
-        client, _, sla_svc = client_with_service
+        client, _, sla_svc, _ = client_with_service
         sla_svc.get_sla_summary = AsyncMock(
             return_value={"breached": 0, "at_risk": 0, "on_track": 0, "total_tickets": 0}
         )
@@ -591,7 +704,7 @@ class TestGetSlaSummaryEndpoint:
 
     def test_service_receives_tenant_id_from_auth_context(self, client_with_service):
         """Endpoint must pass the authenticated tenant_id to the service."""
-        client, _, sla_svc = client_with_service
+        client, _, sla_svc, _ = client_with_service
         sla_svc.get_sla_summary = AsyncMock(
             return_value={"breached": 1, "at_risk": 0, "on_track": 2, "total_tickets": 3}
         )
@@ -602,14 +715,14 @@ class TestGetSlaSummaryEndpoint:
 
     def test_service_exception_propagates_as_500(self, client_with_service):
         """Unhandled service error surfaces as a 500 (raise_server_exceptions=False)."""
-        client, _, sla_svc = client_with_service
+        client, _, sla_svc, _ = client_with_service
         sla_svc.get_sla_summary = AsyncMock(side_effect=RuntimeError("db gone"))
         resp = client.get("/api/v1/sla/summary")
         assert resp.status_code == 500
 
     def test_all_breached_scenario(self, client_with_service):
         """When every ticket is breached, on_track and at_risk are 0."""
-        client, _, sla_svc = client_with_service
+        client, _, sla_svc, _ = client_with_service
         sla_svc.get_sla_summary = AsyncMock(
             return_value={"breached": 7, "at_risk": 0, "on_track": 0, "total_tickets": 7}
         )
