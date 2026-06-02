@@ -30,16 +30,12 @@ class TicketCategorizationModel(Base):
     suggested_team: Mapped[str | None] = mapped_column(String(100), nullable=True)
     human_override: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
     categorized_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    __table_args__ = (
-        Index("ix_ticket_categorizations_tenant_ticket", "tenant_id", "ticket_id"),
-    )
+    __table_args__ = (Index("ix_ticket_categorizations_tenant_ticket", "tenant_id", "ticket_id"),)
 
     def to_dict(self) -> dict:
         return {

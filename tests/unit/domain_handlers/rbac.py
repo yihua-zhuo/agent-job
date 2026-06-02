@@ -252,7 +252,7 @@ def make_permission_handler(state: RBACMockState):
                 # Only collect 'name_N' variants (not bare 'name') to avoid duplicates
                 # when both forms appear in params simultaneously.
                 import re
-                names = [str(params[k]) for k in sorted(params) if re.match(rf"name_\d+", k)]
+                names = [str(params[k]) for k in sorted(params) if re.match(r"name_\d+", k)]
                 rows = [r for r in rows if r["name"] in (names or [])]
             elif "where" in sql_text and "category" in sql_text:
                 cat = _parse_str_param(params, "category")

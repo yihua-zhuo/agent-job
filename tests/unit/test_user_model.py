@@ -1,9 +1,7 @@
 """
 用户模型单元测试
 """
-import pytest
-from datetime import datetime
-from src.models.user import User, UserRole, UserStatus, Role
+from src.models.user import Role, User, UserRole, UserStatus
 
 
 class TestUserModel:

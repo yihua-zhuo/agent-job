@@ -1,16 +1,14 @@
 """Unit tests for src/services/lead_routing_service.py — rule matching, load balancing, SLA, recycling."""
 
 from datetime import UTC, datetime, timedelta
-from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from models.routing import ConditionOperator, RuleCondition
 from services.lead_routing_service import (
     LeadRoutingService,
     evaluate_conditions,
 )
-from models.routing import ConditionOperator, RuleCondition
-
 
 # ---------------------------------------------------------------------------
 # evaluate_conditions (synchronous)

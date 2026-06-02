@@ -161,7 +161,6 @@ class TestRBACServiceStatic:
         get_handlers, which filters by tenant_id (and system roles via the OR
         clause that the mock cannot fully evaluate, returning system roles).
         """
-        from tests.unit.domain_handlers.rbac import RBACMockState, get_handlers
 
         state = RBACMockState()
         session = make_mock_session(get_handlers(state), state=state)

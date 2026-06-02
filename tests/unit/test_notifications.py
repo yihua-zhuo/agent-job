@@ -11,15 +11,14 @@ from fastapi.testclient import TestClient
 from starlette.exceptions import HTTPException
 from starlette.responses import JSONResponse
 
-from api.routers.notifications import _priority_to_string
-from api.routers.notifications import notifications_router
+from api.routers.notifications import _priority_to_string, notifications_router
 from db.connection import get_db
 from db.models.smart_notification import Priority
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.channel_delivery import ChannelDelivery
 from pkg.errors.app_exceptions import AppException
 from services.notification_service import NotificationService
-from tests.unit.conftest import make_mock_session, MockState, make_smart_notification_handler
+from tests.unit.conftest import MockState, make_mock_session, make_smart_notification_handler
 
 
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:

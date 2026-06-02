@@ -1,8 +1,9 @@
 """Unit tests for ReportService CRUD methods."""
 
+from unittest.mock import MagicMock
+
 import pytest
 from sqlalchemy import inspect as sqla_inspect
-from unittest.mock import MagicMock
 
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.report_service import ReportService

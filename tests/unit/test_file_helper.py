@@ -2,9 +2,9 @@
 Unit tests for src/utils/file_helper.py — FileHelper class
 Covers: read_csv, write_csv, read_excel, write_excel, detect_file_format
 """
-import pytest
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
 
 from utils.file_helper import FileHelper
@@ -21,7 +21,7 @@ class TestReadCsv:
 
     def test_read_csv_utf8(self):
         """UTF-8 encoded CSV with Chinese characters."""
-        content = f"name,age,city\n{ZH_NAME},25,{ZH_CITY}\n{ZH2_NAME},30,{ZH2_CITY}".encode('utf-8')
+        content = f"name,age,city\n{ZH_NAME},25,{ZH_CITY}\n{ZH2_NAME},30,{ZH2_CITY}".encode()
         result = FileHelper.read_csv(content)
         assert len(result) == 2
         assert result[0]["name"] == ZH_NAME
@@ -143,8 +143,9 @@ class TestReadExcel:
 
     def _make_excel_bytes(self, rows):
         """Helper: create Excel bytes from list of lists."""
-        from openpyxl import Workbook
         from io import BytesIO
+
+        from openpyxl import Workbook
         wb = Workbook()
         ws = wb.active
         for row in rows:
@@ -212,8 +213,9 @@ class TestWriteExcel:
         """Sheet name is set correctly."""
         data = [{"name": "Alice"}]
         result = FileHelper.write_excel(data, "MySheet")
-        from openpyxl import load_workbook
         from io import BytesIO
+
+        from openpyxl import load_workbook
         wb = load_workbook(BytesIO(result))
         assert wb.active.title == "MySheet"
         wb.close()
@@ -222,8 +224,9 @@ class TestWriteExcel:
         """Headers are written in row 1."""
         data = [{"name": "Alice", "city": "NYC"}]
         result = FileHelper.write_excel(data, "Test")
-        from openpyxl import load_workbook
         from io import BytesIO
+
+        from openpyxl import load_workbook
         wb = load_workbook(BytesIO(result))
         ws = wb.active
         assert ws.cell(row=1, column=1).value == "name"
@@ -234,8 +237,9 @@ class TestWriteExcel:
         """Data rows start at row 2."""
         data = [{"name": "Alice"}, {"name": "Bob"}]
         result = FileHelper.write_excel(data, "Test")
-        from openpyxl import load_workbook
         from io import BytesIO
+
+        from openpyxl import load_workbook
         wb = load_workbook(BytesIO(result))
         ws = wb.active
         assert ws.cell(row=2, column=1).value == "Alice"

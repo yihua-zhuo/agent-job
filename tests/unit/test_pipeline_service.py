@@ -1,18 +1,18 @@
 """Unit tests for PipelineService."""
 import pytest
-import pytest_asyncio
-from services.pipeline_service import PipelineService
+
 from pkg.errors.app_exceptions import (
     ConflictException,
     NotFoundException,
     ValidationException,
 )
+from services.pipeline_service import PipelineService
 from tests.unit.conftest import (
-    make_mock_session,
-    pipeline_handler,
-    make_count_handler,
     MockResult,
     MockState,
+    make_count_handler,
+    make_mock_session,
+    pipeline_handler,
 )
 
 

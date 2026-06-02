@@ -1,7 +1,9 @@
 """Unit tests for RBACService."""
-import pytest
 from unittest.mock import MagicMock
-from src.services.rbac_service import RBACService, Permission
+
+import pytest
+
+from src.services.rbac_service import Permission, RBACService
 
 
 @pytest.fixture
