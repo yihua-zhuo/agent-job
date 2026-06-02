@@ -45,7 +45,7 @@ Reading order followed:
 ## Test Plan
 - Unit tests in `tests/unit/test_tickets_router.py`: extend existing test file with `MockCategorization`, `CATEGORIZATION_ROW`, `TestCategorizeTicketEndpoint` (3 cases), and 2 cases for `auto_categorize_on_create` in `TestCreateTicketEndpoint`
 - Integration tests in `tests/integration/`: none required — `TicketCategorizationService` already has integration tests in `tests/unit/test_ticket_categorization_service.py`; router is tested via unit test with mock service
-- Dev-plan verification: The target board has no `§6` commands (board document ends after §4). Per operational rule "run the corresponding machine-checkable verification from §6 when available", the applicable verification is `PYTHONPATH=src pytest tests/unit/test_tickets_router.py -v` which should show all new and existing tests pass (target: ≥ 3 new passed)
+- Dev-plan verification: `PYTHONPATH=src ruff check src/api/routers/tickets.py && PYTHONPATH=src pytest tests/unit/test_tickets_router.py -v` — all tests pass (≥ 3 new cases for categorize endpoint + 2 for auto_categorize_on_create field)
 
 ## Acceptance Criteria
 - `ruff check src/api/routers/tickets.py` → 0 errors

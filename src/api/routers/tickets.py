@@ -56,7 +56,11 @@ class TicketCreate(BaseModel):
     channel: str = Field(..., pattern="^(email|chat|whatsapp|phone)$")
     priority: str = Field(default="medium", pattern="^(low|medium|high|urgent)$")
     sla_level: str | None = Field(default="standard", pattern="^(basic|standard|premium|enterprise)$")
-    auto_categorize_on_create: bool = Field(default=False)
+    auto_categorize_on_create: bool = Field(
+        default=False,
+        # TODO: wire into service.create_ticket() to trigger async categorization
+        # on ticket creation when this flag is True.
+    )
 
 
 class TicketUpdate(BaseModel):
