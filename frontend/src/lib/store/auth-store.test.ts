@@ -25,9 +25,25 @@ vi.mock("crypto-js", () => ({
   },
 }));
 
+const mockLogin = vi.fn();
+const mockGetMe = vi.fn();
+
+vi.mock("@/lib/api/auth", () => ({
+  login: (...args: unknown[]) => mockLogin(...args),
+  getMe: (...args: unknown[]) => mockGetMe(...args),
+}));
+
 describe("auth-store", () => {
   beforeEach(() => {
-    useAuthStore.setState({ token: null, user: null, isHydrated: true });
+    mockLogin.mockReset();
+    mockGetMe.mockReset();
+    useAuthStore.setState({
+      token: null,
+      user: null,
+      isHydrated: true,
+      error: null,
+      isLoading: false,
+    });
   });
 
   afterEach(() => {
@@ -65,6 +81,12 @@ describe("auth-store", () => {
       expect(useAuthStore.getState().token).toBe("token-2");
       expect(useAuthStore.getState().user?.username).toBe("other");
     });
+
+    it("clears any prior error", () => {
+      useAuthStore.setState({ error: "old error" });
+      useAuthStore.getState().setAuth("t", mockUser);
+      expect(useAuthStore.getState().error).toBeNull();
+    });
   });
 
   describe("clearAuth", () => {
@@ -90,6 +112,12 @@ describe("auth-store", () => {
       expect(store.user).toBeNull();
       expect(store.isAuthenticated()).toBe(false);
     });
+
+    it("clears any prior error", () => {
+      useAuthStore.setState({ error: "old error" });
+      useAuthStore.getState().clearAuth();
+      expect(useAuthStore.getState().error).toBeNull();
+    });
   });
 
   describe("isAuthenticated", () => {
@@ -105,6 +133,99 @@ describe("auth-store", () => {
     it("returns true when token is present", () => {
       useAuthStore.getState().setAuth("valid-token", mockUser);
       expect(useAuthStore.getState().isAuthenticated()).toBe(true);
+    });
+  });
+
+  describe("login", () => {
+    it("stores token and user on successful login", async () => {
+      mockLogin.mockResolvedValue({ access_token: "new-token", token_type: "bearer" });
+      mockGetMe.mockResolvedValue({ data: mockUser });
+
+      await useAuthStore.getState().login({ username: "testuser", password: "secret" });
+
+      expect(mockLogin).toHaveBeenCalledWith({ username: "testuser", password: "secret" });
+      expect(mockGetMe).toHaveBeenCalledWith("new-token");
+      expect(useAuthStore.getState().token).toBe("new-token");
+      expect(useAuthStore.getState().user).toEqual(mockUser);
+      expect(useAuthStore.getState().isAuthenticated()).toBe(true);
+    });
+
+    it("falls back to minimal user when getMe fails", async () => {
+      mockLogin.mockResolvedValue({ access_token: "tok", token_type: "bearer" });
+      mockGetMe.mockRejectedValue(new Error("network"));
+
+      await useAuthStore.getState().login({ username: "testuser", password: "secret" });
+
+      expect(useAuthStore.getState().token).toBe("tok");
+      expect(useAuthStore.getState().user?.username).toBe("testuser");
+    });
+
+    it("sets error and throws on invalid credentials (no state change)", async () => {
+      mockLogin.mockRejectedValue(new Error("Invalid credentials"));
+
+      await expect(
+        useAuthStore.getState().login({ username: "bad@example.com", password: "wrong" })
+      ).rejects.toThrow("Invalid credentials");
+
+      expect(useAuthStore.getState().token).toBeNull();
+      expect(useAuthStore.getState().user).toBeNull();
+      expect(useAuthStore.getState().error).toBe("Invalid credentials");
+      expect(useAuthStore.getState().isAuthenticated()).toBe(false);
+    });
+
+    it("sets error and throws on account locked (no state change)", async () => {
+      mockLogin.mockRejectedValue(new Error("Account locked. Please contact your administrator."));
+
+      await expect(
+        useAuthStore.getState().login({ username: "locked@example.com", password: "any" })
+      ).rejects.toThrow(/locked/);
+
+      expect(useAuthStore.getState().token).toBeNull();
+      expect(useAuthStore.getState().user).toBeNull();
+      expect(useAuthStore.getState().error).toMatch(/locked/);
+    });
+
+    it("sets isLoading back to false on success", async () => {
+      mockLogin.mockResolvedValue({ access_token: "tok", token_type: "bearer" });
+      mockGetMe.mockResolvedValue({ data: mockUser });
+
+      await useAuthStore.getState().login({ username: "u", password: "p" });
+
+      expect(useAuthStore.getState().isLoading).toBe(false);
+      expect(useAuthStore.getState().error).toBeNull();
+    });
+
+    it("sets isLoading back to false on error path", async () => {
+      mockLogin.mockRejectedValue(new Error("Invalid credentials"));
+
+      await expect(
+        useAuthStore.getState().login({ username: "u", password: "p" })
+      ).rejects.toThrow();
+
+      expect(useAuthStore.getState().isLoading).toBe(false);
+    });
+
+    it("clears prior error at the start of a new login attempt", async () => {
+      useAuthStore.setState({ error: "old" });
+      mockLogin.mockRejectedValue(new Error("Invalid credentials"));
+
+      await expect(
+        useAuthStore.getState().login({ username: "u", password: "p" })
+      ).rejects.toThrow();
+
+      // After failure, error is the new one, not the stale one
+      expect(useAuthStore.getState().error).toBe("Invalid credentials");
+    });
+  });
+
+  describe("logout", () => {
+    it("clears auth state", () => {
+      const store = useAuthStore.getState();
+      store.setAuth("t", mockUser);
+      store.logout();
+      expect(useAuthStore.getState().token).toBeNull();
+      expect(useAuthStore.getState().user).toBeNull();
+      expect(useAuthStore.getState().isAuthenticated()).toBe(false);
     });
   });
 });

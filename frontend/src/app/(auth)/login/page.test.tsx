@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen } from "@testing-library/react";
+import "@testing-library/jest-dom/vitest";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import * as auth from "@/lib/api/auth";
 import LoginPage from "./page";
 
 // Mock crypto-js
@@ -29,30 +29,51 @@ vi.mock("crypto-js", () => ({
   },
 }));
 
-// Mock next/navigation
+// Mock next/navigation — useRouter().push is now called from the page, not the store
+const mockPush = vi.fn();
 vi.mock("next/navigation", () => ({
   useRouter: () => ({
-    push: vi.fn(),
+    push: mockPush,
   }),
 }));
 
-// Mock @tanstack/react-query
-vi.mock("@tanstack/react-query", () => ({
-  useMutation: vi.fn(() => ({
-    mutate: vi.fn(),
-    isPending: false,
-  })),
-}));
+// Polyfill matchMedia for jsdom (Providers uses it for system theme detection)
+if (typeof window !== "undefined" && !window.matchMedia) {
+  Object.defineProperty(window, "matchMedia", {
+    writable: true,
+    value: vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
+}
 
-// Mock @/lib/api/auth
-vi.mock("@/lib/api/auth", () => ({
-  login: vi.fn(),
-  getMe: vi.fn().mockResolvedValue({ data: { id: 1, tenant_id: 1, username: "a", email: "a@b.com", role: "user", status: "active" } }),
+// Mock the auth store
+const mockLogin = vi.fn();
+const mockAuthStore = {
+  login: mockLogin,
+  error: null as string | null,
+  isLoading: false,
+};
+
+vi.mock("@/lib/store/auth-store", () => ({
+  useAuthStore: (selector: (s: typeof mockAuthStore) => unknown) =>
+    selector(mockAuthStore),
 }));
 
 describe("LoginPage", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAuthStore.error = null;
+    mockAuthStore.isLoading = false;
+    mockLogin.mockReset();
+    mockPush.mockReset();
   });
 
   it("renders the sign-in form with heading", () => {
@@ -87,27 +108,74 @@ describe("LoginPage", () => {
       await user.click(screen.getByRole("button", { name: /sign in/i }));
       expect(await screen.findByText(/please enter a valid email address/i)).toBeInTheDocument();
     });
+  });
 
-    it("shows root.serverError message on invalid credentials", async () => {
-      let capturedOnError: ((err: Error) => void) | undefined;
-      vi.mocked(auth.login).mockImplementation(() => new Promise((_, reject) => {
-        capturedOnError = (err) => reject(err);
-      }));
+  describe("auth store wiring", () => {
+    it("calls authStore.login once with username and password on valid submit, then redirects to /dashboard", async () => {
+      mockLogin.mockResolvedValue(undefined);
 
-      const { useMutation } = await import("@tanstack/react-query");
-      vi.mocked(useMutation).mockImplementation(({ onError }) => {
-        const mutate = (..._args: unknown[]) => {
-          if (onError && capturedOnError) onError(new Error("Invalid credentials"));
-        };
-        return { mutate, isPending: false };
+      const user = userEvent.setup();
+      render(<LoginPage />);
+      await user.type(screen.getByPlaceholderText("username"), "user@example.com");
+      await user.type(screen.getByPlaceholderText("••••••••"), "correctpassword");
+      await user.click(screen.getByRole("button", { name: /sign in/i }));
+
+      await waitFor(() => {
+        expect(mockLogin).toHaveBeenCalledTimes(1);
       });
+      expect(mockLogin).toHaveBeenCalledWith({
+        username: "user@example.com",
+        password: "correctpassword",
+      });
+      await waitFor(() => {
+        expect(mockPush).toHaveBeenCalledWith("/dashboard");
+      });
+    });
+
+    it("does not redirect to /dashboard when login throws", async () => {
+      mockLogin.mockRejectedValue(new Error("Invalid credentials"));
 
       const user = userEvent.setup();
       render(<LoginPage />);
       await user.type(screen.getByPlaceholderText("username"), "user@example.com");
       await user.type(screen.getByPlaceholderText("••••••••"), "wrongpassword");
       await user.click(screen.getByRole("button", { name: /sign in/i }));
-      expect(await screen.findByText("Invalid credentials")).toBeInTheDocument();
+
+      await waitFor(() => {
+        expect(mockLogin).toHaveBeenCalled();
+      });
+      expect(mockPush).not.toHaveBeenCalledWith("/dashboard");
+    });
+
+    it("renders the inline error text when authStore.error is set (invalid credentials)", () => {
+      mockAuthStore.error = "Invalid credentials";
+
+      render(<LoginPage />);
+      expect(screen.getByText("Invalid credentials")).toBeInTheDocument();
+    });
+
+    it("renders the inline error text when authStore.error indicates account locked", () => {
+      mockAuthStore.error = "Account locked. Please contact your administrator.";
+
+      render(<LoginPage />);
+      expect(
+        screen.getByText(/account locked/i)
+      ).toBeInTheDocument();
+    });
+
+    it("disables the submit button while isLoading is true", () => {
+      mockAuthStore.isLoading = true;
+
+      render(<LoginPage />);
+      const button = screen.getByRole("button", { name: /signing in/i });
+      expect(button).toBeDisabled();
+    });
+
+    it("shows the signing-in label while isLoading is true", () => {
+      mockAuthStore.isLoading = true;
+
+      render(<LoginPage />);
+      expect(screen.getByRole("button", { name: /signing in/i })).toBeTruthy();
     });
   });
 });
