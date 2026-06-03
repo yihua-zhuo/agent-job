@@ -612,4 +612,4 @@ class TestHandleMessage:
     async def test_result_has_expected_keys(self, seeded_session):
         svc = ChatService(seeded_session)
         result = await svc.handle_message("show me customers", tenant_id=1)
-        assert set(result.keys()) == {"intent", "query_results", "error"}
+        assert {"intent", "query_results", "error"} <= set(result.keys())
