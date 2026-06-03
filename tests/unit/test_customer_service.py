@@ -30,15 +30,15 @@ def _make_mock_customer_repo():
 
 @pytest.fixture
 def mock_db_session():
-    """Async mock session."""
-    session = MagicMock()
-    session.add = MagicMock()
-    session.flush = AsyncMock()
-    session.refresh = AsyncMock()
-    session.execute = AsyncMock()
-    session.get = AsyncMock(return_value=None)
-    session.delete = MagicMock()
-    return session
+    """SQL mock session for tests that need seeded DB state via domain handlers.
+
+    Only used by TestSearchCustomers. Most tests pass mock_customer_repo
+    directly to CustomerService and need no SQL mock.
+    """
+    from tests.unit.conftest import MockState, make_mock_session
+
+    state = MockState()
+    return make_mock_session(state=state)
 
 
 @pytest.fixture
