@@ -8,7 +8,6 @@ from pkg.errors.app_exceptions import ValidationException
 from services.chat_service import ChatService
 from tests.unit.conftest import MockResult, MockState, make_mock_session
 
-
 # ---------------------------------------------------------------------------
 # ORM-like mock objects — used in place of MockRow so that r.to_dict()
 # (called by chat_service on scalars) returns a dict rather than crashing.
