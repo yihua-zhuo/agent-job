@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from sqlalchemy import and_, select
+from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.ticket import TicketModel
@@ -80,3 +80,69 @@ class TicketCategorizationService:
         await self.session.flush()
         await self.session.refresh(record)
         return record
+
+    async def get_metrics(self, tenant_id: int) -> dict:
+        total_result = await self.session.execute(
+            select(
+                func.count(TicketCategorizationModel.id).label("total"),
+                func.coalesce(func.avg(TicketCategorizationModel.confidence), 0.0).label("avg_confidence"),
+                func.sum(
+                    case((TicketCategorizationModel.human_override, 1), else_=0)
+                ).label("override_count"),
+            ).where(TicketCategorizationModel.tenant_id == tenant_id)
+        )
+        row = total_result.one()
+        total = row.total or 0
+        override_count = int(row.override_count or 0)
+        override_rate = override_count / total if total > 0 else 0.0
+
+        type_result = await self.session.execute(
+            select(
+                TicketCategorizationModel.category_type,
+                func.count(TicketCategorizationModel.id).label("count"),
+                func.coalesce(func.avg(TicketCategorizationModel.confidence), 0.0).label("avg_confidence"),
+                func.sum(
+                    case((TicketCategorizationModel.human_override, 1), else_=0)
+                ).label("overrides"),
+            )
+            .where(TicketCategorizationModel.tenant_id == tenant_id)
+            .group_by(TicketCategorizationModel.category_type)
+        )
+        by_type = {
+            r.category_type: {
+                "count": r.count,
+                "avg_confidence": round(float(r.avg_confidence), 4),
+                "overrides": int(r.overrides or 0),
+            }
+            for r in type_result
+        }
+
+        priority_result = await self.session.execute(
+            select(
+                TicketCategorizationModel.priority,
+                func.count(TicketCategorizationModel.id).label("count"),
+                func.coalesce(func.avg(TicketCategorizationModel.confidence), 0.0).label("avg_confidence"),
+                func.sum(
+                    case((TicketCategorizationModel.human_override, 1), else_=0)
+                ).label("overrides"),
+            )
+            .where(TicketCategorizationModel.tenant_id == tenant_id)
+            .group_by(TicketCategorizationModel.priority)
+        )
+        by_priority = {
+            r.priority: {
+                "count": r.count,
+                "avg_confidence": round(float(r.avg_confidence), 4),
+                "overrides": int(r.overrides or 0),
+            }
+            for r in priority_result
+        }
+
+        return {
+            "total_categorized": total,
+            "override_count": override_count,
+            "override_rate": round(float(override_rate), 4),
+            "average_confidence": round(float(row.avg_confidence or 0.0), 4),
+            "by_type": by_type,
+            "by_priority": by_priority,
+        }
