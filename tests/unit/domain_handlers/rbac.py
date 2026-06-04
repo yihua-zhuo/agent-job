@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC
 from datetime import datetime as dt
 
-from tests.unit.conftest import MockResult, MockState
+from tests.unit.conftest import MockResult, MockRow, MockState
 
 ORDER = 20
 
@@ -114,6 +114,15 @@ def _build_permission_model(record: dict):
     return _make_permission(**record)
 
 
+def _wrap_role(record: dict):
+    """Return a MockRow wrapping the role record so flush() can iterate keys."""
+    return MockRow(record.copy())
+
+
+def _wrap_permission(record: dict):
+    return MockRow(record.copy())
+
+
 def make_role_permission_handler(state: RBACMockState):
 
     def handler(sql_text, params):
@@ -125,7 +134,7 @@ def make_role_permission_handler(state: RBACMockState):
             permission_id = _parse_int_param(sql_text, params, "permission_id")
             rp = {"id": rid, "role_id": role_id, "permission_id": permission_id}
             state.role_permissions.append(rp)
-            return MockResult([rp])
+            return MockResult([MockRow(rp)])
 
         # Delete from role_permissions
         if "delete from role_permissions" in sql_text:
@@ -136,7 +145,7 @@ def make_role_permission_handler(state: RBACMockState):
             return MockResult([])
 
         # Select from role_permissions (join with permissions for list_role_permissions)
-        if "select" in sql_text and "from role_permissions" in sql_text:
+        if "select" in sql_text and ("from role_permissions" in sql_text or "join role_permissions" in sql_text):
             role_id = _parse_int_param(sql_text, params, "role_id")
             if role_id is None:
                 raise ValueError("role_id could not be determined from query parameters")
@@ -174,7 +183,7 @@ def make_role_handler(state: RBACMockState):
                 "created_at": dt.now(UTC),
             }
             state.roles[rid] = role
-            return MockResult([_build_role_model(role)])
+            return MockResult([_wrap_role(role)])
 
         # Count from roles
         if "select" in sql_text and "count" in sql_text and "from roles" in sql_text:
@@ -193,9 +202,14 @@ def make_role_handler(state: RBACMockState):
             if has_id_param:
                 rid = _parse_int_param(sql_text, params, "id")
                 rows = [r for r in rows if r["id"] == rid]
-            # No id param: filter to tenant + system roles (mimics or_ query in rbac_service.py)
             else:
-                rows = [r for r in rows if r["tenant_id"] == tenant_id or r["tenant_id"] == 0]
+                # Check for a name param: WHERE tenant_id = X AND name = Y
+                name_val = _parse_str_param(params, "name")
+                if name_val is not None:
+                    rows = [r for r in rows if r["name"] == name_val and r["tenant_id"] == tenant_id]
+                # No id / no name: filter to tenant + system roles (mimics or_ query)
+                else:
+                    rows = [r for r in rows if r["tenant_id"] == tenant_id or r["tenant_id"] == 0]
 
             if rows:
                 rows.sort(key=lambda r: (-r["priority"], r["id"]))
@@ -246,14 +260,21 @@ def make_permission_handler(state: RBACMockState):
 
         # Select from permissions
         if "select" in sql_text and "from permissions" in sql_text:
+            import re as _re
             rows = [p.copy() for p in state.permissions.values()]
-            if "where" in sql_text and "name" in sql_text and "in" in sql_text:
-                # Handle permission_names IN clause: SQLAlchemy binds as name_1, name_2, ...
-                # Only collect 'name_N' variants (not bare 'name') to avoid duplicates
-                # when both forms appear in params simultaneously.
-                import re
-                names = [str(params[k]) for k in sorted(params) if re.match(r"name_\d+", k)]
-                rows = [r for r in rows if r["name"] in (names or [])]
+            # Check for IN clause: "name IN (...)" — but be specific to avoid
+            # false positives from "join" containing "in".
+            if "where" in sql_text and "name" in sql_text and _re.search(r"\bin\s*\(", sql_text):
+                # Handle permission_names IN clause: SQLAlchemy binds as a single
+                # list under 'name_1' (expand-bind). Unwrap list values.
+                names: list[str] = []
+                for k, v in sorted(params.items()):
+                    if _re.match(r"name_\d+", k):
+                        if isinstance(v, (list, tuple)):
+                            names.extend(str(x) for x in v)
+                        else:
+                            names.append(str(v))
+                rows = [r for r in rows if r["name"] in names]
             elif "where" in sql_text and "category" in sql_text:
                 cat = _parse_str_param(params, "category")
                 if cat is not None:
@@ -297,7 +318,7 @@ def make_user_role_handler(state: RBACMockState):
                 "granted_at": dt.now(UTC),
             }
             state.user_roles.append(ur)
-            return MockResult([ur])
+            return MockResult([MockRow(ur)])
 
         # Delete from user_roles (revoke)
         if "delete from user_roles" in sql_text:

@@ -14,9 +14,14 @@ import os
 
 import asyncpg
 import pytest
+from httpx import AsyncClient
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.rbac import RoleModel
+from db.models.user import UserModel
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
-from services.rbac_service import RBACService
+from services.rbac_service import DEFAULT_PERMISSIONS, RBACService
 
 
 async def _seed_rbac_data():
@@ -397,3 +402,172 @@ class TestRBACIntegration:
             "admin should be a system role with tenant_id=0"
         assert any(r.name == "viewer" and r.tenant_id == 0 for r in roles_same), \
             "viewer should be a system role with tenant_id=0"
+
+
+# ---------------------------------------------------------------------------
+# Tests for the new role_management_router endpoints at /api/v1/rbac/mgmt/
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.integration
+class TestRoleManagementAPI:
+    """Integration tests for the new role_management_router (issue #642)."""
+
+    async def test_list_roles_returns_system_roles_initially(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        resp = await api_client.get("/api/v1/rbac/mgmt/roles")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        names = {r["name"] for r in body["data"]["items"]}
+        assert "admin" in names
+
+    async def test_create_role_then_list_includes_it(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        resp = await api_client.post(
+            "/api/v1/rbac/mgmt/roles",
+            json={"name": "custom_support", "permissions": ["customer:read"]},
+        )
+        assert resp.status_code == 201, resp.text
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["name"] == "custom_support"
+
+        list_resp = await api_client.get("/api/v1/rbac/mgmt/roles")
+        names = {r["name"] for r in list_resp.json()["data"]["items"]}
+        assert "custom_support" in names
+
+    async def test_create_role_with_unknown_permission_returns_422(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        resp = await api_client.post(
+            "/api/v1/rbac/mgmt/roles",
+            json={"name": "bad_perms", "permissions": ["fake:perm"]},
+        )
+        assert resp.status_code == 422
+
+    async def test_update_role_permissions_replaces_existing(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        create_resp = await api_client.post(
+            "/api/v1/rbac/mgmt/roles",
+            json={"name": "upd_test", "permissions": ["customer:read"]},
+        )
+        assert create_resp.status_code == 201
+        role_id = create_resp.json()["data"]["id"]
+
+        update_resp = await api_client.put(
+            f"/api/v1/rbac/mgmt/roles/{role_id}/permissions",
+            json={"permissions": ["opportunity:read", "ticket:read"]},
+        )
+        assert update_resp.status_code == 200, update_resp.text
+
+        get_resp = await api_client.get(
+            f"/api/v1/rbac/mgmt/roles/{role_id}/permissions"
+        )
+        perms = get_resp.json()["data"]["permissions"]
+        assert "opportunity:read" in perms
+        assert "ticket:read" in perms
+        assert "customer:read" not in perms
+
+    async def test_update_system_role_permissions_returns_403(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        from db.models.rbac import RoleModel
+        result = await async_session.execute(
+            select(RoleModel).where(RoleModel.name == "admin")
+        )
+        admin_role = result.scalar_one()
+        resp = await api_client.put(
+            f"/api/v1/rbac/mgmt/roles/{admin_role.id}/permissions",
+            json={"permissions": ["customer:read"]},
+        )
+        assert resp.status_code == 403
+
+    async def test_assign_role_to_user_persists_binding(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        from db.models.rbac import RoleModel
+        from db.models.user import UserModel
+        result = await async_session.execute(
+            select(RoleModel).where(RoleModel.name == "admin")
+        )
+        admin_role = result.scalar_one()
+
+        result = await async_session.execute(
+            select(UserModel).where(UserModel.username == "webtest")
+        )
+        user = result.scalar_one()
+
+        resp = await api_client.post(
+            f"/api/v1/rbac/mgmt/users/{user.id}/role",
+            json={"role_id": admin_role.id},
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["role_id"] == admin_role.id
+
+    async def test_list_permissions_returns_all_system_pairs(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        resp = await api_client.get("/api/v1/rbac/mgmt/permissions")
+        assert resp.status_code == 200
+        perms = resp.json()["data"]
+        assert len(perms) == len(DEFAULT_PERMISSIONS)
+        for entry in perms:
+            assert set(entry.keys()) == {"resource", "action"}
+            assert entry["resource"]
+            assert entry["action"]
+
+    async def test_tenant_isolation_roles(
+        self,
+        api_client: AsyncClient,
+        api_client_tenant_2: AsyncClient,
+        async_session: AsyncSession,
+        db_schema,
+    ):
+        create_resp = await api_client.post(
+            "/api/v1/rbac/mgmt/roles",
+            json={"name": "tenant1_only_role", "permissions": ["customer:read"]},
+        )
+        assert create_resp.status_code == 201
+        custom_name = create_resp.json()["data"]["name"]
+
+        list1 = await api_client.get("/api/v1/rbac/mgmt/roles")
+        names1 = {r["name"] for r in list1.json()["data"]["items"]}
+        assert custom_name in names1
+
+        list2 = await api_client_tenant_2.get("/api/v1/rbac/mgmt/roles")
+        names2 = {r["name"] for r in list2.json()["data"]["items"]}
+        assert custom_name not in names2
+
+    async def test_get_role_permissions_for_custom_role(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        create_resp = await api_client.post(
+            "/api/v1/rbac/mgmt/roles",
+            json={"name": "get_perms_test", "permissions": ["customer:read", "opportunity:read"]},
+        )
+        assert create_resp.status_code == 201
+        role_id = create_resp.json()["data"]["id"]
+
+        get_resp = await api_client.get(
+            f"/api/v1/rbac/mgmt/roles/{role_id}/permissions"
+        )
+        assert get_resp.status_code == 200
+        data = get_resp.json()["data"]
+        assert data["role_id"] == role_id
+        assert set(data["permissions"]) == {"customer:read", "opportunity:read"}
+
+    async def test_create_role_duplicate_name_returns_409(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        body = {"name": "dup_test", "permissions": ["customer:read"]}
+        first = await api_client.post("/api/v1/rbac/mgmt/roles", json=body)
+        assert first.status_code == 201
+
+        second = await api_client.post("/api/v1/rbac/mgmt/roles", json=body)
+        assert second.status_code == 409
