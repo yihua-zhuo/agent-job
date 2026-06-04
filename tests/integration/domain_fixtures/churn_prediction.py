@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models.customer import CustomerModel
 
 
-async def seed_churn_customer(async_session, tenant_id: int) -> int:
+async def seed_churn_customer(async_session: AsyncSession, tenant_id: int) -> int:
     """Create a customer and return its id."""
     customer = CustomerModel(
         tenant_id=tenant_id,

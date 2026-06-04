@@ -154,7 +154,7 @@ class TestChurnPredictionIntegration:
         assert d["predicted_at"] is not None
         assert d["created_at"] is not None
         assert d["updated_at"] is not None
-        assert d["updated_at"] == d["created_at"]
+        assert d["updated_at"] == d["created_at"]  # both use server_default=func.now() on insert
 
     async def test_tenant_isolation(
         self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant_2
@@ -217,6 +217,10 @@ class TestChurnPredictionIntegration:
         from sqlalchemy.exc import DBAPIError
 
         customer_id = await seed_churn_customer(async_session, tenant_id)
+        # Commit the customer seed before the raw-SQL insert: the raw `text()`
+        # INSERT runs in a separate autobegin transaction that may not see
+        # uncommitted ORM inserts from the same session, so the customer FK
+        # row must be visible to the database at COMMIT time.
         await async_session.commit()
         with pytest.raises(DBAPIError):
             await async_session.execute(
