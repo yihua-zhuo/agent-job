@@ -11,6 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.ticket import SLALevel, TicketChannel, TicketPriority, TicketStatus
+from pkg.errors.app_exceptions import ValidationException
 from services.sla_service import SLAService
 from services.ticket_categorization_service import TicketCategorizationService
 from services.ticket_service import TicketService
@@ -89,6 +90,11 @@ class TicketBulkUpdate(BaseModel):
     ticket_ids: list[int] = Field(..., min_length=1)
     assigned_to: int | None = Field(None, ge=0)
     status: str | None = Field(None, pattern="^(open|in_progress|pending|resolved|closed)$")
+
+
+class CategorizationFeedbackPayload(BaseModel):
+    category: str | None = None
+    priority: str | None = None
 
 
 class SLAStatCard(BaseModel):
@@ -462,3 +468,29 @@ async def get_sla_summary(
         "data": SLAStatCard(**counts).model_dump(),
         "message": "查询成功",
     }
+
+
+@tickets_router.patch("/tickets/{ticket_id}/categorization/feedback")
+async def patch_categorization_feedback(
+    ticket_id: int,
+    body: CategorizationFeedbackPayload,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Record a human correction to the LLM-assigned category and/or priority.
+
+    At least one of category or priority must be provided.
+    Sets TicketCategorizationModel.human_override = True and persists an audit row.
+    """
+    if body.category is None and body.priority is None:
+        raise ValidationException("At least one of category or priority must be provided")
+
+    svc = TicketService(session)
+    feedback = await svc.submit_categorization_feedback(
+        ticket_id=ticket_id,
+        tenant_id=ctx.tenant_id or 0,
+        user_id=ctx.user_id or 0,
+        corrected_category=body.category,
+        corrected_priority=body.priority,
+    )
+    return {"success": True, "data": feedback.to_dict()}
