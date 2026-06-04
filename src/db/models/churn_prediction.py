@@ -19,6 +19,12 @@ class ChurnTier(StrEnum):
     low = "low"
 
 
+# Keep in sync with `ChurnTier` — the migration's enum DDL enumerates these
+# values explicitly. Drift between this tuple and the enum members will cause
+# a migration/schema mismatch.
+CHURN_TIER_VALUES: tuple[str, ...] = tuple(t.value for t in ChurnTier)
+
+
 class ChurnPredictionModel(Base):
     """Churn prediction entity mapped to the `churn_predictions` table."""
 
@@ -36,10 +42,10 @@ class ChurnPredictionModel(Base):
         sa.Enum(ChurnTier, name="churntier"), nullable=False
     )
     factors: Mapped[list[dict]] = mapped_column(
-        JSONB, default=lambda: list(), nullable=False, server_default=sa.text("'[]'::jsonb")
+        JSONB, default=list, nullable=False, server_default=sa.text("'[]'::jsonb")
     )
     recommended_actions: Mapped[list[dict]] = mapped_column(
-        JSONB, default=lambda: list(), nullable=False, server_default=sa.text("'[]'::jsonb")
+        JSONB, default=list, nullable=False, server_default=sa.text("'[]'::jsonb")
     )
     model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -49,7 +55,7 @@ class ChurnPredictionModel(Base):
     )
 
     __table_args__ = (
-        CheckConstraint("score >= 0 AND score <= 1", name="ck_churn_predictions_score_range"),
+        CheckConstraint("score >= 0 AND score <= 100", name="ck_churn_predictions_score_range"),
         Index("ix_churn_predictions_tenant_id_customer_id", "tenant_id", "customer_id"),
         Index("ix_churn_predictions_tier", "tier"),
     )

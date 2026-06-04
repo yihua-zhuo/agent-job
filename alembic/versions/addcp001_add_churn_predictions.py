@@ -19,22 +19,23 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    churntier = sa.Enum("high", "medium", "low", name="churntier")
     op.create_table(
         "churn_predictions",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("customer_id", sa.Integer(), nullable=False),
         sa.Column("score", sa.Float(), nullable=False),
-        sa.Column("tier", sa.Enum("high", "medium", "low", name="churntier"), nullable=False),
+        sa.Column("tier", churntier, nullable=False),
         sa.Column(
             "factors",
-            postgresql.JSONB(astext_type=sa.Text()),
+            postgresql.JSONB(),
             nullable=False,
             server_default=sa.text("'[]'::jsonb"),
         ),
         sa.Column(
             "recommended_actions",
-            postgresql.JSONB(astext_type=sa.Text()),
+            postgresql.JSONB(),
             nullable=False,
             server_default=sa.text("'[]'::jsonb"),
         ),
@@ -58,7 +59,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.CheckConstraint(
-            "score >= 0 AND score <= 1",
+            "score >= 0 AND score <= 100",
             name="ck_churn_predictions_score_range",
         ),
         sa.ForeignKeyConstraint(
