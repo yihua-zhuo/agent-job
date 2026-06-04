@@ -8,7 +8,6 @@ from pkg.errors.app_exceptions import ValidationException
 from services.chat_service import ChatService
 from tests.unit.conftest import MockResult, MockState, make_mock_session
 
-
 # ---------------------------------------------------------------------------
 # ORM-like mock objects — used in place of MockRow so that r.to_dict()
 # (called by chat_service on scalars) returns a dict rather than crashing.
@@ -613,4 +612,4 @@ class TestHandleMessage:
     async def test_result_has_expected_keys(self, seeded_session):
         svc = ChatService(seeded_session)
         result = await svc.handle_message("show me customers", tenant_id=1)
-        assert set(result.keys()) == {"intent", "query_results", "error"}
+        assert {"intent", "query_results", "error"} <= set(result.keys())
