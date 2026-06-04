@@ -27,7 +27,7 @@ export function CopilotChat() {
   const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const { customer_id, opportunity_id } = usePageContext();
-  const { mutate, isPending, error } = useSendCopilotMessage();
+  const { mutate, isPending } = useSendCopilotMessage();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -62,7 +62,8 @@ export function CopilotChat() {
           },
         ]);
       },
-      onError: () => {
+      onError: (err) => {
+        console.error("Copilot request failed", err);
         setMessages((prev) => [
           ...prev,
           {
@@ -77,11 +78,11 @@ export function CopilotChat() {
 
   return (
     <>
-      {/* FAB trigger */}
+      {/* FAB trigger — offset to the left of AIPanel's FAB (bottom-6 right-6) to avoid overlap */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="fixed bottom-6 right-6 z-[9999] flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
+        className="fixed bottom-6 right-24 z-[9999] flex h-12 w-12 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg hover:bg-primary/90 transition-colors"
         aria-label={isOpen ? "Close copilot chat" : "Open copilot chat"}
       >
         {isOpen ? <X className="h-5 w-5" /> : <MessageSquare className="h-5 w-5" />}
@@ -89,7 +90,7 @@ export function CopilotChat() {
 
       {/* Chat window */}
       {isOpen && (
-        <div className="fixed bottom-24 right-6 z-[9999] flex flex-col bg-background border rounded-xl shadow-2xl w-[420px] h-[600px]">
+        <div className="fixed bottom-24 right-24 z-[9999] flex flex-col bg-background border rounded-xl shadow-2xl w-[420px] h-[600px]">
           {/* Context bar */}
           <div className="flex items-center justify-between border-b px-4 py-2 flex-shrink-0 bg-muted/50">
             <span className="text-xs font-medium text-muted-foreground">
@@ -159,9 +160,9 @@ export function CopilotChat() {
                   )}
                 </div>
                 {/* Tool-call cards */}
-                {m.toolCalls?.map((tc, i) => (
+                {m.toolCalls?.map((tc) => (
                   <div
-                    key={i}
+                    key={`${tc.tool}:${JSON.stringify(tc.arguments)}`}
                     className="ml-8 rounded-lg border bg-card p-3 text-xs space-y-1"
                   >
                     <div className="flex items-center gap-1.5 font-medium">
@@ -193,12 +194,6 @@ export function CopilotChat() {
                   <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:150ms]" />
                   <div className="h-1.5 w-1.5 rounded-full bg-muted-foreground animate-bounce [animation-delay:300ms]" />
                 </div>
-              </div>
-            )}
-
-            {error && messages.length === 0 && (
-              <div className="text-sm text-red-500 text-center py-4">
-                Copilot unavailable
               </div>
             )}
 

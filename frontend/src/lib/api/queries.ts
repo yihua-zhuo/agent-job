@@ -580,8 +580,8 @@ export function useSendCopilotMessage() {
   return useMutation({
     mutationFn: (message: string) =>
       apiClient.post<ApiEnvelopeSingle<CopilotChatResponse>>(
-        `/api/v1/copilot/chat?message=${encodeURIComponent(message)}`,
-        {},
+        "/api/v1/copilot/chat",
+        { message },
         token ?? undefined
       ),
   });
