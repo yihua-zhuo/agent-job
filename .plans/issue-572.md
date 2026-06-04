@@ -15,8 +15,8 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
 1. **Create `src/db/models/churn_prediction.py`** following the pattern in `customer.py` and `opportunity.py`:
    - Import `Base` from `db.base`, `Mapped`, `mapped_column` from `sqlalchemy.orm`
    - Define a local `ChurnTier` Python enum (`high`, `medium`, `low`) and a SQLAlchemy `Enum` column mapping to it
-   - Columns: `id` (Integer, PK, autoincrement), `tenant_id` (Integer, nullable=False, index), `customer_id` (Integer, nullable=False), `score` (Integer, nullable=False), `tier` (Enum, nullable=False), `factors` (JSON list — `Mapped[list[dict]]`, use `JSON` from `sqlalchemy.dialects.postgresql` with nullable=False), `recommended_actions` (JSON list), `model_version` (String(50)), `predicted_at`, `created_at`, `updated_at` (DateTime with `server_default=func.now()`)
-   - Add composite index on `(tenant_id, customer_id)`
+   - Columns: `id` (Integer, PK, autoincrement), `tenant_id` (Integer, nullable=False, index), `customer_id` (Integer, nullable=False), `score` (Float, nullable=False, range 0.0–1.0), `tier` (Enum, nullable=False), `factors` (JSONB list — `Mapped[list[dict]]`, use `JSONB` from `sqlalchemy.dialects.postgresql` with nullable=False and `server_default='[]'::jsonb`), `recommended_actions` (JSONB list), `model_version` (String(50)), `predicted_at`, `created_at`, `updated_at` (DateTime with `server_default=func.now()`)
+   - Add composite index on `(tenant_id, customer_id)` and single-column index on `tier`
    - Implement `to_dict()` mirroring other models
 
 2. **Generate the Alembic migration** using the workflow in CLAUDE.md:
@@ -24,7 +24,7 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
    - Create a dedicated `alembic_dev` database: `DROP DATABASE IF EXISTS alembic_dev; CREATE DATABASE alembic_dev;`
    - Run `alembic upgrade head` on `alembic_dev`
    - Run `alembic revision --autogenerate -m "add_churn_predictions"` — since `alembic/env.py` already does `import db.models` (line 14), the new model is auto-discovered
-   - Review the generated file: fix any mismatches (e.g. `sa.Integer` vs `sa.SmallInteger` for score, ensure JSON columns use `postgresql.JSON(astext_type=sa.Text())`), fill in `downgrade()` if left blank
+   - Review the generated file: fix any mismatches (ensure the `churntier` enum is explicitly created with `checkfirst=True` before `create_table`, JSONB columns use `postgresql.JSONB(astext_type=sa.Text())` with `server_default=sa.text("'[]'::jsonb")`, the composite index name matches the model's, the tier column is nullable=False, and a tier index is created), fill in `downgrade()` if left blank
    - Verify: `alembic upgrade head` → `alembic downgrade -1` → `alembic upgrade head` on `alembic_dev`
    - Run a second empty autogen (`alembic revision --autogenerate -m "drift_check"`) and delete it if both up/down are `pass`
    - The new migration file (e.g. `abcdef123456_add_churn_predictions.py`) becomes the head revision

@@ -25,12 +25,18 @@ def upgrade() -> None:
         sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("customer_id", sa.Integer(), nullable=False),
         sa.Column("score", sa.Float(), nullable=False),
-        sa.Column("tier", sa.Enum("high", "medium", "low", name="churntier"), nullable=True),
+        sa.Column("tier", sa.Enum("high", "medium", "low", name="churntier"), nullable=False),
         sa.Column(
-            "factors", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+            "factors",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'[]'::jsonb"),
         ),
         sa.Column(
-            "recommended_actions", postgresql.JSONB(astext_type=sa.Text()), nullable=False
+            "recommended_actions",
+            postgresql.JSONB(astext_type=sa.Text()),
+            nullable=False,
+            server_default=sa.text("'[]'::jsonb"),
         ),
         sa.Column("model_version", sa.String(length=50), nullable=True),
         sa.Column(
@@ -81,9 +87,19 @@ def upgrade() -> None:
         ["tenant_id", "customer_id"],
         unique=False,
     )
+    op.create_index(
+        op.f("ix_churn_predictions_tier"),
+        "churn_predictions",
+        ["tier"],
+        unique=False,
+    )
 
 
 def downgrade() -> None:
+    op.drop_index(
+        op.f("ix_churn_predictions_tier"),
+        table_name="churn_predictions",
+    )
     op.drop_index(
         "ix_churn_predictions_tenant_id_customer_id",
         table_name="churn_predictions",
@@ -97,4 +113,4 @@ def downgrade() -> None:
         table_name="churn_predictions",
     )
     op.drop_table("churn_predictions")
-    op.execute(sa.text("DROP TYPE churntier"))
+    sa.Enum(name="churntier").drop(op.get_bind(), checkfirst=True)

@@ -46,7 +46,7 @@ async def _seed_churn_tenant(async_session, tenant_id: int) -> int:
     return tenant_id
 
 
-@pytest_asyncio.fixture(scope="function", autouse=True)
+@pytest_asyncio.fixture(scope="function")
 async def _seed_churn_tenant_2(async_session, tenant_id_2: int) -> int:
     from db.models.tenant import TenantModel
 
@@ -167,7 +167,9 @@ class TestChurnPredictionIntegration:
         assert d["updated_at"] is not None
         assert d["updated_at"] == d["created_at"]
 
-    async def test_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
+    async def test_tenant_isolation(
+        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_churn_tenant_2
+    ):
         """Predictions are isolated by tenant_id."""
         customer_id_1 = await _seed_churn_customer(async_session, tenant_id)
         customer_id_2 = await _seed_churn_customer(async_session, tenant_id_2)
@@ -201,3 +203,44 @@ class TestChurnPredictionIntegration:
         rows = result.scalars().all()
         assert len(rows) == 1
         assert rows[0].score == 0.90
+
+    async def test_score_out_of_range_rejected(self, db_schema, tenant_id, async_session):
+        """score=1.5 violates the 0..1 CheckConstraint at the database level."""
+        from sqlalchemy.exc import IntegrityError
+
+        customer_id = await _seed_churn_customer(async_session, tenant_id)
+        pred = ChurnPredictionModel(
+            tenant_id=tenant_id,
+            customer_id=customer_id,
+            score=1.5,
+            tier=ChurnTier.high,
+            factors=[],
+            recommended_actions=[],
+        )
+        async_session.add(pred)
+        with pytest.raises(IntegrityError):
+            await async_session.commit()
+        await async_session.rollback()
+
+    async def test_invalid_tier_rejected(self, db_schema, tenant_id, async_session):
+        """tier='invalid' violates the PostgreSQL enum at the database level."""
+        from sqlalchemy import text
+        from sqlalchemy.exc import DBAPIError
+
+        customer_id = await _seed_churn_customer(async_session, tenant_id)
+        await async_session.commit()
+        with pytest.raises(DBAPIError):
+            await async_session.execute(
+                text(
+                    "INSERT INTO churn_predictions "
+                    "(tenant_id, customer_id, score, tier, factors, recommended_actions) "
+                    "VALUES (:tid, :cid, :score, :tier, '[]'::jsonb, '[]'::jsonb)"
+                ),
+                {
+                    "tid": tenant_id,
+                    "cid": customer_id,
+                    "score": 0.5,
+                    "tier": "invalid",
+                },
+            )
+        await async_session.rollback()

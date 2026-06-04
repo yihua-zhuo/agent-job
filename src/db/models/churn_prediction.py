@@ -32,11 +32,15 @@ class ChurnPredictionModel(Base):
         Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True
     )
     score: Mapped[float] = mapped_column(Float, nullable=False)
-    tier: Mapped[ChurnTier | None] = mapped_column(
-        sa.Enum(ChurnTier, name="churntier"), nullable=True
+    tier: Mapped[ChurnTier] = mapped_column(
+        sa.Enum(ChurnTier, name="churntier"), nullable=False
     )
-    factors: Mapped[list[dict]] = mapped_column(JSONB, default=lambda: list(), nullable=False)
-    recommended_actions: Mapped[list[dict]] = mapped_column(JSONB, default=lambda: list(), nullable=False)
+    factors: Mapped[list[dict]] = mapped_column(
+        JSONB, default=lambda: list(), nullable=False, server_default=sa.text("'[]'::jsonb")
+    )
+    recommended_actions: Mapped[list[dict]] = mapped_column(
+        JSONB, default=lambda: list(), nullable=False, server_default=sa.text("'[]'::jsonb")
+    )
     model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
     predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
@@ -46,7 +50,8 @@ class ChurnPredictionModel(Base):
 
     __table_args__ = (
         CheckConstraint("score >= 0 AND score <= 1", name="ck_churn_predictions_score_range"),
-        Index("ix_churn_predictions_tenant_customer", "tenant_id", "customer_id"),
+        Index("ix_churn_predictions_tenant_id_customer_id", "tenant_id", "customer_id"),
+        Index("ix_churn_predictions_tier", "tier"),
     )
 
     def to_dict(self) -> dict:
