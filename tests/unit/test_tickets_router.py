@@ -813,3 +813,51 @@ class TestGetSlaSummaryEndpoint:
         unauthenticated_client = TestClient(app, raise_server_exceptions=False)
         resp = unauthenticated_client.get("/api/v1/sla/summary")
         assert resp.status_code in (401, 403, 422)
+
+
+# ---------------------------------------------------------------------------
+# GET /api/v1/tickets/categorization/metrics — categorization accuracy metrics
+# ---------------------------------------------------------------------------
+
+METRICS_PAYLOAD = {
+    "total_categorized": 50,
+    "override_count": 5,
+    "override_rate": 0.1,
+    "average_confidence": 0.82,
+    "by_type": {
+        "technical": {"count": 30, "avg_confidence": 0.85, "overrides": 3},
+    },
+    "by_priority": {
+        "high": {"count": 20, "avg_confidence": 0.8, "overrides": 2},
+    },
+}
+
+
+class TestGetCategorizationMetricsEndpoint:
+    def test_success_returns_envelope(self, client_with_service):
+        """Happy path: endpoint returns 200 with the metrics dict under data."""
+        client, _, _, cat_svc = client_with_service
+        cat_svc.get_metrics = AsyncMock(return_value=METRICS_PAYLOAD)
+
+        resp = client.get("/api/v1/tickets/categorization/metrics")
+
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        data = body["data"]
+        assert data["total_categorized"] == 50
+        assert data["override_count"] == 5
+        assert data["override_rate"] == 0.1
+        assert data["average_confidence"] == 0.82
+        assert "by_type" in data
+        assert "by_priority" in data
+
+    def test_service_called_with_tenant_id(self, client_with_service):
+        """Endpoint must pass the authenticated tenant_id to the service."""
+        client, _, _, cat_svc = client_with_service
+        cat_svc.get_metrics = AsyncMock(return_value=METRICS_PAYLOAD)
+
+        resp = client.get("/api/v1/tickets/categorization/metrics")
+
+        assert resp.status_code == 200
+        cat_svc.get_metrics.assert_awaited_once_with(tenant_id=1)

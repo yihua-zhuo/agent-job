@@ -494,3 +494,14 @@ async def patch_categorization_feedback(
         corrected_priority=body.priority,
     )
     return {"success": True, "data": feedback.to_dict()}
+
+
+@tickets_router.get("/tickets/categorization/metrics")
+async def get_categorization_metrics(
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Return categorization accuracy metrics for the current tenant."""
+    svc = TicketCategorizationService(session)
+    metrics = await svc.get_metrics(tenant_id=ctx.tenant_id or 0)
+    return {"success": True, "data": metrics}
