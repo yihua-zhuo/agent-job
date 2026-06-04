@@ -12,6 +12,7 @@ from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.ticket import SLALevel, TicketChannel, TicketPriority, TicketStatus
 from services.sla_service import SLAService
+from services.ticket_categorization_service import TicketCategorizationService
 from services.ticket_service import TicketService
 from services.user_service import UserService
 
@@ -55,6 +56,11 @@ class TicketCreate(BaseModel):
     channel: str = Field(..., pattern="^(email|chat|whatsapp|phone)$")
     priority: str = Field(default="medium", pattern="^(low|medium|high|urgent)$")
     sla_level: str | None = Field(default="standard", pattern="^(basic|standard|premium|enterprise)$")
+    auto_categorize_on_create: bool = Field(
+        default=False,
+        # TODO: wire into service.create_ticket() to trigger async categorization
+        # on ticket creation when this flag is True.
+    )
 
 
 class TicketUpdate(BaseModel):
@@ -344,6 +350,18 @@ async def auto_assign_ticket(
     service = TicketService(session)
     ticket = await service.auto_assign(ticket_id, tenant_id=ctx.tenant_id or 0)
     return {"success": True, "data": ticket.to_dict(), "message": "自动分配成功"}
+
+
+@tickets_router.post("/tickets/{ticket_id}/categorize")
+async def categorize_ticket(
+    ticket_id: int,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Classify a ticket using the LLM-based categorization service."""
+    svc = TicketCategorizationService(session)
+    result = await svc.categorize_ticket(ticket_id, tenant_id=ctx.tenant_id or 0)
+    return {"success": True, "data": result.to_dict(), "message": "分类完成"}
 
 
 # ---------------------------------------------------------------------------
