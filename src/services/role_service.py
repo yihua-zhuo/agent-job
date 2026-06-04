@@ -23,11 +23,10 @@ from pkg.errors.app_exceptions import (
     NotFoundException,
     ValidationException,
 )
+from services.rbac_service import DEFAULT_PERMISSIONS
 
 
 def _permission_pairs() -> list[dict[str, str]]:
-    from services.rbac_service import DEFAULT_PERMISSIONS
-
     pairs: list[dict[str, str]] = []
     for name, _display, _category in DEFAULT_PERMISSIONS:
         parts = name.split(":", 1)
@@ -87,6 +86,7 @@ class RoleService:
         )
         self.session.add(role)
         await self.session.flush()
+        await self.session.refresh(role)
 
         for perm in found:
             self.session.add(RolePermissionModel(role_id=role.id, permission_id=perm.id))
@@ -133,6 +133,8 @@ class RoleService:
         if role.is_system:
             raise ForbiddenException("系统角色不可修改权限")
 
+        # De-duplicate while preserving order — the input list is the caller's
+        # data and we mutate the local variable, not the caller's list.
         permissions = list(dict.fromkeys(permissions))
 
         perm_result = await self.session.execute(
@@ -150,6 +152,7 @@ class RoleService:
         for perm in found:
             self.session.add(RolePermissionModel(role_id=role_id, permission_id=perm.id))
         await self.session.flush()
+        await self.session.refresh(role)
         return role
 
     async def assign_role_to_user(
@@ -203,4 +206,11 @@ class RoleService:
         return {"user_id": user_id, "role_id": role_id}
 
     async def list_all_permissions(self) -> list[dict[str, str]]:
+        """Return the canonical system permission set as resource/action pairs.
+
+        Sourced from the static ``DEFAULT_PERMISSIONS`` constant — these are
+        the permissions defined at startup and are the complete set the system
+        understands. DB-backed ``PermissionModel`` rows mirror this constant,
+        so this is the authoritative list.
+        """
         return _permission_pairs()

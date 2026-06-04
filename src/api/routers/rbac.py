@@ -11,10 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from services.rbac_service import RBACService
-from services.role_service import RoleService
 
 rbac_router = APIRouter(prefix="/api/v1/rbac", tags=["rbac"])
-role_management_router = APIRouter(prefix="/api/v1/rbac/mgmt", tags=["rbac-roles"])
 
 
 def _paginated(items, total, page, page_size):
@@ -256,105 +254,3 @@ async def list_users_with_role(
     svc = RBACService(session)
     users = await svc.list_users_with_role(role_id=role_id, tenant_id=ctx.tenant_id)
     return {"success": True, "data": [u.to_dict() for u in users]}
-
-
-# ---------------------------------------------------------------------------
-# RoleManagementRouter — thin facade with the six endpoints specified in #642.
-# Uses a different path shape (POST /users/{user_id}/role, singular) than
-# the existing rbac_router (POST /users/{user_id}/roles, plural) so the two
-# routers do not conflict at FastAPI registration time.
-# ---------------------------------------------------------------------------
-
-
-class CreateRoleRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=50)
-    permissions: list[str] = Field(..., min_length=0)
-
-
-class UpdatePermissionsRequest(BaseModel):
-    permissions: list[str] = Field(..., min_length=0)
-
-
-class AssignRoleRequest(BaseModel):
-    role_id: int = Field(..., description="Role to assign to the user")
-
-
-@role_management_router.get("/roles")
-async def mgmt_list_roles(
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    svc = RoleService(session)
-    roles = await svc.list_roles(tenant_id=ctx.tenant_id)
-    items = [r.to_dict() for r in roles]
-    return {"success": True, "data": {"items": items, "total": len(items)}}
-
-
-@role_management_router.post("/roles", status_code=201)
-async def mgmt_create_role(
-    body: CreateRoleRequest,
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    svc = RoleService(session)
-    role = await svc.create_custom_role(
-        tenant_id=ctx.tenant_id,
-        name=body.name,
-        permissions=body.permissions,
-    )
-    return {"success": True, "data": role.to_dict(), "message": "角色创建成功"}
-
-
-@role_management_router.get("/roles/{role_id}/permissions")
-async def mgmt_get_role_permissions(
-    role_id: int = Path(..., ge=1),
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    svc = RoleService(session)
-    perms = await svc.get_role_permissions(role_id=role_id, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": {"role_id": role_id, "permissions": perms}}
-
-
-@role_management_router.put("/roles/{role_id}/permissions")
-async def mgmt_update_role_permissions(
-    role_id: int,
-    body: UpdatePermissionsRequest,
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    svc = RoleService(session)
-    role = await svc.update_role_permissions(
-        role_id=role_id,
-        tenant_id=ctx.tenant_id,
-        permissions=body.permissions,
-    )
-    return {"success": True, "data": role.to_dict(), "message": "权限分配成功"}
-
-
-@role_management_router.post("/users/{user_id}/role")
-async def mgmt_assign_role(
-    user_id: int,
-    body: AssignRoleRequest,
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    svc = RoleService(session)
-    result = await svc.assign_role_to_user(
-        user_id=user_id,
-        role_id=body.role_id,
-        tenant_id=ctx.tenant_id,
-        granted_by=ctx.user_id,
-    )
-    msg = "角色已分配" if result.get("already_assigned") else "角色分配成功"
-    return {"success": True, "data": result, "message": msg}
-
-
-@role_management_router.get("/permissions")
-async def mgmt_list_permissions(
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    svc = RoleService(session)
-    perms = await svc.list_all_permissions()
-    return {"success": True, "data": perms}
