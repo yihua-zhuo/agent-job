@@ -6,7 +6,7 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
 
 ## Affected Files
 
-- `src/db/models/churn_prediction.py` — new ORM model with id, customer_id, tenant_id, score, tier enum, factors JSON, recommended_actions JSON, model_version, created_at
+- `src/db/models/churn_prediction.py` — new ORM model with id, customer_id, tenant_id, score, tier enum, factors JSON, recommended_actions JSON, model_version, updated_at, predicted_at, created_at
 - `alembic/versions/addcp001_add_churn_predictions.py` — new migration extending head `9d8e7f6a5b3c`
 - `tests/integration/test_churn_prediction_integration.py` — new integration test file
 
@@ -15,7 +15,7 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
 1. **Create `src/db/models/churn_prediction.py`** following the pattern in `customer.py` and `opportunity.py`:
    - Import `Base` from `db.base`, `Mapped`, `mapped_column` from `sqlalchemy.orm`
    - Define a local `ChurnTier` Python enum (`high`, `medium`, `low`) and a SQLAlchemy `Enum` column mapping to it
-   - Columns: `id` (Integer, PK, autoincrement), `tenant_id` (Integer, nullable=False, index), `customer_id` (Integer, nullable=False), `score` (Float, nullable=False, range 0.0–1.0), `tier` (Enum, nullable=False), `factors` (JSONB list — `Mapped[list[dict]]`, use `JSONB` from `sqlalchemy.dialects.postgresql` with nullable=False and `server_default='[]'::jsonb`), `recommended_actions` (JSONB list), `model_version` (String(50)), `predicted_at`, `created_at`, `updated_at` (DateTime with `server_default=func.now()`)
+   - Columns: `id` (Integer, PK, autoincrement), `tenant_id` (Integer, nullable=False, index), `customer_id` (Integer, nullable=False), `score` (Float, nullable=False, range 0–100), `tier` (Enum, nullable=False), `factors` (JSONB list — `Mapped[list[dict]]`, use `JSONB` from `sqlalchemy.dialects.postgresql` with nullable=False and `server_default='[]'::jsonb`), `recommended_actions` (JSONB list), `model_version` (String(50)), `predicted_at`, `created_at`, `updated_at` (DateTime with `server_default=func.now()`)
    - Add composite index on `(tenant_id, customer_id)` and single-column index on `tier`
    - Implement `to_dict()` mirroring other models
 
@@ -32,7 +32,7 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
 3. **Create `tests/integration/test_churn_prediction_integration.py`**:
    - Import `ChurnPredictionModel` from `db.models.churn_prediction`
    - Add a single `@pytest.mark.integration` test class `TestChurnPredictionIntegration`
-   - One test: given `db_schema`, `tenant_id`, `async_session`, and a seeded customer (`_seed_customer`), insert a `ChurnPredictionModel` row, commit, then fetch it back and assert `score`, `tier`, `factors`, `recommended_actions`, and `model_version` are correct
+   - One test: given `db_schema`, `tenant_id`, `async_session`, and a seeded customer (using `seed_churn_customer` from `tests/integration/domain_fixtures/churn_prediction.py`), insert a `ChurnPredictionModel` row, commit, then fetch it back and assert `score`, `tier`, `factors`, `recommended_actions`, and `model_version` are correct
    - Follow the same pattern as `test_ai_integration.py`
 
 ## Test Plan
@@ -43,7 +43,9 @@ Create a new SQLAlchemy ORM model `ChurnPrediction` in `src/db/models/` and a co
 ## Acceptance Criteria
 
 - `ChurnPredictionModel` is importable from `db.models.churn_prediction`
-- `alembic upgrade head` applies the new migration and creates the `churn_predictions` table with all required columns (id, tenant_id, customer_id, score, tier, factors, recommended_actions, model_version, created_at)
+- `alembic upgrade head` applies the new migration and creates the `churn_predictions` table with all required columns (id, tenant_id, customer_id, score, tier, factors, recommended_actions, model_version, created_at, updated_at, predicted_at)
+- The `updated_at` and `predicted_at` columns exist with server defaults and are populated on insert
+- Composite index `(tenant_id, customer_id)` and single-column index on `tier` are created
 - The tier column is backed by a PostgreSQL enum with values `high`, `medium`, `low`
 - The `factors` and `recommended_actions` columns store JSON lists and round-trip correctly
 - `alembic downgrade -1` cleanly removes the table

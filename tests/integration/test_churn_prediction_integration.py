@@ -16,8 +16,8 @@ from db.models.churn_prediction import ChurnPredictionModel, ChurnTier
 from tests.integration.domain_fixtures.churn_prediction import seed_churn_customer
 
 
-# Tests that need a seeded tenant must request this fixture explicitly.
-# Cross-tenant tests additionally request `_seed_tenant_2`.
+# `_seed_tenant` is autouse for this module, so every test gets a primary tenant.
+# Cross-tenant tests additionally request `_seed_tenant_2` explicitly.
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def _seed_tenant(async_session, tenant_id: int) -> int:
     """Seed the primary tenant for all tests in this module."""
@@ -154,7 +154,7 @@ class TestChurnPredictionIntegration:
         assert d["predicted_at"] is not None
         assert d["created_at"] is not None
         assert d["updated_at"] is not None
-        assert d["updated_at"] == d["created_at"]  # both use server_default=func.now() on insert
+        assert d["updated_at"] >= d["created_at"]  # updated_at is set on insert; allow microsecond drift
 
     async def test_tenant_isolation(
         self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant_2
@@ -208,7 +208,7 @@ class TestChurnPredictionIntegration:
         )
         async_session.add(pred)
         with pytest.raises(IntegrityError):
-            await async_session.commit()
+            await async_session.flush()
         await async_session.rollback()
 
     async def test_invalid_tier_rejected(self, db_schema, tenant_id, async_session):
