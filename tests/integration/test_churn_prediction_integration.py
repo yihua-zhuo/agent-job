@@ -193,6 +193,15 @@ class TestChurnPredictionIntegration:
         assert len(rows) == 1
         assert rows[0].score == 90.0
 
+        result_2 = await async_session.execute(
+            select(ChurnPredictionModel).where(
+                ChurnPredictionModel.tenant_id == tenant_id_2
+            )
+        )
+        rows_2 = result_2.scalars().all()
+        assert len(rows_2) == 1
+        assert rows_2[0].score == 10.0
+
     async def test_score_out_of_range_rejected(self, db_schema, tenant_id, async_session):
         """score=150 violates the 0..100 CheckConstraint at the database level."""
         from sqlalchemy.exc import IntegrityError
@@ -217,10 +226,9 @@ class TestChurnPredictionIntegration:
         from sqlalchemy.exc import DBAPIError
 
         customer_id = await seed_churn_customer(async_session, tenant_id)
-        # Commit the customer seed before the raw-SQL insert: the raw `text()`
-        # INSERT runs in a separate autobegin transaction that may not see
-        # uncommitted ORM inserts from the same session, so the customer FK
-        # row must be visible to the database at COMMIT time.
+        # Commit the customer seed before the raw-SQL insert so the customer
+        # row is visible at COMMIT time, which is required for the FK to be
+        # satisfied.
         await async_session.commit()
         with pytest.raises(DBAPIError):
             await async_session.execute(

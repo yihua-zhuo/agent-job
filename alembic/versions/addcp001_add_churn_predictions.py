@@ -19,7 +19,9 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    """Create the churn_predictions table, enum, indexes, and constraints."""
     churntier = sa.Enum("high", "medium", "low", name="churntier")
+    churntier.create(op.get_bind(), checkfirst=True)
     op.create_table(
         "churn_predictions",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
@@ -97,6 +99,7 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    """Drop the churn_predictions table, indexes, and enum type."""
     op.drop_index(
         op.f("ix_churn_predictions_tier"),
         table_name="churn_predictions",
