@@ -5,6 +5,7 @@ import { AuthGuard } from "@/lib/components/auth-guard";
 import { SessionTimeoutGuard } from "@/lib/components/session-timeout-guard";
 import { OfflineBanner } from "@/lib/components/offline-banner";
 import { AIPanel } from "@/lib/components/ai-panel";
+import { CopilotChat } from "@/components/CopilotChat";
 import { AppSidebar } from "@/components/layout/app-sidebar";
 import { TaskModal } from "@/app/(app)/tasks/task-modal";
 import { useQuickAddTask } from "@/lib/store/task-store";
@@ -77,6 +78,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       </div>
 
       <AIPanel />
+      <CopilotChat />
       <SessionTimeoutGuard />
 
       <TaskModal
