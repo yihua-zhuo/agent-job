@@ -53,3 +53,39 @@ class TicketCategorizationModel(Base):
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
         }
+
+
+class CategorizationFeedbackModel(Base):
+    """Audit log of human corrections to LLM-assigned ticket categorizations."""
+
+    __tablename__ = "categorization_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticket_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("tickets.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    original_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    original_priority: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    corrected_category: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    corrected_priority: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    corrected_by: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+
+    def to_dict(self) -> dict:
+        return {
+            "id": self.id,
+            "ticket_id": self.ticket_id,
+            "tenant_id": self.tenant_id,
+            "original_category": self.original_category,
+            "original_priority": self.original_priority,
+            "corrected_category": self.corrected_category,
+            "corrected_priority": self.corrected_priority,
+            "corrected_by": self.corrected_by,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

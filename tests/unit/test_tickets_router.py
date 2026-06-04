@@ -501,6 +501,69 @@ class TestCategorizeTicketEndpoint:
 
 
 # ---------------------------------------------------------------------------
+# PATCH /api/v1/tickets/{ticket_id}/categorization/feedback
+# ---------------------------------------------------------------------------
+
+class MockFeedback:
+    def __init__(self, data=None):
+        for k, v in (data or {}).items():
+            setattr(self, k, v)
+
+    def to_dict(self):
+        return {
+            "id": getattr(self, "id", None),
+            "ticket_id": getattr(self, "ticket_id", None),
+            "tenant_id": getattr(self, "tenant_id", None),
+            "original_category": getattr(self, "original_category", None),
+            "original_priority": getattr(self, "original_priority", None),
+            "corrected_category": getattr(self, "corrected_category", None),
+            "corrected_priority": getattr(self, "corrected_priority", None),
+            "corrected_by": getattr(self, "corrected_by", None),
+            "created_at": getattr(self, "created_at", None),
+        }
+
+
+FEEDBACK_ROW = {
+    "id": 1,
+    "ticket_id": 5,
+    "tenant_id": 1,
+    "original_category": "billing",
+    "original_priority": "low",
+    "corrected_category": "technical",
+    "corrected_priority": None,
+    "corrected_by": 42,
+    "created_at": "2026-06-04T00:00:00Z",
+}
+
+
+class TestCategorizationFeedbackEndpoint:
+    def test_patch_success_returns_200(self, client_with_service):
+        client, svc, _, _ = client_with_service
+        mock_feedback = MockFeedback(FEEDBACK_ROW)
+        svc.submit_categorization_feedback = AsyncMock(return_value=mock_feedback)
+        resp = client.patch(
+            "/api/v1/tickets/5/categorization/feedback",
+            json={"category": "technical"},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["corrected_category"] == "technical"
+        assert body["data"]["original_category"] == "billing"
+
+    def test_patch_not_found_returns_404(self, client_with_service):
+        client, svc, _, _ = client_with_service
+        svc.submit_categorization_feedback = AsyncMock(
+            side_effect=NotFoundException("TicketCategorization")
+        )
+        resp = client.patch(
+            "/api/v1/tickets/9999/categorization/feedback",
+            json={"category": "billing"},
+        )
+        assert resp.status_code == 404
+
+
+# ---------------------------------------------------------------------------
 # GET /api/v1/sla/status/{ticket_id} — SLA status
 # ---------------------------------------------------------------------------
 
