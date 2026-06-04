@@ -20,6 +20,7 @@ import pytest
 from dotenv import load_dotenv
 from sqlalchemy import insert, select, table, text
 from sqlalchemy.exc import CompileError, MultipleResultsFound, UnsupportedCompilationError
+from sqlalchemy.sql.elements import ClauseElement
 
 # Load .env so DATABASE_URL is available in test environment.
 _dotenv_path = Path(__file__).resolve().parents[2] / ".env"
@@ -128,10 +129,17 @@ class MockResult:
         return MappingResult(self._rows)
 
     def scalars(self):
-        return MagicMock(
-            first=MagicMock(return_value=self._rows[0] if self._rows else None),
-            all=MagicMock(return_value=self._rows),
-        )
+        class _Scalars:
+            def __init__(self, rows):
+                self._rows = rows
+
+            def first(self):
+                return self._rows[0] if self._rows else None
+
+            def all(self):
+                return self._rows
+
+        return _Scalars(self._rows)
 
     def scalar_one_or_none(self):
         return self._rows[0] if self._rows else None
@@ -276,15 +284,16 @@ def make_mock_session(handlers=None, state=None):
         sql_text = str(sql).lower().strip()
         bound_params = {}
         try:
-            # Only call .compile() on SQLAlchemy expression objects.
-            # Raw strings have no compile() method — skip param extraction for those.
-            if not isinstance(sql, str):
+            if isinstance(sql, ClauseElement):
                 bound_params.update(getattr(sql.compile(), "params", {}) or {})
         except (TypeError, AttributeError, RuntimeError, CompileError, UnsupportedCompilationError) as exc:
             # These are the exceptions SQLAlchemy's .compile() can raise at
             # bind-param extraction time; others (KeyboardInterrupt, SystemExit)
             # must not be silently swallowed.
             raise RuntimeError(f"mock session: SQL compilation failed: {exc}") from exc
+        except Exception:
+            # Re-raise any unexpected exception type — never silently swallow it.
+            raise
         bound_params.update(params or {})
         for h in handlers:
             # Pass lowercased tablename so "INSERT INTO Agent_Tasks" matches

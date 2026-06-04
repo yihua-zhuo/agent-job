@@ -4,8 +4,8 @@ from datetime import datetime
 from enum import StrEnum
 
 import sqlalchemy as sa
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, func
-from sqlalchemy.dialects.postgresql import JSON
+from sqlalchemy import CheckConstraint, DateTime, Float, ForeignKey, Index, Integer, String, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -25,23 +25,27 @@ class ChurnPredictionModel(Base):
     __tablename__ = "churn_predictions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    customer_id: Mapped[int] = mapped_column(Integer, ForeignKey("customers.id"), nullable=False)
-    score: Mapped[int] = mapped_column(Integer, nullable=False)
-    tier: Mapped[ChurnTier] = mapped_column(sa.Enum(ChurnTier, name="churntier"), nullable=False)
-    factors: Mapped[list[dict]] = mapped_column(JSON, default=lambda: list, nullable=False)
-    recommended_actions: Mapped[list[dict]] = mapped_column(JSON, default=lambda: list, nullable=False)
-    model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    predicted_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    customer_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("customers.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    score: Mapped[float] = mapped_column(Float, nullable=False)
+    tier: Mapped[ChurnTier | None] = mapped_column(
+        sa.Enum(ChurnTier, name="churntier"), nullable=True
+    )
+    factors: Mapped[list[dict]] = mapped_column(JSONB, default=lambda: list(), nullable=False)
+    recommended_actions: Mapped[list[dict]] = mapped_column(JSONB, default=lambda: list(), nullable=False)
+    model_version: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    predicted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
     __table_args__ = (
-        CheckConstraint("score >= 0 AND score <= 100", name="ck_churn_predictions_score_range"),
+        CheckConstraint("score >= 0 AND score <= 1", name="ck_churn_predictions_score_range"),
         Index("ix_churn_predictions_tenant_customer", "tenant_id", "customer_id"),
     )
 

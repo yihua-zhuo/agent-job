@@ -11,7 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.ticket import SLALevel, TicketChannel, TicketPriority, TicketStatus
+from pkg.errors.app_exceptions import ValidationException
 from services.sla_service import SLAService
+from services.ticket_categorization_service import TicketCategorizationService
 from services.ticket_service import TicketService
 from services.user_service import UserService
 
@@ -55,6 +57,11 @@ class TicketCreate(BaseModel):
     channel: str = Field(..., pattern="^(email|chat|whatsapp|phone)$")
     priority: str = Field(default="medium", pattern="^(low|medium|high|urgent)$")
     sla_level: str | None = Field(default="standard", pattern="^(basic|standard|premium|enterprise)$")
+    auto_categorize_on_create: bool = Field(
+        default=False,
+        # TODO: wire into service.create_ticket() to trigger async categorization
+        # on ticket creation when this flag is True.
+    )
 
 
 class TicketUpdate(BaseModel):
@@ -83,6 +90,11 @@ class TicketBulkUpdate(BaseModel):
     ticket_ids: list[int] = Field(..., min_length=1)
     assigned_to: int | None = Field(None, ge=0)
     status: str | None = Field(None, pattern="^(open|in_progress|pending|resolved|closed)$")
+
+
+class CategorizationFeedbackPayload(BaseModel):
+    category: str | None = None
+    priority: str | None = None
 
 
 class SLAStatCard(BaseModel):
@@ -346,6 +358,18 @@ async def auto_assign_ticket(
     return {"success": True, "data": ticket.to_dict(), "message": "自动分配成功"}
 
 
+@tickets_router.post("/tickets/{ticket_id}/categorize")
+async def categorize_ticket(
+    ticket_id: int,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Classify a ticket using the LLM-based categorization service."""
+    svc = TicketCategorizationService(session)
+    result = await svc.categorize_ticket(ticket_id, tenant_id=ctx.tenant_id or 0)
+    return {"success": True, "data": result.to_dict(), "message": "分类完成"}
+
+
 # ---------------------------------------------------------------------------
 # SLA endpoints
 # ---------------------------------------------------------------------------
@@ -444,3 +468,40 @@ async def get_sla_summary(
         "data": SLAStatCard(**counts).model_dump(),
         "message": "查询成功",
     }
+
+
+@tickets_router.patch("/tickets/{ticket_id}/categorization/feedback")
+async def patch_categorization_feedback(
+    ticket_id: int,
+    body: CategorizationFeedbackPayload,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Record a human correction to the LLM-assigned category and/or priority.
+
+    At least one of category or priority must be provided.
+    Sets TicketCategorizationModel.human_override = True and persists an audit row.
+    """
+    if body.category is None and body.priority is None:
+        raise ValidationException("At least one of category or priority must be provided")
+
+    svc = TicketService(session)
+    feedback = await svc.submit_categorization_feedback(
+        ticket_id=ticket_id,
+        tenant_id=ctx.tenant_id or 0,
+        user_id=ctx.user_id or 0,
+        corrected_category=body.category,
+        corrected_priority=body.priority,
+    )
+    return {"success": True, "data": feedback.to_dict()}
+
+
+@tickets_router.get("/tickets/categorization/metrics")
+async def get_categorization_metrics(
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Return categorization accuracy metrics for the current tenant."""
+    svc = TicketCategorizationService(session)
+    metrics = await svc.get_metrics(tenant_id=ctx.tenant_id or 0)
+    return {"success": True, "data": metrics}

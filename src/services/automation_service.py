@@ -89,27 +89,37 @@ class AutomationService:
                     related_type=context.get("entity_type"),
                     related_id=context.get("entity_id"),
                 )
-                return {"type": action_type, "status": "sent"}
             except AppException as e:
+                return {"type": action_type, "status": "error", "error": str(e)}
+            except Exception as e:
+                logger.exception("Unexpected error in notification.send action")
                 return {"type": action_type, "status": "error", "error": str(e)}
 
         elif action_type == "task.create":
             assignee_id = params.get("assignee_id")
+            # Verify the assignee belongs to the current tenant (applies even when assignee_id is None —
+            # the check is a no-op for None but the caller's tenant_id is always enforced via the service layer).
             if assignee_id:
-                # Rule126: verify the assignee belongs to the current tenant
                 assignee_check = await self.session.execute(
                     select(UserModel).where(UserModel.id == assignee_id, UserModel.tenant_id == tenant_id)
                 )
                 if assignee_check.scalar_one_or_none() is None:
                     return {"type": action_type, "status": "skipped", "reason": "assignee not found in tenant"}
             svc = TaskService(self.session)
-            await svc.create_task(
-                tenant_id=tenant_id,
-                title=params.get("title", "Automated task"),
-                description=params.get("description", ""),
-                assigned_to=params.get("assignee_id"),
-                created_by=executed_by,
-            )
+            try:
+                await svc.create_task(
+                    tenant_id=tenant_id,
+                    title=params.get("title", "Automated task"),
+                    description=params.get("description", ""),
+                    assigned_to=assignee_id,
+                    created_by=executed_by,
+                )
+            except AppException as e:
+                return {"type": action_type, "status": "error", "error": str(e)}
+            except Exception as e:
+                logger.exception("Unexpected error in task.create action")
+                return {"type": action_type, "status": "error", "error": str(e)}
+            return {"type": action_type, "status": "created"}
             return {"type": action_type, "status": "created"}
 
         elif action_type == "email.send":
@@ -261,10 +271,30 @@ class AutomationService:
         context: dict,
         executed_by: int = 0,
     ) -> list[dict]:
-        # Guard against attacker-controlled deeply nested dicts once, up-front.
-        context_bytes = json.dumps(context, ensure_ascii=False).encode("utf-8")
-        if len(context_bytes) > 64_000:
-            logger.warning("Automation event dropped: context size %d exceeds limit", len(context_bytes))
+        # Guard against attacker-controlled deeply nested dicts and lists once, up-front.
+        def _max_depth(d, _depth=0):
+            max_d = _depth
+            for v in d.values():
+                if isinstance(v, dict):
+                    max_d = max(max_d, _max_depth(v, _depth + 1))
+                elif isinstance(v, list):
+                    max_d = max(
+                        max_d,
+                        max((_max_depth(i, _depth + 1) for i in v if isinstance(i, dict)), default=_depth),
+                    )
+            return max_d
+
+        encoded = json.dumps(context, ensure_ascii=False).encode("utf-8")
+        # NOTE: these size/breadth bounds are applied only here in trigger_event, the sole
+        # public entry point that accepts a caller-supplied context dict. Other public
+        # methods (create_rule, update_rule, etc.) do not accept arbitrary context dicts
+        # and therefore do not need equivalent guards. Future additions that accept
+        # caller-supplied dicts should apply consistent depth/size limits.
+        if _max_depth(context) > 16 or len(encoded) > 64_000:
+            logger.warning(
+                "Automation event dropped: context size %d exceeds limit or depth exceeds 16",
+                len(encoded),
+            )
             return []
         stmt = select(AutomationRuleModel).where(
             AutomationRuleModel.tenant_id == tenant_id,

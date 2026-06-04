@@ -10,11 +10,12 @@ Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 
 from db.models.churn_prediction import ChurnPredictionModel, ChurnTier
 
 
-async def _seed_customer(async_session, tenant_id: int) -> int:
+async def _seed_churn_customer(async_session, tenant_id: int) -> int:
     """Create a customer and return its id."""
     from db.models.customer import CustomerModel
 
@@ -29,18 +30,49 @@ async def _seed_customer(async_session, tenant_id: int) -> int:
     return customer.id
 
 
+# ── Seed tenants so FK constraints on churn_predictions.tenant_id are satisfied ──
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_churn_tenant(async_session, tenant_id: int) -> int:
+    from db.models.tenant import TenantModel
+
+    tenant = TenantModel(
+        id=tenant_id,
+        name="Churn Integration Test Tenant",
+        plan="free",
+        status="active",
+    )
+    async_session.add(tenant)
+    await async_session.flush()
+    return tenant_id
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_churn_tenant_2(async_session, tenant_id_2: int) -> int:
+    from db.models.tenant import TenantModel
+
+    tenant = TenantModel(
+        id=tenant_id_2,
+        name="Churn Integration Test Tenant 2",
+        plan="free",
+        status="active",
+    )
+    async_session.add(tenant)
+    await async_session.flush()
+    return tenant_id_2
+
+
 @pytest.mark.integration
 class TestChurnPredictionIntegration:
     """ChurnPrediction table lifecycle via the real DB."""
 
     async def test_insert_and_fetch(self, db_schema, tenant_id, async_session):
         """Insert a ChurnPrediction row and retrieve it with all fields correct."""
-        customer_id = await _seed_customer(async_session, tenant_id)
+        customer_id = await _seed_churn_customer(async_session, tenant_id)
 
         prediction = ChurnPredictionModel(
             tenant_id=tenant_id,
             customer_id=customer_id,
-            score=85,
+            score=0.85,
             tier=ChurnTier.high,
             factors=[
                 {
@@ -67,7 +99,7 @@ class TestChurnPredictionIntegration:
         assert prediction.id is not None
         assert prediction.tenant_id == tenant_id
         assert prediction.customer_id == customer_id
-        assert prediction.score == 85
+        assert prediction.score == 0.85
         assert prediction.tier == ChurnTier.high
         assert len(prediction.factors) == 2
         assert prediction.factors[0]["name"] == "low_engagement"
@@ -80,11 +112,11 @@ class TestChurnPredictionIntegration:
 
     async def test_insert_and_query(self, db_schema, tenant_id, async_session):
         """Insert a churn prediction and query it back."""
-        customer_id = await _seed_customer(async_session, tenant_id)
+        customer_id = await _seed_churn_customer(async_session, tenant_id)
         pred = ChurnPredictionModel(
             tenant_id=tenant_id,
             customer_id=customer_id,
-            score=85,
+            score=0.85,
             tier=ChurnTier.high,
             factors=[
                 {"name": "low_engagement", "weight": 0.6, "explanation": "No activity in 30 days"},
@@ -107,17 +139,17 @@ class TestChurnPredictionIntegration:
         assert fetched is not None
         assert fetched.tenant_id == tenant_id
         assert fetched.customer_id == customer_id
-        assert fetched.score == 85
+        assert fetched.score == 0.85
         assert fetched.tier == ChurnTier.high
         assert fetched.factors[0]["name"] == "low_engagement"
 
     async def test_to_dict_after_insert(self, db_schema, tenant_id, async_session):
         """to_dict() returns correct values after persistence."""
-        customer_id = await _seed_customer(async_session, tenant_id)
+        customer_id = await _seed_churn_customer(async_session, tenant_id)
         pred = ChurnPredictionModel(
             tenant_id=tenant_id,
             customer_id=customer_id,
-            score=42,
+            score=0.42,
             tier=ChurnTier.low,
             factors=[{"name": "infrequent_purchase", "weight": 0.7, "explanation": "Purchase frequency dropped"}],
         )
@@ -127,21 +159,22 @@ class TestChurnPredictionIntegration:
         d = pred.to_dict()
         assert d["tenant_id"] == tenant_id
         assert d["customer_id"] == customer_id
-        assert d["score"] == 42
+        assert d["score"] == 0.42
         assert d["tier"] == "low"
         assert d["factors"][0]["name"] == "infrequent_purchase"
         assert d["predicted_at"] is not None
         assert d["created_at"] is not None
         assert d["updated_at"] is not None
+        assert d["updated_at"] == d["created_at"]
 
     async def test_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
         """Predictions are isolated by tenant_id."""
-        customer_id_1 = await _seed_customer(async_session, tenant_id)
-        customer_id_2 = await _seed_customer(async_session, tenant_id_2)
+        customer_id_1 = await _seed_churn_customer(async_session, tenant_id)
+        customer_id_2 = await _seed_churn_customer(async_session, tenant_id_2)
         pred1 = ChurnPredictionModel(
             tenant_id=tenant_id,
             customer_id=customer_id_1,
-            score=90,
+            score=0.90,
             tier=ChurnTier.high,
             factors=[],
             recommended_actions=[],
@@ -149,7 +182,7 @@ class TestChurnPredictionIntegration:
         pred2 = ChurnPredictionModel(
             tenant_id=tenant_id_2,
             customer_id=customer_id_2,
-            score=10,
+            score=0.10,
             tier=ChurnTier.low,
             factors=[],
             recommended_actions=[],
@@ -167,4 +200,4 @@ class TestChurnPredictionIntegration:
         )
         rows = result.scalars().all()
         assert len(rows) == 1
-        assert rows[0].score == 90
+        assert rows[0].score == 0.90

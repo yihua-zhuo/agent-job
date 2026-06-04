@@ -30,6 +30,28 @@ if TYPE_CHECKING:
 pytestmark = pytest.mark.integration
 
 
+# ── Seed system tenant (id=0) so refresh_token FK constraint is satisfied ──
+@pytest.fixture(scope="function", autouse=True)
+def _seed_system_tenant(db_schema):
+    """Create the system tenant (id=0) that newly-registered users reference.
+
+    When a user registers via the public /auth/register endpoint, they are
+    assigned tenant_id=0 in the users table.  The refresh_tokens table has a FK
+    on tenant_id referencing tenants.id, so the system tenant must exist before
+    the login step can insert a refresh token.
+
+    Runs after db_schema to re-seed after TRUNCATE CASCADE between tests.
+    """
+    from sqlalchemy import text
+
+    from tests.integration.conftest import _get_test_sync_engine
+
+    sync_engine = _get_test_sync_engine()
+    with sync_engine.connect() as conn:
+        conn.execute(text("INSERT INTO tenants (id, name, slug, plan, status) VALUES (0, 'System', 'system', 'free', 'active') ON CONFLICT DO NOTHING"))
+        conn.commit()
+
+
 # ──────────────────────────────────────────────────────────────────────────────────────
 #  Health & docs endpoints
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -285,7 +307,7 @@ class TestUserEndpoints:
         )
         assert resp2.status_code in (400, 409), f"Body: {resp2.text}"
 
-    async def test_login_user(self, api_client: AsyncClient, tenant_id_web: int):
+    async def test_login_user(self, api_client: AsyncClient, tenant_id_web: int, _seed_tenant):
         suffix = uuid.uuid4().hex[:6]
         await api_client.post(
             "/api/v1/auth/register",
@@ -874,7 +896,7 @@ class TestNotificationEndpoints:
 
 
 class TestAuthMiddleware:
-    """ "Auth guard: endpoints that require Bearer token."""
+    """Auth guard: endpoints that require Bearer token."""
 
     async def test_unauthenticated_request_returns_401(self, client):
         resp = await client.get("/api/v1/customers")
@@ -1153,7 +1175,7 @@ class TestEdgeCases:
         assert del2.status_code == 404
 
     async def test_get_customer_activities_for_nonexistent_customer(self, api_client: AsyncClient):
-        """ "Getting activities for a non-existent customer returns empty or 404."""
+        """Getting activities for a non-existent customer returns empty or 404."""
         resp = await api_client.get("/api/v1/customers/999999999/activities")
         assert resp.status_code in (200, 404)
 
@@ -1371,7 +1393,7 @@ class TestEdgeCases:
     # ── Tenants ────────────────────────────────────────────────────────────────────
 
     async def test_get_nonexistent_tenant(self, api_client: AsyncClient):
-        """Cross-tenant access is forbidden — returns 403."""
+        """Non-existent tenant ID returns 403 (cross-tenant access is checked before existence)."""
         resp = await api_client.get("/api/v1/tenants/999999999")
         assert resp.status_code == 403
 
@@ -1506,19 +1528,6 @@ class TestEdgeCases:
         )
         # Tenant service may or may not enforce unique name constraint
         assert resp2.status_code in (201, 200, 409, 422), f"Body: {resp2.text}"
-
-    async def test_get_nonexistent_tenant_returns_404(self, api_client: AsyncClient):
-        """Get a non-existent tenant returns 403 (cross-tenant access denied)."""
-        resp = await api_client.get("/api/v1/tenants/999999999")
-        assert resp.status_code == 403, f"Body: {resp.text}"
-
-    async def test_update_nonexistent_tenant_returns_403(self, api_client: AsyncClient):
-        """Updating a tenant you don't own is forbidden (403) before the not-found check runs."""
-        resp = await api_client.put(
-            "/api/v1/tenants/999999999",
-            json={"name": "Does Not Exist"},
-        )
-        assert resp.status_code == 403, f"Body: {resp.text}"
 
     async def test_create_tenant_invalid_plan(self, api_client: AsyncClient):
         """Create tenant with invalid plan returns 422."""

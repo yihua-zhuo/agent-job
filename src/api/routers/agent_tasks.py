@@ -4,7 +4,7 @@ Services raise AppException on errors (caught by global handler in main.py).
 AgentTaskModel objects have .to_dict(); router calls it before returning.
 """
 
-from datetime import date
+from datetime import date, time
 from datetime import datetime as dt_cls
 
 from fastapi import APIRouter, Depends, Query
@@ -43,7 +43,6 @@ class AgentTaskCreate(BaseModel):
 
 def _date_to_datetime(d: date, end_of_day: bool = False) -> dt_cls:
     if end_of_day:
-        from datetime import time
         return dt_cls.combine(d, time.max)
     return dt_cls.combine(d, dt_cls.min.time())
 

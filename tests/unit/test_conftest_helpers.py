@@ -2,8 +2,7 @@
 import pytest
 from sqlalchemy.exc import MultipleResultsFound
 
-from tests.unit.conftest import MockRow, MockResult
-
+from tests.unit.conftest import MockResult, MockRow
 
 # ---------------------------------------------------------------------------
 # MockRow
@@ -148,8 +147,9 @@ class TestMakeMockSession:
     """Tests for the session mock's SQL dispatch logic updated in this PR."""
 
     async def test_insert_customers_returns_row(self):
-        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
+
+        from tests.unit.conftest import make_mock_session
 
         session = make_mock_session()
         sql = text("INSERT INTO customers (...) RETURNING *")
@@ -158,8 +158,9 @@ class TestMakeMockSession:
 
     async def test_select_from_customers_where_id_returns_single_row_for_id_1(self):
         """New SQL-matching logic: 'from customers where id' returns row only for id=1."""
-        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
+
+        from tests.unit.conftest import make_mock_session
 
         session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE id = :id")
@@ -171,8 +172,9 @@ class TestMakeMockSession:
 
     async def test_select_from_customers_where_id_returns_empty_for_id_9999(self):
         """New SQL-matching logic: non-fixture IDs return empty result."""
-        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
+
+        from tests.unit.conftest import make_mock_session
 
         session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE id = :id")
@@ -183,8 +185,9 @@ class TestMakeMockSession:
 
     async def test_select_all_customers_returns_two_rows(self):
         """New logic: SELECT without WHERE id returns list of 2 fixture rows."""
-        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
+
+        from tests.unit.conftest import make_mock_session
 
         session = make_mock_session()
         sql = text("SELECT * FROM customers WHERE tenant_id = :tenant_id LIMIT 20 OFFSET 0")
@@ -195,8 +198,9 @@ class TestMakeMockSession:
 
     async def test_delete_customers_returns_row(self):
         """New logic: DELETE FROM customers returns a row with id."""
-        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
+
+        from tests.unit.conftest import make_mock_session
 
         session = make_mock_session()
         sql = text("DELETE FROM customers WHERE id = :id RETURNING id")
@@ -207,8 +211,9 @@ class TestMakeMockSession:
         assert row["id"] == 1
 
     async def test_count_query_returns_scalar(self):
-        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
+
+        from tests.unit.conftest import make_mock_session
 
         session = make_mock_session()
         sql = text("SELECT count(*) FROM customers WHERE tenant_id = :tenant_id")
@@ -218,8 +223,9 @@ class TestMakeMockSession:
 
     async def test_unknown_sql_returns_empty(self):
         """Default case: unrecognised SQL returns empty MockResult."""
-        from tests.unit.conftest import make_mock_session
         from sqlalchemy import text
+
+        from tests.unit.conftest import make_mock_session
 
         session = make_mock_session()
         sql = text("SELECT * FROM unknown_table WHERE x = :x")

@@ -24,13 +24,13 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("customer_id", sa.Integer(), nullable=False),
-        sa.Column("score", sa.Integer(), nullable=False),
-        sa.Column("tier", sa.Enum("high", "medium", "low", name="churntier"), nullable=False),
+        sa.Column("score", sa.Float(), nullable=False),
+        sa.Column("tier", sa.Enum("high", "medium", "low", name="churntier"), nullable=True),
         sa.Column(
-            "factors", postgresql.JSON(astext_type=sa.Text()), nullable=False
+            "factors", postgresql.JSONB(astext_type=sa.Text()), nullable=False
         ),
         sa.Column(
-            "recommended_actions", postgresql.JSON(astext_type=sa.Text()), nullable=False
+            "recommended_actions", postgresql.JSONB(astext_type=sa.Text()), nullable=False
         ),
         sa.Column("model_version", sa.String(length=50), nullable=True),
         sa.Column(
@@ -51,6 +51,16 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
+        sa.CheckConstraint(
+            "score >= 0 AND score <= 1",
+            name="ck_churn_predictions_score_range",
+        ),
+        sa.ForeignKeyConstraint(
+            ["tenant_id"], ["tenants.id"], ondelete="CASCADE",
+        ),
+        sa.ForeignKeyConstraint(
+            ["customer_id"], ["customers.id"], ondelete="CASCADE",
+        ),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -66,7 +76,7 @@ def upgrade() -> None:
         unique=False,
     )
     op.create_index(
-        "ix_churn_predictions_tenant_customer",
+        "ix_churn_predictions_tenant_id_customer_id",
         "churn_predictions",
         ["tenant_id", "customer_id"],
         unique=False,
@@ -75,7 +85,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index(
-        "ix_churn_predictions_tenant_customer",
+        "ix_churn_predictions_tenant_id_customer_id",
         table_name="churn_predictions",
     )
     op.drop_index(

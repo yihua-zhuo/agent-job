@@ -1,19 +1,19 @@
 """Unit tests for src/api/routers/users.py — /api/v1/users and /api/v1/auth endpoints."""
-import pytest
 from unittest.mock import AsyncMock, MagicMock
-from fastapi.testclient import TestClient
+
+import pytest
 from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
 from api.routers.users import users_router
-from internal.middleware.fastapi_auth import AuthContext
 from db.connection import get_db
+from internal.middleware.fastapi_auth import AuthContext
 from pkg.errors.app_exceptions import (
     AppException,
     NotFoundException,
     UnauthorizedException,
     ValidationException,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -43,9 +43,10 @@ USER_ROW = {
 
 @pytest.fixture
 def client_with_service(monkeypatch):
-    from internal.middleware.fastapi_auth import require_auth
     from starlette.requests import Request
     from starlette.responses import JSONResponse
+
+    from internal.middleware.fastapi_auth import require_auth
 
     mock_service = MagicMock()
     monkeypatch.setattr(

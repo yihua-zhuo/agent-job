@@ -36,7 +36,7 @@
 - `PYTHONPATH=src pytest tests/unit/test_quote_service.py tests/unit/test_contract_service.py -v` → ≥ 12 passed
 - `PYTHONPATH=src pytest tests/integration/test_quote_contract_integration.py -v` → 全 passed
 - `ruff check src/services/quote_service.py src/services/contract_service.py src/api/routers/quotes.py src/api/routers/contracts.py` → 0 errors
-- `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → 三次 exit 0
+- `alembic upgrade head && alembic downgrade -1 && alemembic upgrade head` → 三次 exit 0
 - `mypy src/services/quote_service.py src/services/contract_service.py` → 0 errors
 
 ---
@@ -47,9 +47,9 @@
 
 TBD - 待验证：`src/db/models/opportunity.py` L? — 现有 `opportunities` 表 schema，确认 `tenant_id`、`customer_id`、`stage` 字段存在
 
-TBD - 待验证：`src/services/opportunity_service.py` L? — 现有商机 service，确认已有 list/get 方法可扩展
+TBD - 待验证：TBD - 待验证：`src/services/` 下现有商机 service，确认已有 list/get 方法可扩展
 
-TBD - 待验证：`src/api/routers/opportunities.py` L? — 现有商机 router，确认可追加 "Create Quote" action endpoint
+TBD - 待验证：TBD - 待验证：`src/api/routers/` 下现有商机 router，确认可追加 "Create Quote" action endpoint
 
 ### 2.2 涉及文件清单
 
@@ -103,8 +103,8 @@ TBD - 待验证：`src/api/routers/opportunities.py` L? — 现有商机 router�
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/services/opportunity_service.py`](../../src/services/opportunity_service.py) | 新增 `create_quote_from_opportunity(self, opportunity_id, tenant_id)` 方法 |
-| [`src/api/routers/opportunities.py`](../../src/api/routers/opportunities.py) | 新增 `POST /opportunities/{opportunity_id}/quote` endpoint |
+| TBD - 待验证：`src/services/` — 新增 `create_quote_from_opportunity(self, opportunity_id, tenant_id)` 方法 | 新增 `create_quote_from_opportunity(self, opportunity_id, tenant_id)` 方法 |
+| TBD - 待验证：`src/api/routers/` — 新增 `POST /opportunities/{opportunity_id}/quote` endpoint | 新增 `POST /opportunities/{opportunity_id}/quote` endpoint |
 | `alembic/env.py` | import 新模型 `Quote`、`QuoteItem`、`Contract` 以便 autogenerate |
 
 ### 3.3 新增能力
@@ -686,42 +686,9 @@ async def update_signature_status(
 
 ### Step 6: 扩展 OpportunityService 与路由（Create Quote 快捷入口）
 
-在 `src/services/opportunity_service.py` 新增方法：
+TBD - 待验证：`src/services/` — 新增 `create_quote_from_opportunity` 方法
 
-```python
-async def create_quote_from_opportunity(self, opportunity_id: int, tenant_id: int, items: list[dict], valid_until_days: int = 30) -> Quote:
-    """Create a Quote pre-filled from an Opportunity's customer and products."""
-    opp = await self.get_opportunity(opportunity_id, tenant_id)
-    from services.quote_service import QuoteService
-    quote_svc = QuoteService(self.session)
-    return await quote_svc.create_quote(
-        opportunity_id=opportunity_id,
-        customer_id=opp.customer_id,
-        tenant_id=tenant_id,
-        items=items,
-        valid_until_days=valid_until_days,
-    )
-```
-
-在 `src/api/routers/opportunities.py` 新增 endpoint：
-
-```python
-@router.post("/{opportunity_id}/quote")
-async def create_quote_from_opportunity(
-    opportunity_id: int,
-    payload: dict,
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    svc = OpportunityService(session)
-    quote = await svc.create_quote_from_opportunity(
-        opportunity_id=opportunity_id,
-        tenant_id=ctx.tenant_id,
-        items=payload["items"],
-        valid_until_days=payload.get("valid_until_days", 30),
-    )
-    return {"success": True, "data": quote.to_dict()}
-```
+TBD - 待验证：`src/api/routers/` — 新增 `POST /opportunities/{opportunity_id}/quote` endpoint
 
 **完成判定**：`ruff check src/services/opportunity_service.py src/api/routers/opportunities.py` → 0 errors
 
@@ -921,6 +888,6 @@ gh pr create --base master --title "feat(sales): Quote-to-Contract Workflow Auto
 
 ## 9. 参考
 
-- 同类参考实现：TBD - 待验证：`src/services/opportunity_service.py` — 现有商机 service 结构，可作 QuoteService / ContractService 范式参考
+- 同类参考实现：TBD - 待验证：`src/services/sales_service.py` 或 `src/services/pipeline_service.py` — 现有销售/管线 service 结构，可作 QuoteService / ContractService 范式参考
 - 父 issue / 关联：#72
 - PROD_SPEC.md 中已定义 `quotes` / `contracts` 表 schema（见 issue Dependencies 段落）

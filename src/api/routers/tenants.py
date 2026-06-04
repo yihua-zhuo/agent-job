@@ -92,7 +92,7 @@ async def get_tenant_usage(
 
 @tenants_router.get("/{tenant_id}")
 async def get_tenant(
-    tenant_id: int,
+    tenant_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):

@@ -3,44 +3,34 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
-import { useMutation } from "@tanstack/react-query";
-import { login, getMe } from "@/lib/api/auth";
 import { useAuthStore } from "@/lib/store/auth-store";
 import { Providers } from "@/lib/components/providers";
 import { Input } from "@/components/ui/input";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required"),
+  username: z.string().min(1, "Username is required").email("Please enter a valid email address"),
   password: z.string().min(1, "Password is required"),
 });
 type LoginForm = z.infer<typeof loginSchema>;
 
 function LoginForm() {
   const router = useRouter();
-  const setAuth = useAuthStore((s) => s.setAuth);
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
     defaultValues: { username: "", password: "" },
   });
 
-  const mutation = useMutation({
-    mutationFn: login,
-    onSuccess: async (data) => {
-      try {
-        const me = await getMe(data.access_token);
-        setAuth(data.access_token, me.data);
-      } catch {
-        setAuth(data.access_token, {
-          id: 0, tenant_id: 0,
-          username: form.getValues("username"),
-          email: "", role: "user", status: "active",
-        });
-      }
-      router.push("/customers");
-    },
-    onError: (err: Error) => {
-      form.setError("password", { message: err.message });
-    },
+  const login = useAuthStore((s) => s.login);
+  const error = useAuthStore((s) => s.error);
+  const isLoading = useAuthStore((s) => s.isLoading);
+
+  const onSubmit = form.handleSubmit(async (values) => {
+    try {
+      await login({ username: values.username, password: values.password });
+      router.push("/dashboard");
+    } catch {
+      // error is exposed via the store; nothing more to do here
+    }
   });
 
   return (
@@ -50,7 +40,7 @@ function LoginForm() {
           <h1 className="text-2xl font-bold">Sign In</h1>
           <p className="text-sm text-muted-foreground">Access your CRM workspace</p>
         </div>
-        <form onSubmit={form.handleSubmit((v) => mutation.mutate(v))} className="space-y-4">
+        <form onSubmit={onSubmit} className="space-y-4">
           <div className="space-y-1.5">
             <Input
               {...form.register("username")}
@@ -74,11 +64,14 @@ function LoginForm() {
           </div>
           <button
             type="submit"
-            disabled={mutation.isPending}
+            disabled={isLoading}
             className="inline-flex h-10 w-full items-center justify-center rounded-md bg-primary text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:pointer-events-none"
           >
-            {mutation.isPending ? "Signing in…" : "Sign In"}
+            {isLoading ? "Signing in…" : "Sign In"}
           </button>
+          {error && (
+            <p className="text-sm text-destructive">{error}</p>
+          )}
         </form>
       </div>
     </div>

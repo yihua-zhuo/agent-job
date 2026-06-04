@@ -7,8 +7,7 @@ import pytest
 from models.activity import ActivityType
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.activity_service import ActivityService
-from tests.unit.conftest import MockResult, MockRow, MockState, make_activity_handler, make_mock_session
-
+from tests.unit.conftest import MockState, make_activity_handler, make_mock_session
 
 # ---------------------------------------------------------------------------
 # Test helpers

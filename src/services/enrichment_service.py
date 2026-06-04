@@ -19,8 +19,8 @@ async def _upsert_enrichment(
     tenant_id: int,
     customer_id: int,
     raw_data: dict[str, Any],
-) -> None:
-    """Upsert a CustomerEnrichmentModel record (insert or replace)."""
+) -> CustomerEnrichmentModel:
+    """Upsert a CustomerEnrichmentModel record (insert or replace) and return it."""
     now = datetime.now(UTC)
     next_refresh = now + timedelta(days=7)
     stmt = pg_insert(CustomerEnrichmentModel).values(
@@ -42,6 +42,16 @@ async def _upsert_enrichment(
         },
     )
     await session.execute(stmt)
+    await session.flush()
+    result = await session.execute(
+        select(CustomerEnrichmentModel).where(
+            and_(
+                CustomerEnrichmentModel.customer_id == customer_id,
+                CustomerEnrichmentModel.tenant_id == tenant_id,
+            )
+        )
+    )
+    return result.scalar_one()
 
 
 class EnrichmentService:
@@ -86,6 +96,55 @@ class EnrichmentService:
         await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)
 
         return normalised, raw_data
+
+    async def refresh_full(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        domain_override: str | None = None,
+        company_name_override: str | None = None,
+    ) -> tuple[dict[str, Any], CustomerEnrichmentModel | None]:
+        """Full refresh flow: resolve domain/company from stored enrichment if not provided, then call API."""
+        domain: str | None = domain_override
+        company_name: str | None = company_name_override
+
+        if domain is None and company_name is None:
+            # Pull from stored enrichment record
+            existing = await self.get_latest_enrichment(customer_id, tenant_id)
+            if existing is not None:
+                raw = existing.raw_data_json or {}
+                domain = raw.get("domain")
+                company_name = raw.get("name")
+                if not domain:
+                    domain = None
+                if not company_name:
+                    company_name = None
+
+        if domain is None and company_name is None:
+            raise ValidationException("domain or company_name is required when customer has no prior enrichment record")
+
+        # Customer existence is validated inside refresh() via _call_clearbit_api
+        result, upserted = await self.refresh(customer_id, tenant_id, domain=domain, company_name=company_name)
+        return result, upserted
+
+    async def get_latest_enrichment(
+        self,
+        customer_id: int,
+        tenant_id: int,
+    ) -> "CustomerEnrichmentModel | None":
+        """Fetch the most recent enrichment record for a customer."""
+        result = await self.session.execute(
+            select(CustomerEnrichmentModel)
+            .where(
+                and_(
+                    CustomerEnrichmentModel.customer_id == customer_id,
+                    CustomerEnrichmentModel.tenant_id == tenant_id,
+                )
+            )
+            .order_by(CustomerEnrichmentModel.enriched_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
 
     async def _call_clearbit_api(
         self,
@@ -183,11 +242,11 @@ class EnrichmentService:
         tenant_id: int,
         domain: str | None = None,
         company_name: str | None = None,
-    ) -> tuple[dict[str, Any], dict[str, Any]]:
+    ) -> tuple[dict[str, Any], CustomerEnrichmentModel]:
         """Re-call the enrichment provider for an existing customer.
 
         Validates inputs, calls Clearbit, upserts the enrichment record, and
-        returns a (normalised, raw) tuple.
+        returns a (normalised, upserted_model) tuple.
         """
         # Normalise and validate inputs
         if domain:
@@ -208,6 +267,6 @@ class EnrichmentService:
         raw_data = await self._call_clearbit_api(customer_id, tenant_id, domain, company_name, customer=customer)
         normalised = self._normalise_clearbit(raw_data)
 
-        await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)
+        upserted = await _upsert_enrichment(self.session, tenant_id, customer_id, raw_data)
 
-        return normalised, raw_data
+        return normalised, upserted

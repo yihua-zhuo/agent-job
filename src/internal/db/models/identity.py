@@ -121,7 +121,9 @@ class IdentityDepartmentModel(Base):
     )
 
     # Relationships
-    organization: Mapped["IdentityOrganizationModel"] = relationship("IdentityOrganizationModel", back_populates="departments")
+    organization: Mapped["IdentityOrganizationModel"] = relationship(
+        "IdentityOrganizationModel", back_populates="departments"
+    )
     parent: Mapped["IdentityDepartmentModel | None"] = relationship(
         "IdentityDepartmentModel", remote_side="IdentityDepartmentModel.id", back_populates="children"
     )
@@ -335,9 +337,7 @@ class IdentityUserRoleModel(Base):
     """Assignment of a role to a user (tenant-scoped)."""
 
     __tablename__ = "identity_user_roles"
-    __table_args__ = (
-        UniqueConstraint("user_id", "tenant_id", "role_id", name="uq_identity_user_role_tenant"),
-    )
+    __table_args__ = (UniqueConstraint("user_id", "tenant_id", "role_id", name="uq_identity_user_role_tenant"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(

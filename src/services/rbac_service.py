@@ -392,6 +392,11 @@ class RBACService:
         return {"user_id": user_id, "role_id": role_id}
 
     async def revoke_role_from_user(self, user_id: int, role_id: int, tenant_id: int) -> dict:
+        user_result = await self.session.execute(
+            select(UserModel).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
+        )
+        if user_result.scalar_one_or_none() is None:
+            raise NotFoundException("用户")
         result = await self.session.execute(
             delete(UserRoleModel).where(
                 and_(

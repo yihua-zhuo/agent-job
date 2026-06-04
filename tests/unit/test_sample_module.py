@@ -3,7 +3,9 @@ Unit tests for sample_module
 """
 
 import pytest
-from src.sample_module import add, subtract, multiply, divide, greet, process_data
+
+from src.sample_module import add, divide, greet, multiply, process_data, subtract
+
 
 class TestMathOperations:
     def test_add(self):

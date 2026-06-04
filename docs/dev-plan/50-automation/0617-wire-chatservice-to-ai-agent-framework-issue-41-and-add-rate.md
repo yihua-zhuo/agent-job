@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-当前 `AIService.send_message` 调用的是确定性 stub `AIChatGateway._call_gateway`，没有真实 AI 推理能力。`src/agents/` 中已有 `BaseAgent` / `AgentRegistry` / `CoordinatorAgent`（#625/#626），`src/services/llm_service.py`（#627）即将提供统一的多 provider chat 接口。本次 issue 将两者接入 `AIService`，并增强速率限制——从进程内 in-memory dict 升级为 Redis-backed 分布式限流，支持多实例部署。
+当前 `AIService.send_message` 调用的是确定性 stub `AIChatGateway._call_gateway`，没有真实 AI 推理能力。`src/agents/` 中已有 `BaseAgent` / `AgentRegistry` / `CoordinatorAgent`（TBD - 待验证：#625, TBD - 待验证：#626），`src/services/llm_service.py`（TBD - 待验证：#627）即将提供统一的多 provider chat 接口。本次 issue 将两者接入 `AIService`，并增强速率限制——从进程内 in-memory dict 升级为 Redis-backed 分布式限流，支持多实例部署。
 
 ### 1.2 做完成后
 
@@ -100,7 +100,7 @@
 ### 2.3 缺什么
 
 - [ ] `AIService` 未接入真实 LLM — `AIChatGateway` 是 stub，替换为 `LLMService` 需要依赖 #627 完成
-- [ ] 无 Agent 接入点 — `CoordinatorAgent` 已存在于 `src/agents/coordinator.py`，但 AIService 无法调度它
+- [ ] 无 Agent 接入点 — `CoordinatorAgent` 已存在于 TBD - 待验证：src/agents/coordinator.py，但 AIService 无法调度它
 - [ ] Rate limit 为进程内 in-memory — 多实例部署时不一致，且进程重启后状态丢失
 - [ ] Rate limit 无法配置 per-tenant/per-action — 当前全局 30 req/min
 
@@ -484,8 +484,8 @@ gh pr create --base master --title "#617 feat: wire AIService to Agent Framework
 
 - 同类参考实现：[`src/services/ai_service.py`](../../../src/services/ai_service.py) — AIService 现有实现，Step 2 扩展它
 - 同类参考实现：[`src/api/routers/ai.py`](../../../src/api/routers/ai.py) — 现有 in-memory rate limit，Step 4 替换它
-- 同类参考实现：TBD - 待验证：`src/agents/coordinator.py` — #626 的产物，`run_agent_task` 通过 `AgentRegistry` 调度它
-- 同类参考实现：TBD - 待验证：`src/services/llm_service.py` — #627 的产物，Step 3 接入它（fallback 设计保证顺序无关）
+- 同类参考实现：TBD - 待验证：src/agents/coordinator.py — #626 的产物，`run_agent_task` 通过 `AgentRegistry` 调度它
+- 同类参考实现：TBD - 待验证：src/services/llm_service.py — #627 的产物，Step 3 接入它（fallback 设计保证顺序无关）
 - 依赖 issue / 关联：#625（BaseAgent + AgentRegistry）, #627（LLMService）
 
 ---
@@ -495,15 +495,3 @@ gh pr create --base master --title "#617 feat: wire AIService to Agent Framework
 | 日期 | 变更 | 实施者 |
 |------|------|--------|
 | 2026-05-29 | 创建 | TBD |
-```
-
----
-
-**Changes made:**
-
-| Line | Broken link | Action | Reason |
-|------|-------------|--------|--------|
-| 9 | `[0625](0625-add-baseagent-...md)` | → `TBD - 待验证：#625` | No such file exists in `docs/dev-plan/50-automation/` |
-| 9 | `[0627](0627-add-llmservice-...md)` | → `TBD - 待验证：#627` | No such file exists |
-| 487 | `[src/agents/coordinator.py`](../../src/agents/coordinator.py)` | → `TBD - 待验证：src/agents/coordinator.py` | `src/agents/` directory does not exist |
-| 488 | `[src/services/llm_service.py`](../../src/services/llm_service.py)` | → `TBD - 待验证：src/services/llm_service.py` | No `llm_service.py` found in `src/services/` |

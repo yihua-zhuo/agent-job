@@ -5,7 +5,6 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from models.customer import CustomerCreateDTO, CustomerStatus
-from pkg.errors.app_exceptions import ValidationException
 from services.customer_service import CustomerService
 
 
@@ -22,20 +21,24 @@ def _make_mock_customer_repo():
     repo.add_tag = AsyncMock()
     repo.remove_tag = AsyncMock()
     repo.bulk_import = AsyncMock()
+    repo.get_unassigned_leads = AsyncMock()
+    repo.get_leads_by_owner = AsyncMock()
+    repo.bulk_recycle = AsyncMock()
+    repo.session = MagicMock()
     return repo
 
 
 @pytest.fixture
 def mock_db_session():
-    """Async mock session."""
-    session = MagicMock()
-    session.add = MagicMock()
-    session.flush = AsyncMock()
-    session.refresh = AsyncMock()
-    session.execute = AsyncMock()
-    session.get = AsyncMock(return_value=None)
-    session.delete = MagicMock()
-    return session
+    """SQL mock session for tests that need seeded DB state via domain handlers.
+
+    Only used by TestSearchCustomers. Most tests pass mock_customer_repo
+    directly to CustomerService and need no SQL mock.
+    """
+    from tests.unit.conftest import MockState, make_mock_session
+
+    state = MockState()
+    return make_mock_session(state=state)
 
 
 @pytest.fixture
@@ -152,7 +155,7 @@ class TestCreateCustomerService:
         mock_customer.status = "lead"
         mock_customer.owner_id = 0
         mock_customer_repo.create = AsyncMock(return_value=mock_customer)
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
 
         with patch(
             "services.lead_routing_service.LeadRoutingService.auto_assign_lead",
@@ -181,7 +184,7 @@ class TestCreateCustomerService:
         mock_customer.owner_id = 99
         mock_customer.tags = ["key-account"]
         mock_customer_repo.create = AsyncMock(return_value=mock_customer)
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
 
         dto = CustomerCreateDTO(
             name="DTO Customer",
@@ -211,7 +214,7 @@ class TestCreateCustomerService:
 
     @pytest.mark.asyncio
     async def test_create_customer_empty_dict_uses_defaults(self, mock_db_session, mock_customer_repo):
-        """create_customer with empty dict falls back to default values."""
+        """create_customer with name+email falls back to default values for other fields."""
         mock_customer = MagicMock()
         mock_customer.id = 3
         mock_customer.name = "Customer"
@@ -220,18 +223,18 @@ class TestCreateCustomerService:
         mock_customer.owner_id = 0
         mock_customer.tags = []
         mock_customer_repo.create = AsyncMock(return_value=mock_customer)
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
 
         with patch(
             "services.lead_routing_service.LeadRoutingService.auto_assign_lead",
             new_callable=AsyncMock,
             return_value=None,
         ):
-            result = await service.create_customer({}, tenant_id=1)
+            result = await service.create_customer({"name": "Customer", "email": "default@example.com"}, tenant_id=1)
 
         call_args = mock_customer_repo.create.call_args[0][0]
-        assert call_args.get("name") is None  # repo fills default "Customer"
-        assert call_args.get("email") is None
+        assert call_args["name"] == "Customer"
+        assert call_args["email"] == "default@example.com"
         assert result.name == "Customer"
 
 
@@ -239,15 +242,15 @@ class TestCreateCustomerService:
 class TestCountByStatus:
     """Unit tests for CustomerService.count_by_status — delegates to repo."""
 
-    async def test_count_by_status_empty(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_empty(self, mock_customer_repo):
         """Returns empty dict when no customers in tenant."""
         mock_customer_repo.count_by_status = AsyncMock(return_value={})
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert result == {}
         mock_customer_repo.count_by_status.assert_awaited_once_with(1)
 
-    async def test_count_by_status_returns_counts(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_returns_counts(self, mock_customer_repo):
         """Returns correct count per status."""
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={
@@ -256,42 +259,42 @@ class TestCountByStatus:
                 CustomerStatus.CUSTOMER: 1,
             }
         )
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert result[CustomerStatus.LEAD] == 3
         assert result[CustomerStatus.OPPORTUNITY] == 2
         assert result[CustomerStatus.CUSTOMER] == 1
 
-    async def test_count_by_status_tenant_isolation(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_tenant_isolation(self, mock_customer_repo):
         """Passes correct tenant_id to repository."""
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={CustomerStatus.LEAD: 7}
         )
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
         result = await service.count_by_status(tenant_id=999)
         mock_customer_repo.count_by_status.assert_awaited_once_with(999)
         assert result[CustomerStatus.LEAD] == 7
         assert CustomerStatus.OPPORTUNITY not in result
         assert CustomerStatus.CUSTOMER not in result
 
-    async def test_count_by_status_single_status(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_single_status(self, mock_customer_repo):
         """Returns one entry when all customers share same status."""
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={CustomerStatus.INACTIVE: 10}
         )
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert len(result) == 1
         assert result[CustomerStatus.INACTIVE] == 10
 
     async def test_count_by_status_invalid_db_status_skipped(
-        self, mock_db_session, mock_customer_repo
+        self, mock_customer_repo
     ):
         """Repository returns partial counts when some DB rows have invalid status."""
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={CustomerStatus.LEAD: 3}  # unknown statuses silently skipped
         )
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert result == {CustomerStatus.LEAD: 3}
 
@@ -305,16 +308,24 @@ class TestCountByStatus:
             ("inactive", 2),
         ])
         session.execute = AsyncMock(return_value=mock_result)
-        service = CustomerService(session)
+        mock_customer_repo = _make_mock_customer_repo()
+        mock_customer_repo.count_by_status = AsyncMock(
+            return_value={
+                CustomerStatus.LEAD: 5,
+                CustomerStatus.ACTIVE: 3,
+                CustomerStatus.INACTIVE: 2,
+            }
+        )
+        service = CustomerService(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert result[CustomerStatus.LEAD] == 5
         assert result[CustomerStatus.ACTIVE] == 3
         assert result[CustomerStatus.INACTIVE] == 2
 
-    async def test_count_by_status_zero_tenant(self, mock_db_session, mock_customer_repo):
+    async def test_count_by_status_zero_tenant(self, mock_customer_repo):
         """Delegates to repo which returns empty dict for invalid tenant_id."""
         mock_customer_repo.count_by_status = AsyncMock(return_value={})
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
         result = await service.count_by_status(tenant_id=0)
         assert result == {}
         mock_customer_repo.count_by_status.assert_awaited_once_with(0)
@@ -330,7 +341,7 @@ class TestSearchCustomers:
         """Empty keyword is delegated to repository which returns [] for empty string."""
         # search_customers checks the keyword in the repository, not in the service
         mock_customer_repo.search_customers = AsyncMock(return_value=[])
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
 
         result = await service.search_customers("", tenant_id=1)
 
@@ -344,7 +355,7 @@ class TestSearchCustomers:
         """Delegates to CustomerRepository.search_customers."""
         mock_row = MagicMock()
         mock_customer_repo.search_customers = AsyncMock(return_value=[mock_row])
-        service = CustomerService(mock_db_session, mock_customer_repo)
+        service = CustomerService(mock_customer_repo)
 
         result = await service.search_customers(r"100%_fit\\", tenant_id=1)
 
@@ -358,27 +369,10 @@ class TestEnrichmentUpsert:
     """Unit tests for enrichment upsert on customer create/update."""
 
     @pytest.mark.asyncio
-    async def test_create_customer_with_enrichment_data_calls_upsert(self, mock_db_session):
+    async def test_create_customer_with_enrichment_data_calls_upsert(self):
         """create_customer calls _upsert_enrichment when enrichment_data is in the payload."""
-        service = CustomerService(mock_db_session)
-        next_id = [10]
-
-        def assign_id(obj):
-            obj.id = next_id[0]
-            next_id[0] += 1
-
-        _original_add = mock_db_session.add
-
-        def tracked_add(obj):
-            assign_id(obj)
-            return _original_add(obj)
-
-        mock_db_session.add = tracked_add
-
-        async def fake_refresh(obj):
-            pass
-
-        mock_db_session.refresh = fake_refresh
+        mock_customer_repo = _make_mock_customer_repo()
+        service = CustomerService(mock_customer_repo)
 
         mock_customer = MagicMock()
         mock_customer.id = 10
@@ -386,19 +380,21 @@ class TestEnrichmentUpsert:
         mock_customer.status = "lead"
         mock_customer.owner_id = 1  # non-zero owner to skip auto_assign_lead
         mock_customer.created_at = None
-        service.customer_repo.create = AsyncMock(return_value=mock_customer)
+        mock_customer_repo.create = AsyncMock(return_value=mock_customer)
+        mock_customer_repo.session.execute = AsyncMock()
 
         with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
             await service.create_customer(
-                {"name": "Enriched Customer", "enrichment_data": {"raw": "payload"}},
+                {"name": "Enriched Customer", "email": "enriched@example.com", "enrichment_data": {"raw": "payload"}},
                 tenant_id=1,
             )
             mock_upsert.assert_awaited_once_with(10, 1, {"raw": "payload"})
 
     @pytest.mark.asyncio
-    async def test_update_customer_with_enrichment_data_calls_upsert(self, mock_db_session):
+    async def test_update_customer_with_enrichment_data_calls_upsert(self):
         """update_customer delegates to repo with the full data dict (including enrichment_data)."""
-        service = CustomerService(mock_db_session)
+        mock_customer_repo = _make_mock_customer_repo()
+        service = CustomerService(mock_customer_repo)
 
         fake_customer = MagicMock()
         fake_customer.id = 7
@@ -406,7 +402,7 @@ class TestEnrichmentUpsert:
         fake_customer.status = "lead"
         fake_customer.owner_id = 0
 
-        service.customer_repo.update_customer = AsyncMock(return_value=fake_customer)
+        mock_customer_repo.update_customer = AsyncMock(return_value=fake_customer)
 
         result = await service.update_customer(
             7,
@@ -416,22 +412,16 @@ class TestEnrichmentUpsert:
         # The repo receives the data including enrichment_data; the service itself
         # doesn't call _upsert_enrichment (that lives in the repo or is handled
         # by the router layer via explicit calls).
-        service.customer_repo.update_customer.assert_awaited_once_with(
+        mock_customer_repo.update_customer.assert_awaited_once_with(
             7, {"name": "Updated Name", "enrichment_data": {"raw": "updated"}}, 1
         )
         assert result == fake_customer
 
     @pytest.mark.asyncio
-    async def test_create_customer_without_enrichment_data_skips_upsert(self, mock_db_session):
+    async def test_create_customer_without_enrichment_data_skips_upsert(self):
         """_upsert_enrichment is NOT called when no enrichment_data key is present."""
-        service = CustomerService(mock_db_session)
-
-        async def fake_refresh(obj):
-            obj.id = 20
-            obj.name = "Plain Customer"
-            obj.status = "lead"
-
-        mock_db_session.refresh = fake_refresh
+        mock_customer_repo = _make_mock_customer_repo()
+        service = CustomerService(mock_customer_repo)
 
         mock_customer = MagicMock()
         mock_customer.id = 20
@@ -439,26 +429,21 @@ class TestEnrichmentUpsert:
         mock_customer.status = "lead"
         mock_customer.owner_id = 1  # non-zero owner skips auto_assign_lead
         mock_customer.created_at = None
-        service.customer_repo.create = AsyncMock(return_value=mock_customer)
+        mock_customer_repo.create = AsyncMock(return_value=mock_customer)
+        mock_customer_repo.session.execute = AsyncMock()
 
         with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
             await service.create_customer(
-                {"name": "Plain Customer"},
+                {"name": "Plain Customer", "email": "plain@example.com"},
                 tenant_id=1,
             )
             mock_upsert.assert_not_called()
 
     @pytest.mark.asyncio
-    async def test_create_customer_with_none_enrichment_data_skips_upsert(self, mock_db_session):
+    async def test_create_customer_with_none_enrichment_data_skips_upsert(self):
         """_upsert_enrichment is NOT called when enrichment_data is explicitly None."""
-        service = CustomerService(mock_db_session)
-
-        async def fake_refresh(obj):
-            obj.id = 21
-            obj.name = "Null Enrich Customer"
-            obj.status = "lead"
-
-        mock_db_session.refresh = fake_refresh
+        mock_customer_repo = _make_mock_customer_repo()
+        service = CustomerService(mock_customer_repo)
 
         mock_customer = MagicMock()
         mock_customer.id = 21
@@ -466,11 +451,12 @@ class TestEnrichmentUpsert:
         mock_customer.status = "lead"
         mock_customer.owner_id = 1  # non-zero owner skips auto_assign_lead
         mock_customer.created_at = None
-        service.customer_repo.create = AsyncMock(return_value=mock_customer)
+        mock_customer_repo.create = AsyncMock(return_value=mock_customer)
+        mock_customer_repo.session.execute = AsyncMock()
 
         with patch.object(service, "_upsert_enrichment", new_callable=AsyncMock) as mock_upsert:
             await service.create_customer(
-                {"name": "Null Enrich Customer", "enrichment_data": None},
+                {"name": "Null Enrich Customer", "email": "null@example.com", "enrichment_data": None},
                 tenant_id=1,
             )
             mock_upsert.assert_not_called()
