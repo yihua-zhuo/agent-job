@@ -5,6 +5,7 @@ from .customer import Customer, CustomerStatus
 from .marketing import Campaign, CampaignEvent, CampaignStatus, CampaignType, EventType, TriggerType
 from .opportunity import Opportunity, Stage
 from .pipeline import Pipeline
+from .score import ScoreTier
 from .user import Role, User
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "CampaignType",
     "TriggerType",
     "EventType",
+    "ScoreTier",
 ]
