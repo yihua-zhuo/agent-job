@@ -9,7 +9,7 @@
 - Note: No cron configured — manual runs only
 
 ## cron 状态
-- Job ID: 未配置
+- Job ID: 无配置（当前为手动心跳检查）
 - 测试：待检查
 - 待提交：待检查
 
