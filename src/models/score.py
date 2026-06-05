@@ -1,8 +1,16 @@
 """Score schemas for lead scoring."""
 
+from enum import StrEnum
 from typing import Annotated, Any
 
 from pydantic import BaseModel, Field
+
+
+class ScoreTier(StrEnum):
+    A = "A"
+    B = "B"
+    C = "C"
+    D = "D"
 
 
 class ScoreRequest(BaseModel):
