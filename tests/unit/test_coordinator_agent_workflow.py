@@ -17,22 +17,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
+from agents.registry import AgentRegistry
 from internal.ai_gateway import AIChatGateway
-
-# Import the domain-owned reset_agent_registry_singleton helper so tests
-# that register custom sub-agents can request the local reset_agent_registry
-# fixture to isolate AgentRegistry state.
-from tests.unit.domain_fixtures.coordinator import reset_agent_registry_singleton
 
 
 @pytest.fixture
 def reset_agent_registry() -> Generator[None, None, None]:
-    """Delegate to the domain-owned reset_agent_registry_singleton helper
-    so the AgentRegistry is clean before and after each test.
+    """Reset the AgentRegistry singleton before and after each test.
+
+    The coordinator module mutates the process-wide registry via
+    ``@register("coordinator")`` at import time. This fixture is explicitly
+    requested by tests that register custom sub-agents to prevent registry
+    state from leaking between tests.
     """
-    reset_agent_registry_singleton()
+    AgentRegistry.reset()
     yield
-    reset_agent_registry_singleton()
+    AgentRegistry.reset()
 
 
 @pytest.fixture
@@ -136,3 +136,31 @@ class TestCoordinatorAgentRun:
         assert result.success is True
         assert captured["tenant_id"] is None
         assert coordinator.tenant_id is None
+
+    async def test_run_forwards_tenant_id_to_all_dispatched_subagents(
+        self, tenant_coordinator
+    ):
+        """All sub-agents dispatched in one workflow must observe the same
+        coordinator tenant_id. Guards against a sub-agent observing a default
+        or zero value while a sibling sub-agent sees the correct one.
+        """
+        observed: dict[str, int | None] = {}
+
+        @register("test_agent")
+        class _TestAgent(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                observed["test_agent"] = self.tenant_id
+                return {"ok": True}
+
+        @register("code_review_agent")
+        class _ReviewAgent(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                observed["code_review_agent"] = self.tenant_id
+                return {"ok": True}
+
+        result = await tenant_coordinator.run("test the code review module")
+
+        assert result.success is True
+        assert observed["test_agent"] == 42
+        assert observed["code_review_agent"] == 42
+        assert tenant_coordinator.tenant_id == 42

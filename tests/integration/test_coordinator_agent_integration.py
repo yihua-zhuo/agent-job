@@ -16,18 +16,22 @@ import pytest
 
 from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
+from agents.registry import AgentRegistry
 from internal.ai_gateway import AIChatGateway
-from tests.integration.domain_fixtures.coordinator import reset_agent_registry_singleton
 
 
 @pytest.fixture
 def reset_agent_registry() -> Generator[None, None, None]:
-    """Delegate to the domain-owned reset_agent_registry_singleton helper
-    so the AgentRegistry is clean before and after each test.
+    """Reset the AgentRegistry singleton before and after each test.
+
+    The coordinator module mutates the process-wide registry via
+    ``@register("coordinator")`` at import time. This fixture is explicitly
+    requested by tests that register custom sub-agents to prevent registry
+    state from leaking between tests.
     """
-    reset_agent_registry_singleton()
+    AgentRegistry.reset()
     yield
-    reset_agent_registry_singleton()
+    AgentRegistry.reset()
 
 
 @pytest.fixture
