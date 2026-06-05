@@ -9,6 +9,7 @@ from the contract that sub-agents will see in production.
 
 from __future__ import annotations
 
+from collections.abc import Generator
 from typing import Any
 
 import pytest
@@ -16,28 +17,25 @@ import pytest
 from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
 from internal.ai_gateway import AIChatGateway
-
-# Import the domain-owned reset_agent_registry fixture so tests that register
-# custom sub-agents can request it explicitly to isolate AgentRegistry state.
-from tests.integration.domain_fixtures import coordinator as _coordinator_fixtures  # noqa: F401
-
-
-@pytest.fixture(autouse=True)
-def _reset_agent_registry():
-    """Autouse wrapper that delegates to the domain-owned fixture logic,
-    ensuring every test in this file gets a clean AgentRegistry.
-    """
-    _coordinator_fixtures.reset_agent_registry_singleton()
-    yield
-    _coordinator_fixtures.reset_agent_registry_singleton()
+from tests.integration.domain_fixtures.coordinator import reset_agent_registry_singleton
 
 
 @pytest.fixture
-def coordinator(async_session, tenant_id) -> CoordinatorAgent:
-    """Coordinator wired to the real async_session fixture with a real
-    AIChatGateway and the integration-test tenant_id. The sub-agents
-    registered in these tests never invoke the LLM, so the gateway's
-    deterministic stub is sufficient and no mocks are needed.
+def reset_agent_registry() -> Generator[None, None, None]:
+    """Delegate to the domain-owned reset_agent_registry_singleton helper
+    so the AgentRegistry is clean before and after each test.
+    """
+    reset_agent_registry_singleton()
+    yield
+    reset_agent_registry_singleton()
+
+
+@pytest.fixture
+def sut(async_session, tenant_id) -> CoordinatorAgent:
+    """System under test: CoordinatorAgent wired to the real async_session
+    fixture with a real AIChatGateway and the integration-test tenant_id.
+    The sub-agents registered in these tests never invoke the LLM, so the
+    gateway's deterministic stub is sufficient and no mocks are needed.
     """
     return CoordinatorAgent(llm=AIChatGateway(), session=async_session, tenant_id=tenant_id)
 
@@ -46,14 +44,14 @@ class TestCoordinatorAgentIntegration:
     """Integration tests for CoordinatorAgent.run() against a real async session."""
 
     async def test_run_dispatches_registered_subagent_and_returns_completed(
-        self, coordinator, db_schema, tenant_id, async_session
+        self, reset_agent_registry, sut
     ):
         @register("test_agent")
         class _T(BaseAgent):
             async def run(self, task: str) -> dict[str, Any]:
                 return {"ok": True, "task": task}
 
-        result = await coordinator.run("test the login module")
+        result = await sut.run("test the login module")
 
         assert isinstance(result, WorkflowResult)
         assert result.success is True
@@ -65,14 +63,14 @@ class TestCoordinatorAgentIntegration:
         assert result.completed[0].result == {"ok": True, "task": "test the login module"}
 
     async def test_run_with_unfamiliar_task_falls_back_to_implement_agent(
-        self, coordinator, db_schema, tenant_id, async_session
+        self, reset_agent_registry, sut
     ):
         @register("implement_agent")
         class _Impl(BaseAgent):
             async def run(self, task: str) -> dict[str, Any]:
                 return {"built": True, "task": task}
 
-        result = await coordinator.run("do something completely unrecognised")
+        result = await sut.run("do something completely unrecognised")
 
         assert isinstance(result, WorkflowResult)
         assert result.success is True
@@ -84,7 +82,7 @@ class TestCoordinatorAgentIntegration:
         assert result.completed[0].result == {"built": True, "task": "do something completely unrecognised"}
 
     async def test_run_forwards_tenant_id_to_subagent_and_preserves_coordinator_state(
-        self, db_schema, tenant_id, async_session
+        self, reset_agent_registry, async_session, tenant_id
     ):
         captured: dict[str, Any] = {}
 
@@ -94,24 +92,24 @@ class TestCoordinatorAgentIntegration:
                 captured["tenant_id"] = self.tenant_id
                 return {"ok": True}
 
-        coordinator = CoordinatorAgent(llm=AIChatGateway(), session=async_session, tenant_id=tenant_id)
-        result = await coordinator.run("test the login module")
+        sut = CoordinatorAgent(llm=AIChatGateway(), session=async_session, tenant_id=tenant_id)
+        result = await sut.run("test the login module")
 
         assert result.success is True
         assert captured["tenant_id"] == tenant_id
-        assert coordinator.tenant_id == tenant_id
+        assert sut.tenant_id == tenant_id
 
     async def test_run_with_unknown_subagent_returns_failed(
-        self, coordinator, db_schema, tenant_id, async_session
+        self, reset_agent_registry, sut
     ):
         """When no agent is registered for the dispatched name, the
         coordinator records the failure in ``result.failed`` instead of
         raising — this is the documented LookupError path in _dispatch().
 
-        Depends on the autouse ``_reset_agent_registry`` fixture to ensure
+        Depends on the ``reset_agent_registry`` fixture to ensure
         ``test_agent`` is not registered from a prior test in this file.
         """
-        result = await coordinator.run("test the login module")
+        result = await sut.run("test the login module")
 
         assert isinstance(result, WorkflowResult)
         assert result.success is False

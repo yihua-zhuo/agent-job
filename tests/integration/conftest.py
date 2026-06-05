@@ -489,18 +489,3 @@ async def api_client_tenant_2(
     fastapi_app.dependency_overrides.pop(get_db, None)
 
 
-# ── Shared coordinator-agent test fixtures ─────────────────────────────────────
-@pytest.fixture(autouse=True)
-def reset_agent_registry():
-    """Reset the AgentRegistry singleton before and after each test.
-
-    The coordinator module mutates the process-wide registry via
-    ``@register("coordinator")`` at import time. This fixture is autouse so
-    every test in this directory starts and ends with a clean registry,
-    preventing test ordering and parallel-execution flakiness.
-    """
-    from agents.registry import AgentRegistry
-
-    AgentRegistry.reset()
-    yield
-    AgentRegistry.reset()
