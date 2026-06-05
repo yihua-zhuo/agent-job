@@ -8,6 +8,7 @@ boundary (no matching keyword falls back to implement_agent), and error
 # Coordinator does not call session methods directly; mock is forwarded to sub-agents only.
 from __future__ import annotations
 
+from collections.abc import Generator
 from typing import Any
 from unittest.mock import AsyncMock
 
@@ -18,28 +19,29 @@ from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
 from internal.ai_gateway import AIChatGateway
 
-# Import the domain-owned reset_agent_registry fixture so tests that register
-# custom sub-agents can request it explicitly to isolate AgentRegistry state.
-from tests.unit.domain_fixtures import coordinator as _coordinator_fixtures  # noqa: F401
-
-
-@pytest.fixture(autouse=True)
-def _reset_agent_registry():
-    """Autouse wrapper that delegates to the domain-owned fixture logic,
-    ensuring every test in this file gets a clean AgentRegistry.
-    """
-    _coordinator_fixtures.reset_agent_registry_singleton()
-    yield
-    _coordinator_fixtures.reset_agent_registry_singleton()
+# Import the domain-owned reset_agent_registry_singleton helper so tests
+# that register custom sub-agents can request the local reset_agent_registry
+# fixture to isolate AgentRegistry state.
+from tests.unit.domain_fixtures.coordinator import reset_agent_registry_singleton
 
 
 @pytest.fixture
-def coordinator() -> CoordinatorAgent:
+def reset_agent_registry() -> Generator[None, None, None]:
+    """Delegate to the domain-owned reset_agent_registry_singleton helper
+    so the AgentRegistry is clean before and after each test.
+    """
+    reset_agent_registry_singleton()
+    yield
+    reset_agent_registry_singleton()
+
+
+@pytest.fixture
+def coordinator(reset_agent_registry) -> CoordinatorAgent:
     return CoordinatorAgent(llm=AIChatGateway(), session=AsyncMock(spec=AsyncSession))
 
 
 @pytest.fixture
-def tenant_coordinator() -> CoordinatorAgent:
+def tenant_coordinator(reset_agent_registry) -> CoordinatorAgent:
     """Coordinator with an explicit tenant_id for the propagation test."""
     return CoordinatorAgent(llm=AIChatGateway(), session=AsyncMock(spec=AsyncSession), tenant_id=42)
 

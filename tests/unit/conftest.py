@@ -419,22 +419,3 @@ def tenant_id_2() -> int:
     return 2
 
 
-# ---------------------------------------------------------------------------
-# AgentRegistry fixtures
-# ---------------------------------------------------------------------------
-
-
-@pytest.fixture(autouse=True)
-def reset_agent_registry():
-    """Reset the AgentRegistry singleton before and after each test.
-
-    The coordinator module mutates the process-wide registry via
-    ``@register("coordinator")`` at import time. This fixture is autouse so
-    every test in this directory starts and ends with a clean registry,
-    preventing test-ordering and parallel-execution flakiness.
-    """
-    from agents.registry import AgentRegistry
-
-    AgentRegistry.reset()
-    yield
-    AgentRegistry.reset()

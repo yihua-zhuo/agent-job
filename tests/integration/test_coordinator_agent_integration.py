@@ -31,7 +31,7 @@ def reset_agent_registry() -> Generator[None, None, None]:
 
 
 @pytest.fixture
-def sut(async_session, tenant_id) -> CoordinatorAgent:
+def sut(db_schema, async_session, tenant_id) -> CoordinatorAgent:
     """System under test: CoordinatorAgent wired to the real async_session
     fixture with a real AIChatGateway and the integration-test tenant_id.
     The sub-agents registered in these tests never invoke the LLM, so the
@@ -82,7 +82,7 @@ class TestCoordinatorAgentIntegration:
         assert result.completed[0].result == {"built": True, "task": "do something completely unrecognised"}
 
     async def test_run_forwards_tenant_id_to_subagent_and_preserves_coordinator_state(
-        self, reset_agent_registry, async_session, tenant_id
+        self, reset_agent_registry, db_schema, async_session, tenant_id
     ):
         captured: dict[str, Any] = {}
 
