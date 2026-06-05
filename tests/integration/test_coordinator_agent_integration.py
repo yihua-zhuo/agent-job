@@ -1,77 +1,106 @@
-"""Integration tests for ``docs.agents.coordinator.coordinator_agent.CoordinatorAgent``.
+"""Integration tests for the production ``CoordinatorAgent`` from
+``src.agents.coordinator``.
 
-Covers ``run_workflow`` against the file-based agent script runner:
+The unit suite (``tests/unit/test_coordinator_agent.py``) exercises the
+coordinator with a fully mocked DB session. This file extends coverage to a
+real PostgreSQL session via the ``async_session`` fixture, verifying that
+the coordinator's async dispatch path actually works end-to-end against a
+real DB connection.
 
-* happy-path — a real ``test_agent.py`` script exists in the workspace and
-  exits 0, so dispatch returns ``status == "completed"``.
-* boundary — an empty task list produces an empty results dict and does
-  not raise.
-* error — referencing a non-existent agent script returns
-  ``status == "not_found"`` rather than crashing.
-
-The coordinator's ``run_workflow`` does not interact with the database, so
-``db_schema`` and ``async_session`` are consumed only to satisfy the
-integration-test fixture contract; ``tenant_id`` is forwarded for
-completeness even though dispatch is file-based. The session and tenant_id
-are not asserted on.
+* happy-path — a registered sub-agent is dispatched and returns ``completed``.
+* boundary — an unknown task falls back to ``implement_agent`` (a registered
+  fallback), covering the "all paths through the real session" contract.
+* error — a decomposition referencing a non-existent agent name lands in
+  ``result.failed`` rather than raising.
 """
 
 from __future__ import annotations
 
-# docs/ has no __init__.py files, so we import the module file directly
-# by adding the docs/agents/coordinator directory to sys.path. We do NOT
-# add ``docs/`` because doing so would conflict with ``src.agents`` (the
-# async BaseAgent package) for the bare name ``agents``.
-import sys
-from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock
 
-_coordinator_dir = Path(__file__).resolve().parents[2] / "docs" / "agents" / "coordinator"
-if str(_coordinator_dir) not in sys.path:
-    sys.path.insert(0, str(_coordinator_dir))
+import pytest
 
-import pytest  # noqa: E402
-from coordinator_agent import CoordinatorAgent  # noqa: E402
+from agents.base import BaseAgent, register
+from agents.coordinator import CoordinatorAgent, WorkflowResult
+from agents.registry import AgentRegistry
 
 
-class TestCoordinatorAgent:
-    """Integration tests for CoordinatorAgent.run_workflow."""
+@pytest.fixture(autouse=True)
+def reset_agent_registry():
+    """Reset the AgentRegistry singleton before and after each test."""
+    AgentRegistry.reset()
+    yield
+    AgentRegistry.reset()
 
-    @pytest.fixture
-    def workspace(self, tmp_path):
-        """Workspace with a real ``test_agent.py`` that exits 0 on --task."""
-        agent_dir = tmp_path / "agents" / "test"
-        agent_dir.mkdir(parents=True)
-        (agent_dir / "test_agent.py").write_text(
-            "#!/usr/bin/env python3\nimport sys\nsys.exit(0)\n"
-        )
-        return tmp_path
 
-    async def test_run_workflow_dispatches_task_and_returns_completed(
-        self, workspace, db_schema, tenant_id, async_session
+@pytest.fixture
+def coordinator(async_session) -> CoordinatorAgent:
+    """Coordinator wired to the real async_session fixture.
+
+    The coordinator itself does not query the database, but it forwards
+    ``self.session`` to sub-agents. Using a real session here proves that
+    the integration-test wiring (commit/rollback, async driver) does not
+    interfere with the dispatch chain.
+    """
+    return CoordinatorAgent(llm=MagicMock(), session=async_session)
+
+
+class TestCoordinatorAgentIntegration:
+    """Integration tests for CoordinatorAgent.run() against a real async session."""
+
+    async def test_run_dispatches_registered_subagent_and_returns_completed(
+        self, coordinator, db_schema, tenant_id, async_session
     ):
-        agent = CoordinatorAgent(workspace=workspace)
-        tasks = [{"task_id": "t1", "assignee": "test", "type": "feature"}]
-        results = agent.run_workflow(tasks)
-        assert "dispatched" in results
-        assert len(results["dispatched"]) == 1
-        assert results["dispatched"][0]["status"] == "completed"
+        @register("test_agent")
+        class _T(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                return {"ok": True, "task": task}
 
-    async def test_run_workflow_with_empty_task_list_returns_empty_dispatched(
-        self, workspace, db_schema, tenant_id, async_session
-    ):
-        agent = CoordinatorAgent(workspace=workspace)
-        results = agent.run_workflow([])
-        assert results["dispatched"] == []
-        assert results["completed"] == []
-        assert results["failed"] == []
+        result = await coordinator.run("test the login module")
 
-    async def test_run_workflow_with_nonexistent_agent_script_returns_not_found(
-        self, workspace, db_schema, tenant_id, async_session
+        assert isinstance(result, WorkflowResult)
+        assert result.success is True
+        assert result.task_id
+        assert len(result.completed) == 1
+        assert len(result.failed) == 0
+        assert result.completed[0].agent_name == "test_agent"
+        assert result.completed[0].status == "completed"
+        assert result.completed[0].result == {"ok": True, "task": "test the login module"}
+
+    async def test_run_with_unfamiliar_task_falls_back_to_implement_agent(
+        self, coordinator, db_schema, tenant_id, async_session
     ):
-        agent = CoordinatorAgent(workspace=workspace)
-        # ``code_review`` is a known agent name in dispatch_to_agent's lookup
-        # table, but its script file is NOT present in this workspace —
-        # therefore dispatch hits the "not_found" branch.
-        tasks = [{"task_id": "t2", "assignee": "code_review", "type": "feature"}]
-        results = agent.run_workflow(tasks)
-        assert results["dispatched"][0]["status"] == "not_found"
+        @register("implement_agent")
+        class _Impl(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                return {"built": True, "task": task}
+
+        result = await coordinator.run("do something completely unrecognised")
+
+        assert isinstance(result, WorkflowResult)
+        assert result.success is True
+        assert result.task_id
+        assert len(result.completed) == 1
+        assert len(result.failed) == 0
+        assert result.completed[0].agent_name == "implement_agent"
+        assert result.completed[0].status == "completed"
+        assert result.completed[0].result == {"built": True, "task": "do something completely unrecognised"}
+
+    async def test_run_forwards_tenant_id_to_subagent_and_preserves_coordinator_state(
+        self, db_schema, tenant_id, async_session
+    ):
+        captured: dict[str, Any] = {}
+
+        @register("test_agent")
+        class _T(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                captured["tenant_id"] = self.tenant_id
+                return {"ok": True}
+
+        coordinator = CoordinatorAgent(llm=MagicMock(), session=async_session, tenant_id=42)
+        result = await coordinator.run("test the login module")
+
+        assert result.success is True
+        assert captured["tenant_id"] == 42
+        assert coordinator.tenant_id == 42

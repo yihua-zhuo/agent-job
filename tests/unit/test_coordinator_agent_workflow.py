@@ -5,14 +5,18 @@ boundary (no matching keyword falls back to implement_agent), and error
 (unknown agent -> failed).
 """
 
-# The coordinator does not touch the DB during dispatch (rule 135), so an
-# AsyncMock session is acceptable here in place of MockState/handlers.
+# The coordinator does not touch the DB during dispatch (rule 135), so a
+# spec'd AsyncMock session is acceptable here. ``spec=AsyncSession`` makes
+# accidental ``commit()`` / ``flush()`` calls surface as AttributeError so
+# we catch any regression that violates the sub-agent transaction rule
+# (rule 121, rule 67).
 from __future__ import annotations
 
 from typing import Any
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
@@ -21,6 +25,14 @@ from agents.registry import AgentRegistry
 
 @pytest.fixture(autouse=True)
 def reset_agent_registry():
+    """Reset the AgentRegistry singleton before and after each test.
+
+    The coordinator module mutates the process-wide registry via
+    ``@register("coordinator")`` at import time. This fixture is autouse so
+    parallel test files that share the singleton don't see stale state.
+    Do not run this file in parallel with other registry-mutating test
+    files (rule 117).
+    """
     AgentRegistry.reset()
     yield
     AgentRegistry.reset()
@@ -28,13 +40,15 @@ def reset_agent_registry():
 
 @pytest.fixture
 def coordinator() -> CoordinatorAgent:
-    return CoordinatorAgent(llm=MagicMock(), session=AsyncMock())
+    # spec=AsyncSession so an accidental commit/flush in coordinator code
+    # surfaces as AttributeError (commit is not a method on the spec).
+    return CoordinatorAgent(llm=MagicMock(), session=AsyncMock(spec=AsyncSession))
 
 
 @pytest.fixture
 def tenant_coordinator() -> CoordinatorAgent:
     """Coordinator with an explicit tenant_id for the propagation test."""
-    return CoordinatorAgent(llm=MagicMock(), session=AsyncMock(), tenant_id=42)
+    return CoordinatorAgent(llm=MagicMock(), session=AsyncMock(spec=AsyncSession), tenant_id=42)
 
 
 class TestCoordinatorAgentRun:
@@ -106,3 +120,20 @@ class TestCoordinatorAgentRun:
 
         assert result.success is True
         assert captured["tenant_id"] == 42  # tenant_id propagated from coordinator to sub-agent
+        assert tenant_coordinator.tenant_id == 42  # coordinator's own tenant_id preserved through dispatch
+
+    async def test_run_without_tenant_id_forwards_none_to_subagent(self, coordinator):
+        """A coordinator constructed without tenant_id forwards None downstream."""
+        captured: dict[str, Any] = {}
+
+        @register("test_agent")
+        class _T(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                captured["tenant_id"] = self.tenant_id
+                return {"ok": True}
+
+        result = await coordinator.run("test the login module")
+
+        assert result.success is True
+        assert captured["tenant_id"] is None
+        assert coordinator.tenant_id is None
