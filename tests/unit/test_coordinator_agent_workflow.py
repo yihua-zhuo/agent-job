@@ -1,9 +1,14 @@
-"""Unit tests for CoordinatorAgent workflow orchestration.
+"""Unit tests for CoordinatorAgent orchestration logic.
 
-Exercises the end-to-end ``run()`` and ``_dispatch()`` methods of the real
+Exercises the ``run()`` and ``_dispatch()`` methods of
 ``src.agents.coordinator.CoordinatorAgent`` against registered sub-agents,
 covering happy-path (task dispatch completes), boundary (no matching keyword
 falls back to implement_agent), and error (unknown agent -> failed) scenarios.
+
+The coordinator does not read or write the database during dispatch — the
+``session`` is only forwarded to sub-agents. Since the stub sub-agents in
+these tests don't touch the session, a no-op MagicMock is sufficient and
+domain-handler plumbing is not required.
 """
 
 from __future__ import annotations
@@ -26,17 +31,12 @@ def reset_agent_registry():
 
 
 @pytest.fixture
-def mock_db_session() -> MagicMock:
-    return MagicMock()
-
-
-@pytest.fixture
-def coordinator(mock_db_session: MagicMock) -> CoordinatorAgent:
-    return CoordinatorAgent(llm=MagicMock(), session=mock_db_session)
+def coordinator() -> CoordinatorAgent:
+    return CoordinatorAgent(llm=MagicMock(), session=MagicMock())
 
 
 class TestCoordinatorAgentRunWorkflow:
-    """End-to-end tests for CoordinatorAgent.run() workflow dispatch."""
+    """Unit tests for CoordinatorAgent.run() workflow dispatch."""
 
     async def test_run_dispatches_task_and_returns_completed(self, coordinator):
         @register("test_agent")
