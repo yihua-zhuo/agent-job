@@ -15,4 +15,8 @@ async def get_agents_health(
     ctx: AuthContext = Depends(require_auth),
 ) -> dict:
     status = await agent_svc.get_status(tenant_id=ctx.tenant_id)
-    return {"success": True, "data": status}
+    return {
+        "success": True,
+        "data": status.to_dict(),
+        "message": "Agent health retrieved successfully",
+    }

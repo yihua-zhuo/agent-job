@@ -4,18 +4,21 @@ This module is the single import surface for all DI providers used in
 routers. It re-exports the existing session and auth dependencies and adds
 ``get_llm_service`` and ``get_agent_service`` so routers can wire up agent
 dispatching via the standard FastAPI Depends mechanism.
+
+The shared ``httpx.AsyncClient`` used by ``LLMService`` is owned by the
+application lifecycle (stored in ``app.state.llm_http_client``) and closed
+during FastAPI shutdown — see ``main.lifespan``.
 """
 
 from __future__ import annotations
 
 import httpx
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.registry import AgentRegistry
 from db.connection import get_db
 from dependencies.auth import get_current_user
-from internal.ai_gateway import AIChatGateway
 from services.agent_service import AgentService
 from services.llm_service import LLMService
 
@@ -24,35 +27,25 @@ __all__ = [
     "get_current_user",
     "get_llm_service",
     "get_agent_service",
+    "shutdown_app_state",
 ]
 
 
-# Module-level shared httpx.AsyncClient — instantiated lazily and shared
-# across all LLMService instances to avoid leaking connections on every
-# request.
-_llm_http_client: httpx.AsyncClient | None = None
-
-
-def _get_shared_http_client() -> httpx.AsyncClient:
-    """Return the module-level shared httpx.AsyncClient, creating it on first use."""
-    global _llm_http_client
-    if _llm_http_client is None:
-        _llm_http_client = httpx.AsyncClient(timeout=30.0)
-    return _llm_http_client
-
-
-async def get_llm_service(session: AsyncSession = Depends(get_db)) -> LLMService:
+def get_llm_service(
+    request: Request,
+    session: AsyncSession = Depends(get_db),
+) -> LLMService:
     """Build a request-scoped LLMService bound to the current request's session.
 
-    The underlying httpx.AsyncClient is shared across requests (see
-    ``_get_shared_http_client``) — only the session is request-scoped.
+    The underlying httpx.AsyncClient is shared across requests and owned by
+    ``app.state.llm_http_client``; only the session is request-scoped.
     """
-    return LLMService(session, client=_get_shared_http_client())
+    client: httpx.AsyncClient = request.app.state.llm_http_client
+    return LLMService(session, client=client, owns_client=False)
 
 
 def get_agent_service(
     session: AsyncSession = Depends(get_db),
-    llm_service: LLMService = Depends(get_llm_service),  # noqa: ARG001 — reserved for future LLM-backed agents
 ) -> AgentService:
     """Build a request-scoped AgentService with the shared registry singleton.
 
@@ -60,4 +53,13 @@ def get_agent_service(
     calling the constructor returns the same instance, so it is safe to do
     inside the dependency.
     """
+    from internal.ai_gateway import AIChatGateway
+
     return AgentService(session, AIChatGateway(), AgentRegistry())
+
+
+async def shutdown_app_state(app) -> None:
+    """Close shared resources stored on ``app.state`` during FastAPI shutdown."""
+    client = getattr(app.state, "llm_http_client", None)
+    if client is not None:
+        await client.aclose()

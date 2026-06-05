@@ -1,13 +1,14 @@
 """CoordinatorAgent — decomposes tasks and dispatches to registered sub-agents.
 
-Note: this agent is synchronous. It does not use ``async def`` because
-``BaseAgent.run`` is defined as a regular method. Registered sub-agents must
-therefore be synchronous; wrapping a blocking I/O call here would stall the
-caller's thread.
+This agent is async — it must be awaited when called via ``BaseAgent.run`` and
+relies on the registered sub-agents also being async. Sub-agents share the
+coordinator's session/llm; they must NOT flush or commit transactions — that
+lives at the router layer.
 """
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
@@ -17,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agents.base import BaseAgent, register
 from agents.registry import AgentRegistry
 from internal.ai_gateway import AIChatGateway
+
+logger = logging.getLogger(__name__)
 
 
 class SubTask(BaseModel):
@@ -88,12 +91,12 @@ class CoordinatorAgent(BaseAgent):
         ]
         return TaskDecomposition(task_id=task_id, original_description=task_description, subtasks=subtasks)
 
-    def run(self, task: str) -> dict[str, Any]:
+    async def run(self, task: str) -> dict[str, Any]:
         decomposition = self.decompose(task)
-        result = self._dispatch(decomposition)
+        result = await self._dispatch(decomposition)
         return {"success": result.success, "data": result.model_dump()}
 
-    def _dispatch(self, decomposition: TaskDecomposition) -> WorkflowResult:
+    async def _dispatch(self, decomposition: TaskDecomposition) -> WorkflowResult:
         completed: list[SubTask] = []
         failed: list[SubTask] = []
         for subtask in decomposition.subtasks:
@@ -101,9 +104,13 @@ class CoordinatorAgent(BaseAgent):
                 agent_cls = self._registry.get(subtask.agent_name)
                 agent = agent_cls(self.llm, self.session, tenant_id=self.tenant_id)
                 completed.append(
-                    subtask.model_copy(update={"status": "completed", "result": agent.run(subtask.description)})
+                    subtask.model_copy(update={"status": "completed", "result": await agent.run(subtask.description)})
                 )
             except LookupError:
+                logger.warning(
+                    "coordinator.lookup_error",
+                    extra={"agent_name": subtask.agent_name, "subtask_id": subtask.id},
+                )
                 failed.append(
                     subtask.model_copy(
                         update={"status": "failed", "result": {"error": f"Unknown agent: {subtask.agent_name}"}}

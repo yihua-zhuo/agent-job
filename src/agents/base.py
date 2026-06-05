@@ -74,7 +74,7 @@ class BaseAgent(ABC):
         self.tenant_id = tenant_id
 
     @abstractmethod
-    def run(self, task: str) -> dict[str, Any]:
+    async def run(self, task: str) -> dict[str, Any]:
         """Execute a task and return a result dictionary.
 
         Args:

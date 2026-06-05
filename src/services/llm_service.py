@@ -1,12 +1,15 @@
 """Unified LLM service — multi-provider chat and embed with cost tracking."""
 
 import asyncio
+import logging
 import os
 
 import httpx
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from pkg.errors.app_exceptions import ValidationException
+
+logger = logging.getLogger(__name__)
 
 OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
 ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
@@ -21,16 +24,32 @@ EMBEDDING_COST_PER_M_TOKEN = 0.00002
 class LLMService:
     """Unified multi-provider LLM access — chat, embed, and per-tenant cost tracking."""
 
-    def __init__(self, session: AsyncSession, client: httpx.AsyncClient | None = None):
+    def __init__(
+        self,
+        session: AsyncSession | None = None,
+        client: httpx.AsyncClient | None = None,
+        owns_client: bool = True,
+    ):
         self.session = session
-        self._client = client if client is not None else httpx.AsyncClient(timeout=30.0)
+        if client is None:
+            self._client = httpx.AsyncClient(timeout=30.0)
+            self._owns_client = True
+        else:
+            self._client = client
+            self._owns_client = owns_client
         self._cost_by_tenant: dict[int, float] = {}
+        self._cost_lock = asyncio.Lock()
 
     async def __aenter__(self) -> "LLMService":
         return self
 
     async def __aexit__(self, *args) -> None:
-        await self._client.aclose()
+        if self._owns_client:
+            await self._client.aclose()
+
+    async def _add_cost(self, tenant_id: int, amount: float) -> None:
+        async with self._cost_lock:
+            self._cost_by_tenant[tenant_id] = self._cost_by_tenant.get(tenant_id, 0.0) + amount
 
     async def chat(
         self,
@@ -69,12 +88,17 @@ class LLMService:
             if resp.status_code == 200:
                 data = resp.json()
                 tokens = data.get("usage", {}).get("total_tokens", 0)
-                self._cost_by_tenant[tenant_id] = self._cost_by_tenant.get(tenant_id, 0.0) + (
-                    (tokens / 1_000_000) * EMBEDDING_COST_PER_M_TOKEN
+                await self._add_cost(
+                    tenant_id,
+                    (tokens / 1_000_000) * EMBEDDING_COST_PER_M_TOKEN,
                 )
                 return data["data"][0]["embedding"]
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(2**attempt)
+        logger.error(
+            "llm_provider_error",
+            extra={"provider": "openai", "endpoint": "embeddings", "tenant_id": tenant_id, "status_code": resp.status_code},
+        )
         raise ValidationException(
             f"LLM provider error: OpenAI embeddings returned {resp.status_code} after {MAX_RETRIES} retries"
         )
@@ -93,12 +117,17 @@ class LLMService:
             if resp.status_code == 200:
                 data = resp.json()
                 tokens = data.get("usage", {}).get("total_tokens", 0)
-                self._cost_by_tenant[tenant_id] = self._cost_by_tenant.get(tenant_id, 0.0) + (
-                    (tokens / 1_000_000) * OPENAI_COST_PER_M_TOKEN
+                await self._add_cost(
+                    tenant_id,
+                    (tokens / 1_000_000) * OPENAI_COST_PER_M_TOKEN,
                 )
                 return data
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(2**attempt)
+        logger.error(
+            "llm_provider_error",
+            extra={"provider": "openai", "endpoint": "chat", "tenant_id": tenant_id, "status_code": resp.status_code},
+        )
         raise ValidationException(
             f"LLM provider error: OpenAI returned {resp.status_code} after {MAX_RETRIES} retries"
         )
@@ -115,12 +144,17 @@ class LLMService:
                 data = resp.json()
                 usage = data.get("usage", {})
                 tokens = usage.get("input_tokens", 0) + usage.get("output_tokens", 0)
-                self._cost_by_tenant[tenant_id] = self._cost_by_tenant.get(tenant_id, 0.0) + (
-                    (tokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKEN
+                await self._add_cost(
+                    tenant_id,
+                    (tokens / 1_000_000) * ANTHROPIC_COST_PER_M_TOKEN,
                 )
                 return data
             if attempt < MAX_RETRIES - 1:
                 await asyncio.sleep(2**attempt)
+        logger.error(
+            "llm_provider_error",
+            extra={"provider": "anthropic", "endpoint": "messages", "tenant_id": tenant_id, "status_code": resp.status_code},
+        )
         raise ValidationException(
             f"LLM provider error: Anthropic returned {resp.status_code} after {MAX_RETRIES} retries"
         )
