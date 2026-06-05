@@ -514,6 +514,7 @@ class TestRoleManagementAPI:
     async def test_update_system_role_permissions_returns_403(
         self, api_client: AsyncClient, async_session: AsyncSession, db_schema
     ):
+        from db.models.rbac import RoleModel
         result = await async_session.execute(
             select(RoleModel).where(RoleModel.name == "admin")
         )
@@ -527,6 +528,8 @@ class TestRoleManagementAPI:
     async def test_assign_role_to_user_persists_binding(
         self, api_client: AsyncClient, async_session: AsyncSession, db_schema
     ):
+        from db.models.rbac import RoleModel
+        from db.models.user import UserModel
         result = await async_session.execute(
             select(RoleModel).where(RoleModel.name == "admin")
         )
