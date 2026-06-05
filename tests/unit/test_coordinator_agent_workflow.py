@@ -1,20 +1,21 @@
 """Unit tests for CoordinatorAgent orchestration logic.
 
-Exercises the ``run()`` and ``_dispatch()`` methods of
+Exercises the ``run()`` method of
 ``src.agents.coordinator.CoordinatorAgent`` against registered sub-agents,
 covering happy-path (task dispatch completes), boundary (no matching keyword
 falls back to implement_agent), and error (unknown agent -> failed) scenarios.
 
 The coordinator does not read or write the database during dispatch — the
-``session`` is only forwarded to sub-agents. Since the stub sub-agents in
-these tests don't touch the session, a no-op MagicMock is sufficient and
-domain-handler plumbing is not required.
+``session`` is only forwarded to sub-agents. An ``AsyncMock`` is used so
+the stub sub-agents can ``await`` on it without raising if they grow to use
+it; the tests themselves do not assert on the session, so domain-handler
+plumbing is not required.
 """
 
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
@@ -32,7 +33,7 @@ def reset_agent_registry():
 
 @pytest.fixture
 def coordinator() -> CoordinatorAgent:
-    return CoordinatorAgent(llm=MagicMock(), session=MagicMock())
+    return CoordinatorAgent(llm=MagicMock(), session=AsyncMock())
 
 
 class TestCoordinatorAgentRunWorkflow:
@@ -48,6 +49,7 @@ class TestCoordinatorAgentRunWorkflow:
 
         assert isinstance(result, WorkflowResult)
         assert result.success is True
+        assert result.task_id  # non-empty UUID prefix from decompose()
         assert len(result.completed) == 1
         assert result.completed[0].agent_name == "test_agent"
         assert result.completed[0].status == "completed"
@@ -73,8 +75,15 @@ class TestCoordinatorAgentRunWorkflow:
 
         assert isinstance(result, WorkflowResult)
         assert result.success is False
+        assert result.task_id  # non-empty UUID prefix from decompose()
         assert len(result.completed) == 0
         assert len(result.failed) == 1
         assert result.failed[0].agent_name == "test_agent"
         assert result.failed[0].status == "failed"
+        # Keyword 'test' in the task triggers the 'test_agent' dispatch in
+        # _KEYWORD_GROUPS (coordinator.py:49-54); the registered class is
+        # unavailable here, so _dispatch() records a LookupError under the
+        # 'error' key.
+        assert isinstance(result.failed[0].result, dict)
+        assert "error" in result.failed[0].result
         assert "test_agent" in result.failed[0].result["error"]
