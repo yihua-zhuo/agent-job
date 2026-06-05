@@ -61,6 +61,15 @@ class AgentRegistry:
         self._ensure_base()
         return sorted(self._agents.keys())
 
+    @classmethod
+    def reset(cls) -> None:
+        """Reset the singleton to its initial state. Test-only utility."""
+        global _registry
+        _registry = None
+        import agents.base as base_module
+
+        base_module._registry = None
+
 
 def get(name: str) -> type[BaseAgent]:  # type: ignore[valid-type]
     """Return the registered agent class for *name* (module-level API)."""
