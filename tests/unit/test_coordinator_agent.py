@@ -2,46 +2,54 @@
 
 from __future__ import annotations
 
+from typing import Any
 from unittest.mock import MagicMock
 
 import pytest
 
-import agents.base as agent_base
 import agents.coordinator as _coordinator_module  # noqa: F401  — ensures @register runs at import
 from agents.base import BaseAgent
 from agents.coordinator import CoordinatorAgent, SubTask, TaskDecomposition, WorkflowResult
 from agents.registry import AgentRegistry
 
 
-def _reset_registry() -> None:
-    import agents.registry as agent_registry
-
-    agent_base._registry = None
-    agent_registry._registry = None
-
-
 @pytest.fixture(autouse=True)
 def reset_agent_registry():
-    _reset_registry()
+    """Reset the AgentRegistry singleton before and after each test."""
+    AgentRegistry.reset()
     yield
+    AgentRegistry.reset()
 
 
 @pytest.fixture
-def coordinator():
-    return CoordinatorAgent(llm=MagicMock(), session=MagicMock())
+def mock_db_session() -> MagicMock:
+    """Minimal DB session stub for CoordinatorAgent tests.
+
+    The coordinator does not touch the database directly, but BaseAgent
+    requires a session in its constructor. A MagicMock satisfies the type
+    contract without coupling to any SQL handler.
+    """
+    return MagicMock()
 
 
-class _MockAgent(BaseAgent):
-    def __init__(self, llm=None, session=None) -> None:
-        super().__init__(llm=llm or MagicMock(), session=session or MagicMock())
-        self._name = "mock"
+@pytest.fixture
+def coordinator(mock_db_session: MagicMock) -> CoordinatorAgent:
+    return CoordinatorAgent(llm=MagicMock(), session=mock_db_session)
 
-    @property
-    def name(self) -> str:
-        return self._name
 
-    def run(self, task: str) -> dict:
-        return {"agent": self._name, "task": task}
+def _make_mock_agent_class(name: str) -> type[BaseAgent]:
+    """Build a BaseAgent subclass with a unique name and configurable run()."""
+
+    class _MockAgent(BaseAgent):
+        @property
+        def name(self) -> str:
+            return name
+
+        def run(self, task: str) -> dict[str, Any]:
+            return {"agent": name, "task": task}
+
+    _MockAgent.__name__ = f"MockAgent_{name}"
+    return _MockAgent
 
 
 class TestDecompose:
@@ -83,15 +91,24 @@ class TestDecompose:
 
 class TestDispatch:
     def test_dispatch_routes_to_registered_agents(self, coordinator):
-        AgentRegistry()._agents["test_agent"] = _MockAgent
-        AgentRegistry()._agents["code_review_agent"] = _MockAgent
+        from agents.base import register
+
+        @register("test_agent_dispatch_1")
+        class _T1(BaseAgent):
+            def run(self, task):
+                return {"agent": "test_agent_dispatch_1", "task": task}
+
+        @register("code_review_agent_dispatch_1")
+        class _R1(BaseAgent):
+            def run(self, task):
+                return {"agent": "code_review_agent_dispatch_1", "task": task}
 
         decomposition = TaskDecomposition(
             task_id="t1",
             original_description="test and review",
             subtasks=[
-                SubTask(id="t1-0", agent_name="test_agent", description="test it"),
-                SubTask(id="t1-1", agent_name="code_review_agent", description="review it"),
+                SubTask(id="t1-0", agent_name="test_agent_dispatch_1", description="test it"),
+                SubTask(id="t1-1", agent_name="code_review_agent_dispatch_1", description="review it"),
             ],
         )
         result = coordinator._dispatch(decomposition)
@@ -106,97 +123,121 @@ class TestDispatch:
         decomposition = TaskDecomposition(
             task_id="t2",
             original_description="ghost work",
-            subtasks=[SubTask(id="t2-0", agent_name="ghost_agent", description="ghost")],
+            subtasks=[SubTask(id="t2-0", agent_name="ghost_agent_xyz", description="ghost")],
         )
         result = coordinator._dispatch(decomposition)
         assert len(result.failed) == 1
-        assert "ghost_agent" in result.failed[0].result["error"]
+        assert "ghost_agent_xyz" in result.failed[0].result["error"]
         assert result.failed[0].status == "failed"
 
     def test_dispatch_catches_agent_exception(self, coordinator):
+        from agents.base import register
+
+        @register("broken_agent_test_1")
         class _Boom(BaseAgent):
-            def __init__(self, llm=None, session=None) -> None:
-                super().__init__(llm=llm or MagicMock(), session=session or MagicMock())
-
-            @property
-            def name(self):
-                return "broken_agent"
-
             def run(self, task):
                 raise RuntimeError("boom")
-
-        AgentRegistry()._agents["broken_agent"] = _Boom
 
         decomposition = TaskDecomposition(
             task_id="t3",
             original_description="break it",
-            subtasks=[SubTask(id="t3-0", agent_name="broken_agent", description="break")],
+            subtasks=[SubTask(id="t3-0", agent_name="broken_agent_test_1", description="break")],
         )
         result = coordinator._dispatch(decomposition)
         assert len(result.failed) == 1
         assert result.failed[0].result["error"] == "boom"
 
     def test_dispatch_mixed_success_and_failure(self, coordinator):
+        from agents.base import register
+
+        @register("good_agent_mixed_1")
         class _Good(BaseAgent):
-            def __init__(self, llm=None, session=None) -> None:
-                super().__init__(llm=llm or MagicMock(), session=session or MagicMock())
-
-            @property
-            def name(self):
-                return "good_agent"
-
             def run(self, task):
                 return {"ok": True}
 
+        @register("bad_agent_mixed_1")
         class _Bad(BaseAgent):
-            def __init__(self, llm=None, session=None) -> None:
-                super().__init__(llm=llm or MagicMock(), session=session or MagicMock())
-
-            @property
-            def name(self):
-                return "bad_agent"
-
             def run(self, task):
                 raise ValueError("nope")
-
-        AgentRegistry()._agents["good_agent"] = _Good
-        AgentRegistry()._agents["bad_agent"] = _Bad
 
         decomposition = TaskDecomposition(
             task_id="t4",
             original_description="mixed",
             subtasks=[
-                SubTask(id="t4-0", agent_name="good_agent", description="good"),
-                SubTask(id="t4-1", agent_name="bad_agent", description="bad"),
-                SubTask(id="t4-2", agent_name="ghost_agent", description="ghost"),
+                SubTask(id="t4-0", agent_name="good_agent_mixed_1", description="good"),
+                SubTask(id="t4-1", agent_name="bad_agent_mixed_1", description="bad"),
+                SubTask(id="t4-2", agent_name="ghost_agent_mixed_1", description="ghost"),
             ],
         )
         result = coordinator._dispatch(decomposition)
         assert len(result.completed) == 1
         assert len(result.failed) == 2
+        # Verify which subtask ended up where
+        completed_ids = {s.id for s in result.completed}
+        failed_ids = {s.id for s in result.failed}
+        assert "t4-0" in completed_ids
+        assert "t4-1" in failed_ids
+        assert "t4-2" in failed_ids
+        # The good_agent should be in completed, bad/ghost in failed
+        assert result.completed[0].agent_name == "good_agent_mixed_1"
+        failed_agent_names = {s.agent_name for s in result.failed}
+        assert "bad_agent_mixed_1" in failed_agent_names
+        assert "ghost_agent_mixed_1" in failed_agent_names
+
+    def test_dispatch_does_not_mutate_original_subtasks(self, coordinator):
+        """SubTask instances should be copied, not mutated in place."""
+        from agents.base import register
+
+        @register("immutable_test_agent_1")
+        class _T(BaseAgent):
+            def run(self, task):
+                return {"ok": True}
+
+        original = SubTask(id="imm-0", agent_name="immutable_test_agent_1", description="test")
+        decomposition = TaskDecomposition(
+            task_id="imm",
+            original_description="x",
+            subtasks=[original],
+        )
+        coordinator._dispatch(decomposition)
+        # Original should remain untouched
+        assert original.status == "pending"
+        assert original.result is None
 
 
 class TestRunEndToEnd:
-    def test_run_returns_dict_with_completed_and_failed(self, coordinator):
-        AgentRegistry()._agents["test_agent"] = _MockAgent
-        AgentRegistry()._agents["code_review_agent"] = _MockAgent
+    def test_run_returns_dict_with_success_data_completed_and_failed(self, coordinator):
+        from agents.base import register
+
+        @register("test_agent")
+        class _T1(BaseAgent):
+            def run(self, task):
+                return {"agent": "test_agent", "task": task}
+
+        @register("code_review_agent")
+        class _T2(BaseAgent):
+            def run(self, task):
+                return {"agent": "code_review_agent", "task": task}
 
         result = coordinator.run("review and test the login module")
         assert isinstance(result, dict)
-        assert "completed" in result
-        assert "failed" in result
-        assert len(result["completed"]) == 2
-        assert len(result["failed"]) == 0
+        assert result["success"] is True
+        assert "data" in result
+        data = result["data"]
+        assert "completed" in data
+        assert "failed" in data
+        assert len(data["completed"]) == 2
+        assert len(data["failed"]) == 0
 
 
 class TestRegistration:
     def test_coordinator_is_registered(self):
-        # Re-import the coordinator module so the @register decorator runs
-        # against the freshly-reset singleton.
+        """The @register decorator on CoordinatorAgent runs at module import time."""
         import importlib
 
         import agents.coordinator
 
+        # Reload to re-run the @register decorator against the freshly-reset singleton
         importlib.reload(agents.coordinator)
         names = AgentRegistry().list_agents()
         assert "coordinator" in names

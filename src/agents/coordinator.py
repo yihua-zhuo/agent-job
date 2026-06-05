@@ -1,4 +1,10 @@
-"""CoordinatorAgent — decomposes tasks and dispatches to registered sub-agents."""
+"""CoordinatorAgent — decomposes tasks and dispatches to registered sub-agents.
+
+Note: this agent is synchronous. It does not use ``async def`` because
+``BaseAgent.run`` is defined as a regular method. Registered sub-agents must
+therefore be synchronous; wrapping a blocking I/O call here would stall the
+caller's thread.
+"""
 
 from __future__ import annotations
 
@@ -31,6 +37,10 @@ class WorkflowResult(BaseModel):
     task_id: str
     completed: list[SubTask] = Field(default_factory=list)
     failed: list[SubTask] = Field(default_factory=list)
+
+    @property
+    def success(self) -> bool:
+        return not self.failed
 
 
 _KEYWORD_GROUPS: list[tuple[tuple[str, ...], str]] = [
@@ -80,7 +90,7 @@ class CoordinatorAgent(BaseAgent):
     def run(self, task: str) -> dict[str, Any]:
         decomposition = self.decompose(task)
         result = self._dispatch(decomposition)
-        return result.model_dump()
+        return {"success": result.success, "data": result.model_dump()}
 
     def _dispatch(self, decomposition: TaskDecomposition) -> WorkflowResult:
         completed: list[SubTask] = []
@@ -89,15 +99,15 @@ class CoordinatorAgent(BaseAgent):
             try:
                 agent_cls = self._registry.get(subtask.agent_name)
                 agent = agent_cls(self.llm, self.session)
-                subtask.result = agent.run(subtask.description)
-                subtask.status = "completed"
-                completed.append(subtask)
+                completed.append(
+                    subtask.model_copy(update={"status": "completed", "result": agent.run(subtask.description)})
+                )
             except LookupError:
-                subtask.status = "failed"
-                subtask.result = {"error": f"Unknown agent: {subtask.agent_name}"}
-                failed.append(subtask)
-            except Exception as exc:
-                subtask.status = "failed"
-                subtask.result = {"error": str(exc)}
-                failed.append(subtask)
+                failed.append(
+                    subtask.model_copy(
+                        update={"status": "failed", "result": {"error": f"Unknown agent: {subtask.agent_name}"}}
+                    )
+                )
+            except (RuntimeError, ValueError, TypeError, AttributeError) as exc:
+                failed.append(subtask.model_copy(update={"status": "failed", "result": {"error": str(exc)}}))
         return WorkflowResult(task_id=decomposition.task_id, completed=completed, failed=failed)
