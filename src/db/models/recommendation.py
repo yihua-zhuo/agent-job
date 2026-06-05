@@ -1,9 +1,16 @@
-"""Recommendation and RiskSignal ORM models."""
+"""Recommendation and RiskSignal ORM models.
+
+Design note: Both ``recommendations`` and ``risk_signals`` carry a
+``(tenant_id, opportunity_id)`` unique index. This enforces a one-row-per-tenant-
+per-opportunity invariant — each tenant can hold at most one active recommendation
+and one active risk signal per opportunity. If multiple recommendations per
+opportunity are needed (e.g. competing strategies), drop the unique index.
+"""
 
 from datetime import datetime
 from enum import StrEnum
 
-from sqlalchemy import DateTime, Enum, Float, ForeignKey, Index, Integer, func
+from sqlalchemy import CheckConstraint, DateTime, Enum, Float, ForeignKey, Index, Integer, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -29,12 +36,19 @@ class RiskLevel(StrEnum):
 
 
 class RecommendationModel(Base):
-    """AI-generated sales recommendation for an opportunity."""
+    """AI-generated sales recommendation for an opportunity.
+
+    Each tenant may have at most one recommendation per opportunity (enforced
+    by ``ix_recommendations_tenant_opportunity``). Drop that unique index if
+    multiple competing recommendations per opportunity are required.
+    """
 
     __tablename__ = "recommendations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     opportunity_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("opportunities.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -52,13 +66,16 @@ class RecommendationModel(Base):
 
     __table_args__ = (
         Index("ix_recommendations_tenant_opportunity", "tenant_id", "opportunity_id", unique=True),
+        CheckConstraint("confidence >= 0.0 AND confidence <= 1.0", name="chk_confidence"),
     )
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "opportunity_id": self.opportunity_id,
-            "next_action": self.next_action.value if isinstance(self.next_action, NextAction) else NextAction(self.next_action).value,
+            "next_action": self.next_action.value
+            if isinstance(self.next_action, NextAction)
+            else NextAction(self.next_action).value,
             "confidence": self.confidence,
             "reasons": self.reasons,
             "similar_deals": self.similar_deals,
@@ -68,12 +85,18 @@ class RecommendationModel(Base):
 
 
 class RiskSignalModel(Base):
-    """Risk assessment signal for an opportunity."""
+    """Risk assessment signal for an opportunity.
+
+    Each tenant may have at most one risk signal per opportunity (enforced by
+    ``ix_risk_signals_tenant_opportunity``).
+    """
 
     __tablename__ = "risk_signals"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+    )
     opportunity_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("opportunities.id", ondelete="CASCADE"), nullable=False, index=True
     )
@@ -87,15 +110,15 @@ class RiskSignalModel(Base):
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
 
-    __table_args__ = (
-        Index("ix_risk_signals_tenant_opportunity", "tenant_id", "opportunity_id", unique=True),
-    )
+    __table_args__ = (Index("ix_risk_signals_tenant_opportunity", "tenant_id", "opportunity_id", unique=True),)
 
     def to_dict(self) -> dict:
         return {
             "id": self.id,
             "opportunity_id": self.opportunity_id,
-            "risk_level": self.risk_level.value if isinstance(self.risk_level, RiskLevel) else RiskLevel(self.risk_level).value,
+            "risk_level": self.risk_level.value
+            if isinstance(self.risk_level, RiskLevel)
+            else RiskLevel(self.risk_level).value,
             "risk_factors": self.risk_factors,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,

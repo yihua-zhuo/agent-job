@@ -7,6 +7,7 @@ Run against a real PostgreSQL database:
 Requires DATABASE_URL (or TEST_DATABASE_URL) pointing at a live Postgres instance.
 Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 """
+
 from __future__ import annotations
 
 import uuid
@@ -36,9 +37,10 @@ async def _seed_user(async_session, tenant_id: int = 1) -> int:
 
 async def _seed_customer(async_session, tenant_id: int = 1, **overrides):
     """Create a customer and return the CustomerModel."""
+    from db.repositories.customer import CustomerRepository
     from services.customer_service import CustomerService
 
-    cust_svc = CustomerService(async_session)
+    cust_svc = CustomerService(CustomerRepository(async_session))
     suffix = uuid.uuid4().hex[:8]
     data = {"name": f"Rec Cust {suffix}", "email": f"rec_{suffix}@example.com", **overrides}
     return await cust_svc.create_customer(data=data, tenant_id=tenant_id)
@@ -69,7 +71,7 @@ async def _seed_opportunity(async_session, tenant_id: int, customer_id: int) -> 
 class TestRecommendationCreateAndGet:
     """Test create/retrieve for RecommendationModel and RiskSignalModel plus tenant isolation."""
 
-    async def test_create_and_get_recommendation(self, db_schema, tenant_id, async_session):
+    async def test_create_and_get_recommendation(self, db_schema, _seed_tenant, tenant_id, async_session):
         """Insert a RecommendationModel row directly and fetch it back via the session."""
         cust = await _seed_customer(async_session, tenant_id)
         opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
@@ -86,9 +88,7 @@ class TestRecommendationCreateAndGet:
         await async_session.flush()
         await async_session.refresh(rec)
 
-        result = await async_session.execute(
-            select(RecommendationModel).where(RecommendationModel.id == rec.id)
-        )
+        result = await async_session.execute(select(RecommendationModel).where(RecommendationModel.id == rec.id))
         fetched = result.scalar_one()
 
         assert fetched.id == rec.id
@@ -101,7 +101,7 @@ class TestRecommendationCreateAndGet:
         assert fetched.created_at is not None
         assert fetched.updated_at is not None
 
-    async def test_create_and_get_risk_signal(self, db_schema, tenant_id, async_session):
+    async def test_create_and_get_risk_signal(self, db_schema, _seed_tenant, tenant_id, async_session):
         """Insert a RiskSignalModel row directly and fetch it back via the session."""
         cust = await _seed_customer(async_session, tenant_id)
         opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
@@ -116,9 +116,7 @@ class TestRecommendationCreateAndGet:
         await async_session.flush()
         await async_session.refresh(signal)
 
-        result = await async_session.execute(
-            select(RiskSignalModel).where(RiskSignalModel.id == signal.id)
-        )
+        result = await async_session.execute(select(RiskSignalModel).where(RiskSignalModel.id == signal.id))
         fetched = result.scalar_one()
 
         assert fetched.id == signal.id
@@ -129,7 +127,9 @@ class TestRecommendationCreateAndGet:
         assert fetched.created_at is not None
         assert fetched.updated_at is not None
 
-    async def test_recommendation_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
+    async def test_recommendation_tenant_isolation(
+        self, db_schema, _seed_tenant, _seed_tenant_2, tenant_id, tenant_id_2, async_session
+    ):
         """Each tenant sees only their own recommendations — even when referencing the same opportunity_id."""
         cust1 = await _seed_customer(async_session, tenant_id)
         cust2 = await _seed_customer(async_session, tenant_id_2)
@@ -198,7 +198,9 @@ class TestRecommendationCreateAndGet:
         )
         assert len(cross_t2.scalars().all()) == 0
 
-    async def test_risk_signal_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session):
+    async def test_risk_signal_tenant_isolation(
+        self, db_schema, _seed_tenant, _seed_tenant_2, tenant_id, tenant_id_2, async_session
+    ):
         """Each tenant sees only their own risk signals — cross-tenant queries return zero rows."""
         cust1 = await _seed_customer(async_session, tenant_id)
         cust2 = await _seed_customer(async_session, tenant_id_2)
@@ -261,7 +263,7 @@ class TestRecommendationCreateAndGet:
         )
         assert len(cross_t2.scalars().all()) == 0
 
-    async def test_to_dict_json_serializable(self, db_schema, tenant_id, async_session):
+    async def test_to_dict_json_serializable(self, db_schema, _seed_tenant, tenant_id, async_session):
         """to_dict() on both models returns JSON-serializable output including JSON columns."""
         cust = await _seed_customer(async_session, tenant_id)
         opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
@@ -296,7 +298,7 @@ class TestRecommendationCreateAndGet:
         assert d_sig["risk_level"] == "medium"
         assert d_sig["risk_factors"] == ["churn_risk"]
 
-    async def test_recommendation_unique_constraint(self, db_schema, tenant_id, async_session):
+    async def test_recommendation_unique_constraint(self, db_schema, _seed_tenant, tenant_id, async_session):
         """Duplicate opportunity_id for the same tenant raises an appropriate error."""
         cust = await _seed_customer(async_session, tenant_id)
         opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
@@ -324,7 +326,7 @@ class TestRecommendationCreateAndGet:
         with pytest.raises(sa_exc.IntegrityError):  # integrity error from duplicate key
             await async_session.flush()
 
-    async def test_null_json_columns(self, db_schema, tenant_id, async_session):
+    async def test_null_json_columns(self, db_schema, _seed_tenant, tenant_id, async_session):
         """recommendations with null reasons/similar_deals insert and round-trip correctly."""
         cust = await _seed_customer(async_session, tenant_id)
         opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)
@@ -363,7 +365,7 @@ class TestRecommendationCreateAndGet:
         with pytest.raises(sa_exc.DBAPIError):
             await async_session.flush()
 
-    async def test_to_dict_excludes_tenant_id(self, db_schema, tenant_id, async_session):
+    async def test_to_dict_excludes_tenant_id(self, db_schema, _seed_tenant, tenant_id, async_session):
         """to_dict() must not expose internal tenant_id in external responses."""
         cust = await _seed_customer(async_session, tenant_id)
         opp_id = await _seed_opportunity(async_session, tenant_id, cust.id)

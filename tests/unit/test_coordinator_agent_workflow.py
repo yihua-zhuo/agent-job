@@ -136,3 +136,31 @@ class TestCoordinatorAgentRun:
         assert result.success is True
         assert captured["tenant_id"] is None
         assert coordinator.tenant_id is None
+
+    async def test_run_forwards_tenant_id_to_all_dispatched_subagents(
+        self, tenant_coordinator
+    ):
+        """All sub-agents dispatched in one workflow must observe the same
+        coordinator tenant_id. Guards against a sub-agent observing a default
+        or zero value while a sibling sub-agent sees the correct one.
+        """
+        observed: dict[str, int | None] = {}
+
+        @register("test_agent")
+        class _TestAgent(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                observed["test_agent"] = self.tenant_id
+                return {"ok": True}
+
+        @register("code_review_agent")
+        class _ReviewAgent(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                observed["code_review_agent"] = self.tenant_id
+                return {"ok": True}
+
+        result = await tenant_coordinator.run("test the code review module")
+
+        assert result.success is True
+        assert observed["test_agent"] == 42
+        assert observed["code_review_agent"] == 42
+        assert tenant_coordinator.tenant_id == 42
