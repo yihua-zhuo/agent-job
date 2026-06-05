@@ -14,7 +14,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from agents.base import BaseAgent, register
-from agents.coordinator import CoordinatorAgent, SubTask, TaskDecomposition, WorkflowResult
+from agents.coordinator import CoordinatorAgent, WorkflowResult
 from agents.registry import AgentRegistry
 
 
@@ -38,7 +38,7 @@ def coordinator(mock_db_session: MagicMock) -> CoordinatorAgent:
 class TestCoordinatorAgentRunWorkflow:
     """End-to-end tests for CoordinatorAgent.run() workflow dispatch."""
 
-    async def test_run_workflow_dispatches_task_and_returns_completed(self, coordinator):
+    async def test_run_dispatches_task_and_returns_completed(self, coordinator):
         @register("test_agent")
         class _T(BaseAgent):
             async def run(self, task: str) -> dict[str, Any]:
@@ -54,7 +54,7 @@ class TestCoordinatorAgentRunWorkflow:
         assert result.completed[0].result == {"ok": True, "task": "test the login module"}
         assert result.failed == []
 
-    async def test_run_workflow_with_no_matching_keyword_falls_back_to_implement(self, coordinator):
+    async def test_run_with_no_matching_keyword_falls_back_to_implement(self, coordinator):
         @register("implement_agent")
         class _Impl(BaseAgent):
             async def run(self, task: str) -> dict[str, Any]:
@@ -68,18 +68,13 @@ class TestCoordinatorAgentRunWorkflow:
         assert result.completed[0].agent_name == "implement_agent"
         assert result.completed[0].status == "completed"
 
-    async def test_run_workflow_with_unknown_subagent_returns_failed(self, coordinator):
-        decomposition = TaskDecomposition(
-            task_id="t_err",
-            original_description="ghost work",
-            subtasks=[SubTask(id="t_err-0", agent_name="ghost_agent_wf_xyz", description="ghost")],
-        )
-        result = await coordinator._dispatch(decomposition)
+    async def test_run_with_unknown_subagent_returns_failed(self, coordinator):
+        result = await coordinator.run("test the login module")
 
         assert isinstance(result, WorkflowResult)
         assert result.success is False
         assert len(result.completed) == 0
         assert len(result.failed) == 1
-        assert result.failed[0].agent_name == "ghost_agent_wf_xyz"
+        assert result.failed[0].agent_name == "test_agent"
         assert result.failed[0].status == "failed"
-        assert "ghost_agent_wf_xyz" in result.failed[0].result["error"]
+        assert "test_agent" in result.failed[0].result["error"]
