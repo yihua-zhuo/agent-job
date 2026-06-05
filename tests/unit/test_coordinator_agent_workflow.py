@@ -5,50 +5,38 @@ boundary (no matching keyword falls back to implement_agent), and error
 (unknown agent -> failed).
 """
 
-# The coordinator does not touch the DB during dispatch (rule 135), so a
-# spec'd AsyncMock session is acceptable here. ``spec=AsyncSession`` makes
-# accidental ``commit()`` / ``flush()`` calls surface as AttributeError so
-# we catch any regression that violates the sub-agent transaction rule
-# (rule 121, rule 67).
+# The coordinator does not touch the DB during dispatch, so we use the
+# production AIChatGateway stub (deterministic, no network) and an
+# AsyncMock session. AsyncMock is used here only because the coordinator
+# forwards ``self.session`` to sub-agents — it never calls any session
+# method itself, so no DB-backed fixture is needed.
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
-from agents.registry import AgentRegistry
+from internal.ai_gateway import AIChatGateway
 
-
-@pytest.fixture(autouse=True)
-def reset_agent_registry():
-    """Reset the AgentRegistry singleton before and after each test.
-
-    The coordinator module mutates the process-wide registry via
-    ``@register("coordinator")`` at import time. This fixture is autouse so
-    parallel test files that share the singleton don't see stale state.
-    Do not run this file in parallel with other registry-mutating test
-    files (rule 117).
-    """
-    AgentRegistry.reset()
-    yield
-    AgentRegistry.reset()
+# This module mutates the process-wide AgentRegistry singleton via
+# @register() and the autouse reset_agent_registry fixture. Mark the whole
+# module so pytest-xdist schedules tests in the same worker.
+pytestmark = pytest.mark.xdist_group(name="agent_registry")
 
 
 @pytest.fixture
 def coordinator() -> CoordinatorAgent:
-    # spec=AsyncSession so an accidental commit/flush in coordinator code
-    # surfaces as AttributeError (commit is not a method on the spec).
-    return CoordinatorAgent(llm=MagicMock(), session=AsyncMock(spec=AsyncSession))
+    return CoordinatorAgent(llm=AIChatGateway(), session=AsyncMock(spec=AsyncSession))
 
 
 @pytest.fixture
 def tenant_coordinator() -> CoordinatorAgent:
     """Coordinator with an explicit tenant_id for the propagation test."""
-    return CoordinatorAgent(llm=MagicMock(), session=AsyncMock(spec=AsyncSession), tenant_id=42)
+    return CoordinatorAgent(llm=AIChatGateway(), session=AsyncMock(spec=AsyncSession), tenant_id=42)
 
 
 class TestCoordinatorAgentRun:
@@ -90,6 +78,13 @@ class TestCoordinatorAgentRun:
         assert result.failed == []
 
     async def test_run_with_unknown_subagent_returns_failed(self, coordinator):
+        # The token "test" in the task description matches the
+        # ``_KEYWORD_GROUPS`` rule ``(("test",), "test_agent")`` in
+        # ``agents.coordinator``, so decompose() emits a test_agent
+        # subtask. Because the reset_agent_registry fixture has cleared
+        # the registry and this test never re-registers test_agent,
+        # _dispatch() hits the LookupError branch and the subtask lands
+        # in ``result.failed`` rather than raising.
         result = await coordinator.run("test the login module")
 
         assert isinstance(result, WorkflowResult)
@@ -100,9 +95,6 @@ class TestCoordinatorAgentRun:
         assert len(result.failed) == 1
         assert result.failed[0].agent_name == "test_agent"
         assert result.failed[0].status == "failed"
-        # Keyword 'test' in the task triggers the 'test_agent' dispatch in
-        # _KEYWORD_GROUPS; the registered class is unavailable here, so
-        # _dispatch() records a LookupError under the 'error' key.
         assert isinstance(result.failed[0].result, dict)
         assert "error" in result.failed[0].result
         assert "test_agent" in result.failed[0].result["error"]

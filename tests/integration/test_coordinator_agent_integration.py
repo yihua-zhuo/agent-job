@@ -1,49 +1,31 @@
-"""Integration tests for the production ``CoordinatorAgent`` from
-``src.agents.coordinator``.
+"""Integration tests for CoordinatorAgent.run() using the real async_session
+fixture, the db_schema and tenant_id fixtures from conftest, and the
+production ``AIChatGateway`` stub (no mocks).
 
-The unit suite (``tests/unit/test_coordinator_agent.py``) exercises the
-coordinator with a fully mocked DB session. This file extends coverage to a
-real PostgreSQL session via the ``async_session`` fixture, verifying that
-the coordinator's async dispatch path actually works end-to-end against a
-real DB connection.
-
-* happy-path — a registered sub-agent is dispatched and returns ``completed``.
-* boundary — an unknown task falls back to ``implement_agent`` (a registered
-  fallback), covering the "all paths through the real session" contract.
-* error — a decomposition referencing a non-existent agent name lands in
-  ``result.failed`` rather than raising.
+These tests exercise the dispatch path end-to-end against a real PostgreSQL
+session so the wiring (commit/rollback, async driver) cannot silently drift
+from the contract that sub-agents will see in production.
 """
 
 from __future__ import annotations
 
 from typing import Any
-from unittest.mock import MagicMock
 
 import pytest
 
 from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
-from agents.registry import AgentRegistry
-
-
-@pytest.fixture(autouse=True)
-def reset_agent_registry():
-    """Reset the AgentRegistry singleton before and after each test."""
-    AgentRegistry.reset()
-    yield
-    AgentRegistry.reset()
+from internal.ai_gateway import AIChatGateway
 
 
 @pytest.fixture
 def coordinator(async_session) -> CoordinatorAgent:
-    """Coordinator wired to the real async_session fixture.
-
-    The coordinator itself does not query the database, but it forwards
-    ``self.session`` to sub-agents. Using a real session here proves that
-    the integration-test wiring (commit/rollback, async driver) does not
-    interfere with the dispatch chain.
+    """Coordinator wired to the real async_session fixture with a real
+    AIChatGateway. The sub-agents registered in these tests never invoke the
+    LLM, so the gateway's deterministic stub is sufficient and no mocks are
+    needed.
     """
-    return CoordinatorAgent(llm=MagicMock(), session=async_session)
+    return CoordinatorAgent(llm=AIChatGateway(), session=async_session)
 
 
 class TestCoordinatorAgentIntegration:
@@ -98,9 +80,29 @@ class TestCoordinatorAgentIntegration:
                 captured["tenant_id"] = self.tenant_id
                 return {"ok": True}
 
-        coordinator = CoordinatorAgent(llm=MagicMock(), session=async_session, tenant_id=42)
+        coordinator = CoordinatorAgent(llm=AIChatGateway(), session=async_session, tenant_id=tenant_id)
         result = await coordinator.run("test the login module")
 
         assert result.success is True
-        assert captured["tenant_id"] == 42
-        assert coordinator.tenant_id == 42
+        assert captured["tenant_id"] == tenant_id
+        assert coordinator.tenant_id == tenant_id
+
+    async def test_run_with_unknown_subagent_returns_failed(
+        self, coordinator, db_schema, tenant_id, async_session
+    ):
+        """When no agent is registered for the dispatched name, the
+        coordinator records the failure in ``result.failed`` instead of
+        raising — this is the documented LookupError path in _dispatch().
+        """
+        result = await coordinator.run("test the login module")
+
+        assert isinstance(result, WorkflowResult)
+        assert result.success is False
+        assert result.task_id
+        assert len(result.completed) == 0
+        assert len(result.failed) == 1
+        assert result.failed[0].agent_name == "test_agent"
+        assert result.failed[0].status == "failed"
+        assert isinstance(result.failed[0].result, dict)
+        assert "error" in result.failed[0].result
+        assert "test_agent" in result.failed[0].result["error"]
