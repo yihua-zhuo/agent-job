@@ -1,4 +1,4 @@
-Now I have all the details. Critical findings:
+Now I have all the details. Dev-plan corrections:
 
 1. **`src/api/deps.py` does NOT exist** — it needs to be created (not "extended"). The dev-plan incorrectly says "add to" it.
 2. **`AgentRegistry.get()` raises `LookupError`** (not `KeyError`) — the dev-plan's `dispatch` code is wrong, it must catch `LookupError`.
@@ -6,8 +6,6 @@ Now I have all the details. Critical findings:
 4. **`LLMService.__init__` takes `session: AsyncSession`** — not parameterless.
 5. **Routers are auto-discovered** by `iter_routers()` — naming `router` suffices; no manual `include_router` in `main.py` needed.
 6. **The dev-plan has import path errors**: `from db.models.llm_service` and `from db.models.agent_registry` — both are wrong. Correct paths: `from services.llm_service` and `from agents.registry`.
-
-Now I have everything to write the plan.
 
 # Implementation Plan — Issue #628
 
@@ -48,7 +46,7 @@ Reading order followed:
 
 Create `AgentService` with constructor that types `session: AsyncSession` (no default), `llm_service: LLMService`, and `registry: AgentRegistry`.
 
-- `async dispatch(self, agent_type: str, task: dict, tenant_id: int) -> dict` — calls `self._registry.get(agent_type)` inside a `try/except LookupError` (NOT `KeyError` — the registry raises `LookupError`, see `src/agents/registry.py` L56), re-raises as `NotFoundException(f"Agent type '{agent_type}' not registered")`. On success returns the result of `agent.run(task, tenant_id=tenant_id, session=self.session)` or `await agent.run(...)` depending on the `BaseAgent` contract.
+- `async def dispatch(self, agent_type: str, task: str, tenant_id: int) -> dict` — `task` is a plain string description (NOT a dict). Calls `self._registry.get(agent_type)` inside a `try/except LookupError` (NOT `KeyError` — the registry raises `LookupError`, see `src/agents/registry.py` L56), re-raises as `NotFoundException(f"Agent type '{agent_type}' not registered")`. On success returns the awaited result of `agent.run(task)`. The dispatch method is async because `BaseAgent.run` is async.
 - `async get_status(self) -> dict` — returns `{"llm": "ok"|"error", "agents": <list_agents()>, "timestamp": <ISO 8601>}`. Wraps `llm_service` availability check in a `try/except` and defaults to `"error"` on failure.
 
 Import paths (corrected from dev-plan):
@@ -98,7 +96,7 @@ The existing root-level `GET /` health endpoint in `main.py` (L91-93) is left un
 
 ### Step 4: Write unit tests `tests/unit/test_agent_service.py`
 
-Test three behaviours using `unittest.mock.AsyncMock` / `MagicMock` (no DB session needed for `AgentService` unit tests since `dispatch()` and `get_status()` don't touch the DB directly — the session is passed through to the agent's `run()` method, which is also mocked):
+Test three behaviours using `unittest.mock.AsyncMock` / `MagicMock` (the session is passed through to the agent's `run()` method, which is fully mocked in unit tests — the service itself does not execute SQL):
 
 1. **`test_dispatch_success`** — mock `registry.get()` to return a mock agent whose `run()` is an `AsyncMock` returning `{"result": "ok"}`. Call `await agent_service.dispatch("greeting", {"text": "hi"}, tenant_id=1)`. Assert result equals `{"result": "ok"}` and `registry.get` called once with `"greeting"`.
 2. **`test_dispatch_unknown_type_raises`** — mock `registry.get` to raise `LookupError("greeting")`. Assert `pytest.raises(NotFoundException)` with the agent type in the exception message.
@@ -130,7 +128,7 @@ Final checks:
   - `tests/unit/test_health_router.py` — 2 cases: `GET /health/agents` returns 200 with correct envelope, route is registered under the `/health` prefix.
 
 - **Integration tests in `tests/integration/`:**
-  - No new integration test file is required. `AgentService` does not perform DB queries directly — it passes the session to the agent's `run()` method. The dev-plan §3.1 marks the integration test as "optional" and §1.4 lists it as a KPI only "if integration tests are added in this board". We are not adding one because the unit tests cover the dispatch and status logic with mocks, and integration coverage for the `GET /health/agents` HTTP round-trip belongs to the existing `test_main_app.py` or `test_ai_router.py` patterns, which are out of scope for this board (no DB fixture warranted).
+  - One new integration test will live in `tests/integration/test_health_agents_endpoint_integration.py`. It will call `GET /health/agents` against the real FastAPI app (constructed with the real lifespan and real session fixture) and assert the response shape. This is required because the endpoint is a critical HTTP flow that the unit tests only exercise with a minimal `TestClient` (no middleware, no real session).
 
 - **Dev-plan verification (mapped to §6 acceptance items):**
   - `ruff check src/services/agent_service.py src/api/deps.py src/api/routers/health.py` → 0 errors

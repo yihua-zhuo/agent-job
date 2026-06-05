@@ -4,6 +4,7 @@ from datetime import datetime
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from internal.ai_gateway import AIChatGateway
 from pkg.errors.app_exceptions import NotFoundException
@@ -12,7 +13,8 @@ from services.agent_service import AgentService, AgentStatus
 
 @pytest.fixture
 def session():
-    return MagicMock()
+    """AsyncSession-shaped mock — uses spec= so attribute access is type-checked."""
+    return MagicMock(spec=AsyncSession)
 
 
 @pytest.fixture
@@ -36,7 +38,7 @@ def agent_service(session, llm, registry):
 
 
 class TestDispatch:
-    async def test_dispatch_success(self, agent_service, registry):
+    async def test_dispatch_success(self, agent_service, registry, session, llm):
         """dispatch() returns the agent's run() result and looks up the agent by type."""
         mock_agent_instance = MagicMock()
         mock_agent_instance.run = AsyncMock(return_value={"result": "ok"})
@@ -48,9 +50,7 @@ class TestDispatch:
 
         assert result == {"result": "ok"}
         registry.get.assert_called_once_with("greeting")
-        mock_agent_cls.assert_called_once_with(
-            agent_service._llm, agent_service.session, tenant_id=1
-        )
+        mock_agent_cls.assert_called_once_with(llm, session, tenant_id=1)
         mock_agent_instance.run.assert_awaited_once_with("hi")
 
     async def test_dispatch_unknown_type_raises_not_found(self, agent_service, registry):
@@ -113,9 +113,7 @@ class TestGetStatus:
             (99_999_999, ["a", "b", "c", "d", "e", "f", "g", "h", "i", "j"]),
         ],
     )
-    async def test_get_status_timestamp_is_valid_utc_iso8601(
-        self, agent_service, registry, tenant_id, agents
-    ):
+    async def test_get_status_timestamp_is_valid_utc_iso8601(self, agent_service, registry, tenant_id, agents):
         """get_status() emits an ISO-8601 UTC timestamp for any tenant/agent list."""
         registry.list_agents = MagicMock(return_value=agents)
 

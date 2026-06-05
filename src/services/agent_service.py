@@ -62,7 +62,15 @@ class AgentService:
         return await agent_instance.run(task)
 
     async def get_status(self, tenant_id: int) -> AgentStatus:
-        """Return an AgentStatus snapshot for the given tenant."""
+        """Return an AgentStatus snapshot for the given tenant.
+
+        llm_status is a static snapshot: the AIChatGateway stub is stateless
+        and process-local, so a live connectivity probe is not possible here.
+        A real LLM client should replace this with an actual health probe
+        (e.g. a lightweight ``ping`` or list-models call).
+        Registry is tenant-agnostic; tenant_id is echoed in the response for
+        caller context.
+        """
         return AgentStatus(
             llm_status="ok",
             agents=self._registry.list_agents(),

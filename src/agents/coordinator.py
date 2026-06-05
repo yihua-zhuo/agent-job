@@ -56,17 +56,24 @@ _KEYWORD_GROUPS: list[tuple[tuple[str, ...], str]] = [
 
 @register("coordinator")
 class CoordinatorAgent(BaseAgent):
-    """Top-level agent that decomposes a task and dispatches subtasks to registered agents."""
+    """Top-level agent that decomposes a task and dispatches subtasks to registered agents.
+
+    Sub-agents are instantiated with this coordinator's ``llm`` and ``session``.
+    Sub-agents MUST NOT flush or commit the session — the transaction boundary
+    lives at the router layer (rule 121). Treat the shared session/llm as
+    read-only inputs into each sub-agent's ``run`` method.
+    """
 
     def __init__(
         self,
         llm: AIChatGateway,
         session: AsyncSession,
-        registry: AgentRegistry | None = None,
         tenant_id: int | None = None,
     ) -> None:
         super().__init__(llm, session, tenant_id=tenant_id)
-        self._registry = registry if registry is not None else AgentRegistry()
+        # AgentRegistry is a process-wide singleton — always use the global
+        # instance, do not allow callers to inject an alternative registry.
+        self._registry = AgentRegistry()
 
     @property
     def name(self) -> str:
@@ -91,10 +98,15 @@ class CoordinatorAgent(BaseAgent):
         ]
         return TaskDecomposition(task_id=task_id, original_description=task_description, subtasks=subtasks)
 
-    async def run(self, task: str) -> dict[str, Any]:
+    async def run(self, task: str) -> WorkflowResult:
+        """Decompose *task* and dispatch subtasks. Return the WorkflowResult object.
+
+        The router/service layer is responsible for serialising this domain
+        object (``.model_dump()``) and wrapping it in the standard response
+        envelope.
+        """
         decomposition = self.decompose(task)
-        result = await self._dispatch(decomposition)
-        return {"success": result.success, "data": result.model_dump()}
+        return await self._dispatch(decomposition)
 
     async def _dispatch(self, decomposition: TaskDecomposition) -> WorkflowResult:
         completed: list[SubTask] = []

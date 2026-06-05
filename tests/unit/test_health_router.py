@@ -1,4 +1,4 @@
-"""Unit tests for src/api/routers/health.py — GET /health/agents endpoint."""
+"""Unit tests for src/api/routers/health.py — health endpoints."""
 
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
@@ -32,7 +33,8 @@ def _make_status(tenant_id: int, llm_status: str = "ok") -> AgentStatus:
 
 @pytest.fixture
 def mock_db_session():
-    return MagicMock()
+    """AsyncSession-shaped mock; the health endpoint should never touch it."""
+    return MagicMock(spec=AsyncSession)
 
 
 @pytest.fixture
@@ -47,14 +49,12 @@ def mock_agent_service():
     return mock
 
 
-@pytest.fixture
-def client(mock_db_session, mock_agent_service):
-    """Return a TestClient with get_agent_service fully mocked and auth bypassed."""
+def _build_app(mock_db_session, mock_agent_service, tenant_id: int) -> FastAPI:
     app = FastAPI()
     app.include_router(router)
     app.dependency_overrides[get_db] = lambda: mock_db_session
     app.dependency_overrides[get_agent_service] = lambda: mock_agent_service
-    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=1)
+    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=tenant_id)
 
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -70,11 +70,30 @@ def client(mock_db_session, mock_agent_service):
             content={"success": False, "message": "Internal server error", "code": "INTERNAL_ERROR"},
         )
 
+    return app
+
+
+@pytest.fixture
+def client(mock_db_session, mock_agent_service):
+    """Return a TestClient with get_agent_service fully mocked and auth bypassed."""
+    app = _build_app(mock_db_session, mock_agent_service, tenant_id=1)
     return TestClient(app, raise_server_exceptions=False)
 
 
+class TestHealthLive:
+    def test_health_live_is_public(self, mock_db_session, mock_agent_service):
+        """/health/live must work without auth and without touching the DB."""
+        app = _build_app(mock_db_session, mock_agent_service, tenant_id=1)
+        # NB: we do NOT override require_auth — the route should not depend on it.
+        c = TestClient(app, raise_server_exceptions=False)
+        resp = c.get("/health/live")
+        assert resp.status_code == 200
+        assert resp.json() == {"status": "ok"}
+        mock_db_session.execute.assert_not_called()
+
+
 class TestHealthAgentsEndpoint:
-    def test_health_agents_returns_200(self, client):
+    def test_health_agents_returns_200(self, client, mock_db_session):
         resp = client.get("/health/agents")
         assert resp.status_code == 200
         body = resp.json()
@@ -85,9 +104,12 @@ class TestHealthAgentsEndpoint:
         assert "timestamp" in body["data"]
         assert "message" in body
         assert body["message"] == "Agent health retrieved successfully"
+        # Lock in the no-DB-access contract for the success path.
+        mock_db_session.execute.assert_not_called()
 
-    def test_health_agents_returns_200_when_llm_is_down(self, client, mock_agent_service):
+    def test_health_agents_returns_200_when_llm_is_down(self, client, mock_agent_service, mock_db_session):
         """When get_status reports llm=error, the endpoint still 200s (status is informational)."""
+
         async def _status(tenant_id: int, **_):
             return _make_status(tenant_id, llm_status="error")
 
@@ -96,15 +118,11 @@ class TestHealthAgentsEndpoint:
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["llm"] == "error"
+        mock_db_session.execute.assert_not_called()
 
     def test_health_agents_reflects_caller_tenant(self, mock_db_session, mock_agent_service):
         """get_status is called with the tenant_id from the AuthContext."""
-        app = FastAPI()
-        app.include_router(router)
-        app.dependency_overrides[get_db] = lambda: mock_db_session
-        app.dependency_overrides[get_agent_service] = lambda: mock_agent_service
-        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=7)
-
+        app = _build_app(mock_db_session, mock_agent_service, tenant_id=7)
         c = TestClient(app, raise_server_exceptions=False)
         resp = c.get("/health/agents")
         assert resp.status_code == 200

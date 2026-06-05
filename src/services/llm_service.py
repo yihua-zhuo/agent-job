@@ -26,7 +26,7 @@ class LLMService:
 
     def __init__(
         self,
-        session: AsyncSession | None = None,
+        session: AsyncSession,
         client: httpx.AsyncClient | None = None,
         owns_client: bool = True,
     ):
@@ -97,7 +97,12 @@ class LLMService:
                 await asyncio.sleep(2**attempt)
         logger.error(
             "llm_provider_error",
-            extra={"provider": "openai", "endpoint": "embeddings", "tenant_id": tenant_id, "status_code": resp.status_code},
+            extra={
+                "provider": "openai",
+                "endpoint": "embeddings",
+                "tenant_id": tenant_id,
+                "status_code": resp.status_code,
+            },
         )
         raise ValidationException(
             f"LLM provider error: OpenAI embeddings returned {resp.status_code} after {MAX_RETRIES} retries"
@@ -128,9 +133,7 @@ class LLMService:
             "llm_provider_error",
             extra={"provider": "openai", "endpoint": "chat", "tenant_id": tenant_id, "status_code": resp.status_code},
         )
-        raise ValidationException(
-            f"LLM provider error: OpenAI returned {resp.status_code} after {MAX_RETRIES} retries"
-        )
+        raise ValidationException(f"LLM provider error: OpenAI returned {resp.status_code} after {MAX_RETRIES} retries")
 
     async def _call_anthropic(self, payload: dict, tenant_id: int) -> dict:
         headers = {
@@ -153,7 +156,12 @@ class LLMService:
                 await asyncio.sleep(2**attempt)
         logger.error(
             "llm_provider_error",
-            extra={"provider": "anthropic", "endpoint": "messages", "tenant_id": tenant_id, "status_code": resp.status_code},
+            extra={
+                "provider": "anthropic",
+                "endpoint": "messages",
+                "tenant_id": tenant_id,
+                "status_code": resp.status_code,
+            },
         )
         raise ValidationException(
             f"LLM provider error: Anthropic returned {resp.status_code} after {MAX_RETRIES} retries"
