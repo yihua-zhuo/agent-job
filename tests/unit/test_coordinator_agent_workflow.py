@@ -17,22 +17,22 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
-from agents.registry import AgentRegistry
 from internal.ai_gateway import AIChatGateway
+
+# Import the domain-owned reset_agent_registry_singleton helper so tests
+# that register custom sub-agents can request the local reset_agent_registry
+# fixture to isolate AgentRegistry state.
+from tests.unit.domain_fixtures.coordinator import reset_agent_registry_singleton
 
 
 @pytest.fixture
 def reset_agent_registry() -> Generator[None, None, None]:
-    """Reset the AgentRegistry singleton before and after each test.
-
-    The coordinator module mutates the process-wide registry via
-    ``@register("coordinator")`` at import time. This fixture is explicitly
-    requested by tests that register custom sub-agents to prevent registry
-    state from leaking between tests.
+    """Delegate to the domain-owned reset_agent_registry_singleton helper
+    so the AgentRegistry is clean before and after each test.
     """
-    AgentRegistry.reset()
+    reset_agent_registry_singleton()
     yield
-    AgentRegistry.reset()
+    reset_agent_registry_singleton()
 
 
 @pytest.fixture
