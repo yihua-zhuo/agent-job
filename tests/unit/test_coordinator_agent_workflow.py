@@ -1,71 +1,85 @@
-"""Unit tests for CoordinatorAgent.run_workflow.
+"""Unit tests for CoordinatorAgent workflow orchestration.
 
-Exercises the dispatch/aggregation logic of the standalone
-``docs.agents.coordinator.coordinator_agent.CoordinatorAgent`` across
-happy-path (task dispatch completes), boundary (empty task list), and
-error (agent script missing -> not_found) scenarios.
-
-The CoordinatorAgent has no database interaction — these are pure unit
-tests that use a ``tmp_path`` workspace with fake agent scripts to
-validate dispatch behavior.
+Exercises the end-to-end ``run()`` and ``_dispatch()`` methods of the real
+``src.agents.coordinator.CoordinatorAgent`` against registered sub-agents,
+covering happy-path (task dispatch completes), boundary (no matching keyword
+falls back to implement_agent), and error (unknown agent -> failed) scenarios.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import Any
+from unittest.mock import MagicMock
 
-from docs.agents.coordinator.coordinator_agent import CoordinatorAgent
+import pytest
+
+from agents.base import BaseAgent, register
+from agents.coordinator import CoordinatorAgent, SubTask, TaskDecomposition, WorkflowResult
+from agents.registry import AgentRegistry
 
 
-def _make_fake_agent(workspace: Path, agent_name: str, expected_task: dict) -> Path:
-    """Create a fake agent script that validates the task payload and prints a sentinel."""
-    agent_dir = workspace / "agents" / agent_name
-    agent_dir.mkdir(parents=True, exist_ok=True)
-    script = agent_dir / f"{agent_name}_agent.py"
-    script.write_text(
-        "#!/usr/bin/env python3\n"
-        "import json, sys\n"
-        "assert '--task' in sys.argv, 'missing --task arg'\n"
-        f"task = json.loads(sys.argv[sys.argv.index('--task') + 1])\n"
-        f"assert task == {expected_task!r}, f'task mismatch: {{task}}'\n"
-        "print('FAKE_AGENT_OK')\n"
-    )
-    return script
+@pytest.fixture(autouse=True)
+def reset_agent_registry():
+    AgentRegistry.reset()
+    yield
+    AgentRegistry.reset()
+
+
+@pytest.fixture
+def mock_db_session() -> MagicMock:
+    return MagicMock()
+
+
+@pytest.fixture
+def coordinator(mock_db_session: MagicMock) -> CoordinatorAgent:
+    return CoordinatorAgent(llm=MagicMock(), session=mock_db_session)
 
 
 class TestCoordinatorAgentRunWorkflow:
-    """Unit tests for CoordinatorAgent.run_workflow."""
+    """End-to-end tests for CoordinatorAgent.run() workflow dispatch."""
 
-    def test_run_workflow_dispatches_task_and_returns_completed(self, tmp_path):
-        expected_task = {"task_id": "t1", "assignee": "test", "type": "feature"}
-        _make_fake_agent(tmp_path, "test", expected_task)
+    async def test_run_workflow_dispatches_task_and_returns_completed(self, coordinator):
+        @register("test_agent")
+        class _T(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                return {"ok": True, "task": task}
 
-        agent = CoordinatorAgent(workspace=tmp_path)
-        results = agent.run_workflow([expected_task])
+        result = await coordinator.run("test the login module")
 
-        assert "dispatched" in results
-        assert len(results["dispatched"]) == 1
-        entry = results["dispatched"][0]
-        assert entry["status"] == "completed"
-        assert "FAKE_AGENT_OK" in entry.get("output", "")
+        assert isinstance(result, WorkflowResult)
+        assert result.success is True
+        assert len(result.completed) == 1
+        assert result.completed[0].agent_name == "test_agent"
+        assert result.completed[0].status == "completed"
+        assert result.completed[0].result == {"ok": True, "task": "test the login module"}
+        assert result.failed == []
 
-    def test_run_workflow_with_empty_task_list_returns_empty_dispatched(self, tmp_path):
-        _make_fake_agent(tmp_path, "test", {})
+    async def test_run_workflow_with_no_matching_keyword_falls_back_to_implement(self, coordinator):
+        @register("implement_agent")
+        class _Impl(BaseAgent):
+            async def run(self, task: str) -> dict[str, Any]:
+                return {"built": True}
 
-        agent = CoordinatorAgent(workspace=tmp_path)
-        results = agent.run_workflow([])
+        result = await coordinator.run("do something completely unrecognised")
 
-        assert results["dispatched"] == []
-        assert results["completed"] == []
-        assert results["failed"] == []
+        assert isinstance(result, WorkflowResult)
+        assert result.success is True
+        assert len(result.completed) == 1
+        assert result.completed[0].agent_name == "implement_agent"
+        assert result.completed[0].status == "completed"
 
-    def test_run_workflow_with_missing_agent_script_returns_not_found(self, tmp_path):
-        # "coordinator" is a known agent name in dispatch_to_agent's script map,
-        # but the workspace has no agents/coordinator/ directory — the script
-        # path will not exist, exercising the not_found branch.
-        agent = CoordinatorAgent(workspace=tmp_path)
-        tasks = [{"task_id": "t2", "assignee": "coordinator", "type": "feature"}]
-        results = agent.run_workflow(tasks)
+    async def test_run_workflow_with_unknown_subagent_returns_failed(self, coordinator):
+        decomposition = TaskDecomposition(
+            task_id="t_err",
+            original_description="ghost work",
+            subtasks=[SubTask(id="t_err-0", agent_name="ghost_agent_wf_xyz", description="ghost")],
+        )
+        result = await coordinator._dispatch(decomposition)
 
-        assert len(results["dispatched"]) == 1
-        assert results["dispatched"][0]["status"] == "not_found"
+        assert isinstance(result, WorkflowResult)
+        assert result.success is False
+        assert len(result.completed) == 0
+        assert len(result.failed) == 1
+        assert result.failed[0].agent_name == "ghost_agent_wf_xyz"
+        assert result.failed[0].status == "failed"
+        assert "ghost_agent_wf_xyz" in result.failed[0].result["error"]
