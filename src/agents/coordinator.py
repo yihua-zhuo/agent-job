@@ -60,8 +60,9 @@ class CoordinatorAgent(BaseAgent):
         llm: AIChatGateway,
         session: AsyncSession,
         registry: AgentRegistry | None = None,
+        tenant_id: int | None = None,
     ) -> None:
-        super().__init__(llm, session)
+        super().__init__(llm, session, tenant_id=tenant_id)
         self._registry = registry if registry is not None else AgentRegistry()
 
     @property
@@ -98,7 +99,7 @@ class CoordinatorAgent(BaseAgent):
         for subtask in decomposition.subtasks:
             try:
                 agent_cls = self._registry.get(subtask.agent_name)
-                agent = agent_cls(self.llm, self.session)
+                agent = agent_cls(self.llm, self.session, tenant_id=self.tenant_id)
                 completed.append(
                     subtask.model_copy(update={"status": "completed", "result": agent.run(subtask.description)})
                 )

@@ -21,9 +21,9 @@ EMBEDDING_COST_PER_M_TOKEN = 0.00002
 class LLMService:
     """Unified multi-provider LLM access — chat, embed, and per-tenant cost tracking."""
 
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, client: httpx.AsyncClient | None = None):
         self.session = session
-        self._client = httpx.AsyncClient(timeout=30.0)
+        self._client = client if client is not None else httpx.AsyncClient(timeout=30.0)
         self._cost_by_tenant: dict[int, float] = {}
 
     async def __aenter__(self) -> "LLMService":
