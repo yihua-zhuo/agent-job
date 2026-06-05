@@ -17,15 +17,29 @@ from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
 from internal.ai_gateway import AIChatGateway
 
+# Import the domain-owned reset_agent_registry fixture so tests that register
+# custom sub-agents can request it explicitly to isolate AgentRegistry state.
+from tests.integration.domain_fixtures import coordinator as _coordinator_fixtures  # noqa: F401
+
+
+@pytest.fixture(autouse=True)
+def _reset_agent_registry():
+    """Autouse wrapper that delegates to the domain-owned fixture logic,
+    ensuring every test in this file gets a clean AgentRegistry.
+    """
+    _coordinator_fixtures.reset_agent_registry_singleton()
+    yield
+    _coordinator_fixtures.reset_agent_registry_singleton()
+
 
 @pytest.fixture
-def coordinator(async_session) -> CoordinatorAgent:
+def coordinator(async_session, tenant_id) -> CoordinatorAgent:
     """Coordinator wired to the real async_session fixture with a real
-    AIChatGateway. The sub-agents registered in these tests never invoke the
-    LLM, so the gateway's deterministic stub is sufficient and no mocks are
-    needed.
+    AIChatGateway and the integration-test tenant_id. The sub-agents
+    registered in these tests never invoke the LLM, so the gateway's
+    deterministic stub is sufficient and no mocks are needed.
     """
-    return CoordinatorAgent(llm=AIChatGateway(), session=async_session)
+    return CoordinatorAgent(llm=AIChatGateway(), session=async_session, tenant_id=tenant_id)
 
 
 class TestCoordinatorAgentIntegration:
@@ -93,6 +107,9 @@ class TestCoordinatorAgentIntegration:
         """When no agent is registered for the dispatched name, the
         coordinator records the failure in ``result.failed`` instead of
         raising — this is the documented LookupError path in _dispatch().
+
+        Depends on the autouse ``_reset_agent_registry`` fixture to ensure
+        ``test_agent`` is not registered from a prior test in this file.
         """
         result = await coordinator.run("test the login module")
 

@@ -5,11 +5,7 @@ boundary (no matching keyword falls back to implement_agent), and error
 (unknown agent -> failed).
 """
 
-# The coordinator does not touch the DB during dispatch, so we use the
-# production AIChatGateway stub (deterministic, no network) and an
-# AsyncMock session. AsyncMock is used here only because the coordinator
-# forwards ``self.session`` to sub-agents — it never calls any session
-# method itself, so no DB-backed fixture is needed.
+# Coordinator does not call session methods directly; mock is forwarded to sub-agents only.
 from __future__ import annotations
 
 from typing import Any
@@ -22,10 +18,19 @@ from agents.base import BaseAgent, register
 from agents.coordinator import CoordinatorAgent, WorkflowResult
 from internal.ai_gateway import AIChatGateway
 
-# This module mutates the process-wide AgentRegistry singleton via
-# @register() and the autouse reset_agent_registry fixture. Mark the whole
-# module so pytest-xdist schedules tests in the same worker.
-pytestmark = pytest.mark.xdist_group(name="agent_registry")
+# Import the domain-owned reset_agent_registry fixture so tests that register
+# custom sub-agents can request it explicitly to isolate AgentRegistry state.
+from tests.unit.domain_fixtures import coordinator as _coordinator_fixtures  # noqa: F401
+
+
+@pytest.fixture(autouse=True)
+def _reset_agent_registry():
+    """Autouse wrapper that delegates to the domain-owned fixture logic,
+    ensuring every test in this file gets a clean AgentRegistry.
+    """
+    _coordinator_fixtures.reset_agent_registry_singleton()
+    yield
+    _coordinator_fixtures.reset_agent_registry_singleton()
 
 
 @pytest.fixture
