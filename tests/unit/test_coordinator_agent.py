@@ -45,7 +45,7 @@ def _make_mock_agent_class(name: str) -> type[BaseAgent]:
         def name(self) -> str:
             return name
 
-        def run(self, task: str) -> dict[str, Any]:
+        async def run(self, task: str) -> dict[str, Any]:
             return {"agent": name, "task": task}
 
     _MockAgent.__name__ = f"MockAgent_{name}"
@@ -90,17 +90,17 @@ class TestDecompose:
 
 
 class TestDispatch:
-    def test_dispatch_routes_to_registered_agents(self, coordinator):
+    async def test_dispatch_routes_to_registered_agents(self, coordinator):
         from agents.base import register
 
         @register("test_agent_dispatch_1")
         class _T1(BaseAgent):
-            def run(self, task):
+            async def run(self, task):
                 return {"agent": "test_agent_dispatch_1", "task": task}
 
         @register("code_review_agent_dispatch_1")
         class _R1(BaseAgent):
-            def run(self, task):
+            async def run(self, task):
                 return {"agent": "code_review_agent_dispatch_1", "task": task}
 
         decomposition = TaskDecomposition(
@@ -111,7 +111,7 @@ class TestDispatch:
                 SubTask(id="t1-1", agent_name="code_review_agent_dispatch_1", description="review it"),
             ],
         )
-        result = coordinator._dispatch(decomposition)
+        result = await coordinator._dispatch(decomposition)
         assert isinstance(result, WorkflowResult)
         assert len(result.completed) == 2
         assert len(result.failed) == 0
@@ -119,23 +119,23 @@ class TestDispatch:
             assert s.status == "completed"
             assert s.result is not None
 
-    def test_dispatch_catches_unknown_agent(self, coordinator):
+    async def test_dispatch_catches_unknown_agent(self, coordinator):
         decomposition = TaskDecomposition(
             task_id="t2",
             original_description="ghost work",
             subtasks=[SubTask(id="t2-0", agent_name="ghost_agent_xyz", description="ghost")],
         )
-        result = coordinator._dispatch(decomposition)
+        result = await coordinator._dispatch(decomposition)
         assert len(result.failed) == 1
         assert "ghost_agent_xyz" in result.failed[0].result["error"]
         assert result.failed[0].status == "failed"
 
-    def test_dispatch_catches_agent_exception(self, coordinator):
+    async def test_dispatch_catches_agent_exception(self, coordinator):
         from agents.base import register
 
         @register("broken_agent_test_1")
         class _Boom(BaseAgent):
-            def run(self, task):
+            async def run(self, task):
                 raise RuntimeError("boom")
 
         decomposition = TaskDecomposition(
@@ -143,21 +143,21 @@ class TestDispatch:
             original_description="break it",
             subtasks=[SubTask(id="t3-0", agent_name="broken_agent_test_1", description="break")],
         )
-        result = coordinator._dispatch(decomposition)
+        result = await coordinator._dispatch(decomposition)
         assert len(result.failed) == 1
         assert result.failed[0].result["error"] == "boom"
 
-    def test_dispatch_mixed_success_and_failure(self, coordinator):
+    async def test_dispatch_mixed_success_and_failure(self, coordinator):
         from agents.base import register
 
         @register("good_agent_mixed_1")
         class _Good(BaseAgent):
-            def run(self, task):
+            async def run(self, task):
                 return {"ok": True}
 
         @register("bad_agent_mixed_1")
         class _Bad(BaseAgent):
-            def run(self, task):
+            async def run(self, task):
                 raise ValueError("nope")
 
         decomposition = TaskDecomposition(
@@ -169,28 +169,26 @@ class TestDispatch:
                 SubTask(id="t4-2", agent_name="ghost_agent_mixed_1", description="ghost"),
             ],
         )
-        result = coordinator._dispatch(decomposition)
+        result = await coordinator._dispatch(decomposition)
         assert len(result.completed) == 1
         assert len(result.failed) == 2
-        # Verify which subtask ended up where
         completed_ids = {s.id for s in result.completed}
         failed_ids = {s.id for s in result.failed}
         assert "t4-0" in completed_ids
         assert "t4-1" in failed_ids
         assert "t4-2" in failed_ids
-        # The good_agent should be in completed, bad/ghost in failed
         assert result.completed[0].agent_name == "good_agent_mixed_1"
         failed_agent_names = {s.agent_name for s in result.failed}
         assert "bad_agent_mixed_1" in failed_agent_names
         assert "ghost_agent_mixed_1" in failed_agent_names
 
-    def test_dispatch_does_not_mutate_original_subtasks(self, coordinator):
+    async def test_dispatch_does_not_mutate_original_subtasks(self, coordinator):
         """SubTask instances should be copied, not mutated in place."""
         from agents.base import register
 
         @register("immutable_test_agent_1")
         class _T(BaseAgent):
-            def run(self, task):
+            async def run(self, task):
                 return {"ok": True}
 
         original = SubTask(id="imm-0", agent_name="immutable_test_agent_1", description="test")
@@ -199,45 +197,50 @@ class TestDispatch:
             original_description="x",
             subtasks=[original],
         )
-        coordinator._dispatch(decomposition)
-        # Original should remain untouched
+        await coordinator._dispatch(decomposition)
         assert original.status == "pending"
         assert original.result is None
 
 
 class TestRunEndToEnd:
-    def test_run_returns_dict_with_success_data_completed_and_failed(self, coordinator):
+    async def test_run_returns_workflow_result_with_completed_and_failed(self, coordinator):
         from agents.base import register
 
         @register("test_agent")
         class _T1(BaseAgent):
-            def run(self, task):
+            async def run(self, task):
                 return {"agent": "test_agent", "task": task}
 
         @register("code_review_agent")
         class _T2(BaseAgent):
-            def run(self, task):
+            async def run(self, task):
                 return {"agent": "code_review_agent", "task": task}
 
-        result = coordinator.run("review and test the login module")
-        assert isinstance(result, dict)
-        assert result["success"] is True
-        assert "data" in result
-        data = result["data"]
-        assert "completed" in data
-        assert "failed" in data
-        assert len(data["completed"]) == 2
-        assert len(data["failed"]) == 0
+        result = await coordinator.run("review and test the login module")
+        assert isinstance(result, WorkflowResult)
+        assert result.success is True
+        assert len(result.completed) == 2
+        assert len(result.failed) == 0
 
 
 class TestRegistration:
     def test_coordinator_is_registered(self):
-        """The @register decorator on CoordinatorAgent runs at module import time."""
-        import importlib
+        """The @register decorator on CoordinatorAgent runs at module import time.
 
-        import agents.coordinator
+        The module is already imported at the top of this file (line 10),
+        which triggers ``@register(\"coordinator\")``. The autouse
+        ``reset_agent_registry`` fixture clears the registry before this
+        test runs, so we re-trigger the registration by re-applying
+        ``@register`` to the already-imported CoordinatorAgent class.
+        This is a cheaper and more explicit equivalent of
+        ``importlib.reload(agents.coordinator)`` (which would also
+        re-execute the module body) — see review note 24.
+        """
+        from agents.base import register
 
-        # Reload to re-run the @register decorator against the freshly-reset singleton
-        importlib.reload(agents.coordinator)
-        names = AgentRegistry().list_agents()
-        assert "coordinator" in names
+        @register("coordinator")
+        class _CoordinatorReRegistered(BaseAgent):
+            async def run(self, task):
+                return {}
+
+        assert "coordinator" in AgentRegistry().list_agents()

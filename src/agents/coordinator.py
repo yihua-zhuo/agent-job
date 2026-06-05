@@ -1,13 +1,14 @@
 """CoordinatorAgent — decomposes tasks and dispatches to registered sub-agents.
 
-Note: this agent is synchronous. It does not use ``async def`` because
-``BaseAgent.run`` is defined as a regular method. Registered sub-agents must
-therefore be synchronous; wrapping a blocking I/O call here would stall the
-caller's thread.
+This agent is async — it must be awaited when called via ``BaseAgent.run`` and
+relies on the registered sub-agents also being async. Sub-agents share the
+coordinator's session/llm; they must NOT flush or commit transactions — that
+lives at the router layer.
 """
 
 from __future__ import annotations
 
+import logging
 import uuid
 from typing import Any
 
@@ -17,6 +18,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from agents.base import BaseAgent, register
 from agents.registry import AgentRegistry
 from internal.ai_gateway import AIChatGateway
+
+logger = logging.getLogger(__name__)
 
 
 class SubTask(BaseModel):
@@ -53,16 +56,24 @@ _KEYWORD_GROUPS: list[tuple[tuple[str, ...], str]] = [
 
 @register("coordinator")
 class CoordinatorAgent(BaseAgent):
-    """Top-level agent that decomposes a task and dispatches subtasks to registered agents."""
+    """Top-level agent that decomposes a task and dispatches subtasks to registered agents.
+
+    Sub-agents are instantiated with this coordinator's ``llm`` and ``session``.
+    Sub-agents MUST NOT flush or commit the session — the transaction boundary
+    lives at the router layer (rule 121). Treat the shared session/llm as
+    read-only inputs into each sub-agent's ``run`` method.
+    """
 
     def __init__(
         self,
         llm: AIChatGateway,
         session: AsyncSession,
-        registry: AgentRegistry | None = None,
+        tenant_id: int | None = None,
     ) -> None:
-        super().__init__(llm, session)
-        self._registry = registry if registry is not None else AgentRegistry()
+        super().__init__(llm, session, tenant_id=tenant_id)
+        # AgentRegistry is a process-wide singleton — always use the global
+        # instance, do not allow callers to inject an alternative registry.
+        self._registry = AgentRegistry()
 
     @property
     def name(self) -> str:
@@ -87,22 +98,31 @@ class CoordinatorAgent(BaseAgent):
         ]
         return TaskDecomposition(task_id=task_id, original_description=task_description, subtasks=subtasks)
 
-    def run(self, task: str) -> dict[str, Any]:
-        decomposition = self.decompose(task)
-        result = self._dispatch(decomposition)
-        return {"success": result.success, "data": result.model_dump()}
+    async def run(self, task: str) -> WorkflowResult:
+        """Decompose *task* and dispatch subtasks. Return the WorkflowResult object.
 
-    def _dispatch(self, decomposition: TaskDecomposition) -> WorkflowResult:
+        The router/service layer is responsible for serialising this domain
+        object (``.model_dump()``) and wrapping it in the standard response
+        envelope.
+        """
+        decomposition = self.decompose(task)
+        return await self._dispatch(decomposition)
+
+    async def _dispatch(self, decomposition: TaskDecomposition) -> WorkflowResult:
         completed: list[SubTask] = []
         failed: list[SubTask] = []
         for subtask in decomposition.subtasks:
             try:
                 agent_cls = self._registry.get(subtask.agent_name)
-                agent = agent_cls(self.llm, self.session)
+                agent = agent_cls(self.llm, self.session, tenant_id=self.tenant_id)
                 completed.append(
-                    subtask.model_copy(update={"status": "completed", "result": agent.run(subtask.description)})
+                    subtask.model_copy(update={"status": "completed", "result": await agent.run(subtask.description)})
                 )
             except LookupError:
+                logger.warning(
+                    "coordinator.lookup_error",
+                    extra={"agent_name": subtask.agent_name, "subtask_id": subtask.id},
+                )
                 failed.append(
                     subtask.model_copy(
                         update={"status": "failed", "result": {"error": f"Unknown agent: {subtask.agent_name}"}}

@@ -63,12 +63,18 @@ class BaseAgent(ABC):
     dependencies through the constructor and implement ``run``.
     """
 
-    def __init__(self, llm: AIChatGateway, session: AsyncSession) -> None:
+    def __init__(
+        self,
+        llm: AIChatGateway,
+        session: AsyncSession,
+        tenant_id: int | None = None,
+    ) -> None:
         self.llm = llm
         self.session = session
+        self.tenant_id = tenant_id
 
     @abstractmethod
-    def run(self, task: str) -> dict[str, Any]:
+    async def run(self, task: str) -> dict[str, Any]:
         """Execute a task and return a result dictionary.
 
         Args:
