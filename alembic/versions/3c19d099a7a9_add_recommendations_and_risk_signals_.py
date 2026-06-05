@@ -54,16 +54,15 @@ def upgrade() -> None:
             server_default=sa.text("now()"),
             nullable=False,
         ),
+        sa.CheckConstraint("confidence >= 0.0 AND confidence <= 1.0", name="chk_confidence"),
         sa.ForeignKeyConstraint(["opportunity_id"], ["opportunities.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_recommendations_tenant_id"), "recommendations", ["tenant_id"], unique=False)
     op.create_index(op.f("ix_recommendations_opportunity_id"), "recommendations", ["opportunity_id"], unique=False)
     op.create_index(
         "ix_recommendations_tenant_opportunity", "recommendations", ["tenant_id", "opportunity_id"], unique=True
-    )
-    op.execute(
-        "ALTER TABLE recommendations ADD CONSTRAINT chk_confidence CHECK (confidence >= 0.0 AND confidence <= 1.0)"
     )
 
     # --- risk_signals table ---
@@ -96,6 +95,7 @@ def upgrade() -> None:
             nullable=False,
         ),
         sa.ForeignKeyConstraint(["opportunity_id"], ["opportunities.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(["tenant_id"], ["tenants.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(op.f("ix_risk_signals_tenant_id"), "risk_signals", ["tenant_id"], unique=False)
@@ -104,7 +104,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.execute("ALTER TABLE recommendations DROP CONSTRAINT IF EXISTS chk_confidence")
     op.drop_table("risk_signals")
     op.drop_table("recommendations")
     op.execute("DROP TYPE IF EXISTS risk_level_enum")
