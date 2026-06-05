@@ -417,3 +417,5 @@ def tenant_id() -> int:
 def tenant_id_2() -> int:
     """Return a second fixed test tenant ID."""
     return 2
+
+

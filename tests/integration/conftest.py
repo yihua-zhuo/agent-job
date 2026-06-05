@@ -507,3 +507,5 @@ async def api_client_tenant_2(
     async with AsyncClient(transport=transport, base_url="http://test", headers=auth_headers_tenant_2) as ac:
         yield ac
     fastapi_app.dependency_overrides.pop(get_db, None)
+
+

@@ -566,3 +566,23 @@ export function useAutomationLogs(page = 1, pageSize = 20, ruleId?: number, stat
     staleTime: 30 * 1000,
   });
 }
+
+// ── Copilot ───────────────────────────────────────────────────────────────
+
+interface CopilotChatResponse {
+  response: string;
+  conversation_id: number;
+  tool_calls: Array<{ tool: string; arguments: Record<string, unknown>; result?: unknown }>;
+}
+
+export function useSendCopilotMessage() {
+  const token = useAuthStore((s) => s.token);
+  return useMutation({
+    mutationFn: (message: string) =>
+      apiClient.post<ApiEnvelopeSingle<CopilotChatResponse>>(
+        "/api/v1/copilot/chat",
+        { message },
+        token ?? undefined
+      ),
+  });
+}

@@ -254,3 +254,12 @@ async def list_users_with_role(
     svc = RBACService(session)
     users = await svc.list_users_with_role(role_id=role_id, tenant_id=ctx.tenant_id)
     return {"success": True, "data": [u.to_dict() for u in users]}
+
+
+# ---------------------------------------------------------------------------
+# RoleManagementRouter — defined in src/api/routers/role_management.py.
+# The management endpoints (/api/v1/rbac/mgmt/*) live in their own module
+# to keep this file focused on the legacy RBAC API. The two routers share
+# no handlers and use distinct path prefixes (mgmt vs non-mgmt) so FastAPI
+# registration does not collide.
+# ---------------------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -20,9 +21,16 @@ async def lifespan(app: FastAPI):
     from db.connection import ensure_engine
 
     ensure_engine()
+    app.state.llm_http_client = httpx.AsyncClient(timeout=30.0)
     logger.info("app_started", env=settings.env, app_name=settings.app_name)
     yield
     await dispose_async_engine()
+    client = getattr(app.state, "llm_http_client", None)
+    if client is not None:
+        try:
+            await client.aclose()
+        except Exception:
+            logger.warning("llm_http_client.aclose failed during shutdown", exc_info=True)
     logger.info("app_shutdown")
 
 
