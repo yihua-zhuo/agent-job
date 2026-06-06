@@ -554,7 +554,15 @@ async def trigger_lead_recycle(
 @customers_router.post("/{customer_id}/score")
 async def calculate_customer_score(
     customer_id: int,
-    include_ai: bool = Query(True, description="Call AI agent for similar_leads enrichment"),
+    include_ai: bool = Query(
+        True,
+        description=(
+            "Call AI agent for similar_leads enrichment. Default is True for the POST "
+            "action path because callers expect a freshly enriched score. Note: this "
+            "adds latency and an external-dependency failure surface; pass False to "
+            "skip AI enrichment and get a fast static score."
+        ),
+    ),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
@@ -567,16 +575,14 @@ async def calculate_customer_score(
     response with ``similar_leads``. The AI call degrades gracefully — if the
     agent is unreachable, the static score is still returned and
     ``similar_leads`` is omitted from the response.
+
+    Asymmetry with GET: POST defaults ``include_ai`` to True (action callers
+    expect enrichment), while GET defaults it to False (read callers usually
+    want a fast, cacheable score).
     """
     service = ScoreService(session)
     score_result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
-    response = ScoreResponse(
-        score=score_result.score,
-        tier=score_result.tier.value,
-        top_factors=score_result.top_factors,
-        recommendations=score_result.recommendations,
-        similar_leads=score_result.similar_leads or None,
-    )
+    response = ScoreResponse.from_result(score_result)
     return {
         "success": True,
         "data": response.to_dict(),
@@ -589,7 +595,11 @@ async def get_customer_score(
     customer_id: int,
     include_ai: bool = Query(
         False,
-        description="Call AI agent for similar_leads enrichment (read path skips AI by default for lower latency)",
+        description=(
+            "Call AI agent for similar_leads enrichment. Default is False for the GET "
+            "read path to keep latency low — set True to opt in to AI enrichment. "
+            "Note: POST defaults this to True; the asymmetry is intentional."
+        ),
     ),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
@@ -597,13 +607,7 @@ async def get_customer_score(
     """Get the current score for a customer. Returns 404 if the customer has never been scored."""
     service = ScoreService(session)
     score_result = await service.get_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
-    response = ScoreResponse(
-        score=score_result.score,
-        tier=score_result.tier.value,
-        top_factors=score_result.top_factors,
-        recommendations=score_result.recommendations,
-        similar_leads=score_result.similar_leads or None,
-    )
+    response = ScoreResponse.from_result(score_result)
     return {
         "success": True,
         "data": response.to_dict(),

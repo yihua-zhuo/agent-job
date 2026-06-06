@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
+import httpx
 import pytest
 
 from models.score import ScoreTier
@@ -188,7 +189,8 @@ async def test_top_factors_excludes_zero():
         },
     )
     svc = ScoreService(_make_session(state))
-    _, _, factors, _, _ = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    factors = result.top_factors
     assert "deal_velocity" not in factors
     assert "payment_history" not in factors
     assert all(f not in ("deal_velocity", "payment_history") for f in factors)
@@ -208,7 +210,9 @@ async def test_recommendations_match_top_factors():
         },
     )
     svc = ScoreService(_make_session(state))
-    _, _, factors, recs, _ = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    factors = result.top_factors
+    recs = result.recommendations
     assert len(factors) == len(recs)
     for f, r in zip(factors, recs, strict=True):
         assert r == FIELD_RECOMMENDATIONS[f]
@@ -221,7 +225,7 @@ async def test_recommendations_match_top_factors():
 
 @pytest.mark.asyncio
 async def test_calculate_score_ai_branch():
-    """When AIAgentClient returns data, similar_leads and recommendations are enriched."""
+    """When the AI client returns data, similar_leads and recommendations are enriched."""
     state = MockState()
     _seed_customer(
         state,
@@ -233,49 +237,41 @@ async def test_calculate_score_ai_branch():
             "product_adoption": 60,
         },
     )
-    svc = ScoreService(_make_session(state))
 
-    mock_agent_instance = AsyncMock()
-    mock_agent_instance.analyze_factors = AsyncMock(
+    mock_agent = MagicMock()
+    mock_agent.analyze_factors = AsyncMock(
         return_value={
             "similar_leads": [{"id": 42, "score": 0.9}],
             "recommendations": ["Expand to segment B"],
         }
     )
-    mock_agent_class = MagicMock(return_value=mock_agent_instance)
 
-    with patch("services.score_service.AIAgentClient", mock_agent_class):
-        result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
 
-    score = result.score
-    tier = result.tier
-    factors = result.top_factors
-    recs = result.recommendations
-    similar_leads = result.similar_leads
-
-    # similar_leads is now a list[SimilarLead]; convert to dicts for comparison
-    assert [sl.to_dict() for sl in similar_leads] == [{"id": 42, "score": 0.9, "name": None}]
+    # similar_leads is populated from the AI client; assert only contract-guaranteed fields
+    assert len(result.similar_leads) == 1
+    sl = result.similar_leads[0]
+    assert sl.id == 42
+    assert sl.score == pytest.approx(0.9)
     # AI recs come first, static recs fill gaps (no duplicates)
-    assert "Expand to segment B" in recs
-    assert isinstance(score, int)
-    assert tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
-    assert factors
-    mock_agent_class.assert_called_once()
-    assert mock_agent_class.call_args is not None  # verify it was called with args
-    mock_agent_instance.analyze_factors.assert_awaited_once_with(
+    assert "Expand to segment B" in result.recommendations
+    assert isinstance(result.score, int)
+    assert result.tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
+    assert result.top_factors
+    mock_agent.analyze_factors.assert_awaited_once_with(
         entity_id=CUSTOMER_ID,
         tenant_id=TENANT_ID,
-        current_score=score,
+        current_score=result.score,
     )
 
 
-class AIAgentUnavailableError(Exception):
-    """Domain-specific exception for AI agent failures (test stand-in)."""
-
-
 @pytest.mark.asyncio
-async def test_calculate_score_ai_fallback():
-    """When AIAgentClient raises, scoring degrades gracefully (similar_leads == [])."""
+async def test_calculate_score_ai_fallback(caplog):
+    """When the AI client raises a known transport error, scoring degrades gracefully
+    and the failure is logged at WARNING/ERROR level with context."""
+    import logging
+
     state = MockState()
     _seed_customer(
         state,
@@ -287,33 +283,31 @@ async def test_calculate_score_ai_fallback():
             "product_adoption": 60,
         },
     )
-    svc = ScoreService(_make_session(state))
 
-    mock_agent_instance = AsyncMock()
-    mock_agent_instance.analyze_factors = AsyncMock(side_effect=AIAgentUnavailableError("agent down"))
-    mock_agent_class = MagicMock(return_value=mock_agent_instance)
+    mock_agent = MagicMock()
+    mock_agent.analyze_factors = AsyncMock(side_effect=httpx.HTTPError("agent down"))
 
-    with patch("services.score_service.AIAgentClient", mock_agent_class):
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    with caplog.at_level(logging.WARNING, logger="services.score_service"):
         result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
 
-    score = result.score
-    tier = result.tier
-    factors = result.top_factors
-    recs = result.recommendations
-    similar_leads = result.similar_leads
-
-    assert similar_leads == []
-    assert isinstance(score, int)
-    assert score > 0
-    assert tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
-    assert factors
-    assert recs
-    mock_agent_class.assert_called_once()
+    assert result.similar_leads == []
+    assert isinstance(result.score, int)
+    assert result.score > 0
+    assert result.tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
+    assert result.top_factors
+    assert result.recommendations
+    # The AI failure must be logged with customer context
+    assert any(
+        "AI agent call failed" in record.message
+        and str(CUSTOMER_ID) in record.message
+        for record in caplog.records
+    )
 
 
 @pytest.mark.asyncio
 async def test_calculate_score_include_ai_false_skips_agent():
-    """When include_ai=False, the AI client is never instantiated."""
+    """When include_ai=False, the AI client is never invoked."""
     state = MockState()
     _seed_customer(
         state,
@@ -325,22 +319,16 @@ async def test_calculate_score_include_ai_false_skips_agent():
             "product_adoption": 60,
         },
     )
-    svc = ScoreService(_make_session(state))
 
-    mock_agent_class = MagicMock(return_value=AsyncMock())
+    mock_agent = MagicMock()
+    mock_agent.analyze_factors = AsyncMock()
 
-    with patch("services.score_service.AIAgentClient", mock_agent_class):
-        result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=False)
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=False)
 
-    score = result.score
-    tier = result.tier
-    factors = result.top_factors
-    recs = result.recommendations
-    similar_leads = result.similar_leads
-
-    assert similar_leads == []
-    assert isinstance(score, int)
-    assert tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
-    assert factors
-    assert recs
-    mock_agent_class.assert_not_called()
+    assert result.similar_leads == []
+    assert isinstance(result.score, int)
+    assert result.tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
+    assert result.top_factors
+    assert result.recommendations
+    mock_agent.analyze_factors.assert_not_called()

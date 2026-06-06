@@ -1,9 +1,23 @@
 """Score schemas for lead scoring."""
 
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, Protocol
 
 from pydantic import BaseModel, Field
+
+
+class ScoreResultLike(Protocol):
+    """Structural type for objects that can be mapped to ScoreResponse.
+
+    Decouples the schema from the service's dataclass so the router doesn't
+    depend on the concrete ``ScoreResult`` type.
+    """
+
+    score: int
+    tier_label: str
+    top_factors: list
+    recommendations: list
+    similar_leads: list
 
 
 class ScoreTier(StrEnum):
@@ -16,7 +30,7 @@ class ScoreTier(StrEnum):
 class SimilarLead(BaseModel):
     """A single similar-lead entry returned by AI enrichment."""
 
-    id: int
+    id: Annotated[int, Field(gt=0)]
     score: float
     name: str | None = None
 
@@ -63,8 +77,27 @@ class ScoreResponse(BaseModel):
     recommendations: list | None = None
     similar_leads: list[SimilarLead] | None = None
 
+    @classmethod
+    def from_result(cls, result: "ScoreResultLike") -> "ScoreResponse":
+        """Build a ScoreResponse from a result object.
+
+        Decouples the router from the service's internal type representation
+        (e.g. ScoreTier enum → tier string) and keeps the field mapping in one
+        place so schema changes are not scattered across routers.
+        """
+        return cls(
+            score=result.score,
+            tier=result.tier_label,
+            top_factors=result.top_factors,
+            recommendations=result.recommendations,
+            similar_leads=result.similar_leads or None,
+        )
+
     def to_dict(self) -> dict[str, Any]:
-        """Render as a plain dict, omitting None values for consistency with router output."""
+        """Render as a plain dict. ``similar_leads`` is conditionally included only
+        when not ``None``; all other fields are always present (even when None)
+        for a consistent response shape.
+        """
         data: dict[str, Any] = {
             "score": self.score,
             "tier": self.tier,

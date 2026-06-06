@@ -14,9 +14,13 @@ with an empty ``similar_leads`` list — the static score is never lost.
 
 from __future__ import annotations
 
+import importlib
+import importlib.util
 import logging
 from dataclasses import dataclass, field
+from typing import Protocol
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -24,12 +28,29 @@ from db.models.customer import CustomerModel
 from models.score import ScoreTier, SimilarLead
 from pkg.errors.app_exceptions import NotFoundException
 
-try:
-    from services.ai_agent_client import AIAgentClient  # type: ignore[import-not-found]
-except ImportError:
-    AIAgentClient = None  # type: ignore[assignment,misc]
-
 logger = logging.getLogger(__name__)
+
+# Lazy lookup for the TBD AI client. We use importlib.util.find_spec so that
+# SyntaxError or other non-ImportError issues in the TBD module do not
+# propagate through the import-time fallback.
+AIAgentClient: type | None = None
+if importlib.util.find_spec("services.ai_agent_client") is not None:
+    _ai_module = importlib.import_module("services.ai_agent_client")
+    AIAgentClient = getattr(_ai_module, "AIAgentClient", None)
+
+
+class _AIAgentClientProtocol(Protocol):
+    """Structural type for an injected AI client. The real ``AIAgentClient``
+    (when implemented) is expected to satisfy this protocol."""
+
+    async def analyze_factors(
+        self,
+        *,
+        entity_id: int,
+        tenant_id: int,
+        current_score: int,
+    ) -> dict: ...
+
 
 DEFAULT_SCORE = 50
 DEFAULT_TIER = ScoreTier.C
@@ -74,38 +95,16 @@ class ScoreResult:
     recommendations: list[str] = field(default_factory=list)
     similar_leads: list[SimilarLead] = field(default_factory=list)
 
-    def to_tuple(self) -> tuple[int, str, list[str], list[str], list[dict]]:
-        """Legacy 5-tuple form for callers that still index positionally."""
-        return (
-            self.score,
-            self.tier.value,
-            self.top_factors,
-            self.recommendations,
-            [sl.to_dict() if hasattr(sl, "to_dict") else sl for sl in self.similar_leads],
-        )
-
-    def __iter__(self):
-        """Allow tuple-style unpacking: ``score, tier, factors, recs, similar = result``."""
-        return iter(self.to_tuple())
+    @property
+    def tier_label(self) -> str:
+        """Return the string form of the tier (decouples callers from the enum)."""
+        return self.tier.value
 
 
 class ScoreService:
-    def __init__(self, session: AsyncSession, ai_client: AIAgentClient | None = None):
+    def __init__(self, session: AsyncSession, ai_client: _AIAgentClientProtocol | None = None):
         self.session = session
         self._ai_client = ai_client
-
-    def _get_ai_client(self) -> AIAgentClient | None:
-        """Return the injected AI client, or construct one if not injected.
-
-        If ``AIAgentClient`` is not importable (TBD module), returns ``None``
-        and the caller degrades gracefully.
-        """
-        if self._ai_client is not None:
-            return self._ai_client
-        if AIAgentClient is None:
-            logger.warning("AIAgentClient not available; AI scoring disabled")
-            return None
-        return AIAgentClient()
 
     async def ai_annotate_score(
         self,
@@ -119,7 +118,7 @@ class ScoreService:
         empty dict on any failure (timeout, non-200, malformed payload, missing
         client). ``similar_leads`` is capped at ``MAX_SIMILAR_LEADS`` items.
         """
-        client = self._get_ai_client()
+        client = self._ai_client
         if client is None:
             return {}
         try:
@@ -128,7 +127,7 @@ class ScoreService:
                 tenant_id=tenant_id,
                 current_score=current_score,
             )
-        except Exception as exc:
+        except (TimeoutError, httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
             logger.warning("AI agent call failed for customer %s: %s", customer_id, exc)
             return {}
 
@@ -146,10 +145,13 @@ class ScoreService:
         for item in similar_leads_raw[:MAX_SIMILAR_LEADS]:
             if not isinstance(item, dict):
                 continue
+            raw_id = item.get("id")
+            if not isinstance(raw_id, int) or raw_id <= 0:
+                continue
             try:
                 parsed.append(
                     SimilarLead(
-                        id=int(item.get("id", 0)),
+                        id=raw_id,
                         score=float(item.get("score", 0.0)),
                         name=item.get("name"),
                     )
@@ -195,6 +197,8 @@ class ScoreService:
                 factor_score = int(score_factors.get(field_name, 0))
                 factor_score = max(0, min(100, factor_score))
                 contributions[field_name] = factor_score
+                # Integer-division: weights are percentages that sum to 100,
+                # so floor division gives an exact integer total.
                 total += factor_score * weight // 100
 
             score = max(0, min(100, total))
@@ -242,6 +246,16 @@ class ScoreService:
         include_ai: bool = True,
     ) -> ScoreResult:
         score_result = await self.calculate_score(customer_id, tenant_id, include_ai=include_ai)
-        if not score_result.top_factors and not score_result.recommendations:
+        # Treat the customer as "never scored" only if the persisted factor
+        # data is absent. top_factors/recommendations are derived views and can
+        # legitimately be empty (e.g. all factor scores == 0).
+        result = await self.session.execute(
+            select(CustomerModel).where(
+                CustomerModel.id == customer_id,
+                CustomerModel.tenant_id == tenant_id,
+            )
+        )
+        customer = result.scalar_one_or_none()
+        if customer is None or not customer.score_factors:
             raise NotFoundException("Score")
         return score_result
