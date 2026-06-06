@@ -19,7 +19,7 @@ from db.models.customer_enrichment import CustomerEnrichmentModel
 from db.repositories import CustomerRepository
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.customer import CustomerStatus
-from pkg.errors.app_exceptions import ForbiddenException, NotFoundException
+from pkg.errors.app_exceptions import ForbiddenException
 from services.customer_service import CustomerService
 from services.lead_routing_service import LeadRoutingService
 from services.score_service import ScoreService
@@ -556,7 +556,11 @@ async def calculate_customer_score(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    """Trigger score calculation for a customer."""
+    """Trigger score calculation for a customer.
+
+    Returns 200 (per the file's convention for action endpoints, not 201).
+    ScoreService is a stateless calculator that uses the session directly.
+    """
     service = ScoreService(session)
     result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id)
     return {
@@ -567,6 +571,7 @@ async def calculate_customer_score(
             "top_factors": result[2],
             "recommendations": result[3],
         },
+        "message": "客户评分计算成功",
     }
 
 
@@ -579,8 +584,6 @@ async def get_customer_score(
     """Get the current score for a customer. Returns 404 if the customer has never been scored."""
     service = ScoreService(session)
     result = await service.get_score(customer_id, tenant_id=ctx.tenant_id)
-    if not result[2] and not result[3]:
-        raise NotFoundException("Score")
     return {
         "success": True,
         "data": {

@@ -82,4 +82,8 @@ class ScoreService:
         return score, tier.value, top_factors, recommendations
 
     async def get_score(self, customer_id: int, tenant_id: int) -> tuple[int, str, list[str], list[str]]:
-        return await self.calculate_score(customer_id, tenant_id)
+        result = await self.calculate_score(customer_id, tenant_id)
+        score, _tier, top_factors, recommendations = result
+        if not top_factors and not recommendations:
+            raise NotFoundException("Score")
+        return result
