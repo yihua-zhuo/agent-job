@@ -285,6 +285,45 @@ async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
     return tenant_id_2
 
 
+@pytest.fixture
+def _seed_customer(async_session, _seed_tenant, tenant_id):
+    """Return a sync callable that returns a coroutine — tests still `await` the result.
+
+    Tests call it as ``await _seed_customer(score=10, tier="A")``; the fixture
+    binds async_session and tenant_id automatically. Pass ``tenant_id=...`` to
+    override (used by cross-tenant isolation tests).
+    """
+    from tests.integration.domain_fixtures.customer import seed_customer
+
+    def _factory(
+        *,
+        tenant_id: int = tenant_id,
+        name_suffix: str | None = None,
+        score: int | None = None,
+        tier: str | None = None,
+        score_factors: dict | None = None,
+    ):
+        return seed_customer(
+            async_session,
+            tenant_id,
+            name_suffix=name_suffix,
+            score=score,
+            tier=tier,
+            score_factors=score_factors,
+        )
+
+    return _factory
+
+
+@pytest_asyncio.fixture
+async def customer_service(async_session):
+    """Wire CustomerService with a real CustomerRepository + session for service-level tests."""
+    from db.repositories.customer import CustomerRepository
+    from services.customer_service import CustomerService
+
+    return CustomerService(CustomerRepository(async_session))
+
+
 # ── Per-file cleanup rule (mandatory) ────────────────────────────────────────────
 # Every integration test file must clean up all created data after its tests
 # complete. This fixture runs once per module (i.e. per test file) as the

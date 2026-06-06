@@ -55,19 +55,7 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
-        op.f("ix_engagement_events_tenant_id"),
-        "engagement_events",
-        ["tenant_id"],
-        unique=False,
-    )
-    op.create_index(
-        op.f("ix_engagement_events_customer_id"),
-        "engagement_events",
-        ["customer_id"],
-        unique=False,
-    )
-    op.create_index(
-        "ix_engagement_events_tenant_customer",
+        "ix_engagement_tenant_customer",
         "engagement_events",
         ["tenant_id", "customer_id"],
         unique=False,
@@ -82,7 +70,5 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_engagement_events_tenant_event_type", table_name="engagement_events")
-    op.drop_index("ix_engagement_events_tenant_customer", table_name="engagement_events")
-    op.drop_index(op.f("ix_engagement_events_customer_id"), table_name="engagement_events")
-    op.drop_index(op.f("ix_engagement_events_tenant_id"), table_name="engagement_events")
+    op.drop_index("ix_engagement_tenant_customer", table_name="engagement_events")
     op.drop_table("engagement_events")

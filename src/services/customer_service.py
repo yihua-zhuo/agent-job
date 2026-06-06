@@ -11,6 +11,14 @@ class CustomerService:
     """Business logic for customers — delegates SQL to CustomerRepository."""
 
     VALID_STATUSES = {status.value for status in CustomerStatus}
+    # Maps the public lead_tier filter values (hot/warm/cold) to the stored
+    # ScoreTier letter values (A/B/C) that the customer.tier column carries.
+    # Tier "D" customers are below the cold threshold and excluded by design.
+    LEAD_TIER_TO_STORED: dict[str, str] = {
+        "hot": "A",
+        "warm": "B",
+        "cold": "C",
+    }
 
     def __init__(self, repository: CustomerRepository) -> None:
         self.repository = repository
@@ -44,15 +52,6 @@ class CustomerService:
             await self._upsert_enrichment(customer.id, tenant_id, data["enrichment_data"])
 
         return customer
-
-    # Maps the public lead_tier filter values (hot/warm/cold) to the stored
-    # ScoreTier letter values (A/B/C) that the customer.tier column carries.
-    # Tier "D" customers are below the cold threshold and excluded by design.
-    LEAD_TIER_TO_STORED: dict[str, str] = {
-        "hot": "A",
-        "warm": "B",
-        "cold": "C",
-    }
 
     async def list_customers(
         self,

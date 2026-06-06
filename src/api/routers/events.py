@@ -4,9 +4,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
+from db.models.customer import CustomerModel
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from services.event_service import EventService
 from services.score_service import ScoreService
@@ -26,7 +28,7 @@ async def create_engagement_event(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    """Record an engagement event and trigger a score recalculation for the customer."""
+    """Record an engagement event, recalculate the customer's score, and persist the result."""
     event_svc = EventService(session)
     score_svc = ScoreService(session)
 
@@ -34,12 +36,27 @@ async def create_engagement_event(
         tenant_id=ctx.tenant_id,
         customer_id=body.customer_id,
         event_type=body.event_type,
-        metadata=body.event_metadata,
+        event_metadata=body.event_metadata,
     )
     result = await score_svc.calculate_score(
         customer_id=body.customer_id,
         tenant_id=ctx.tenant_id,
     )
+    # ScoreService.calculate_score is read-only — persist the recalculated
+    # score/tier back to the customer row so the change survives commit.
+    customer_result = await session.execute(
+        select(CustomerModel).where(
+            and_(
+                CustomerModel.id == body.customer_id,
+                CustomerModel.tenant_id == ctx.tenant_id,
+            )
+        )
+    )
+    customer = customer_result.scalar_one_or_none()
+    if customer is not None:
+        customer.score = result.score
+        customer.tier = result.tier_label
+        await session.flush()
     return {
         "success": True,
         "data": {

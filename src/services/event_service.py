@@ -17,8 +17,6 @@ VALID_EVENT_TYPES = {"email_open", "website_visit"}
 class EventService:
     """Business logic for engagement events — persists EngagementEventModel rows."""
 
-    VALID_EVENT_TYPES = VALID_EVENT_TYPES
-
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
@@ -27,7 +25,7 @@ class EventService:
         tenant_id: int,
         customer_id: int,
         event_type: str,
-        metadata: dict[str, Any] | None = None,
+        event_metadata: dict[str, Any] | None = None,
     ) -> EngagementEventModel:
         """Insert a new engagement event and return the refreshed ORM object.
 
@@ -37,9 +35,12 @@ class EventService:
         commit the session themselves if they need the row visible to
         subsequent reads.
         """
-        if event_type not in self.VALID_EVENT_TYPES:
-            raise ValidationException(f"event_type must be one of: {', '.join(sorted(self.VALID_EVENT_TYPES))}")
+        if event_type not in VALID_EVENT_TYPES:
+            raise ValidationException(f"event_type must be one of: {', '.join(sorted(VALID_EVENT_TYPES))}")
 
+        # Pre-existence check gives a clean 404 (NotFoundException) for unknown
+        # customer_id. The FK constraint would also catch this on INSERT, but
+        # it surfaces as IntegrityError — the explicit SELECT is friendlier.
         customer_exists = await self.session.execute(
             select(CustomerModel.id).where(
                 and_(
@@ -55,7 +56,7 @@ class EventService:
             tenant_id=tenant_id,
             customer_id=customer_id,
             event_type=event_type,
-            event_metadata=metadata or {},
+            event_metadata=event_metadata or {},
         )
         self.session.add(event)
         await self.session.flush()

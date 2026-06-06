@@ -216,7 +216,14 @@ async def list_customers(
     page_size: int = Query(20, ge=1, le=100),
     status: str | None = None,
     owner_id: int | None = Query(None, ge=0),
-    lead_tier: str | None = Query(None, pattern="^(hot|warm|cold)$", description="Filter by lead tier: hot, warm, cold"),
+    lead_tier: str | None = Query(
+        None,
+        pattern="^(hot|warm|cold)$",
+        description=(
+            "Filter by lead tier. Public values map to stored ScoreTier: "
+            "hot→A, warm→B, cold→C (tier D is below cold and excluded by design)."
+        ),
+    ),
     order_by_score: bool = Query(False, description="Auto-rank by score descending"),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
