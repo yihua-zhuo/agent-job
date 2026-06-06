@@ -1,6 +1,6 @@
 {
   "lastChecks": {
-    "cron": 1780712824,
+    "cron": 1780714740,
     "test_count": 1776490320,
     "security_sync": 1779345824
   },
@@ -22,7 +22,9 @@
     "security-hourly": {
       "id": "db67bfcc-5a19-4251-a9e3-1d6b531cf00f",
       "status": "ok",
-      "note": "restored Jun 6"
+      "lastRunStatus": "ok",
+      "lastDelivered": true,
+      "consecutiveErrors": 0
     }
   }
 }
