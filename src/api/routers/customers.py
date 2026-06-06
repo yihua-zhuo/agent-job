@@ -22,6 +22,7 @@ from models.customer import CustomerStatus
 from pkg.errors.app_exceptions import ForbiddenException
 from services.customer_service import CustomerService
 from services.lead_routing_service import LeadRoutingService
+from services.score_service import ScoreService
 
 customers_router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
 CUSTOMER_STATUS_PATTERN = "^(" + "|".join(re.escape(status.value) for status in CustomerStatus) + ")$"
@@ -541,4 +542,54 @@ async def trigger_lead_recycle(
         "success": True,
         "data": {"recycled_ids": recycled},
         "message": f"已回收 {len(recycled)} 个线索",
+    }
+
+
+# ---------------------------------------------------------------------------
+# Customer scoring endpoints (analytics)
+# ---------------------------------------------------------------------------
+
+
+@customers_router.post("/{customer_id}/score")
+async def calculate_customer_score(
+    customer_id: int,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Trigger score calculation for a customer.
+
+    Returns 200 (per the file's convention for action endpoints, not 201).
+    ScoreService is a stateless calculator that uses the session directly.
+    """
+    service = ScoreService(session)
+    result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id)
+    return {
+        "success": True,
+        "data": {
+            "score": result[0],
+            "tier": result[1],
+            "top_factors": result[2],
+            "recommendations": result[3],
+        },
+        "message": "客户评分计算成功",
+    }
+
+
+@customers_router.get("/{customer_id}/score")
+async def get_customer_score(
+    customer_id: int,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    """Get the current score for a customer. Returns 404 if the customer has never been scored."""
+    service = ScoreService(session)
+    result = await service.get_score(customer_id, tenant_id=ctx.tenant_id)
+    return {
+        "success": True,
+        "data": {
+            "score": result[0],
+            "tier": result[1],
+            "top_factors": result[2],
+            "recommendations": result[3],
+        },
     }
