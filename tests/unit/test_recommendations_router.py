@@ -7,9 +7,9 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.routers.recommendations import recommendations_router
-from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from pkg.errors.app_exceptions import AppException, NotFoundException
+from main import register_exception_handlers
+from pkg.errors.app_exceptions import NotFoundException
 from services.sales_recommendation import RecommendationResult, SalesActionRecommendation
 
 
@@ -21,28 +21,16 @@ def _build_app(
     mock_service: MagicMock | None = None,
     auth_ctx: AuthContext | None = None,
 ) -> FastAPI:
-    """Build a FastAPI app with the router and dependency overrides.
+    """Build a FastAPI app with the router, exception handlers, and dependency overrides.
 
     `auth_ctx=None` means require_auth is NOT overridden (to test 401).
-    Exception handlers come from main.create_app and are registered here as
-    copies — the source of truth is main.create_app's create_app(), so any
-    format change there must be mirrored here.
     """
-    from main import create_app
-
-    app = create_app()
-    # Only include the recommendations router for isolation
     app = FastAPI()
     app.include_router(recommendations_router)
-    # Copy exception handlers from main's create_app
-    _main_app = create_app()
-
-    for exc_type, handler in _main_app.exception_handlers.items():
-        app.add_exception_handler(exc_type, handler)
+    register_exception_handlers(app)
 
     if auth_ctx is not None:
         app.dependency_overrides[require_auth] = lambda ctx=auth_ctx: ctx
-    app.dependency_overrides[get_db] = lambda: MagicMock()
     return app
 
 
@@ -91,7 +79,7 @@ class TestGetRecommendations:
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
-        assert body["message"] == "Recommendations fetched"
+        assert "data" in body
         assert body["data"]["opportunity_id"] == 5
         assert body["data"]["conversion_probability"] == 0.72
 

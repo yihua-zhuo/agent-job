@@ -34,6 +34,38 @@ async def lifespan(app: FastAPI):
     logger.info("app_shutdown")
 
 
+def register_exception_handlers(app: FastAPI) -> None:
+    """Register the global exception handlers.
+
+    Extracted from create_app so tests can apply the same handlers without
+    duplicating the JSON envelopes here.
+    """
+
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        logger.error("app_exception", code=exc.code, detail=exc.detail, path=request.url.path)
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
+    @app.exception_handler(HTTPException)
+    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+        """Reshape HTTPException to ErrorEnvelope shape for Swagger consistency."""
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail},
+        )
+
+    @app.exception_handler(Exception)
+    async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+        logger.error("unhandled_exception", type=type(exc).__name__, detail=str(exc))
+        return JSONResponse(
+            status_code=500,
+            content={"success": False, "message": "Internal server error", "code": "INTERNAL_ERROR"},
+        )
+
+
 def create_app() -> FastAPI:
     # Determine OpenAPI availability based on environment
     docs_url = "/docs" if settings.openapi_enabled else None
@@ -68,29 +100,7 @@ def create_app() -> FastAPI:
     )
 
     # ── Global exception handlers ─────────────────────────────────────────
-    @app.exception_handler(AppException)
-    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
-        logger.error("app_exception", code=exc.code, detail=exc.detail, path=request.url.path)
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"success": False, "message": exc.detail, "code": exc.code},
-        )
-
-    @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-        """Reshape HTTPException to ErrorEnvelope shape for Swagger consistency."""
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"success": False, "message": exc.detail},
-        )
-
-    @app.exception_handler(Exception)
-    async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        logger.error("unhandled_exception", type=type(exc).__name__, detail=str(exc))
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": "Internal server error", "code": "INTERNAL_ERROR"},
-        )
+    register_exception_handlers(app)
 
     # ── Routes ─────────────────────────────────────────────────────────────
     for router in iter_routers():

@@ -7,9 +7,10 @@ import hashlib
 import random
 from dataclasses import dataclass, field
 
-from sqlalchemy import text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.opportunity import OpportunityModel
 from pkg.errors.app_exceptions import NotFoundException
 
 
@@ -51,6 +52,15 @@ class SimilarCustomer:
     monthly_revenue: int
     usage_rate: float
     satisfaction_score: float
+
+    def to_dict(self) -> dict:
+        return {
+            "customer_id": self.customer_id,
+            "current_tier": self.current_tier,
+            "monthly_revenue": self.monthly_revenue,
+            "usage_rate": self.usage_rate,
+            "satisfaction_score": self.satisfaction_score,
+        }
 
 
 @dataclass
@@ -126,8 +136,10 @@ class SalesRecommendationService:
     async def _resolve_customer_id(self, opportunity_id: int, tenant_id: int) -> int:
         """通过 DB 查询解析商机关联的 customer_id。如果商机不存在则抛出 NotFoundException。"""
         result = await self.session.execute(
-            text("SELECT customer_id FROM opportunities WHERE id = :id AND tenant_id = :tenant_id"),
-            {"id": opportunity_id, "tenant_id": tenant_id},
+            select(OpportunityModel.customer_id).where(
+                OpportunityModel.id == opportunity_id,
+                OpportunityModel.tenant_id == tenant_id,
+            )
         )
         row = result.first()
         if row is None:
