@@ -7,6 +7,8 @@ can query ``from users`` and filter by tenant_id.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from pkg.errors.app_exceptions import (
@@ -18,8 +20,34 @@ from pkg.errors.app_exceptions import (
 from services.rbac_service import DEFAULT_PERMISSIONS
 from services.role_service import RoleService
 from tests.unit.conftest import make_mock_session
-from tests.unit.domain_handlers.rbac import RBACMockState
+from tests.unit.domain_handlers.rbac import RBACMockState, get_handlers
 from tests.unit.domain_handlers.users import make_user_handler
+
+
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def _seed_role(
+    state: RBACMockState,
+    role_id: int,
+    *,
+    tenant_id: int,
+    name: str,
+    display_name: str | None = None,
+    is_system: bool = False,
+    priority: int = 0,
+) -> None:
+    state.roles[role_id] = {
+        "id": role_id,
+        "tenant_id": tenant_id,
+        "name": name,
+        "display_name": display_name or name,
+        "description": "",
+        "is_system": is_system,
+        "priority": priority,
+        "created_at": _now(),
+    }
 
 
 @pytest.fixture
@@ -29,8 +57,6 @@ def state() -> RBACMockState:
 
 @pytest.fixture
 def mock_db_session(state: RBACMockState):
-    from tests.unit.domain_handlers.rbac import get_handlers
-
     return make_mock_session(
         [*get_handlers(state), make_user_handler(state)],
         state=state,
@@ -44,44 +70,26 @@ def role_service(mock_db_session):
 
 class TestListRoles:
     async def test_list_roles_returns_tenant_and_system_roles(self, role_service, state):
-        from db.models.rbac import RoleModel
-
-        custom = RoleModel(
-            id=900,
+        _seed_role(
+            state,
+            900,
             tenant_id=1,
             name="custom_tenant_role",
             display_name="Custom Tenant Role",
-            description="",
-            is_system=False,
-            priority=0,
-            created_at=__import__("datetime").datetime.now(__import__("datetime").UTC),
         )
-        state.roles[custom.id] = {
-            "id": custom.id,
-            "tenant_id": custom.tenant_id,
-            "name": custom.name,
-            "display_name": custom.display_name,
-            "description": custom.description,
-            "is_system": custom.is_system,
-            "priority": custom.priority,
-            "created_at": custom.created_at,
-        }
         roles = await role_service.list_roles(tenant_id=1)
         names = {r.name for r in roles}
         assert "admin" in names
         assert "custom_tenant_role" in names
 
     async def test_list_roles_excludes_other_tenant_roles(self, role_service, state):
-        state.roles[901] = {
-            "id": 901,
-            "tenant_id": 2,
-            "name": "tenant2_only",
-            "display_name": "Tenant 2 Only",
-            "description": "",
-            "is_system": False,
-            "priority": 0,
-            "created_at": __import__("datetime").datetime.now(__import__("datetime").UTC),
-        }
+        _seed_role(
+            state,
+            901,
+            tenant_id=2,
+            name="tenant2_only",
+            display_name="Tenant 2 Only",
+        )
         roles = await role_service.list_roles(tenant_id=1)
         names = {r.name for r in roles}
         assert "tenant2_only" not in names
@@ -140,21 +148,18 @@ class TestCreateCustomRole:
 class TestGetRolePermissions:
     async def test_get_role_permissions_returns_name_list(self, role_service, state):
         custom_id = 960
-        state.roles[custom_id] = {
-            "id": custom_id,
-            "tenant_id": 1,
-            "name": "perms_test",
-            "display_name": "Perms Test",
-            "description": "",
-            "is_system": False,
-            "priority": 0,
-            "created_at": __import__("datetime").datetime.now(__import__("datetime").UTC),
-        }
-        state.role_permissions.append(
-            {"id": 10, "role_id": custom_id, "permission_id": 2}
+        _seed_role(
+            state,
+            custom_id,
+            tenant_id=1,
+            name="perms_test",
+            display_name="Perms Test",
         )
         state.role_permissions.append(
-            {"id": 11, "role_id": custom_id, "permission_id": 6}
+            {"id": 9001, "role_id": custom_id, "permission_id": 2}
+        )
+        state.role_permissions.append(
+            {"id": 9002, "role_id": custom_id, "permission_id": 6}
         )
         perms = await role_service.get_role_permissions(role_id=custom_id, tenant_id=1)
         assert isinstance(perms, list)
@@ -178,23 +183,22 @@ class TestUpdateRolePermissions:
 
     async def test_update_role_permissions_replaces_existing_links(self, role_service, state):
         custom_id = 950
-        state.roles[custom_id] = {
-            "id": custom_id,
-            "tenant_id": 1,
-            "name": "replaceable",
-            "display_name": "Replaceable",
-            "description": "",
-            "is_system": False,
-            "priority": 0,
-            "created_at": __import__("datetime").datetime.now(__import__("datetime").UTC),
-        }
+        _seed_role(
+            state,
+            custom_id,
+            tenant_id=1,
+            name="replaceable",
+            display_name="Replaceable",
+        )
+        # Use reserved id range (>=9000) to avoid colliding with
+        # state.role_permissions_next_id auto-increment.
         state.role_permissions.append(
-            {"id": 1, "role_id": custom_id, "permission_id": 1}
+            {"id": 9003, "role_id": custom_id, "permission_id": 1}
         )
         state.role_permissions.append(
-            {"id": 2, "role_id": custom_id, "permission_id": 2}
+            {"id": 9004, "role_id": custom_id, "permission_id": 2}
         )
-        before = {rp["id"] for rp in state.role_permissions if rp["role_id"] == custom_id}
+        before = [rp for rp in state.role_permissions if rp["role_id"] == custom_id]
         assert len(before) == 2
 
         await role_service.update_role_permissions(
@@ -210,16 +214,13 @@ class TestUpdateRolePermissions:
         self, role_service, state
     ):
         custom_id = 951
-        state.roles[custom_id] = {
-            "id": custom_id,
-            "tenant_id": 1,
-            "name": "custom_for_val",
-            "display_name": "Custom For Val",
-            "description": "",
-            "is_system": False,
-            "priority": 0,
-            "created_at": __import__("datetime").datetime.now(__import__("datetime").UTC),
-        }
+        _seed_role(
+            state,
+            custom_id,
+            tenant_id=1,
+            name="custom_for_val",
+            display_name="Custom For Val",
+        )
         with pytest.raises(ValidationException):
             await role_service.update_role_permissions(
                 role_id=custom_id,

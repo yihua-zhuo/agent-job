@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import os
 
-import asyncpg
 import pytest
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -32,6 +31,10 @@ async def _seed_rbac_data():
     This function inserts the seed data into already-existing tables.
 
     Uses asyncpg (async) so it is safe to call inside async test fixtures.
+
+    asyncpg is imported lazily here (not at module top) so the rest of the
+    file can be imported in environments where asyncpg is not installed
+    (e.g. type-checker only runs).
     """
     db_url = os.environ.get("DATABASE_URL")
     if not db_url:
@@ -40,6 +43,8 @@ async def _seed_rbac_data():
             "Example: DATABASE_URL='postgresql+asyncpg://user:pass@host:5432/db' pytest tests/integration/ -m integration -v"
         )
     # Strip async driver prefix so asyncpg gets a valid postgresql:// DSN
+    import asyncpg
+
     sync_url = db_url.replace("postgresql+asyncpg://", "postgresql://", 1)
     sync_url = sync_url.replace("postgresql+psycopg2://", "postgresql://", 1)
 
@@ -239,7 +244,8 @@ class TestRBACIntegration:
         assert result.get("already_assigned") is not True
 
         # Verify tenant_id on the user_roles row (not just the role object)
-        from sqlalchemy import select, and_
+        from sqlalchemy import and_, select
+
         from db.models.rbac import UserRoleModel
         result = await async_session.execute(
             select(UserRoleModel).where(
@@ -273,7 +279,8 @@ class TestRBACIntegration:
         result = await svc.assign_role_to_user(user_id=user.id, role_id=admin_role.id, tenant_id=tenant_id)
         assert result.get("already_assigned") is True
         # Verify tenant_id on the user_roles row
-        from sqlalchemy import select, and_
+        from sqlalchemy import and_, select
+
         from db.models.rbac import UserRoleModel
         result = await async_session.execute(
             select(UserRoleModel).where(
@@ -423,6 +430,21 @@ class TestRoleManagementAPI:
         names = {r["name"] for r in body["data"]["items"]}
         assert "admin" in names
 
+    async def test_list_roles_pagination_envelope(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        """Pagination: page=1 page_size=2 returns at most 2 items with total fields populated."""
+        resp = await api_client.get("/api/v1/rbac/mgmt/roles?page=1&page_size=2")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        data = body["data"]
+        assert data["page"] == 1
+        assert data["page_size"] == 2
+        assert data["total"] >= 5
+        assert data["total_pages"] >= 1
+        assert len(data["items"]) <= 2
+
     async def test_create_role_then_list_includes_it(
         self, api_client: AsyncClient, async_session: AsyncSession, db_schema
     ):
@@ -434,6 +456,8 @@ class TestRoleManagementAPI:
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["name"] == "custom_support"
+        assert body["data"]["tenant_id"] is not None
+        assert "admin" not in body["data"] or body["data"]["is_system"] is False
 
         list_resp = await api_client.get("/api/v1/rbac/mgmt/roles")
         names = {r["name"] for r in list_resp.json()["data"]["items"]}
@@ -472,6 +496,21 @@ class TestRoleManagementAPI:
         assert "ticket:read" in perms
         assert "customer:read" not in perms
 
+    async def test_update_role_permissions_empty_list_returns_422(
+        self, api_client: AsyncClient, async_session: AsyncSession, db_schema
+    ):
+        create_resp = await api_client.post(
+            "/api/v1/rbac/mgmt/roles",
+            json={"name": "upd_empty", "permissions": ["customer:read"]},
+        )
+        assert create_resp.status_code == 201
+        role_id = create_resp.json()["data"]["id"]
+        resp = await api_client.put(
+            f"/api/v1/rbac/mgmt/roles/{role_id}/permissions",
+            json={"permissions": []},
+        )
+        assert resp.status_code == 422
+
     async def test_update_system_role_permissions_returns_403(
         self, api_client: AsyncClient, async_session: AsyncSession, db_schema
     ):
@@ -509,6 +548,20 @@ class TestRoleManagementAPI:
         body = resp.json()
         assert body["success"] is True
         assert body["data"]["role_id"] == admin_role.id
+        assert body["data"]["user_id"] == user.id
+        # First call is not idempotent, so already_assigned should be False / unset
+        assert body["data"].get("already_assigned") is not True
+        assert body["message"] == "角色分配成功"
+
+        # Second call must return already_assigned=True and a different message
+        resp2 = await api_client.post(
+            f"/api/v1/rbac/mgmt/users/{user.id}/role",
+            json={"role_id": admin_role.id},
+        )
+        assert resp2.status_code == 200
+        body2 = resp2.json()
+        assert body2["data"].get("already_assigned") is True
+        assert body2["message"] == "角色已分配"
 
     async def test_list_permissions_returns_all_system_pairs(
         self, api_client: AsyncClient, async_session: AsyncSession, db_schema
@@ -534,15 +587,28 @@ class TestRoleManagementAPI:
             json={"name": "tenant1_only_role", "permissions": ["customer:read"]},
         )
         assert create_resp.status_code == 201
-        custom_name = create_resp.json()["data"]["name"]
+        custom = create_resp.json()["data"]
+        custom_name = custom["name"]
+        # The response must carry the tenant_id so callers can confirm the
+        # role belongs to tenant 1 (not just rely on absence in tenant 2).
+        assert custom["tenant_id"] != 0
+        assert custom["tenant_id"] is not None
 
         list1 = await api_client.get("/api/v1/rbac/mgmt/roles")
-        names1 = {r["name"] for r in list1.json()["data"]["items"]}
+        items1 = list1.json()["data"]["items"]
+        names1 = {r["name"] for r in items1}
         assert custom_name in names1
+        # Verify tenant_id on the listed custom role entry
+        role1 = next(r for r in items1 if r["name"] == custom_name)
+        assert role1["tenant_id"] == custom["tenant_id"]
+        assert role1["is_system"] is False
 
         list2 = await api_client_tenant_2.get("/api/v1/rbac/mgmt/roles")
         names2 = {r["name"] for r in list2.json()["data"]["items"]}
         assert custom_name not in names2
+        # Tenant 2 should still see the 5 system roles
+        assert "admin" in names2
+        assert "viewer" in names2
 
     async def test_get_role_permissions_for_custom_role(
         self, api_client: AsyncClient, async_session: AsyncSession, db_schema
@@ -571,3 +637,68 @@ class TestRoleManagementAPI:
 
         second = await api_client.post("/api/v1/rbac/mgmt/roles", json=body)
         assert second.status_code == 409
+
+    async def test_create_role_denies_non_admin(
+        self, db_schema, async_session: AsyncSession
+    ):
+        """A JWT with no `admin` role must be denied (403) for write endpoints.
+
+        Constructs a token without `roles: ["admin"]` to verify the gate.
+        """
+        from datetime import UTC, datetime, timedelta
+
+        import jwt as _jwt
+        from httpx import ASGITransport
+        from httpx import AsyncClient as _AC
+
+        from db.connection import get_db
+        from db.models.tenant import TenantModel
+        from main import app as _app
+        from services.user_service import UserService
+
+        tid = 42_000_001
+        result = await async_session.execute(select(TenantModel).where(TenantModel.id == tid))
+        if result.scalar_one_or_none() is None:
+            async_session.add(TenantModel(id=tid, name="NoAdmin Tenant", plan="free", status="active"))
+            await async_session.flush()
+
+        user_svc = UserService(async_session)
+        existing = await user_svc.get_user_by_username(tid, "nonadmin")
+        if existing is None:
+            await user_svc.create_user(
+                username="nonadmin",
+                email="nonadmin@example.com",
+                password="TestPass123!",
+                role="viewer",
+                tenant_id=tid,
+            )
+
+        now = datetime.now(UTC)
+        token = _jwt.encode(
+            {
+                "user_id": 1,
+                "username": "nonadmin",
+                "role": "viewer",
+                "roles": ["viewer"],
+                "iat": now,
+                "exp": now + timedelta(hours=1),
+                "tenant_id": tid,
+            },
+            os.environ["JWT_SECRET_KEY"],
+            algorithm="HS256",
+        )
+
+        async def _override_get_db():
+            yield async_session
+
+        _app.dependency_overrides[get_db] = _override_get_db
+        try:
+            transport = ASGITransport(app=_app)
+            async with _AC(transport=transport, base_url="http://test", headers={"Authorization": f"Bearer {token}"}) as ac:
+                resp = await ac.post(
+                    "/api/v1/rbac/mgmt/roles",
+                    json={"name": "viewer_attempt", "permissions": ["customer:read"]},
+                )
+                assert resp.status_code == 403, resp.text
+        finally:
+            _app.dependency_overrides.pop(get_db, None)
