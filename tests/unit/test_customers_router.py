@@ -509,7 +509,7 @@ class TestScoreEndpoints:
     def test_post_score_returns_data(self, client_with_score_service):
         client, _cust, score_svc = client_with_score_service
         score_svc.calculate_score = AsyncMock(
-            return_value=(85, "B", ["engagement_level"], ["Increase touchpoints with targeted campaigns"])
+            return_value=(85, "B", ["engagement_level"], ["Increase touchpoints with targeted campaigns"], [])
         )
         resp = client.post("/api/v1/customers/1/score")
         assert resp.status_code == 200
@@ -520,12 +520,12 @@ class TestScoreEndpoints:
         assert body["data"]["top_factors"] == ["engagement_level"]
         assert body["data"]["recommendations"] == ["Increase touchpoints with targeted campaigns"]
         assert "message" in body
-        score_svc.calculate_score.assert_called_once_with(1, tenant_id=1)
+        score_svc.calculate_score.assert_called_once_with(1, tenant_id=1, include_ai=True)
 
     def test_get_score_returns_data_with_factors(self, client_with_score_service):
         client, _cust, score_svc = client_with_score_service
         score_svc.get_score = AsyncMock(
-            return_value=(75, "B", ["deal_velocity"], ["Accelerate pipeline with limited-time offers"])
+            return_value=(75, "B", ["deal_velocity"], ["Accelerate pipeline with limited-time offers"], [])
         )
         resp = client.get("/api/v1/customers/1/score")
         assert resp.status_code == 200

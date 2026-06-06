@@ -553,6 +553,7 @@ async def trigger_lead_recycle(
 @customers_router.post("/{customer_id}/score")
 async def calculate_customer_score(
     customer_id: int,
+    include_ai: bool = Query(True, description="Call AI agent for similar_leads enrichment"),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
@@ -560,17 +561,25 @@ async def calculate_customer_score(
 
     Returns 200 (per the file's convention for action endpoints, not 201).
     ScoreService is a stateless calculator that uses the session directly.
+
+    When ``include_ai`` is true (default) the AI agent is called to enrich the
+    response with ``similar_leads``. The AI call degrades gracefully — if the
+    agent is unreachable, the static score is still returned and
+    ``similar_leads`` is omitted from the response.
     """
     service = ScoreService(session)
-    result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id)
+    result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
+    data: dict = {
+        "score": result[0],
+        "tier": result[1],
+        "top_factors": result[2],
+        "recommendations": result[3],
+    }
+    if result[4]:
+        data["similar_leads"] = result[4]
     return {
         "success": True,
-        "data": {
-            "score": result[0],
-            "tier": result[1],
-            "top_factors": result[2],
-            "recommendations": result[3],
-        },
+        "data": data,
         "message": "客户评分计算成功",
     }
 
@@ -578,18 +587,22 @@ async def calculate_customer_score(
 @customers_router.get("/{customer_id}/score")
 async def get_customer_score(
     customer_id: int,
+    include_ai: bool = Query(True, description="Call AI agent for similar_leads enrichment"),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     """Get the current score for a customer. Returns 404 if the customer has never been scored."""
     service = ScoreService(session)
-    result = await service.get_score(customer_id, tenant_id=ctx.tenant_id)
+    result = await service.get_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
+    data: dict = {
+        "score": result[0],
+        "tier": result[1],
+        "top_factors": result[2],
+        "recommendations": result[3],
+    }
+    if result[4]:
+        data["similar_leads"] = result[4]
     return {
         "success": True,
-        "data": {
-            "score": result[0],
-            "tier": result[1],
-            "top_factors": result[2],
-            "recommendations": result[3],
-        },
+        "data": data,
     }

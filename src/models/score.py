@@ -49,6 +49,7 @@ class ScoreResponse(BaseModel):
     score_factors: dict | None = None
     top_factors: list | None = None
     recommendations: list | None = None
+    similar_leads: list[dict[str, Any]] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         """Render as a plain dict."""
@@ -58,4 +59,5 @@ class ScoreResponse(BaseModel):
             "score_factors": self.score_factors,
             "top_factors": self.top_factors,
             "recommendations": self.recommendations,
+            "similar_leads": self.similar_leads,
         }

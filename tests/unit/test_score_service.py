@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
 
 from models.score import ScoreTier
@@ -125,7 +127,7 @@ def tier_service(request):
 @pytest.mark.asyncio
 async def test_calculate_score_tier(tier_service):
     svc, expected_tier, score_bound = tier_service
-    score, tier, factors, recs = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    score, tier, factors, recs, similar_leads = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
     if isinstance(expected_tier, tuple):
         assert tier in expected_tier
     else:
@@ -182,7 +184,7 @@ async def test_top_factors_excludes_zero():
         },
     )
     svc = ScoreService(_make_session(state))
-    _, _, factors, _ = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    _, _, factors, _, _ = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
     assert "deal_velocity" not in factors
     assert "payment_history" not in factors
     assert all(f not in ("deal_velocity", "payment_history") for f in factors)
@@ -202,7 +204,120 @@ async def test_recommendations_match_top_factors():
         },
     )
     svc = ScoreService(_make_session(state))
-    _, _, factors, recs = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    _, _, factors, recs, _ = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
     assert len(factors) == len(recs)
     for f, r in zip(factors, recs, strict=True):
         assert r == FIELD_RECOMMENDATIONS[f]
+
+
+# ---------------------------------------------------------------------------
+# AI agent branch tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_calculate_score_ai_branch():
+    """When AIAgentClient returns data, similar_leads and recommendations are enriched."""
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 70,
+            "payment_history": 65,
+            "product_adoption": 60,
+        },
+    )
+    svc = ScoreService(_make_session(state))
+
+    mock_agent_instance = AsyncMock()
+    mock_agent_instance.analyze_factors = AsyncMock(
+        return_value={
+            "similar_leads": [{"id": 42, "score": 0.9}],
+            "recommendations": ["Expand to segment B"],
+        }
+    )
+    mock_agent_class = MagicMock(return_value=mock_agent_instance)
+
+    with patch("services.score_service.AIAgentClient", mock_agent_class):
+        score, tier, factors, recs, similar_leads = await svc.calculate_score(
+            CUSTOMER_ID, TENANT_ID, include_ai=True
+        )
+
+    assert similar_leads == [{"id": 42, "score": 0.9}]
+    assert recs == ["Expand to segment B"]
+    assert isinstance(score, int)
+    assert tier in ("A", "B", "C", "D")
+    assert factors
+    mock_agent_class.assert_called_once()
+    mock_agent_instance.analyze_factors.assert_awaited_once_with(
+        entity_id=CUSTOMER_ID,
+        tenant_id=TENANT_ID,
+        current_score=score,
+    )
+
+
+@pytest.mark.asyncio
+async def test_calculate_score_ai_fallback():
+    """When AIAgentClient raises, scoring degrades gracefully (similar_leads == [])."""
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 70,
+            "payment_history": 65,
+            "product_adoption": 60,
+        },
+    )
+    svc = ScoreService(_make_session(state))
+
+    mock_agent_instance = AsyncMock()
+    mock_agent_instance.analyze_factors = AsyncMock(side_effect=Exception("agent down"))
+    mock_agent_class = MagicMock(return_value=mock_agent_instance)
+
+    with patch("services.score_service.AIAgentClient", mock_agent_class):
+        score, tier, factors, recs, similar_leads = await svc.calculate_score(
+            CUSTOMER_ID, TENANT_ID, include_ai=True
+        )
+
+    assert similar_leads == []
+    assert isinstance(score, int)
+    assert score > 0
+    assert tier in ("A", "B", "C", "D")
+    assert factors
+    assert recs
+    mock_agent_class.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_calculate_score_include_ai_false_skips_agent():
+    """When include_ai=False, the AI client is never instantiated."""
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 70,
+            "payment_history": 65,
+            "product_adoption": 60,
+        },
+    )
+    svc = ScoreService(_make_session(state))
+
+    mock_agent_class = MagicMock(return_value=AsyncMock())
+
+    with patch("services.score_service.AIAgentClient", mock_agent_class):
+        score, tier, factors, recs, similar_leads = await svc.calculate_score(
+            CUSTOMER_ID, TENANT_ID, include_ai=False
+        )
+
+    assert similar_leads == []
+    assert isinstance(score, int)
+    assert tier in ("A", "B", "C", "D")
+    assert factors
+    assert recs
+    mock_agent_class.assert_not_called()
