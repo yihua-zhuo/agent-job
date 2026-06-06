@@ -5,21 +5,21 @@ upstream scoring pipeline), sums each factor's contribution, clamps to 0–100, 
 into a tier (A/B/C/D), surfaces the top contributing factors, and returns actionable
 recommendations. No AI / LLM calls are made in this module.
 
-When ``include_ai`` is ``True`` (default), ``calculate_score`` also calls
+When ``include_ai`` is ``True``, ``calculate_score`` also calls
 ``AIAgentClient.analyze_factors`` to enrich the result with ``similar_leads`` and
-AI-generated recommendations. The AI call is wrapped in a try/except so that
-agent unavailability or malformed payloads degrade gracefully to a static score
-with an empty ``similar_leads`` list — the static score is never lost.
+AI-generated recommendations. The default is ``False`` so callers (especially
+routers and workers) must opt in to the AI dependency. The AI call is wrapped
+in a try/except so that agent unavailability or malformed payloads degrade
+gracefully to a static score with an empty ``similar_leads`` list — the static
+score is never lost.
 """
 
 from __future__ import annotations
 
-import json
 import logging
 from dataclasses import dataclass, field
 from typing import Protocol
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -109,6 +109,11 @@ class ScoreService:
         Returns a dict with ``similar_leads`` and ``recommendations`` keys, or an
         empty dict on any failure (timeout, non-200, malformed payload, missing
         client). ``similar_leads`` is capped at ``MAX_SIMILAR_LEADS`` items.
+
+        Sentinel: ``recommendations`` is ``None`` when the AI did not return a
+        recommendations key (or returned a non-list), and an empty list ``[]``
+        when the AI explicitly returned an empty list. The caller distinguishes
+        "AI absent" from "AI had nothing to suggest".
         """
         client = self._ai_client
         if client is None:
@@ -119,7 +124,7 @@ class ScoreService:
                 tenant_id=tenant_id,
                 current_score=current_score,
             )
-        except (TimeoutError, httpx.HTTPError, json.JSONDecodeError) as exc:
+        except Exception as exc:
             logger.warning("AI agent call failed for customer %s: %s", customer_id, exc)
             return {}
 
@@ -127,11 +132,16 @@ class ScoreService:
             return {}
 
         similar_leads_raw = result.get("similar_leads") or []
-        recommendations = result.get("recommendations") or []
         if not isinstance(similar_leads_raw, list):
             similar_leads_raw = []
-        if not isinstance(recommendations, list):
-            recommendations = []
+
+        # Distinguish key-absent/non-list (None sentinel) from empty list
+        # (explicitly empty from the AI).
+        raw_recs = result.get("recommendations")
+        if raw_recs is not None and not isinstance(raw_recs, list):
+            recommendations: list | None = None
+        else:
+            recommendations = raw_recs
 
         parsed: list[SimilarLead] = []
         for item in similar_leads_raw[:MAX_SIMILAR_LEADS]:
@@ -160,7 +170,7 @@ class ScoreService:
         self,
         customer_id: int,
         tenant_id: int,
-        include_ai: bool = True,
+        include_ai: bool = False,
     ) -> ScoreResult:
         result = await self.session.execute(
             select(CustomerModel).where(
@@ -214,14 +224,18 @@ class ScoreService:
             ai_similar = ai_data.get("similar_leads") or []
             if ai_similar:
                 similar_leads = ai_similar
-            ai_recs = ai_data.get("recommendations") or []
-            if ai_recs:
+            # Sentinel: ``None`` means the AI call failed or the key was
+            # missing/non-list — keep the static recommendations.
+            # A non-empty list is authoritative; an empty list means
+            # "AI ran successfully with no recs" — static recs still apply.
+            ai_recs_raw = ai_data.get("recommendations")
+            if isinstance(ai_recs_raw, list) and ai_recs_raw:
                 # AI recommendations are authoritative when present;
                 # static FIELD_RECOMMENDATIONS are the fallback when AI is
                 # absent or returns nothing. Merge: AI first, static fills gaps.
                 static_keys = [f for f in top_factors if f in FIELD_RECOMMENDATIONS]
                 static_recs = [FIELD_RECOMMENDATIONS[f] for f in static_keys]
-                merged = list(ai_recs)
+                merged = list(ai_recs_raw)
                 for rec in static_recs:
                     if rec not in merged:
                         merged.append(rec)
@@ -240,7 +254,7 @@ class ScoreService:
         self,
         customer_id: int,
         tenant_id: int,
-        include_ai: bool = True,
+        include_ai: bool = False,
     ) -> ScoreResult:
         # Fail fast: 404s for unscored/missing customers must never trigger
         # the AI dependency. The persisted factor check runs before any

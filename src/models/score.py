@@ -75,9 +75,9 @@ class ScoreResponse(BaseModel):
 
     score: int | None = None
     tier: str | None = None
-    score_factors: dict | None = None
-    top_factors: list | None = None
-    recommendations: list | None = None
+    score_factors: dict[str, int] | None = None
+    top_factors: list[str] | None = None
+    recommendations: list[str] | None = None
     similar_leads: list[SimilarLead] | None = None
 
     @classmethod
@@ -100,8 +100,9 @@ class ScoreResponse(BaseModel):
     def to_dict(self) -> dict[str, Any]:
         """Render as a plain dict.
 
-        All fields are always present (even when None) for a consistent
-        response shape, except ``similar_leads`` which is conditionally omitted
+        ``score``, ``tier``, ``score_factors``, ``top_factors``, and
+        ``recommendations`` are always present (even when None) for a
+        consistent response shape. ``similar_leads`` is conditionally omitted
         when ``None`` so callers can distinguish "no enrichment" from an
         explicit empty list.
         """

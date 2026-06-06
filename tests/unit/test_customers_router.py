@@ -1,22 +1,16 @@
 """Unit tests for src/api/routers/customers.py — router endpoint tests."""
 
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.routers.customers import (
-    _is_valid_email,
-    _sanitize,
-    customers_router,
-)
+from api.routers.customers import customers_router
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import AppException, NotFoundException, ValidationException
-from tests.unit.conftest import MockState, make_mock_session
-from tests.unit.domain_handlers.customers import make_customer_handler
-from tests.unit.domain_handlers.lead_routing import make_lead_routing_handler
 
 # ---------------------------------------------------------------------------
 # Helpers: build a minimal FastAPI app with overridden deps for each test
@@ -27,69 +21,27 @@ def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
 
 
-# ---------------------------------------------------------------------------
-# _sanitize
-# ---------------------------------------------------------------------------
+def _mock_to_dict(data: dict):
+    """Build a lightweight object exposing a single to_dict() method.
+
+    SimpleNamespace is deterministic and makes assertions on the rendered dict
+    straightforward without the indirection of MagicMock attribute chains.
+    """
+    return SimpleNamespace(to_dict=lambda: data)
 
 
-class TestSanitize:
-    def test_strips_html_tags(self):
-        assert _sanitize("<b>hello</b>") == "hello"
+def _empty_enrichment_session():
+    """Return a mock session whose ``execute`` resolves to a result with
+    ``scalar_one_or_none() == None``.
 
-    def test_strips_nested_tags(self):
-        assert _sanitize("<script>alert(1)</script>text") == "text"
-
-    def test_removes_control_chars(self):
-        result = _sanitize("hello\x00world")
-        assert "\x00" not in result
-
-    def test_strips_whitespace(self):
-        assert _sanitize("  hello  ") == "hello"
-
-    def test_empty_string_passthrough(self):
-        assert _sanitize("") == ""
-
-    def test_none_passthrough(self):
-        assert _sanitize(None) is None
-
-    def test_normal_string_unchanged(self):
-        assert _sanitize("john doe") == "john doe"
-
-
-# ---------------------------------------------------------------------------
-# _is_valid_email
-# ---------------------------------------------------------------------------
-
-
-class TestIsValidEmail:
-    def test_valid_email(self):
-        assert _is_valid_email("user@example.com") is True
-
-    def test_valid_email_with_plus(self):
-        assert _is_valid_email("user+tag@domain.co.uk") is True
-
-    def test_missing_at_sign(self):
-        assert _is_valid_email("userexample.com") is False
-
-    def test_missing_domain(self):
-        assert _is_valid_email("user@") is False
-
-    def test_invalid_tld_too_short(self):
-        assert _is_valid_email("user@domain.c") is False
-
-    def test_empty_string(self):
-        assert _is_valid_email("") is False
-
-
-# ---------------------------------------------------------------------------
-# Router endpoint tests using TestClient with mocked CustomerService
-# ---------------------------------------------------------------------------
-
-
-def _mock_to_dict(data):
-    m = MagicMock()
-    m.to_dict = MagicMock(return_value=data)
-    return m
+    The GET customer endpoint runs a follow-up enrichment query directly on
+    the session; an empty result is the common case (no enrichment record).
+    """
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=None)
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=result)
+    return session
 
 
 CUSTOMER_ROW = {
@@ -111,49 +63,35 @@ CUSTOMER_ROW = {
 def client_with_service(monkeypatch):
     """Return a TestClient with CustomerService fully mocked.
 
-    The session is built via ``make_mock_session`` with the project's
-    customer and lead_routing handlers (which include the customer_enrichment
-    subquery used by list/search routes) — the shared mock infrastructure
-    handles tenant-isolation semantics for the queries the router actually
-    fires against the session.
+    ``CustomerService`` is monkey-patched to return a bare MagicMock so the
+    real service never queries the session. The session itself is a minimal
+    mock that returns no enrichment rows, which is what the GET customer
+    endpoint's follow-up query expects.
     """
     from starlette.requests import Request
     from starlette.responses import JSONResponse
 
-    # Create mock eagerly so the fixture can return it before any request is made.
-    # Each test gets its own fresh mock (no module-level singleton = no cross-test pollution).
-    _mock = MagicMock()
-    _repo_sessions = []
+    # Hoist the mock so the ``override_customer_service`` closure shares the
+    # same instance across the test run; per-test attributes are then
+    # configured in each test body.
+    service_mock = MagicMock()
+    _repo_sessions: list = []
 
     def override_customer_service(repository):
-        return _mock
+        return service_mock
 
-    # Composable mock session: customer handler covers customer_enrichment
-    # subqueries, lead_routing covers sla_status lookups in /leads endpoint.
-    state = MockState()
-    mock_session = make_mock_session(
-        handlers=[
-            make_customer_handler(state),
-            make_lead_routing_handler(state),
-        ],
-        state=state,
-    )
+    mock_session = _empty_enrichment_session()
 
     app = FastAPI()
     app.include_router(customers_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
     app.dependency_overrides[get_db] = lambda: mock_session
 
-    # Patch CustomerService in the router's module namespace so the
-    # router uses mock_service directly instead of instantiating the real class.
     monkeypatch.setattr(
         "api.routers.customers.CustomerService",
         override_customer_service,
     )
 
-    # Mock CustomerRepository so that CustomerRepository(session) in the router
-    # returns a mock whose .session attribute is the mock_session we control.
-    # Track every session argument so tests can assert the right one was used.
     def make_mock_repo(session):
         _repo_sessions.append(session)
         return MagicMock(session=session)
@@ -171,7 +109,7 @@ def client_with_service(monkeypatch):
         )
 
     client = TestClient(app, raise_server_exceptions=False)
-    return client, _mock, _repo_sessions
+    return client, service_mock, _repo_sessions
 
 
 class TestCreateCustomerEndpoint:

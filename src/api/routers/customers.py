@@ -551,7 +551,7 @@ async def trigger_lead_recycle(
 # ---------------------------------------------------------------------------
 
 
-@customers_router.post("/{customer_id}/score")
+@customers_router.post("/{customer_id}/score", status_code=200)
 async def calculate_customer_score(
     customer_id: int,
     include_ai: bool = Query(
@@ -567,7 +567,6 @@ async def calculate_customer_score(
 ):
     """Trigger score calculation for a customer.
 
-    Returns 200 (per the file's convention for action endpoints, not 201).
     ScoreService is a stateless calculator that uses the session directly.
 
     When ``include_ai`` is true the AI agent is called to enrich the response
