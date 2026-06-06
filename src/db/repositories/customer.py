@@ -42,24 +42,35 @@ class CustomerRepository(BaseRepository):
         page_size: int = 20,
         status: str | None = None,
         owner_id: int | None = None,
+        lead_tier: str | None = None,
+        order_by_score: bool = False,
     ) -> tuple[list[CustomerModel], int]:
-        """List customers for tenant with optional status / owner filters."""
+        """List customers for tenant with optional status / owner / tier filters."""
         conditions = [CustomerModel.tenant_id == tenant_id]
         if status:
             conditions.append(CustomerModel.status == status)
         if owner_id is not None:
             conditions.append(CustomerModel.owner_id == owner_id)
+        if lead_tier is not None:
+            conditions.append(CustomerModel.tier == lead_tier)
 
         count_result = await self.session.execute(select(func.count(CustomerModel.id)).where(and_(*conditions)))
         total = count_result.scalar() or 0
 
         offset = (page - 1) * page_size
+        if order_by_score:
+            order_clauses = (
+                func.coalesce(CustomerModel.score, 0).desc(),
+                CustomerModel.created_at.desc(),
+                CustomerModel.id.desc(),
+            )
+        else:
+            order_clauses = (
+                CustomerModel.created_at.desc(),
+                CustomerModel.id.desc(),
+            )
         result = await self.session.execute(
-            select(CustomerModel)
-            .where(and_(*conditions))
-            .order_by(CustomerModel.created_at.desc())
-            .offset(offset)
-            .limit(page_size)
+            select(CustomerModel).where(and_(*conditions)).order_by(*order_clauses).offset(offset).limit(page_size)
         )
         return result.scalars().all(), total
 
