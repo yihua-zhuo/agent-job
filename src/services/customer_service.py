@@ -45,6 +45,15 @@ class CustomerService:
 
         return customer
 
+    # Maps the public lead_tier filter values (hot/warm/cold) to the stored
+    # ScoreTier letter values (A/B/C) that the customer.tier column carries.
+    # Tier "D" customers are below the cold threshold and excluded by design.
+    LEAD_TIER_TO_STORED: dict[str, str] = {
+        "hot": "A",
+        "warm": "B",
+        "cold": "C",
+    }
+
     async def list_customers(
         self,
         tenant_id: int,
@@ -52,14 +61,23 @@ class CustomerService:
         page_size: int = 20,
         status: str | None = None,
         owner_id: int | None = None,
+        lead_tier: str | None = None,
+        order_by_score: bool = False,
     ) -> tuple[list[Any], int]:
         """List customers for tenant with optional filters."""
+        stored_tier: str | None = None
+        if lead_tier is not None:
+            if lead_tier not in self.LEAD_TIER_TO_STORED:
+                raise ValidationException("lead_tier must be one of: hot, warm, cold")
+            stored_tier = self.LEAD_TIER_TO_STORED[lead_tier]
         return await self.repository.list_customers(
             tenant_id=tenant_id,
             page=page,
             page_size=page_size,
             status=status,
             owner_id=owner_id,
+            lead_tier=stored_tier,
+            order_by_score=order_by_score,
         )
 
     async def get_customer(self, customer_id: int, tenant_id: int) -> Any:

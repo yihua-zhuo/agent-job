@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from models.customer import CustomerCreateDTO, CustomerStatus
+from pkg.errors.app_exceptions import ValidationException
 from services.customer_service import CustomerService
 
 
@@ -363,6 +364,83 @@ class TestSearchCustomers:
             r"100%_fit\\", 1
         )
         assert result == [mock_row]
+
+
+@pytest.mark.asyncio
+class TestListCustomers:
+    """Unit tests for CustomerService.list_customers — lead_tier filter and order_by_score pass-through."""
+
+    async def test_list_customers_passes_lead_tier_hot(self, mock_customer_repo):
+        """Service maps lead_tier='hot' to stored tier 'A' and forwards to the repository."""
+        mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
+        service = CustomerService(mock_customer_repo)
+
+        result = await service.list_customers(tenant_id=1, lead_tier="hot")
+
+        mock_customer_repo.list_customers.assert_awaited_once_with(
+            tenant_id=1,
+            page=1,
+            page_size=20,
+            status=None,
+            owner_id=None,
+            lead_tier="A",
+            order_by_score=False,
+        )
+        assert result == ([], 0)
+
+    async def test_list_customers_passes_lead_tier_warm(self, mock_customer_repo):
+        """Service maps lead_tier='warm' to stored tier 'B' and forwards to the repository."""
+        mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
+        service = CustomerService(mock_customer_repo)
+
+        await service.list_customers(tenant_id=2, lead_tier="warm")
+
+        call_kwargs = mock_customer_repo.list_customers.call_args.kwargs
+        assert call_kwargs["lead_tier"] == "B"
+        assert call_kwargs["tenant_id"] == 2
+
+    async def test_list_customers_passes_lead_tier_cold(self, mock_customer_repo):
+        """Service maps lead_tier='cold' to stored tier 'C' and forwards to the repository."""
+        mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
+        service = CustomerService(mock_customer_repo)
+
+        await service.list_customers(tenant_id=3, lead_tier="cold")
+
+        call_kwargs = mock_customer_repo.list_customers.call_args.kwargs
+        assert call_kwargs["lead_tier"] == "C"
+        assert call_kwargs["tenant_id"] == 3
+
+    async def test_list_customers_passes_order_by_score_true(self, mock_customer_repo):
+        """Service forwards order_by_score=True to the repository."""
+        mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
+        service = CustomerService(mock_customer_repo)
+
+        await service.list_customers(tenant_id=1, order_by_score=True)
+
+        call_kwargs = mock_customer_repo.list_customers.call_args.kwargs
+        assert call_kwargs["order_by_score"] is True
+        assert call_kwargs["tenant_id"] == 1
+
+    async def test_list_customers_no_lead_tier_passes_none(self, mock_customer_repo):
+        """When lead_tier is None the repository receives None (no filter)."""
+        mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
+        service = CustomerService(mock_customer_repo)
+
+        await service.list_customers(tenant_id=1)
+
+        call_kwargs = mock_customer_repo.list_customers.call_args.kwargs
+        assert call_kwargs["lead_tier"] is None
+
+    async def test_list_customers_invalid_tier_raises_validation(self, mock_customer_repo):
+        """Service raises ValidationException for unknown lead_tier values."""
+        mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
+        service = CustomerService(mock_customer_repo)
+
+        with pytest.raises(ValidationException, match="lead_tier must be one of"):
+            await service.list_customers(tenant_id=1, lead_tier="invalid")
+
+        # Repository should not be called when validation fails
+        mock_customer_repo.list_customers.assert_not_called()
 
 
 class TestEnrichmentUpsert:
