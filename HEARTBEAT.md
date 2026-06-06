@@ -7,6 +7,10 @@
 - Status: ⚠️ 23:29 Jun 6 FAILED — "Invalid email or password"
 - Last good: 22:03 Jun 6 (all 5 pages complete)
 - Note: ⚠️ Login failing — credentials may be expired; needs credential check
+- Telegram alert: ❌ failed (chat not found)
+
+## 需处理
+- 更新 Security Platform 密码: `~/.openclaw/workspace/security_platform_connector/.env`
 
 ## 输出报告格式（如需要发送）
 📊 待更新
