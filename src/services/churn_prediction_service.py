@@ -1,10 +1,10 @@
 """ChurnPredictionService — rule-based real-time churn scoring (0-100).
 
 Computes a weighted churn score from four customer dimensions and returns
-a ``ChurnPrediction`` dataclass. No DB writes — all queries are read-only.
+a ``ChurnPrediction`` dataclass. No DB writes (read-only queries against
+activity, opportunity, and ticket tables).
 """
 
-import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -71,43 +71,41 @@ class ChurnPredictionService:
         now = datetime.now(UTC)
         login_window = now - timedelta(days=30)
 
-        login_result, engagement_result, purchase_result, ticket_result = await asyncio.gather(
-            self.session.execute(
-                select(func.count(ActivityModel.id)).where(
-                    and_(
-                        ActivityModel.tenant_id == tenant_id,
-                        ActivityModel.customer_id == customer_id,
-                        ActivityModel.created_at >= login_window,
-                    )
+        login_result = await self.session.execute(
+            select(func.count(ActivityModel.id)).where(
+                and_(
+                    ActivityModel.tenant_id == tenant_id,
+                    ActivityModel.customer_id == customer_id,
+                    ActivityModel.created_at >= login_window,
                 )
-            ),
-            self.session.execute(
-                select(func.count(func.distinct(ActivityModel.type))).where(
-                    and_(
-                        ActivityModel.tenant_id == tenant_id,
-                        ActivityModel.customer_id == customer_id,
-                        ActivityModel.created_at >= login_window,
-                    )
+            )
+        )
+        engagement_result = await self.session.execute(
+            select(func.count(func.distinct(ActivityModel.type))).where(
+                and_(
+                    ActivityModel.tenant_id == tenant_id,
+                    ActivityModel.customer_id == customer_id,
+                    ActivityModel.created_at >= login_window,
                 )
-            ),
-            self.session.execute(
-                select(func.max(OpportunityModel.created_at)).where(
-                    and_(
-                        OpportunityModel.tenant_id == tenant_id,
-                        OpportunityModel.customer_id == customer_id,
-                        OpportunityModel.stage == "won",
-                    )
+            )
+        )
+        purchase_result = await self.session.execute(
+            select(func.max(OpportunityModel.created_at)).where(
+                and_(
+                    OpportunityModel.tenant_id == tenant_id,
+                    OpportunityModel.customer_id == customer_id,
+                    OpportunityModel.stage == "won",
                 )
-            ),
-            self.session.execute(
-                select(func.count(TicketModel.id)).where(
-                    and_(
-                        TicketModel.tenant_id == tenant_id,
-                        TicketModel.customer_id == customer_id,
-                        TicketModel.status.in_(("open", "pending")),
-                    )
+            )
+        )
+        ticket_result = await self.session.execute(
+            select(func.count(TicketModel.id)).where(
+                and_(
+                    TicketModel.tenant_id == tenant_id,
+                    TicketModel.customer_id == customer_id,
+                    TicketModel.status.in_(("open", "pending")),
                 )
-            ),
+            )
         )
 
         login_frequency = int(login_result.scalar() or 0)
@@ -117,7 +115,7 @@ class ChurnPredictionService:
         if last_purchase is not None:
             if last_purchase.tzinfo is None:
                 last_purchase = last_purchase.replace(tzinfo=UTC)
-            purchase_recency_days = max(0, (now - last_purchase).days)
+            purchase_recency_days = max(0.0, (now - last_purchase).total_seconds() / 86400.0)
         else:
             purchase_recency_days = 90
 
@@ -157,17 +155,18 @@ class ChurnPredictionService:
         return "low"
 
     def _build_top_3_factors(self, name_to_score: dict[str, float]) -> list[ChurnRiskFactor]:
-        """Return the three dimensions with the highest sub-scores (healthiest first)."""
-        ranked = sorted(name_to_score.items(), key=lambda item: item[1], reverse=True)
+        """Return the three dimensions with the highest churn risk (lowest health first)."""
+        name_to_risk = {name: 100.0 - score for name, score in name_to_score.items()}
+        ranked = sorted(name_to_risk.items(), key=lambda item: item[1], reverse=True)
         top_3 = ranked[:3]
         return [
             ChurnRiskFactor(
                 name=name,
                 weight=self.WEIGHTS[name],
-                score=score,
+                score=name_to_score[name],
                 description=self._FACTOR_DESCRIPTIONS.get(name, name),
             )
-            for name, score in top_3
+            for name, _ in top_3
         ]
 
     async def calculate_score(self, customer_id: int, tenant_id: int) -> ChurnPrediction:
@@ -181,7 +180,7 @@ class ChurnPredictionService:
             "engagement_score": self._normalize_score("engagement_score", raw["engagement_score_raw"]),
         }
         raw_total = sum(score * self.WEIGHTS[name] for name, score in name_to_score.items())
-        score = round(min(raw_total, 100.0), 2)
+        score = round(max(0.0, min(raw_total, 100.0)), 2)
 
         top_3_risk_factors = self._build_top_3_factors(name_to_score)
 

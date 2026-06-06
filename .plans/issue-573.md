@@ -1,7 +1,7 @@
 # Implementation Plan — Issue #573
 
 ## Goal
-Create a new `ChurnPredictionService` class in `src/services/churn_prediction_service.py` that computes a real-time 0-100 churn score from four customer dimensions (login_frequency, purchase_recency, support_ticket_count, engagement_score) using a weighted formula. The service returns a domain object (`ChurnPrediction` dataclass) with score, tier, top-3 risk factors, and recommended actions — no DB writes. This fills a gap left by the existing DB-backed `churn_prediction.py`, which will be complemented by this rule-based entry point. The API router and downstream features (#672, #673, #674) depend on this service being available.
+Create a new `ChurnPredictionService` class in `src/services/churn_prediction_service.py` that computes a real-time 0-100 churn score from four customer dimensions (login_frequency, purchase_recency, support_ticket_count, engagement_score) using a weighted formula. The service returns a domain object (`ChurnPrediction` dataclass) with score, tier, top-3 risk factors, and recommended actions — no DB writes (read-only queries against activity, opportunity, and ticket tables). This fills a gap left by the existing DB-backed `churn_prediction.py`, which will be complemented by this rule-based entry point. The API router and downstream features (#672, #673, #674) depend on this service being available.
 
 ## Source Contract
 Dev-plan target: `/home/runner/work/agent-job/agent-job/docs/dev-plan/60-analytics/0573-implement-churnpredictionservice-with-scoring-logic.md`
@@ -64,7 +64,7 @@ Reading order followed:
    - **Test 4 — Tier boundary with seeded metrics**: Use a `mock_db_session` with specific `state.activities` entries to exercise different score ranges and verify `tier` computation logic (note: opportunity/ticket mock data comes from hardcoded handlers, so assertions should validate the tier mapping contract is wired correctly, not exact scores).
 
 ## Test Plan
-- **Unit tests in `tests/unit/`**: `test_churn_prediction_service.py` — covers happy path (customer exists, all dimensions return data), error path (customer not found → `NotFoundException`), and structural validation (returns `ChurnPrediction` dataclass with correct fields, score in 0-100, valid tier, 3 risk factors, non-empty recommendations).
+- **Unit tests in `tests/unit/`**: `test_churn_prediction_service.py` — covers happy path (customer exists, all dimensions return data), error path (customer not found → `NotFoundException`; wrong tenant also raises `NotFoundException`, added during implementation to verify the tenant predicate in `_fetch_raw_metrics`), and structural validation (returns `ChurnPrediction` dataclass with correct fields, score in 0-100, valid tier, 3 risk factors, non-empty recommendations).
 - **Integration tests in `tests/integration/`**: None — the dev-plan §1.3 explicitly excludes DB writes, and all DB reads are exercised through unit-test mocks. No integration test needed.
 - **Dev-plan verification** (target-board §6):
   - `ruff check src/services/churn_prediction_service.py` → 0 errors (Step 1–4 completion gate)

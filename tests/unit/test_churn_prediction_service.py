@@ -6,14 +6,8 @@ import pytest
 
 from pkg.errors.app_exceptions import NotFoundException
 from services.churn_prediction_service import ChurnPrediction, ChurnPredictionService, ChurnRiskFactor
-from tests.unit.conftest import (
-    MockResult,
-    MockRow,
-    MockState,
-    make_count_handler,
-    make_customer_handler,
-    make_mock_session,
-)
+from tests.unit.conftest import MockState, make_count_handler, make_mock_session
+from tests.unit.domain_handlers.churn import make_tenant_aware_customer_handler
 
 
 def _seed_test_customer(state: MockState, customer_id: int = 1, tenant_id: int = 1) -> None:
@@ -37,37 +31,12 @@ def _seed_test_customer(state: MockState, customer_id: int = 1, tenant_id: int =
     }
 
 
-def _make_tenant_aware_customer_handler(state: MockState):
-    """Customer handler that filters by tenant_id in the SQL predicate.
-
-    The shared ``make_customer_handler`` only matches ``from customers where id`` and ignores
-    tenant_id, which would mask cross-tenant isolation bugs. This handler inspects the
-    tenant_id param and only returns the customer when it matches the seeded record.
-    """
-
-    def handler(sql_text, params):
-        normalized = " ".join(sql_text.split())
-        if "from customers where" in normalized and "customers.id" in normalized:
-            # SQLAlchemy bind params are suffixed (_1, _2, ...). Accept either form.
-            customer_id = params.get("id") if "id" in params else params.get("id_1")
-            tenant_id = params.get("tenant_id") if "tenant_id" in params else params.get("tenant_id_1")
-            if customer_id in state.customers:
-                rec = state.customers[customer_id]
-                if tenant_id is None or rec.get("tenant_id") == tenant_id:
-                    return MockResult([MockRow(rec.copy())])
-                return MockResult([])
-            return MockResult([])
-        return None
-
-    return handler
-
-
 @pytest.fixture
 def mock_db_session():
     state = MockState()
     _seed_test_customer(state, customer_id=1, tenant_id=1)
     return make_mock_session(
-        [_make_tenant_aware_customer_handler(state), make_customer_handler(state), make_count_handler(state)],
+        [make_tenant_aware_customer_handler(state), make_count_handler(state)],
         state=state,
     )
 
@@ -122,7 +91,7 @@ class TestCustomerNotFound:
         state = MockState()
         _seed_test_customer(state, customer_id=1, tenant_id=1)
         session = make_mock_session(
-            [_make_tenant_aware_customer_handler(state), make_count_handler(state)],
+            [make_tenant_aware_customer_handler(state), make_count_handler(state)],
             state=state,
         )
         return ChurnPredictionService(session)
