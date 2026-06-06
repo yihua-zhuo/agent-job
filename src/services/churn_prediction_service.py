@@ -12,6 +12,7 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.activity import ActivityModel
+from db.models.churn_prediction import ChurnPredictionModel
 from db.models.customer import CustomerModel
 from db.models.opportunity import OpportunityModel
 from db.models.ticket import TicketModel
@@ -27,6 +28,14 @@ class ChurnRiskFactor:
     score: float
     description: str
 
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "weight": self.weight,
+            "score": self.score,
+            "description": self.description,
+        }
+
 
 @dataclass
 class ChurnPrediction:
@@ -37,6 +46,15 @@ class ChurnPrediction:
     tier: str
     top_3_risk_factors: list[ChurnRiskFactor] = field(default_factory=list)
     recommended_actions: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "customer_id": self.customer_id,
+            "score": self.score,
+            "tier": self.tier,
+            "top_3_risk_factors": [f.to_dict() for f in self.top_3_risk_factors],
+            "recommended_actions": list(self.recommended_actions),
+        }
 
 
 class ChurnPredictionService:
@@ -201,3 +219,54 @@ class ChurnPredictionService:
             top_3_risk_factors=top_3_risk_factors,
             recommended_actions=recommended_actions,
         )
+
+    async def get_churn_prediction(self, customer_id: int, tenant_id: int) -> ChurnPrediction:
+        """Return the latest stored churn prediction for a customer, or raise NotFoundException."""
+        result = await self.session.execute(
+            select(ChurnPredictionModel)
+            .where(
+                and_(
+                    ChurnPredictionModel.tenant_id == tenant_id,
+                    ChurnPredictionModel.customer_id == customer_id,
+                )
+            )
+            .order_by(ChurnPredictionModel.predicted_at.desc())
+            .limit(1)
+        )
+        row = result.scalar_one_or_none()
+        if row is None:
+            raise NotFoundException("ChurnPrediction")
+
+        factors = [
+            ChurnRiskFactor(
+                name=f.get("name", ""),
+                weight=float(f.get("weight", 0.0)),
+                score=float(f.get("score", 0.0)),
+                description=f.get("description", ""),
+            )
+            for f in (row.factors or [])
+        ]
+        actions = [
+            str(a.get("action", "")) if isinstance(a, dict) else str(a)
+            for a in (row.recommended_actions or [])
+        ]
+        tier_value = row.tier.value if hasattr(row.tier, "value") else str(row.tier)
+        return ChurnPrediction(
+            customer_id=row.customer_id,
+            score=float(row.score),
+            tier=tier_value,
+            top_3_risk_factors=factors,
+            recommended_actions=actions,
+        )
+
+    async def predict_churn(
+        self, customer_ids: list[int], tenant_id: int
+    ) -> list[ChurnPrediction]:
+        """Batch-compute churn predictions, skipping customers that raise NotFoundException."""
+        results: list[ChurnPrediction] = []
+        for cid in customer_ids:
+            try:
+                results.append(await self.calculate_score(cid, tenant_id=tenant_id))
+            except NotFoundException:
+                continue
+        return results

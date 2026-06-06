@@ -1,5 +1,6 @@
 """Unit tests for src/api/routers/churn_risk.py."""
 
+from dataclasses import dataclass, field
 from unittest.mock import AsyncMock
 
 import pytest
@@ -11,7 +12,7 @@ from starlette.responses import JSONResponse
 
 from api.routers.churn_risk import churn_risk_router
 from db.connection import get_db
-from internal.middleware.fastapi_auth import AuthContext
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import AppException, NotFoundException
 
 
@@ -19,25 +20,33 @@ def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
 
 
-def _make_prediction(customer_id: int = 42, score: float = 75.0, tier: str = "high"):
-    """Build a mock ChurnPrediction-like object with __dict__/fields."""
-    from dataclasses import dataclass, field
+@dataclass
+class _Factor:
+    name: str
+    weight: float
+    score: float
+    description: str
 
-    @dataclass
-    class _Factor:
-        name: str
-        weight: float
-        score: float
-        description: str
 
-    @dataclass
-    class _Prediction:
-        customer_id: int
-        score: float
-        tier: str
-        top_3_risk_factors: list = field(default_factory=list)
-        recommended_actions: list = field(default_factory=list)
+@dataclass
+class _Prediction:
+    customer_id: int
+    score: float
+    tier: str
+    top_3_risk_factors: list = field(default_factory=list)
+    recommended_actions: list = field(default_factory=list)
 
+    def to_dict(self) -> dict:
+        return {
+            "customer_id": self.customer_id,
+            "score": self.score,
+            "tier": self.tier,
+            "top_3_risk_factors": [f.__dict__ for f in self.top_3_risk_factors],
+            "recommended_actions": list(self.recommended_actions),
+        }
+
+
+def _make_prediction(customer_id: int = 42, score: float = 75.0, tier: str = "high") -> _Prediction:
     return _Prediction(
         customer_id=customer_id,
         score=score,
@@ -50,27 +59,23 @@ def _make_prediction(customer_id: int = 42, score: float = 75.0, tier: str = "hi
 
 
 @pytest.fixture
-def mock_db_session():
-    """Minimal mock DB session — not used directly because ChurnPredictionService is patched."""
+def mock_churn_service():
     return AsyncMock()
 
 
 @pytest.fixture
-def client(monkeypatch, mock_db_session):
-    """Return a TestClient with ChurnPredictionService fully mocked."""
-    from internal.middleware.fastapi_auth import require_auth
+def client(mock_churn_service):
+    """TestClient for the churn risk router with the service fully mocked."""
+    from api.routers import churn_risk
 
-    mock_service = AsyncMock()
-
-    monkeypatch.setattr(
-        "api.routers.churn_risk.ChurnPredictionService",
-        lambda session: mock_service,
-    )
+    monkeypatch_module = churn_risk
+    original = monkeypatch_module.ChurnPredictionService
+    monkeypatch_module.ChurnPredictionService = lambda session: mock_churn_service
 
     app = FastAPI()
     app.include_router(churn_risk_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    app.dependency_overrides[get_db] = lambda: mock_db_session
+    app.dependency_overrides[get_db] = lambda: AsyncMock()
 
     @app.exception_handler(AppException)
     async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
@@ -86,17 +91,20 @@ def client(monkeypatch, mock_db_session):
             content={"success": False, "message": "Validation error", "detail": exc.errors()},
         )
 
-    client = TestClient(app, raise_server_exceptions=False)
-    return client, mock_service
+    test_client = TestClient(app, raise_server_exceptions=False)
+
+    yield test_client
+
+    monkeypatch_module.ChurnPredictionService = original
 
 
 class TestGetChurnRisk:
-    def test_returns_existing_prediction(self, client):
-        c, svc = client
+    def test_returns_stored_prediction(self, client, mock_churn_service):
         prediction = _make_prediction(customer_id=42, score=82.5, tier="high")
-        svc.calculate_score = AsyncMock(return_value=prediction)
+        mock_churn_service.get_churn_prediction = AsyncMock(return_value=prediction)
+        mock_churn_service.calculate_score = AsyncMock()
 
-        resp = c.get("/api/v1/customers/42/churn-risk")
+        resp = client.get("/api/v1/customers/42/churn-risk")
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -105,25 +113,28 @@ class TestGetChurnRisk:
         assert body["data"]["tier"] == "high"
         assert "top_3_risk_factors" in body["data"]
         assert "recommended_actions" in body["data"]
-        svc.calculate_score.assert_awaited_once_with(42, tenant_id=1)
+        mock_churn_service.get_churn_prediction.assert_awaited_once_with(42, tenant_id=1)
+        mock_churn_service.calculate_score.assert_not_awaited()
 
-    def test_returns_low_tier_prediction(self, client):
-        c, svc = client
+    def test_falls_back_to_compute_on_not_found(self, client, mock_churn_service):
         prediction = _make_prediction(customer_id=7, score=15.0, tier="low")
-        svc.calculate_score = AsyncMock(return_value=prediction)
+        mock_churn_service.get_churn_prediction = AsyncMock(side_effect=NotFoundException("ChurnPrediction"))
+        mock_churn_service.calculate_score = AsyncMock(return_value=prediction)
 
-        resp = c.get("/api/v1/customers/7/churn-risk")
+        resp = client.get("/api/v1/customers/7/churn-risk")
         assert resp.status_code == 200
         body = resp.json()
         assert body["data"]["tier"] == "low"
         assert body["data"]["score"] == 15.0
         assert body["data"]["customer_id"] == 7
+        mock_churn_service.get_churn_prediction.assert_awaited_once_with(7, tenant_id=1)
+        mock_churn_service.calculate_score.assert_awaited_once_with(7, tenant_id=1)
 
-    def test_not_found_returns_404(self, client):
-        c, svc = client
-        svc.calculate_score = AsyncMock(side_effect=NotFoundException("Customer"))
+    def test_not_found_returns_404(self, client, mock_churn_service):
+        mock_churn_service.get_churn_prediction = AsyncMock(side_effect=NotFoundException("ChurnPrediction"))
+        mock_churn_service.calculate_score = AsyncMock(side_effect=NotFoundException("Customer"))
 
-        resp = c.get("/api/v1/customers/9999/churn-risk")
+        resp = client.get("/api/v1/customers/9999/churn-risk")
         assert resp.status_code == 404
         body = resp.json()
         assert body["success"] is False
@@ -132,13 +143,12 @@ class TestGetChurnRisk:
 
 
 class TestPredictBatch:
-    def test_returns_predictions(self, client):
-        c, svc = client
+    def test_returns_predictions(self, client, mock_churn_service):
         p1 = _make_prediction(customer_id=1, score=70.0, tier="high")
         p2 = _make_prediction(customer_id=2, score=30.0, tier="low")
-        svc.calculate_score = AsyncMock(side_effect=[p1, p2])
+        mock_churn_service.predict_churn = AsyncMock(return_value=[p1, p2])
 
-        resp = c.post("/api/v1/customers/churn-predict-batch", json={"customer_ids": [1, 2]})
+        resp = client.post("/api/v1/customers/churn-predict-batch", json={"customer_ids": [1, 2]})
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
@@ -147,29 +157,38 @@ class TestPredictBatch:
         assert body["data"]["predictions"][0]["tier"] == "high"
         assert body["data"]["predictions"][1]["customer_id"] == 2
         assert body["data"]["predictions"][1]["tier"] == "low"
+        mock_churn_service.predict_churn.assert_awaited_once_with([1, 2], tenant_id=1)
 
-    def test_empty_list_rejected(self, client):
-        c, _svc = client
-        resp = c.post("/api/v1/customers/churn-predict-batch", json={"customer_ids": []})
+    def test_batch_skips_not_found_customers(self, client, mock_churn_service):
+        p1 = _make_prediction(customer_id=1, score=70.0, tier="high")
+        p2 = _make_prediction(customer_id=2, score=30.0, tier="low")
+        mock_churn_service.predict_churn = AsyncMock(return_value=[p1, p2])
+
+        resp = client.post(
+            "/api/v1/customers/churn-predict-batch",
+            json={"customer_ids": [1, 2, 3]},
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert len(body["data"]["predictions"]) == 2
+        returned_ids = [p["customer_id"] for p in body["data"]["predictions"]]
+        assert 1 in returned_ids
+        assert 2 in returned_ids
+        assert 3 not in returned_ids
+        mock_churn_service.predict_churn.assert_awaited_once_with([1, 2, 3], tenant_id=1)
+
+    def test_empty_list_rejected(self, client, mock_churn_service):
+        resp = client.post("/api/v1/customers/churn-predict-batch", json={"customer_ids": []})
         assert resp.status_code == 422
         body = resp.json()
         assert body["success"] is False
 
-    def test_oversized_batch_rejected(self, client):
-        c, _svc = client
-        resp = c.post(
+    def test_oversized_batch_rejected(self, client, mock_churn_service):
+        resp = client.post(
             "/api/v1/customers/churn-predict-batch",
             json={"customer_ids": list(range(1, 502))},
         )
         assert resp.status_code == 422
         body = resp.json()
         assert body["success"] is False
-
-    def test_passes_tenant_id(self, client):
-        c, svc = client
-        prediction = _make_prediction(customer_id=5, score=50.0, tier="medium")
-        svc.calculate_score = AsyncMock(return_value=prediction)
-
-        resp = c.post("/api/v1/customers/churn-predict-batch", json={"customer_ids": [5]})
-        assert resp.status_code == 200
-        svc.calculate_score.assert_awaited_once_with(5, tenant_id=1)

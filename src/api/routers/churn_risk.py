@@ -1,11 +1,10 @@
 """Churn risk REST endpoints — single + batch.
 
 Wraps ``ChurnPredictionService`` for HTTP clients. The single-customer
-endpoint computes a fresh prediction on demand; the batch endpoint
-accepts a list of customer IDs and returns a prediction for each.
+endpoint returns the latest stored prediction or computes a new one if
+none exists; the batch endpoint accepts a list of customer IDs and
+returns a prediction for each, skipping customers that cannot be found.
 """
-
-from dataclasses import asdict
 
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
@@ -13,6 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
+from pkg.errors.app_exceptions import NotFoundException
 from services.churn_prediction_service import ChurnPredictionService
 
 churn_risk_router = APIRouter(prefix="/api/v1/customers", tags=["churn-risk"])
@@ -29,8 +29,11 @@ async def get_churn_risk(
     session: AsyncSession = Depends(get_db),
 ):
     svc = ChurnPredictionService(session)
-    prediction = await svc.calculate_score(customer_id, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": asdict(prediction)}
+    try:
+        prediction = await svc.get_churn_prediction(customer_id, tenant_id=ctx.tenant_id)
+    except NotFoundException:
+        prediction = await svc.calculate_score(customer_id, tenant_id=ctx.tenant_id)
+    return {"success": True, "data": prediction.to_dict()}
 
 
 @churn_risk_router.post("/churn-predict-batch")
@@ -40,8 +43,8 @@ async def predict_churn_batch(
     session: AsyncSession = Depends(get_db),
 ):
     svc = ChurnPredictionService(session)
-    results = []
-    for cid in body.customer_ids:
-        prediction = await svc.calculate_score(cid, tenant_id=ctx.tenant_id)
-        results.append(asdict(prediction))
-    return {"success": True, "data": {"predictions": results}}
+    predictions = await svc.predict_churn(body.customer_ids, tenant_id=ctx.tenant_id)
+    return {
+        "success": True,
+        "data": {"predictions": [p.to_dict() for p in predictions]},
+    }
