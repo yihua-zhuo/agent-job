@@ -123,8 +123,8 @@ class TestSalesRecommendationService:
     """Test SalesRecommendationService - recommendations and predictions."""
 
     @pytest.fixture
-    def svc(self):
-        return SalesRecommendationService()
+    def svc(self, async_session):
+        return SalesRecommendationService(async_session)
 
     def test_get_next_best_action(self, svc):
         result = svc.get_next_best_action(tenant_id=1, customer_id=1)

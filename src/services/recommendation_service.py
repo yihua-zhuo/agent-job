@@ -5,38 +5,55 @@ results in a module-level dict for 3600s.
 """
 
 import time
+from dataclasses import dataclass, field
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.opportunity import OpportunityModel
 from pkg.errors.app_exceptions import NotFoundException
-from services.sales_recommendation import SalesRecommendationService
+from services.sales_recommendation import SalesActionRecommendation, SalesRecommendationService
 
 _CACHE_TTL = 3600.0  # seconds
 
 # Module-level singleton cache — survives across service instances within a process.
-_cache: dict[str, tuple[float, dict]] = {}
+_cache: dict[str, tuple[float, "CachedRecommendationResult"]] = {}
 
 
 def _cache_key(opportunity_id: int, tenant_id: int) -> str:
     return f"{opportunity_id}:{tenant_id}"
 
 
-class RecommendationService:
-    __slots__ = ("session", "_sales_svc")
+@dataclass
+class CachedRecommendationResult:
+    """Cached recommendation result returned by RecommendationService.get_recommendations."""
 
+    opportunity_id: int
+    conversion_probability: float
+    next_action: SalesActionRecommendation
+    similar_deals: list[dict] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return {
+            "opportunity_id": self.opportunity_id,
+            "conversion_probability": self.conversion_probability,
+            "next_action": self.next_action.to_dict(),
+            "similar_deals": self.similar_deals,
+        }
+
+
+class RecommendationService:
     def __init__(self, session: AsyncSession):
         self.session = session
-        self._sales_svc = SalesRecommendationService()
+        self._sales_svc = SalesRecommendationService(session)
 
-    async def get_recommendations(self, opportunity_id: int, tenant_id: int) -> dict:
+    async def get_recommendations(self, opportunity_id: int, tenant_id: int) -> CachedRecommendationResult:
         key = _cache_key(opportunity_id, tenant_id)
         now = time.time()
         if key in _cache:
-            ts, data = _cache[key]
+            ts, cached = _cache[key]
             if now - ts < _CACHE_TTL:
-                return data
+                return cached
         result = await self.session.execute(
             select(OpportunityModel).where(
                 OpportunityModel.id == opportunity_id,
@@ -46,12 +63,12 @@ class RecommendationService:
         opp = result.scalar_one_or_none()
         if opp is None:
             raise NotFoundException("Opportunity")
-        data = {
-            "opportunity_id": opportunity_id,
-            "conversion_probability": self._sales_svc.predict_conversion_probability(opportunity_id),
-            "next_action": self._sales_svc.get_next_best_action(tenant_id, opp.customer_id),
-            "similar_deals": [],
-        }
+        data = CachedRecommendationResult(
+            opportunity_id=opportunity_id,
+            conversion_probability=self._sales_svc.predict_conversion_probability(opportunity_id),
+            next_action=self._sales_svc.get_next_best_action(tenant_id, opp.customer_id),
+            similar_deals=[],
+        )
         _cache[key] = (now, data)
         return data
 
