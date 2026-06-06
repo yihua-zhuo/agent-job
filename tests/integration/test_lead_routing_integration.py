@@ -75,7 +75,7 @@ class TestLeadRoutingServiceIntegration:
             owner_id=0,
         ))
         await async_session.flush()
-        cust_svc = CustomerService(CustomerRepository(async_session))
+        cust_svc = CustomerService(async_session)
         # Fetch the lead we just inserted (id was auto-assigned by the ORM)
         items, _ = await cust_svc.get_unassigned_leads(tenant_id=tenant_id)
         lead = next(c for c in items if c.name == "RoundRobin Lead")
@@ -108,7 +108,7 @@ class TestLeadRoutingServiceIntegration:
         async_session.add(rule)
         await async_session.flush()
 
-        cust_svc = CustomerService(CustomerRepository(async_session))
+        cust_svc = CustomerService(async_session)
         lead = await cust_svc.create_customer(
             {"name": "ACME Lead", "email": "acme@example.com", "status": "lead", "owner_id": 0, "company": "ACME Corp"},
             tenant_id=tenant_id,
@@ -138,7 +138,7 @@ class TestLeadRoutingServiceIntegration:
         async_session.add(rule)
         await async_session.flush()
 
-        cust_svc = CustomerService(CustomerRepository(async_session))
+        cust_svc = CustomerService(async_session)
         lead = await cust_svc.create_customer(
             {"name": "ACME Inactive Lead", "email": "acme-inactive@example.com", "status": "lead", "owner_id": 0, "company": "ACME Corp"},
             tenant_id=tenant_id,
@@ -150,7 +150,7 @@ class TestLeadRoutingServiceIntegration:
 
     async def test_reassign_lead_logs_history(self, db_schema, tenant_id, async_session):
         """Reassigning a lead should increment recycle_count and log history."""
-        cust_svc = CustomerService(CustomerRepository(async_session))
+        cust_svc = CustomerService(async_session)
         lead = await cust_svc.create_customer(
             {"name": "Reassign Test", "email": "reassign@example.com", "status": "lead", "owner_id": 1},
             tenant_id=tenant_id,
@@ -197,7 +197,7 @@ class TestLeadRoutingServiceIntegration:
         ))
         await async_session.flush()
 
-        items, total = await CustomerService(CustomerRepository(async_session)).get_unassigned_leads(tenant_id=tenant_id)
+        items, total = await CustomerService(async_session).get_unassigned_leads(tenant_id=tenant_id)
         names = [c.name for c in items]
         assert "Unassigned 1" in names
         assert "Unassigned 2" in names
@@ -208,7 +208,7 @@ class TestLeadRoutingServiceIntegration:
         """Leads at max recycle count should be disqualified."""
         from db.models.customer import CustomerModel
 
-        cust_svc = CustomerService(CustomerRepository(async_session))
+        cust_svc = CustomerService(async_session)
         lead = CustomerModel(
             tenant_id=tenant_id,
             name="Overcycled",
@@ -260,7 +260,7 @@ class TestLeadRoutingServiceIntegration:
 
     async def test_bulk_recycle(self, db_schema, tenant_id, async_session):
         """bulk_recycle should reset multiple leads at once."""
-        cust_svc = CustomerService(CustomerRepository(async_session))
+        cust_svc = CustomerService(async_session)
         uid = await _seed_user(async_session, tenant_id)
 
         lead1 = await cust_svc.create_customer(
@@ -281,7 +281,7 @@ class TestLeadRoutingServiceIntegration:
 
     async def test_assign_owner_sets_assigned_at(self, db_schema, tenant_id, async_session):
         """assign_owner should set assigned_at on first assignment."""
-        cust_svc = CustomerService(CustomerRepository(async_session))
+        cust_svc = CustomerService(async_session)
         uid = await _seed_user(async_session, tenant_id)
         lead = await cust_svc.create_customer(
             {"name": "Assign Test", "email": "assign@example.com", "status": "lead", "owner_id": 0},

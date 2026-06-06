@@ -20,7 +20,7 @@ from services.smart_categorization import SmartCategorizationService
 
 async def _seed_customer(async_session, tenant_id: int) -> int:
     """Seed a customer and return its id."""
-    svc = CustomerService(CustomerRepository(async_session))
+    svc = CustomerService(async_session)
     suffix = uuid.uuid4().hex[:8]
     result = await svc.create_customer(
         data={

@@ -50,7 +50,7 @@ async def _seed_user(async_session, tenant_id: int = 1, **overrides) -> int:
 
 
 async def _seed_customer(async_session, tenant_id: int = 1, **overrides):
-    cust_svc = CustomerService(CustomerRepository(async_session))
+    cust_svc = CustomerService(async_session)
     suffix = uuid.uuid4().hex[:8]
     data = {"name": f"SC Cust {suffix}", "email": f"sc_{suffix}@example.com", **overrides}
     result = await cust_svc.create_customer(data=data, tenant_id=tenant_id)

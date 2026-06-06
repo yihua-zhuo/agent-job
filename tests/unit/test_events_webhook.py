@@ -42,7 +42,8 @@ def app_with_overrides(monkeypatch, mock_db_session):
     This is a router-level delegation test — the EventService and ScoreService
     classes are patched at the router module level with thin lambdas so we
     exercise the router wiring only. The services' own SQL is covered by
-    integration tests.
+    integration tests; service-layer validation is below in
+    TestEventServiceValidation.
     """
     mock_event = MagicMock()
     mock_event.record_engagement_event = AsyncMock()
@@ -103,7 +104,7 @@ class TestEngagementWebhook:
         assert call_kwargs["customer_id"] == 42
         assert call_kwargs["event_type"] == "website_visit"
         # event_metadata was not provided — defaults to None (EventService handles None)
-        assert call_kwargs["metadata"] is None
+        assert call_kwargs["event_metadata"] is None
 
     def test_valid_engagement_triggers_score_recalculation(self, app_with_overrides):
         """ScoreService.calculate_score is awaited exactly once after the event is recorded."""
@@ -155,6 +156,9 @@ class TestEngagementWebhook:
         # Pydantic 422 returns FastAPI's default validation error shape with "detail"
         body = response.json()
         assert "detail" in body or "message" in body
+        # Pydantic's validation error detail lists the field that failed.
+        body_str = repr(body).lower()
+        assert "event_type" in body_str
         # Neither service should be called when Pydantic validation fails
         mock_event.record_engagement_event.assert_not_called()
         mock_score.calculate_score.assert_not_called()
@@ -169,6 +173,8 @@ class TestEngagementWebhook:
         )
 
         assert response.status_code == 422, response.text
+        body_str = repr(response.json()).lower()
+        assert "customer_id" in body_str
         mock_event.record_engagement_event.assert_not_called()
 
     @pytest.mark.parametrize("bad_id", [0, -1, -999])
@@ -182,6 +188,8 @@ class TestEngagementWebhook:
         )
 
         assert response.status_code == 422, response.text
+        body_str = repr(response.json()).lower()
+        assert "customer_id" in body_str
         mock_event.record_engagement_event.assert_not_called()
 
 

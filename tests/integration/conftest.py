@@ -285,6 +285,17 @@ async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
     return tenant_id_2
 
 
+# ── Re-export domain-owned customer fixtures ────────────────────────────────────
+# The fixtures themselves live in tests/integration/domain_fixtures/customer.py
+# so the customer domain module owns the data shape (Rule 110, Rule 125). This
+# block re-imports them so any integration test can request them by name without
+# importing the domain module directly.
+from tests.integration.domain_fixtures.customer import (  # noqa: E402, F401
+    _seed_customer,
+    customer_service,
+)
+
+
 # ── Per-file cleanup rule (mandatory) ────────────────────────────────────────────
 # Every integration test file must clean up all created data after its tests
 # complete. This fixture runs once per module (i.e. per test file) as the

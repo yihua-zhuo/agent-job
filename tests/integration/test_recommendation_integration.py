@@ -40,7 +40,7 @@ async def _seed_customer(async_session, tenant_id: int = 1, **overrides):
     from db.repositories.customer import CustomerRepository
     from services.customer_service import CustomerService
 
-    cust_svc = CustomerService(CustomerRepository(async_session))
+    cust_svc = CustomerService(async_session)
     suffix = uuid.uuid4().hex[:8]
     data = {"name": f"Rec Cust {suffix}", "email": f"rec_{suffix}@example.com", **overrides}
     return await cust_svc.create_customer(data=data, tenant_id=tenant_id)

@@ -29,6 +29,28 @@ def _make_mock_customer_repo():
     return repo
 
 
+def _make_mock_session():
+    """Build a mock AsyncSession for CustomerService to wrap with a repository."""
+    return MagicMock()
+
+
+def _make_service_with_repo(mock_customer_repo):
+    """Return (service, session) where service is a CustomerService wired to mock_customer_repo.
+
+    Patches CustomerRepository to return mock_customer_repo so the service's
+    internal construction (service builds its own repository from the session)
+    still routes through the mock.
+    """
+    from db.repositories import customer as customer_repo_module
+    from services import customer_service as service_module
+
+    mock_session = _make_mock_session()
+    with patch.object(customer_repo_module, "CustomerRepository", return_value=mock_customer_repo), \
+         patch.object(service_module, "CustomerRepository", return_value=mock_customer_repo):
+        service = CustomerService(mock_session)
+    return service, mock_session
+
+
 @pytest.fixture
 def mock_db_session():
     """SQL mock session for tests that need seeded DB state via domain handlers.
@@ -156,7 +178,7 @@ class TestCreateCustomerService:
         mock_customer.status = "lead"
         mock_customer.owner_id = 0
         mock_customer_repo.create = AsyncMock(return_value=mock_customer)
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         with patch(
             "services.lead_routing_service.LeadRoutingService.auto_assign_lead",
@@ -185,7 +207,7 @@ class TestCreateCustomerService:
         mock_customer.owner_id = 99
         mock_customer.tags = ["key-account"]
         mock_customer_repo.create = AsyncMock(return_value=mock_customer)
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         dto = CustomerCreateDTO(
             name="DTO Customer",
@@ -224,7 +246,7 @@ class TestCreateCustomerService:
         mock_customer.owner_id = 0
         mock_customer.tags = []
         mock_customer_repo.create = AsyncMock(return_value=mock_customer)
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         with patch(
             "services.lead_routing_service.LeadRoutingService.auto_assign_lead",
@@ -246,7 +268,7 @@ class TestCountByStatus:
     async def test_count_by_status_empty(self, mock_customer_repo):
         """Returns empty dict when no customers in tenant."""
         mock_customer_repo.count_by_status = AsyncMock(return_value={})
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert result == {}
         mock_customer_repo.count_by_status.assert_awaited_once_with(1)
@@ -260,7 +282,7 @@ class TestCountByStatus:
                 CustomerStatus.CUSTOMER: 1,
             }
         )
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert result[CustomerStatus.LEAD] == 3
         assert result[CustomerStatus.OPPORTUNITY] == 2
@@ -271,7 +293,7 @@ class TestCountByStatus:
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={CustomerStatus.LEAD: 7}
         )
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
         result = await service.count_by_status(tenant_id=999)
         mock_customer_repo.count_by_status.assert_awaited_once_with(999)
         assert result[CustomerStatus.LEAD] == 7
@@ -283,7 +305,7 @@ class TestCountByStatus:
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={CustomerStatus.INACTIVE: 10}
         )
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert len(result) == 1
         assert result[CustomerStatus.INACTIVE] == 10
@@ -295,7 +317,7 @@ class TestCountByStatus:
         mock_customer_repo.count_by_status = AsyncMock(
             return_value={CustomerStatus.LEAD: 3}  # unknown statuses silently skipped
         )
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert result == {CustomerStatus.LEAD: 3}
 
@@ -317,7 +339,7 @@ class TestCountByStatus:
                 CustomerStatus.INACTIVE: 2,
             }
         )
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
         result = await service.count_by_status(tenant_id=1)
         assert result[CustomerStatus.LEAD] == 5
         assert result[CustomerStatus.ACTIVE] == 3
@@ -326,7 +348,7 @@ class TestCountByStatus:
     async def test_count_by_status_zero_tenant(self, mock_customer_repo):
         """Delegates to repo which returns empty dict for invalid tenant_id."""
         mock_customer_repo.count_by_status = AsyncMock(return_value={})
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
         result = await service.count_by_status(tenant_id=0)
         assert result == {}
         mock_customer_repo.count_by_status.assert_awaited_once_with(0)
@@ -342,7 +364,7 @@ class TestSearchCustomers:
         """Empty keyword is delegated to repository which returns [] for empty string."""
         # search_customers checks the keyword in the repository, not in the service
         mock_customer_repo.search_customers = AsyncMock(return_value=[])
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         result = await service.search_customers("", tenant_id=1)
 
@@ -356,7 +378,7 @@ class TestSearchCustomers:
         """Delegates to CustomerRepository.search_customers."""
         mock_row = MagicMock()
         mock_customer_repo.search_customers = AsyncMock(return_value=[mock_row])
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         result = await service.search_customers(r"100%_fit\\", tenant_id=1)
 
@@ -373,7 +395,7 @@ class TestListCustomers:
     async def test_list_customers_passes_lead_tier_hot(self, mock_customer_repo):
         """Service maps lead_tier='hot' to stored tier 'A' and forwards to the repository."""
         mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         result = await service.list_customers(tenant_id=1, lead_tier="hot")
 
@@ -391,7 +413,7 @@ class TestListCustomers:
     async def test_list_customers_passes_lead_tier_warm(self, mock_customer_repo):
         """Service maps lead_tier='warm' to stored tier 'B' and forwards to the repository."""
         mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         await service.list_customers(tenant_id=2, lead_tier="warm")
 
@@ -402,7 +424,7 @@ class TestListCustomers:
     async def test_list_customers_passes_lead_tier_cold(self, mock_customer_repo):
         """Service maps lead_tier='cold' to stored tier 'C' and forwards to the repository."""
         mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         await service.list_customers(tenant_id=3, lead_tier="cold")
 
@@ -413,7 +435,7 @@ class TestListCustomers:
     async def test_list_customers_passes_order_by_score_true(self, mock_customer_repo):
         """Service forwards order_by_score=True to the repository."""
         mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         await service.list_customers(tenant_id=1, order_by_score=True)
 
@@ -424,7 +446,7 @@ class TestListCustomers:
     async def test_list_customers_no_lead_tier_passes_none(self, mock_customer_repo):
         """When lead_tier is None the repository receives None (no filter)."""
         mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         await service.list_customers(tenant_id=1)
 
@@ -434,7 +456,7 @@ class TestListCustomers:
     async def test_list_customers_invalid_tier_raises_validation(self, mock_customer_repo):
         """Service raises ValidationException for unknown lead_tier values."""
         mock_customer_repo.list_customers = AsyncMock(return_value=([], 0))
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         with pytest.raises(ValidationException, match="lead_tier must be one of"):
             await service.list_customers(tenant_id=1, lead_tier="invalid")
@@ -450,7 +472,7 @@ class TestEnrichmentUpsert:
     async def test_create_customer_with_enrichment_data_calls_upsert(self):
         """create_customer calls _upsert_enrichment when enrichment_data is in the payload."""
         mock_customer_repo = _make_mock_customer_repo()
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         mock_customer = MagicMock()
         mock_customer.id = 10
@@ -472,7 +494,7 @@ class TestEnrichmentUpsert:
     async def test_update_customer_with_enrichment_data_calls_upsert(self):
         """update_customer delegates to repo with the full data dict (including enrichment_data)."""
         mock_customer_repo = _make_mock_customer_repo()
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         fake_customer = MagicMock()
         fake_customer.id = 7
@@ -499,7 +521,7 @@ class TestEnrichmentUpsert:
     async def test_create_customer_without_enrichment_data_skips_upsert(self):
         """_upsert_enrichment is NOT called when no enrichment_data key is present."""
         mock_customer_repo = _make_mock_customer_repo()
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         mock_customer = MagicMock()
         mock_customer.id = 20
@@ -521,7 +543,7 @@ class TestEnrichmentUpsert:
     async def test_create_customer_with_none_enrichment_data_skips_upsert(self):
         """_upsert_enrichment is NOT called when enrichment_data is explicitly None."""
         mock_customer_repo = _make_mock_customer_repo()
-        service = CustomerService(mock_customer_repo)
+        service, _session = _make_service_with_repo(mock_customer_repo)
 
         mock_customer = MagicMock()
         mock_customer.id = 21

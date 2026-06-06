@@ -34,7 +34,7 @@ async def create_engagement_event(
         tenant_id=ctx.tenant_id,
         customer_id=body.customer_id,
         event_type=body.event_type,
-        metadata=body.event_metadata,
+        event_metadata=body.event_metadata,
     )
     result = await score_svc.calculate_score(
         customer_id=body.customer_id,

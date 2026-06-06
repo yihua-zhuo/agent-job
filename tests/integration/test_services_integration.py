@@ -341,7 +341,7 @@ class TestActivityIntegration:
         return reg.id
 
     async def _seed_customer(self, tenant_id: int, async_session) -> int:
-        cust_svc = CustomerService(CustomerRepository(async_session))
+        cust_svc = CustomerService(async_session)
         suffix = uuid.uuid4().hex[:8]
         result = await cust_svc.create_customer(
             data={"name": f"Activity Cust {suffix}", "email": f"act_{suffix}@example.com"},
