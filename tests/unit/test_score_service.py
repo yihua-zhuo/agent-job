@@ -267,6 +267,82 @@ async def test_calculate_score_ai_branch():
 
 
 @pytest.mark.asyncio
+async def test_ai_recommendations_deduped_against_static():
+    """When AI returns one recommendation and the top factors yield static
+    recommendations, the AI rec comes first, the static recs follow, and
+    duplicate AI recs are not re-appended.
+    """
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 70,
+            "payment_history": 0,
+            "product_adoption": 0,
+        },
+    )
+
+    mock_agent = MagicMock()
+    # AI returns one rec that does NOT collide with any static FIELD_RECOMMENDATIONS
+    mock_agent.analyze_factors = AsyncMock(
+        return_value={
+            "similar_leads": [],
+            "recommendations": ["Expand to segment B"],
+        }
+    )
+
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
+
+    recs = result.recommendations
+    # AI rec is first; the 3 static recs (engagement/deal_velocity/support_health
+    # all have non-zero contributions and map to FIELD_RECOMMENDATIONS) follow.
+    assert recs[0] == "Expand to segment B"
+    static_recs = [r for r in recs if r in FIELD_RECOMMENDATIONS.values()]
+    assert len(static_recs) == 3
+    assert len(recs) == 4
+    assert len(set(recs)) == len(recs), f"recs contain duplicates: {recs}"
+
+
+@pytest.mark.asyncio
+async def test_ai_recommendations_duplicate_not_reappended():
+    """When AI returns a recommendation that matches a static rec, the
+    duplicate is not appended twice.
+    """
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 0,
+            "payment_history": 0,
+            "product_adoption": 0,
+        },
+    )
+
+    engagement_rec = FIELD_RECOMMENDATIONS["engagement_level"]
+    mock_agent = MagicMock()
+    mock_agent.analyze_factors = AsyncMock(
+        return_value={
+            "similar_leads": [],
+            "recommendations": [engagement_rec],  # exact duplicate of a static rec
+        }
+    )
+
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
+
+    recs = result.recommendations
+    # AI rec appears once, followed by the non-duplicate static rec (deal_velocity).
+    assert recs.count(engagement_rec) == 1, f"engagement_rec should appear exactly once: {recs}"
+    assert FIELD_RECOMMENDATIONS["deal_velocity"] in recs
+    assert len(set(recs)) == len(recs), f"recs contain duplicates: {recs}"
+
+
+@pytest.mark.asyncio
 async def test_calculate_score_ai_fallback(caplog):
     """When the AI client raises a known transport error, scoring degrades gracefully
     and the failure is logged at WARNING/ERROR level with context."""
@@ -299,9 +375,7 @@ async def test_calculate_score_ai_fallback(caplog):
     assert result.recommendations
     # The AI failure must be logged with customer context
     assert any(
-        "AI agent call failed" in record.message
-        and str(CUSTOMER_ID) in record.message
-        for record in caplog.records
+        "AI agent call failed" in record.message and str(CUSTOMER_ID) in record.message for record in caplog.records
     )
 
 

@@ -1,5 +1,7 @@
 """Score schemas for lead scoring."""
 
+from __future__ import annotations
+
 from enum import StrEnum
 from typing import Annotated, Any, Protocol
 
@@ -15,9 +17,10 @@ class ScoreResultLike(Protocol):
 
     score: int
     tier_label: str
-    top_factors: list
-    recommendations: list
-    similar_leads: list
+    score_factors: dict[str, int] | None
+    top_factors: list[str]
+    recommendations: list[str]
+    similar_leads: list[SimilarLead]
 
 
 class ScoreTier(StrEnum):
@@ -78,7 +81,7 @@ class ScoreResponse(BaseModel):
     similar_leads: list[SimilarLead] | None = None
 
     @classmethod
-    def from_result(cls, result: "ScoreResultLike") -> "ScoreResponse":
+    def from_result(cls, result: ScoreResultLike) -> ScoreResponse:
         """Build a ScoreResponse from a result object.
 
         Decouples the router from the service's internal type representation
@@ -88,15 +91,19 @@ class ScoreResponse(BaseModel):
         return cls(
             score=result.score,
             tier=result.tier_label,
+            score_factors=result.score_factors,
             top_factors=result.top_factors,
             recommendations=result.recommendations,
             similar_leads=result.similar_leads or None,
         )
 
     def to_dict(self) -> dict[str, Any]:
-        """Render as a plain dict. ``similar_leads`` is conditionally included only
-        when not ``None``; all other fields are always present (even when None)
-        for a consistent response shape.
+        """Render as a plain dict.
+
+        All fields are always present (even when None) for a consistent
+        response shape, except ``similar_leads`` which is conditionally omitted
+        when ``None`` so callers can distinguish "no enrichment" from an
+        explicit empty list.
         """
         data: dict[str, Any] = {
             "score": self.score,
@@ -106,5 +113,5 @@ class ScoreResponse(BaseModel):
             "recommendations": self.recommendations,
         }
         if self.similar_leads is not None:
-            data["similar_leads"] = [sl.to_dict() if hasattr(sl, "to_dict") else sl for sl in self.similar_leads]
+            data["similar_leads"] = [sl.to_dict() for sl in self.similar_leads]
         return data

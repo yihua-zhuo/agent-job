@@ -14,8 +14,7 @@ with an empty ``similar_leads`` list — the static score is never lost.
 
 from __future__ import annotations
 
-import importlib
-import importlib.util
+import json
 import logging
 from dataclasses import dataclass, field
 from typing import Protocol
@@ -29,14 +28,6 @@ from models.score import ScoreTier, SimilarLead
 from pkg.errors.app_exceptions import NotFoundException
 
 logger = logging.getLogger(__name__)
-
-# Lazy lookup for the TBD AI client. We use importlib.util.find_spec so that
-# SyntaxError or other non-ImportError issues in the TBD module do not
-# propagate through the import-time fallback.
-AIAgentClient: type | None = None
-if importlib.util.find_spec("services.ai_agent_client") is not None:
-    _ai_module = importlib.import_module("services.ai_agent_client")
-    AIAgentClient = getattr(_ai_module, "AIAgentClient", None)
 
 
 class _AIAgentClientProtocol(Protocol):
@@ -91,6 +82,7 @@ class ScoreResult:
 
     score: int
     tier: ScoreTier
+    score_factors: dict[str, int] | None = None
     top_factors: list[str] = field(default_factory=list)
     recommendations: list[str] = field(default_factory=list)
     similar_leads: list[SimilarLead] = field(default_factory=list)
@@ -127,7 +119,7 @@ class ScoreService:
                 tenant_id=tenant_id,
                 current_score=current_score,
             )
-        except (TimeoutError, httpx.HTTPError, ValueError, KeyError, TypeError) as exc:
+        except (TimeoutError, httpx.HTTPError, json.JSONDecodeError) as exc:
             logger.warning("AI agent call failed for customer %s: %s", customer_id, exc)
             return {}
 
@@ -194,7 +186,11 @@ class ScoreService:
             total = 0
             contributions: dict[str, int] = {}
             for field_name, weight in FIELD_WEIGHTS.items():
-                factor_score = int(score_factors.get(field_name, 0))
+                raw_value = score_factors.get(field_name, 0)
+                try:
+                    factor_score = int(raw_value)
+                except (TypeError, ValueError):
+                    factor_score = 0
                 factor_score = max(0, min(100, factor_score))
                 contributions[field_name] = factor_score
                 # Integer-division: weights are percentages that sum to 100,
@@ -234,6 +230,7 @@ class ScoreService:
         return ScoreResult(
             score=score,
             tier=tier,
+            score_factors=score_factors,
             top_factors=top_factors,
             recommendations=recommendations,
             similar_leads=similar_leads,
@@ -245,10 +242,9 @@ class ScoreService:
         tenant_id: int,
         include_ai: bool = True,
     ) -> ScoreResult:
-        score_result = await self.calculate_score(customer_id, tenant_id, include_ai=include_ai)
-        # Treat the customer as "never scored" only if the persisted factor
-        # data is absent. top_factors/recommendations are derived views and can
-        # legitimately be empty (e.g. all factor scores == 0).
+        # Fail fast: 404s for unscored/missing customers must never trigger
+        # the AI dependency. The persisted factor check runs before any
+        # scoring work, so unscored customers raise without an AI call.
         result = await self.session.execute(
             select(CustomerModel).where(
                 CustomerModel.id == customer_id,
@@ -258,4 +254,4 @@ class ScoreService:
         customer = result.scalar_one_or_none()
         if customer is None or not customer.score_factors:
             raise NotFoundException("Score")
-        return score_result
+        return await self.calculate_score(customer_id, tenant_id, include_ai=include_ai)

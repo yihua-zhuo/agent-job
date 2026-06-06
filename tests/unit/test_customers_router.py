@@ -12,8 +12,11 @@ from api.routers.customers import (
     customers_router,
 )
 from db.connection import get_db
-from internal.middleware.fastapi_auth import AuthContext
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import AppException, NotFoundException, ValidationException
+from tests.unit.conftest import MockState, make_mock_session
+from tests.unit.domain_handlers.customers import make_customer_handler
+from tests.unit.domain_handlers.lead_routing import make_lead_routing_handler
 
 # ---------------------------------------------------------------------------
 # Helpers: build a minimal FastAPI app with overridden deps for each test
@@ -106,11 +109,16 @@ CUSTOMER_ROW = {
 
 @pytest.fixture
 def client_with_service(monkeypatch):
-    """Return a TestClient with CustomerService fully mocked."""
+    """Return a TestClient with CustomerService fully mocked.
+
+    The session is built via ``make_mock_session`` with the project's
+    customer and lead_routing handlers (which include the customer_enrichment
+    subquery used by list/search routes) — the shared mock infrastructure
+    handles tenant-isolation semantics for the queries the router actually
+    fires against the session.
+    """
     from starlette.requests import Request
     from starlette.responses import JSONResponse
-
-    from internal.middleware.fastapi_auth import require_auth
 
     # Create mock eagerly so the fixture can return it before any request is made.
     # Each test gets its own fresh mock (no module-level singleton = no cross-test pollution).
@@ -120,12 +128,16 @@ def client_with_service(monkeypatch):
     def override_customer_service(repository):
         return _mock
 
-    # Async-aware mock session for session.execute() calls (enrichment queries)
-    mock_session = MagicMock()
-    mock_enrich_result = MagicMock()
-    mock_enrich_result.all = MagicMock(return_value=[])
-    mock_enrich_result.scalar_one_or_none = MagicMock(return_value=None)
-    mock_session.execute = AsyncMock(return_value=mock_enrich_result)
+    # Composable mock session: customer handler covers customer_enrichment
+    # subqueries, lead_routing covers sla_status lookups in /leads endpoint.
+    state = MockState()
+    mock_session = make_mock_session(
+        handlers=[
+            make_customer_handler(state),
+            make_lead_routing_handler(state),
+        ],
+        state=state,
+    )
 
     app = FastAPI()
     app.include_router(customers_router)

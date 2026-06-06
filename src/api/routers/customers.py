@@ -555,12 +555,11 @@ async def trigger_lead_recycle(
 async def calculate_customer_score(
     customer_id: int,
     include_ai: bool = Query(
-        True,
+        False,
         description=(
-            "Call AI agent for similar_leads enrichment. Default is True for the POST "
-            "action path because callers expect a freshly enriched score. Note: this "
-            "adds latency and an external-dependency failure surface; pass False to "
-            "skip AI enrichment and get a fast static score."
+            "Call AI agent for similar_leads enrichment. Set True to opt in; "
+            "default is False to keep latency low and avoid the external AI "
+            "dependency. AI failures degrade gracefully to a static score."
         ),
     ),
     ctx: AuthContext = Depends(require_auth),
@@ -571,14 +570,10 @@ async def calculate_customer_score(
     Returns 200 (per the file's convention for action endpoints, not 201).
     ScoreService is a stateless calculator that uses the session directly.
 
-    When ``include_ai`` is true (default) the AI agent is called to enrich the
-    response with ``similar_leads``. The AI call degrades gracefully — if the
-    agent is unreachable, the static score is still returned and
-    ``similar_leads`` is omitted from the response.
-
-    Asymmetry with GET: POST defaults ``include_ai`` to True (action callers
-    expect enrichment), while GET defaults it to False (read callers usually
-    want a fast, cacheable score).
+    When ``include_ai`` is true the AI agent is called to enrich the response
+    with ``similar_leads``. The AI call degrades gracefully — if the agent is
+    unreachable, the static score is still returned and ``similar_leads`` is
+    omitted from the response.
     """
     service = ScoreService(session)
     score_result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
@@ -596,9 +591,9 @@ async def get_customer_score(
     include_ai: bool = Query(
         False,
         description=(
-            "Call AI agent for similar_leads enrichment. Default is False for the GET "
-            "read path to keep latency low — set True to opt in to AI enrichment. "
-            "Note: POST defaults this to True; the asymmetry is intentional."
+            "Call AI agent for similar_leads enrichment. Set True to opt in; "
+            "default is False to keep latency low and avoid the external AI "
+            "dependency."
         ),
     ),
     ctx: AuthContext = Depends(require_auth),
