@@ -10,6 +10,24 @@ from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
 
+# event_metadata is a free-form JSONB blob written by external webhook callers.
+# Contract: keys must come from the SAFE_METADATA_KEYS allow-list below, or be
+# added to it before use. Do NOT place internal IDs, passwords, tokens, or
+# any other PII in this column — it is returned verbatim to API consumers
+# via to_dict() and any sensitive value will leak by default.
+SAFE_METADATA_KEYS: frozenset[str] = frozenset(
+    {
+        "campaign",
+        "source",
+        "channel",
+        "url",
+        "user_agent",
+        "device_type",
+        "duration_seconds",
+        "referrer",
+    }
+)
+
 
 class EngagementEventModel(Base):
     """Engagement event entity mapped to the ``engagement_events`` table."""

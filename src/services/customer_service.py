@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
 from typing import Any
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.repositories.customer import CustomerRepository
 from models.customer import CustomerCreateDTO, CustomerStatus
 from pkg.errors.app_exceptions import ValidationException
@@ -20,8 +22,9 @@ class CustomerService:
         "cold": "C",
     }
 
-    def __init__(self, repository: CustomerRepository) -> None:
-        self.repository = repository
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+        self.repository = CustomerRepository(session)
 
     async def create_customer(
         self,
@@ -52,15 +55,6 @@ class CustomerService:
             await self._upsert_enrichment(customer.id, tenant_id, data["enrichment_data"])
 
         return customer
-
-    # Maps the public lead_tier filter values (hot/warm/cold) to the stored
-    # ScoreTier letter values (A/B/C) that the customer.tier column carries.
-    # Tier "D" customers are below the cold threshold and excluded by design.
-    LEAD_TIER_TO_STORED: dict[str, str] = {
-        "hot": "A",
-        "warm": "B",
-        "cold": "C",
-    }
 
     async def list_customers(
         self,

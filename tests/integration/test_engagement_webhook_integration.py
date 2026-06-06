@@ -11,7 +11,6 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import select
 
-from db.models.customer import CustomerModel
 from db.models.engagement import EngagementEventModel
 from db.repositories.customer import CustomerRepository
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
@@ -200,26 +199,22 @@ class TestLeadTierAndOrderByScore:
         assert ids_in_order[-1] == null_id
 
     async def test_default_ordering_unchanged_without_order_by_score(
-        self, db_schema, _seed_tenant, tenant_id, async_session
+        self, db_schema, _seed_tenant, _seed_customer, tenant_id, async_session
     ):
         """Without order_by_score the default created_at DESC ordering is preserved."""
-        # Seed customers with explicit, distinct created_at timestamps so DESC ordering is deterministic
+        # Seed customers with explicit, distinct created_at timestamps so DESC
+        # ordering is deterministic. The seed_customer domain fixture owns the
+        # data shape; we just pass the timestamps through it.
         base = datetime.now(UTC)
         ids: list[int] = []
         for offset_minutes in range(3):
-            customer = CustomerModel(
-                tenant_id=tenant_id,
-                name=f"Order {offset_minutes}",
-                email=f"order_{offset_minutes}@example.com",
-                status="lead",
-                owner_id=0,
-                tags=[],
-                created_at=base + timedelta(minutes=offset_minutes),
-                updated_at=base + timedelta(minutes=offset_minutes),
+            ts = base + timedelta(minutes=offset_minutes)
+            customer_id = await _seed_customer(
+                name_suffix=f"order_{offset_minutes}",
+                created_at=ts,
+                updated_at=ts,
             )
-            async_session.add(customer)
-            await async_session.flush()
-            ids.append(customer.id)
+            ids.append(customer_id)
         first_id, second_id, third_id = ids
 
         repo = CustomerRepository(async_session)

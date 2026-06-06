@@ -285,43 +285,15 @@ async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
     return tenant_id_2
 
 
-@pytest.fixture
-def _seed_customer(async_session, _seed_tenant, tenant_id):
-    """Return a sync callable that returns a coroutine — tests still `await` the result.
-
-    Tests call it as ``await _seed_customer(score=10, tier="A")``; the fixture
-    binds async_session and tenant_id automatically. Pass ``tenant_id=...`` to
-    override (used by cross-tenant isolation tests).
-    """
-    from tests.integration.domain_fixtures.customer import seed_customer
-
-    def _factory(
-        *,
-        tenant_id: int = tenant_id,
-        name_suffix: str | None = None,
-        score: int | None = None,
-        tier: str | None = None,
-        score_factors: dict | None = None,
-    ):
-        return seed_customer(
-            async_session,
-            tenant_id,
-            name_suffix=name_suffix,
-            score=score,
-            tier=tier,
-            score_factors=score_factors,
-        )
-
-    return _factory
-
-
-@pytest_asyncio.fixture
-async def customer_service(async_session):
-    """Wire CustomerService with a real CustomerRepository + session for service-level tests."""
-    from db.repositories.customer import CustomerRepository
-    from services.customer_service import CustomerService
-
-    return CustomerService(CustomerRepository(async_session))
+# ── Re-export domain-owned customer fixtures ────────────────────────────────────
+# The fixtures themselves live in tests/integration/domain_fixtures/customer.py
+# so the customer domain module owns the data shape (Rule 110, Rule 125). This
+# block re-imports them so any integration test can request them by name without
+# importing the domain module directly.
+from tests.integration.domain_fixtures.customer import (  # noqa: E402, F401
+    _seed_customer,
+    customer_service,
+)
 
 
 # ── Per-file cleanup rule (mandatory) ────────────────────────────────────────────

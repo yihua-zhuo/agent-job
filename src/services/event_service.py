@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import and_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.customer import CustomerModel
 from db.models.engagement import EngagementEventModel
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 
@@ -38,20 +37,6 @@ class EventService:
         if event_type not in VALID_EVENT_TYPES:
             raise ValidationException(f"event_type must be one of: {', '.join(sorted(VALID_EVENT_TYPES))}")
 
-        # Pre-existence check gives a clean 404 (NotFoundException) for unknown
-        # customer_id. The FK constraint would also catch this on INSERT, but
-        # it surfaces as IntegrityError — the explicit SELECT is friendlier.
-        customer_exists = await self.session.execute(
-            select(CustomerModel.id).where(
-                and_(
-                    CustomerModel.id == customer_id,
-                    CustomerModel.tenant_id == tenant_id,
-                )
-            )
-        )
-        if customer_exists.scalar_one_or_none() is None:
-            raise NotFoundException("Customer")
-
         event = EngagementEventModel(
             tenant_id=tenant_id,
             customer_id=customer_id,
@@ -59,6 +44,10 @@ class EventService:
             event_metadata=event_metadata or {},
         )
         self.session.add(event)
-        await self.session.flush()
+        try:
+            await self.session.flush()
+        except IntegrityError as exc:
+            await self.session.rollback()
+            raise NotFoundException("Customer") from exc
         await self.session.refresh(event)
         return event
