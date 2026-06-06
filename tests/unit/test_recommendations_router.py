@@ -5,8 +5,6 @@ from unittest.mock import AsyncMock, MagicMock
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from starlette.requests import Request
-from starlette.responses import JSONResponse
 
 from api.routers.recommendations import recommendations_router
 from db.connection import get_db
@@ -15,33 +13,36 @@ from pkg.errors.app_exceptions import AppException, NotFoundException
 from services.sales_recommendation import RecommendationResult, SalesActionRecommendation
 
 
-def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
+def _make_auth_ctx(tenant_id: int | None = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
 
 
-def _build_app(mock_service: MagicMock | None) -> FastAPI:
-    """Build a FastAPI app with the router, the global exception handlers from
-    main.py, and dependency overrides. `mock_service=None` means do not patch
-    the service (used for tests that exercise auth only)."""
+def _build_app(
+    mock_service: MagicMock | None = None,
+    auth_ctx: AuthContext | None = None,
+) -> FastAPI:
+    """Build a FastAPI app with the router and dependency overrides.
+
+    `auth_ctx=None` means require_auth is NOT overridden (to test 401).
+    Exception handlers come from main.create_app and are registered here as
+    copies — the source of truth is main.create_app's create_app(), so any
+    format change there must be mirrored here.
+    """
+    from main import create_app
+
+    app = create_app()
+    # Only include the recommendations router for isolation
     app = FastAPI()
     app.include_router(recommendations_router)
-    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
+    # Copy exception handlers from main's create_app
+    _main_app = create_app()
+
+    for exc_type, handler in _main_app.exception_handlers.items():
+        app.add_exception_handler(exc_type, handler)
+
+    if auth_ctx is not None:
+        app.dependency_overrides[require_auth] = lambda ctx=auth_ctx: ctx
     app.dependency_overrides[get_db] = lambda: MagicMock()
-
-    @app.exception_handler(AppException)
-    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"success": False, "message": exc.detail, "code": exc.code},
-        )
-
-    @app.exception_handler(Exception)
-    async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-        return JSONResponse(
-            status_code=500,
-            content={"success": False, "message": "Internal server error", "code": "INTERNAL_ERROR"},
-        )
-
     return app
 
 
@@ -51,9 +52,9 @@ def mocked_service_client(monkeypatch):
     mock_service = MagicMock()
     monkeypatch.setattr(
         "api.routers.recommendations.SalesRecommendationService",
-        lambda: mock_service,
+        lambda session=None: mock_service,
     )
-    app = _build_app(mock_service)
+    app = _build_app(auth_ctx=_make_auth_ctx())
     client = TestClient(app, raise_server_exceptions=False)
     return client, mock_service
 
@@ -61,9 +62,7 @@ def mocked_service_client(monkeypatch):
 @pytest.fixture
 def no_auth_client():
     """Return a TestClient where require_auth is NOT overridden (to test 401)."""
-    app = FastAPI()
-    app.include_router(recommendations_router)
-    app.dependency_overrides[get_db] = lambda: MagicMock()
+    app = _build_app(auth_ctx=None)
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -111,20 +110,14 @@ class TestGetRecommendations:
         assert body["success"] is False
         assert body["code"] == "INTERNAL_ERROR"
 
-    def test_missing_tenant_returns_400(self, monkeypatch):
-        from api.routers import recommendations as rec_router
-
-        mock_service = MagicMock()
-        mock_service.get_recommendations = AsyncMock(return_value=_make_recommendation_result())
-        monkeypatch.setattr(rec_router, "SalesRecommendationService", lambda: mock_service)
-
-        app = _build_app(mock_service)
+    def test_missing_tenant_returns_422(self, mocked_service_client):
+        client, svc = mocked_service_client
+        svc.get_recommendations = AsyncMock(return_value=_make_recommendation_result())
         # Override auth to return a context with tenant_id = None
-        app.dependency_overrides[require_auth] = lambda: AuthContext(user_id=99, tenant_id=None, roles=[])
-        client = TestClient(app, raise_server_exceptions=False)
+        client.app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=None)
         resp = client.get("/api/v1/sales/opportunities/1/recommendations")
-        assert resp.status_code == 400
-        mock_service.get_recommendations.assert_not_called()
+        assert resp.status_code == 422
+        svc.get_recommendations.assert_not_called()
 
     def test_missing_auth_returns_401(self, no_auth_client):
         client = no_auth_client

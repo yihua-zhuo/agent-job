@@ -28,7 +28,7 @@ class RecommendationService:
 
     def __init__(self, session: AsyncSession):
         self.session = session
-        self._sales_svc = SalesRecommendationService()
+        self._sales_svc = SalesRecommendationService(session)
 
     async def get_recommendations(self, opportunity_id: int, tenant_id: int) -> dict:
         key = _cache_key(opportunity_id, tenant_id)
