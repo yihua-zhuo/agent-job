@@ -5,8 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from pkg.errors.app_exceptions import ValidationException
-from services.sales_recommendation import SalesRecommendationService
+from services.recommendation_service import RecommendationService
 
 recommendations_router = APIRouter(prefix="/api/v1/sales", tags=["sales"])
 
@@ -17,9 +16,7 @@ async def get_opportunity_recommendations(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
-    if ctx.tenant_id is None:
-        raise ValidationException("Tenant ID is required")
-    service = SalesRecommendationService(session)
+    service = RecommendationService(session)
     result = await service.get_recommendations(opportunity_id, ctx.tenant_id)
     return {
         "success": True,

@@ -84,6 +84,14 @@ class RecommendationResult:
 class SalesRecommendationService:
     """销售推荐服务"""
 
+    # Hash-derived ID scan range for similar-customer lookup (synthetic data only).
+    _MAX_SCAN_RANGE = 1000
+    # Upper bound on similar-customer lookups per call.
+    _SIMILAR_SCAN_LIMIT = 10
+    # Confidence-score bounds for `get_next_best_action` (non-security, recommendation only).
+    _CONFIDENCE_MIN = 0.6
+    _CONFIDENCE_MAX = 0.95
+
     # 产品目录
     PRODUCTS = {
         "basic": {"name": "基础版", "price": 100, "tier": 1},
@@ -128,7 +136,7 @@ class SalesRecommendationService:
         tier_index = list(self.PRODUCTS.keys()).index(tier)
         similar = [
             i
-            for i in range(1, 1000)
+            for i in range(1, self._MAX_SCAN_RANGE)
             if int(hashlib.sha256(f"{tenant_id}:{i}".encode()).hexdigest()[:8], 16) % 4 == tier_index
         ][:limit]
         return similar
@@ -181,7 +189,7 @@ class SalesRecommendationService:
             action=action,
             target=target,
             reason=reason,
-            confidence=round(self._rng.uniform(0.6, 0.95), 2),  # noqa: S311 - non-security recommendation scoring
+            confidence=round(self._rng.uniform(self._CONFIDENCE_MIN, self._CONFIDENCE_MAX), 2),  # noqa: S311 - non-security recommendation scoring
         )
 
     def recommend_cross_sell(self, tenant_id: int, customer_id: int) -> list[ProductRecommendation]:
@@ -207,7 +215,7 @@ class SalesRecommendationService:
                     browsing_scores[related] = browsing_scores.get(related, 0) + 0.2
 
         # 3. 基于相似客户的推荐
-        similar_customers = self._get_similar_customers_by_tier(tenant_id, current_tier, limit=10)
+        similar_customers = self._get_similar_customers_by_tier(tenant_id, current_tier, limit=self._SIMILAR_SCAN_LIMIT)
         for sim_cid in similar_customers:
             sim_data = self._get_mock_customer_data(tenant_id, sim_cid)
             for product in sim_data["purchase_history"]:
@@ -297,12 +305,12 @@ class SalesRecommendationService:
 
         return similar_customers
 
-    def predict_conversion_probability(self, opportunity_id: int) -> float:
+    def predict_conversion_probability(self, opportunity_id: int, tenant_id: int) -> float:
         """
         预测商机成交概率（增强版）
         结合：历史数据、市场情绪、竞争分析
         """
-        seed = int(hashlib.sha256(str(opportunity_id).encode()).hexdigest()[:8], 16)
+        seed = int(hashlib.sha256(f"{tenant_id}:{opportunity_id}".encode()).hexdigest()[:8], 16)
 
         # 基础概率 (历史数据)
         base_prob = 0.3 + (seed % 50) / 100.0
@@ -325,7 +333,7 @@ class SalesRecommendationService:
         然后组装转换概率、相似客户和下一步最佳行动。
         """
         customer_id = await self._resolve_customer_id(opportunity_id, tenant_id)
-        conversion_prob = self.predict_conversion_probability(opportunity_id)
+        conversion_prob = self.predict_conversion_probability(opportunity_id, tenant_id)
         similar = self.get_similar_customers(tenant_id, customer_id)
         next_action = self.get_next_best_action(tenant_id, customer_id)
         return RecommendationResult(
