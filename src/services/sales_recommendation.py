@@ -5,9 +5,7 @@
 
 import hashlib
 import random
-from dataclasses import dataclass
-
-from sqlalchemy.ext.asyncio import AsyncSession
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -42,6 +40,16 @@ class SimilarCustomer:
     satisfaction_score: float
 
 
+@dataclass
+class RecommendationResult:
+    """商机完整推荐结果"""
+
+    opportunity_id: int
+    conversion_probability: float
+    similar_opportunities: list[dict] = field(default_factory=list)
+    next_best_action: SalesActionRecommendation | None = None
+
+
 class SalesRecommendationService:
     """销售推荐服务"""
 
@@ -61,9 +69,9 @@ class SalesRecommendationService:
         "enterprise": ["premium"],
     }
 
-    def __init__(self, session: AsyncSession | None = None):
-        """初始化服务"""
-        self.session = session
+    def __init__(self, seed: int | None = None):
+        """初始化服务。`seed` 控制随机行为以保证测试可复现。"""
+        self._seed = seed
         self._customer_cache: dict[int, dict] = {}
 
     def _get_mock_customer_data(self, tenant_id: int, customer_id: int) -> dict:
@@ -272,15 +280,21 @@ class SalesRecommendationService:
 
         return round(min(max(conversion_prob, 0.0), 1.0), 2)
 
-    async def get_recommendations(self, opportunity_id: int, tenant_id: int) -> dict:
-        """获取商机完整推荐结果。"""
+    async def get_recommendations(self, opportunity_id: int, tenant_id: int) -> RecommendationResult:
+        """获取商机完整推荐结果。
+
+        接受 `opportunity_id` + `tenant_id`，查找关联客户并组装结果。
+        """
+        # NOTE: service is currently mock-based; once migrated to real DB-backed models
+        # the opportunity's `customer_id` must be resolved from the opportunity row.
+        customer_id = opportunity_id
         conversion_prob = self.predict_conversion_probability(opportunity_id)
-        similar = self.get_similar_customers(tenant_id, opportunity_id)
-        next_action = self.get_next_best_action(tenant_id, opportunity_id)
-        return {
-            "opportunity_id": opportunity_id,
-            "conversion_probability": conversion_prob,
-            "similar_opportunities": [
+        similar = self.get_similar_customers(tenant_id, customer_id)
+        next_action = self.get_next_best_action(tenant_id, customer_id)
+        return RecommendationResult(
+            opportunity_id=opportunity_id,
+            conversion_probability=conversion_prob,
+            similar_opportunities=[
                 {
                     "customer_id": s.customer_id,
                     "current_tier": s.current_tier,
@@ -288,10 +302,5 @@ class SalesRecommendationService:
                 }
                 for s in similar
             ],
-            "next_best_action": {
-                "action": next_action.action,
-                "target": next_action.target,
-                "reason": next_action.reason,
-                "confidence": next_action.confidence,
-            },
-        }
+            next_best_action=next_action,
+        )
