@@ -15,6 +15,7 @@ from db.models.customer import CustomerModel
 from db.models.engagement import EngagementEventModel
 from db.repositories.customer import CustomerRepository
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
+from services.customer_service import CustomerService
 from services.event_service import EventService
 from services.score_service import ScoreService
 
@@ -244,7 +245,7 @@ class TestLeadTierAndOrderByScore:
         assert [c.id for c in items] == [hot_high, hot_low]
 
     async def test_lead_tier_invalid_raises_validation_in_service(
-        self, db_schema, _seed_tenant, _seed_customer, customer_service, tenant_id
+        self, db_schema, _seed_tenant, _seed_customer, customer_service, tenant_id, async_session
     ):
         """Service-layer validation rejects unknown lead_tier values with ValidationException.
 
@@ -258,7 +259,7 @@ class TestLeadTierAndOrderByScore:
             await customer_service.list_customers(tenant_id=tenant_id, lead_tier="bogus")
 
     async def test_lead_tier_hot_via_service_maps_to_tier_a(
-        self, db_schema, _seed_tenant, _seed_customer, customer_service, tenant_id
+        self, db_schema, _seed_tenant, _seed_customer, customer_service, tenant_id, async_session
     ):
         """Service-level lead_tier='hot' is translated to stored tier 'A' before SQL filtering."""
         customer_id_a = await _seed_customer(tier="A")

@@ -1,4 +1,4 @@
-"""Unit tests for src/api/routers/events.py — tests for the events webhook router wiring."""
+"""Unit tests for src/api/routers/events.py — tests for the events webhook router and EventService validation path."""
 
 from __future__ import annotations
 
@@ -14,7 +14,8 @@ from api.routers.events import router
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.score import ScoreTier
-from pkg.errors.app_exceptions import AppException
+from pkg.errors.app_exceptions import AppException, ValidationException
+from services.event_service import VALID_EVENT_TYPES
 
 
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
@@ -31,16 +32,7 @@ def _make_score_result(score: int = 75, tier: ScoreTier = ScoreTier.B):
 
 @pytest.fixture
 def mock_db_session():
-    # Stand-in for the dependency override — the real session is provided by
-    # app.dependency_overrides[get_db] below. The webhook does a SELECT against
-    # CustomerModel after calculate_score, so session.execute() must return a
-    # result whose scalar_one_or_none() yields a non-None mock customer.
-    session = MagicMock()
-    session.flush = AsyncMock()
-    customer_result = MagicMock()
-    customer_result.scalar_one_or_none.return_value = MagicMock()
-    session.execute = AsyncMock(return_value=customer_result)
-    return session
+    return MagicMock()
 
 
 @pytest.fixture
@@ -50,8 +42,8 @@ def app_with_overrides(monkeypatch, mock_db_session):
     This is a router-level delegation test — the EventService and ScoreService
     classes are patched at the router module level with thin lambdas so we
     exercise the router wiring only. The services' own SQL is covered by
-    integration tests; service-layer validation is in
-    tests/unit/test_event_service.py.
+    integration tests; service-layer validation is below in
+    TestEventServiceValidation.
     """
     mock_event = MagicMock()
     mock_event.record_engagement_event = AsyncMock()
@@ -199,3 +191,41 @@ class TestEngagementWebhook:
         body_str = repr(response.json()).lower()
         assert "customer_id" in body_str
         mock_event.record_engagement_event.assert_not_called()
+
+
+class TestEventServiceValidation:
+    """Unit tests for the standalone EventService.record_engagement_event validation path."""
+
+    @pytest.mark.asyncio
+    async def test_record_engagement_event_invalid_type_raises(self):
+        """EventService raises ValidationException for event_type not in the allowlist."""
+        from services.event_service import EventService
+
+        # validation path does not touch the DB; MagicMock is safe here
+        svc = EventService(MagicMock())
+        with pytest.raises(ValidationException, match="event_type must be one of"):
+            await svc.record_engagement_event(tenant_id=1, customer_id=1, event_type="bogus")
+
+    @pytest.mark.asyncio
+    async def test_valid_event_types_accepted(self):
+        """All event types in VALID_EVENT_TYPES are accepted by the service (exact equality)."""
+        from services.event_service import EventService
+
+        assert set(VALID_EVENT_TYPES) == {"email_open", "website_visit"}
+
+        for event_type in VALID_EVENT_TYPES:
+            session = MagicMock()
+            session.add = MagicMock()
+            session.flush = AsyncMock()
+            session.refresh = AsyncMock()
+            # Customer existence check returns a row -> customer exists -> insert proceeds
+            existence_result = MagicMock()
+            existence_result.scalar_one_or_none.return_value = 1
+            session.execute = AsyncMock(return_value=existence_result)
+            svc = EventService(session)
+            await svc.record_engagement_event(
+                tenant_id=1,
+                customer_id=1,
+                event_type=event_type,
+            )
+            session.add.assert_called_once()
