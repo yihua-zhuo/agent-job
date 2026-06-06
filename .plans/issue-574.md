@@ -21,10 +21,10 @@ Reading order followed:
 ### Step 1: Verify service interface and serialization path
 Before writing any code, confirm how `ChurnPredictionService` returns prediction objects and whether they support `.to_dict()`. The service lives at `src/services/churn_prediction_service.py` and exposes:
 - `calculate_score(customer_id, tenant_id) -> ChurnPrediction` — computes a fresh prediction (returns a dataclass with fields `customer_id`, `score`, `tier`, `top_3_risk_factors`, `recommended_actions`)
-- `get_churn_prediction(customer_id, tenant_id) -> ChurnPrediction` — returns the latest stored prediction (may return an ORM model or raise `NotFoundException`)
+- `get_churn_prediction(customer_id, tenant_id) -> ChurnPrediction` — returns a `ChurnPrediction` dataclass, or raises `NotFoundException`
 - `predict_churn(customer_ids, tenant_id) -> list[ChurnPrediction]` — batch computation
 
-If the return objects lack `.to_dict()`, use `dataclasses.asdict()` for dataclass results. For ORM model results, use `.to_dict()` as defined in `src/db/models/churn_prediction.py` line 56–70. Adapt serialization accordingly.
+Since both methods return a `ChurnPrediction` dataclass that has a `.to_dict()` method, serialize via `prediction.to_dict()` directly.
 
 ### Step 2: Create `src/api/routers/churn_risk.py`
 
@@ -51,10 +51,7 @@ async def get_churn_risk(
     session: AsyncSession = Depends(get_db),
 ):
     svc = ChurnPredictionService(session)
-    try:
-        prediction = await svc.get_churn_prediction(customer_id, tenant_id=ctx.tenant_id)
-    except Exception:
-        prediction = await svc.calculate_score(customer_id, tenant_id=ctx.tenant_id)
+    prediction = await svc.get_or_compute_prediction(customer_id, tenant_id=ctx.tenant_id)
     return {"success": True, "data": prediction.to_dict()}
 
 
@@ -65,14 +62,21 @@ async def predict_churn_batch(
     session: AsyncSession = Depends(get_db),
 ):
     svc = ChurnPredictionService(session)
-    results = await svc.predict_churn(body.customer_ids, tenant_id=ctx.tenant_id)
-    return {"success": True, "data": {"predictions": [r.to_dict() for r in results]}}
+    found, skipped = await svc.predict_churn(body.customer_ids, tenant_id=ctx.tenant_id)
+    return {
+        "success": True,
+        "data": {
+            "predictions": [p.to_dict() for p in found],
+            "skipped_customer_ids": skipped,
+        },
+    }
 ```
 
 Notes:
 - Router variable must be named `churn_risk_router` (not `router`) for auto-discovery by `iter_routers()` per `src/api/__init__.py` line 22–40.
 - `BatchPredictRequest` enforces `min_length=1` (rejects empty list with 422) and `max_length=500` (guards against oversized batches per dev-plan §7 risk table).
-- The GET endpoint's fallback to `calculate_score` satisfies the issue requirement: "returning the latest prediction (or compute if none exists)."
+- The GET endpoint delegates the "return latest or compute" logic to `get_or_compute_prediction`, keeping the router a thin serialization layer per CLAUDE.md §Router Pattern.
+- The batch endpoint returns `(found, skipped)` from `predict_churn` so the client can see which customer IDs were excluded (e.g., not found), making partial failures visible.
 - Serialize via `.to_dict()` per CLAUDE.md §Service Pattern.
 
 ### Step 3: Write unit tests in `tests/unit/test_churn_risk_router.py`
@@ -88,7 +92,7 @@ Test classes and cases:
 **`TestGetChurnRisk`:**
 - `test_returns_existing_prediction` — mock `get_churn_prediction` to return a prediction; assert 200, `success: True`, `data` contains expected fields.
 - `test_computes_when_not_found` — mock `get_churn_prediction` to raise; mock `calculate_score` to return a prediction; assert 200 and the computed result is returned.
-- `test_not_found_passthrough` — mock `calculate_score` to raise `NotFoundException`; assert 404 in response.
+- `test_not_found_returns_404` — mock `get_or_compute_prediction` to raise `NotFoundException`; assert 404 in response.
 
 **`TestPredictBatch`:**
 - `test_returns_predictions` — mock `predict_churn` to return a list; POST with `{"customer_ids": [1, 2]}`; assert 200 and `data.predictions` has the expected length.
@@ -96,12 +100,12 @@ Test classes and cases:
 - `test_oversized_batch_rejected` — POST with 501 IDs; assert 422 (`max_length=500`).
 
 ## Test Plan
-- Unit tests in `tests/unit/`: **new file** `test_churn_risk_router.py` with 6 test cases across 2 test classes covering both endpoints (normal, fallback, error paths).
+- Unit tests in `tests/unit/`: **new file** `test_churn_risk_router.py` with 7 test cases across 2 test classes covering both endpoints (normal, fallback, error paths).
 - Integration tests in `tests/integration/`: **none** — the dev-plan §1.3 explicitly excludes end-to-end integration; the service-layer integration is covered by #573. This is a pure router-layer change that needs only unit tests per dev-plan §5 Step 3.
 - Dev-plan verification (§6):
   - `ruff check src/api/routers/churn_risk.py` → 0 errors
   - `ruff check src/main.py` → 0 errors (no changes expected, but verify)
-  - `PYTHONPATH=src pytest tests/unit/test_churn_risk_router.py -v` → 6 passed
+  - `PYTHONPATH=src pytest tests/unit/test_churn_risk_router.py -v` → 7 passed
   - `alembic upgrade head && alembic downgrade -1 && alembic upgrade head` → not applicable for this issue (no new migrations; #573 owns the churn_predictions table)
 
 ## Acceptance Criteria
@@ -111,5 +115,5 @@ Test classes and cases:
 - `POST /api/v1/customers/churn-predict-batch` returns 200 with `{"success": true, "data": {"predictions": [...]}}` for valid input
 - `POST /api/v1/customers/churn-predict-batch` returns 422 for empty `customer_ids` or lists exceeding 500 items
 - `ruff check src/api/routers/churn_risk.py` passes with 0 errors
-- `PYTHONPATH=src pytest tests/unit/test_churn_risk_router.py -v` shows 6 passed
+- `PYTHONPATH=src pytest tests/unit/test_churn_risk_router.py -v` shows 7 passed
 - Router is auto-registered via `iter_routers()` — confirmed by app startup with no manual `main.py` edits

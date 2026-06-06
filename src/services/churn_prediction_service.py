@@ -202,23 +202,23 @@ class ChurnPredictionService:
 
         top_3_risk_factors = self._build_top_3_factors(name_to_score)
 
-        recommended_actions: list[str] = []
-        if raw["support_ticket_count"] > 2:
-            recommended_actions.append("优先处理客户工单，降低流失风险")
-        if raw["purchase_recency_days"] > 60:
-            recommended_actions.append("客户长期无购买记录，触发重新激活营销")
-        if raw["login_frequency"] < 3:
-            recommended_actions.append("客户登录频率低，建议发送个性化内容激活")
-        if not recommended_actions:
-            recommended_actions.append("客户状态健康，维持常规维护")
-
         return ChurnPrediction(
             customer_id=customer_id,
             score=score,
             tier=self._compute_tier(score),
             top_3_risk_factors=top_3_risk_factors,
-            recommended_actions=recommended_actions,
+            recommended_actions=self._build_recommended_actions(raw),
         )
+
+    async def get_or_compute_prediction(self, customer_id: int, tenant_id: int) -> ChurnPrediction:
+        """Return the latest stored prediction, or compute a fresh one if none exists.
+
+        Raises NotFoundException if the customer itself does not exist.
+        """
+        try:
+            return await self.get_churn_prediction(customer_id, tenant_id=tenant_id)
+        except NotFoundException:
+            return await self.calculate_score(customer_id, tenant_id=tenant_id)
 
     async def get_churn_prediction(self, customer_id: int, tenant_id: int) -> ChurnPrediction:
         """Return the latest stored churn prediction for a customer, or raise NotFoundException."""
@@ -261,12 +261,158 @@ class ChurnPredictionService:
 
     async def predict_churn(
         self, customer_ids: list[int], tenant_id: int
-    ) -> list[ChurnPrediction]:
-        """Batch-compute churn predictions, skipping customers that raise NotFoundException."""
-        results: list[ChurnPrediction] = []
+    ) -> tuple[list[ChurnPrediction], list[int]]:
+        """Batch-compute churn predictions for multiple customers.
+
+        Returns (found, skipped) where ``found`` is a list of predictions in
+        the same order as the input IDs and ``skipped`` contains customer
+        IDs whose lookup raised NotFoundException.
+
+        Uses 4 batched queries (customer existence, login count, engagement
+        diversity, ticket count) plus 1 batched purchase-recency query,
+        regardless of batch size.
+        """
+        if not customer_ids:
+            return [], []
+
+        metrics = await self._fetch_raw_metrics_batch(customer_ids, tenant_id)
+
+        found: list[ChurnPrediction] = []
+        skipped: list[int] = []
         for cid in customer_ids:
-            try:
-                results.append(await self.calculate_score(cid, tenant_id=tenant_id))
-            except NotFoundException:
+            raw = metrics.get(cid)
+            if raw is None:
+                skipped.append(cid)
                 continue
-        return results
+            name_to_score = {
+                "login_frequency": self._normalize_score("login_frequency", raw["login_frequency"]),
+                "purchase_recency": self._normalize_score("purchase_recency", raw["purchase_recency_days"]),
+                "support_ticket_count": self._normalize_score("support_ticket_count", raw["support_ticket_count"]),
+                "engagement_score": self._normalize_score("engagement_score", raw["engagement_score_raw"]),
+            }
+            raw_total = sum(score * self.WEIGHTS[name] for name, score in name_to_score.items())
+            score = round(max(0.0, min(raw_total, 100.0)), 2)
+
+            found.append(
+                ChurnPrediction(
+                    customer_id=cid,
+                    score=score,
+                    tier=self._compute_tier(score),
+                    top_3_risk_factors=self._build_top_3_factors(name_to_score),
+                    recommended_actions=self._build_recommended_actions(raw),
+                )
+            )
+
+        return found, skipped
+
+    @staticmethod
+    def _build_recommended_actions(raw: dict) -> list[str]:
+        actions: list[str] = []
+        if raw["support_ticket_count"] > 2:
+            actions.append("优先处理客户工单，降低流失风险")
+        if raw["purchase_recency_days"] > 60:
+            actions.append("客户长期无购买记录，触发重新激活营销")
+        if raw["login_frequency"] < 3:
+            actions.append("客户登录频率低，建议发送个性化内容激活")
+        if not actions:
+            actions.append("客户状态健康，维持常规维护")
+        return actions
+
+    async def _fetch_raw_metrics_batch(
+        self, customer_ids: list[int], tenant_id: int
+    ) -> dict[int, dict]:
+        """Batch-read raw metrics for multiple customers with 4 queries total.
+
+        Returns a dict mapping customer_id -> raw metrics dict. Customers
+        not present in the dict do not exist (or are filtered out by tenant).
+        """
+        now = datetime.now(UTC)
+        login_window = now - timedelta(days=30)
+
+        customer_result = await self.session.execute(
+            select(CustomerModel.id).where(
+                and_(CustomerModel.id.in_(customer_ids), CustomerModel.tenant_id == tenant_id)
+            )
+        )
+        existing_ids = {row[0] for row in customer_result.all()}
+
+        login_result = await self.session.execute(
+            select(ActivityModel.customer_id, func.count(ActivityModel.id))
+            .where(
+                and_(
+                    ActivityModel.tenant_id == tenant_id,
+                    ActivityModel.customer_id.in_(customer_ids),
+                    ActivityModel.created_at >= login_window,
+                )
+            )
+            .group_by(ActivityModel.customer_id)
+        )
+        login_counts = {row[0]: int(row[1] or 0) for row in login_result.all()}
+
+        engagement_result = await self.session.execute(
+            select(
+                ActivityModel.customer_id,
+                func.count(func.distinct(ActivityModel.type)),
+            )
+            .where(
+                and_(
+                    ActivityModel.tenant_id == tenant_id,
+                    ActivityModel.customer_id.in_(customer_ids),
+                    ActivityModel.created_at >= login_window,
+                )
+            )
+            .group_by(ActivityModel.customer_id)
+        )
+        engagement_counts = {row[0]: int(row[1] or 0) for row in engagement_result.all()}
+
+        purchase_result = await self.session.execute(
+            select(
+                OpportunityModel.customer_id,
+                func.max(OpportunityModel.created_at),
+            )
+            .where(
+                and_(
+                    OpportunityModel.tenant_id == tenant_id,
+                    OpportunityModel.customer_id.in_(customer_ids),
+                    OpportunityModel.stage == "won",
+                )
+            )
+            .group_by(OpportunityModel.customer_id)
+        )
+        last_purchase_by_customer: dict[int, datetime] = {}
+        for row in purchase_result.all():
+            cid = row[0]
+            last = row[1]
+            if last is not None and last.tzinfo is None:
+                last = last.replace(tzinfo=UTC)
+            last_purchase_by_customer[cid] = last
+
+        ticket_result = await self.session.execute(
+            select(TicketModel.customer_id, func.count(TicketModel.id))
+            .where(
+                and_(
+                    TicketModel.tenant_id == tenant_id,
+                    TicketModel.customer_id.in_(customer_ids),
+                    TicketModel.status.in_(("open", "pending")),
+                )
+            )
+            .group_by(TicketModel.customer_id)
+        )
+        ticket_counts = {row[0]: int(row[1] or 0) for row in ticket_result.all()}
+
+        metrics: dict[int, dict] = {}
+        for cid in customer_ids:
+            if cid not in existing_ids:
+                continue
+            last_purchase = last_purchase_by_customer.get(cid)
+            if last_purchase is not None:
+                purchase_recency_days = max(0.0, (now - last_purchase).total_seconds() / 86400.0)
+            else:
+                purchase_recency_days = 90
+            metrics[cid] = {
+                "login_frequency": login_counts.get(cid, 0),
+                "purchase_recency_days": purchase_recency_days,
+                "support_ticket_count": ticket_counts.get(cid, 0),
+                "engagement_score_raw": engagement_counts.get(cid, 0),
+            }
+        return metrics

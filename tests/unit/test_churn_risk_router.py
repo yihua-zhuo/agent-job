@@ -27,21 +27,29 @@ class _Factor:
     score: float
     description: str
 
+    def to_dict(self) -> dict:
+        return {
+            "name": self.name,
+            "weight": self.weight,
+            "score": self.score,
+            "description": self.description,
+        }
+
 
 @dataclass
 class _Prediction:
     customer_id: int
     score: float
     tier: str
-    top_3_risk_factors: list = field(default_factory=list)
-    recommended_actions: list = field(default_factory=list)
+    top_3_risk_factors: list[_Factor] = field(default_factory=list)
+    recommended_actions: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "customer_id": self.customer_id,
             "score": self.score,
             "tier": self.tier,
-            "top_3_risk_factors": [f.__dict__ for f in self.top_3_risk_factors],
+            "top_3_risk_factors": [f.to_dict() for f in self.top_3_risk_factors],
             "recommended_actions": list(self.recommended_actions),
         }
 
@@ -68,9 +76,9 @@ def client(mock_churn_service):
     """TestClient for the churn risk router with the service fully mocked."""
     from api.routers import churn_risk
 
-    monkeypatch_module = churn_risk
-    original = monkeypatch_module.ChurnPredictionService
-    monkeypatch_module.ChurnPredictionService = lambda session: mock_churn_service
+    churn_risk_module = churn_risk
+    original = churn_risk_module.ChurnPredictionService
+    churn_risk_module.ChurnPredictionService = lambda session: mock_churn_service
 
     app = FastAPI()
     app.include_router(churn_risk_router)
@@ -95,14 +103,13 @@ def client(mock_churn_service):
 
     yield test_client
 
-    monkeypatch_module.ChurnPredictionService = original
+    churn_risk_module.ChurnPredictionService = original
 
 
 class TestGetChurnRisk:
     def test_returns_stored_prediction(self, client, mock_churn_service):
         prediction = _make_prediction(customer_id=42, score=82.5, tier="high")
-        mock_churn_service.get_churn_prediction = AsyncMock(return_value=prediction)
-        mock_churn_service.calculate_score = AsyncMock()
+        mock_churn_service.get_or_compute_prediction = AsyncMock(return_value=prediction)
 
         resp = client.get("/api/v1/customers/42/churn-risk")
         assert resp.status_code == 200
@@ -113,13 +120,11 @@ class TestGetChurnRisk:
         assert body["data"]["tier"] == "high"
         assert "top_3_risk_factors" in body["data"]
         assert "recommended_actions" in body["data"]
-        mock_churn_service.get_churn_prediction.assert_awaited_once_with(42, tenant_id=1)
-        mock_churn_service.calculate_score.assert_not_awaited()
+        mock_churn_service.get_or_compute_prediction.assert_awaited_once_with(42, tenant_id=1)
 
     def test_falls_back_to_compute_on_not_found(self, client, mock_churn_service):
         prediction = _make_prediction(customer_id=7, score=15.0, tier="low")
-        mock_churn_service.get_churn_prediction = AsyncMock(side_effect=NotFoundException("ChurnPrediction"))
-        mock_churn_service.calculate_score = AsyncMock(return_value=prediction)
+        mock_churn_service.get_or_compute_prediction = AsyncMock(return_value=prediction)
 
         resp = client.get("/api/v1/customers/7/churn-risk")
         assert resp.status_code == 200
@@ -127,12 +132,10 @@ class TestGetChurnRisk:
         assert body["data"]["tier"] == "low"
         assert body["data"]["score"] == 15.0
         assert body["data"]["customer_id"] == 7
-        mock_churn_service.get_churn_prediction.assert_awaited_once_with(7, tenant_id=1)
-        mock_churn_service.calculate_score.assert_awaited_once_with(7, tenant_id=1)
+        mock_churn_service.get_or_compute_prediction.assert_awaited_once_with(7, tenant_id=1)
 
     def test_not_found_returns_404(self, client, mock_churn_service):
-        mock_churn_service.get_churn_prediction = AsyncMock(side_effect=NotFoundException("ChurnPrediction"))
-        mock_churn_service.calculate_score = AsyncMock(side_effect=NotFoundException("Customer"))
+        mock_churn_service.get_or_compute_prediction = AsyncMock(side_effect=NotFoundException("Customer"))
 
         resp = client.get("/api/v1/customers/9999/churn-risk")
         assert resp.status_code == 404
@@ -146,13 +149,14 @@ class TestPredictBatch:
     def test_returns_predictions(self, client, mock_churn_service):
         p1 = _make_prediction(customer_id=1, score=70.0, tier="high")
         p2 = _make_prediction(customer_id=2, score=30.0, tier="low")
-        mock_churn_service.predict_churn = AsyncMock(return_value=[p1, p2])
+        mock_churn_service.predict_churn = AsyncMock(return_value=([p1, p2], []))
 
         resp = client.post("/api/v1/customers/churn-predict-batch", json={"customer_ids": [1, 2]})
         assert resp.status_code == 200
         body = resp.json()
         assert body["success"] is True
         assert len(body["data"]["predictions"]) == 2
+        assert body["data"]["skipped_customer_ids"] == []
         assert body["data"]["predictions"][0]["customer_id"] == 1
         assert body["data"]["predictions"][0]["tier"] == "high"
         assert body["data"]["predictions"][1]["customer_id"] == 2
@@ -162,7 +166,7 @@ class TestPredictBatch:
     def test_batch_skips_not_found_customers(self, client, mock_churn_service):
         p1 = _make_prediction(customer_id=1, score=70.0, tier="high")
         p2 = _make_prediction(customer_id=2, score=30.0, tier="low")
-        mock_churn_service.predict_churn = AsyncMock(return_value=[p1, p2])
+        mock_churn_service.predict_churn = AsyncMock(return_value=([p1, p2], [3]))
 
         resp = client.post(
             "/api/v1/customers/churn-predict-batch",
@@ -172,6 +176,7 @@ class TestPredictBatch:
         body = resp.json()
         assert body["success"] is True
         assert len(body["data"]["predictions"]) == 2
+        assert body["data"]["skipped_customer_ids"] == [3]
         returned_ids = [p["customer_id"] for p in body["data"]["predictions"]]
         assert 1 in returned_ids
         assert 2 in returned_ids
