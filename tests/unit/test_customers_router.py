@@ -1,4 +1,5 @@
 """Unit tests for src/api/routers/customers.py — router endpoint tests."""
+
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -18,6 +19,7 @@ from pkg.errors.app_exceptions import AppException, NotFoundException, Validatio
 # Helpers: build a minimal FastAPI app with overridden deps for each test
 # ---------------------------------------------------------------------------
 
+
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
 
@@ -25,6 +27,7 @@ def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
 # ---------------------------------------------------------------------------
 # _sanitize
 # ---------------------------------------------------------------------------
+
 
 class TestSanitize:
     def test_strips_html_tags(self):
@@ -54,6 +57,7 @@ class TestSanitize:
 # _is_valid_email
 # ---------------------------------------------------------------------------
 
+
 class TestIsValidEmail:
     def test_valid_email(self):
         assert _is_valid_email("user@example.com") is True
@@ -77,6 +81,7 @@ class TestIsValidEmail:
 # ---------------------------------------------------------------------------
 # Router endpoint tests using TestClient with mocked CustomerService
 # ---------------------------------------------------------------------------
+
 
 def _mock_to_dict(data):
     m = MagicMock()
@@ -133,6 +138,7 @@ def client_with_service(monkeypatch):
         "api.routers.customers.CustomerService",
         override_customer_service,
     )
+
     # Mock CustomerRepository so that CustomerRepository(session) in the router
     # returns a mock whose .session attribute is the mock_session we control.
     # Track every session argument so tests can assert the right one was used.
@@ -171,9 +177,7 @@ class TestCreateCustomerEndpoint:
 
     def test_service_error_returns_4xx(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.create_customer = AsyncMock(
-            side_effect=ValidationException("Invalid data")
-        )
+        svc.create_customer = AsyncMock(side_effect=ValidationException("Invalid data"))
         resp = client.post(
             "/api/v1/customers",
             json={"name": "Alice", "owner_id": 1},
@@ -278,9 +282,7 @@ class TestGetCustomerEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.get_customer = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.get_customer = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.get("/api/v1/customers/9999")
         assert resp.status_code == 404
 
@@ -288,18 +290,14 @@ class TestGetCustomerEndpoint:
 class TestUpdateCustomerEndpoint:
     def test_success(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.update_customer = AsyncMock(
-            return_value=_mock_to_dict({**CUSTOMER_ROW, "name": "Updated"})
-        )
+        svc.update_customer = AsyncMock(return_value=_mock_to_dict({**CUSTOMER_ROW, "name": "Updated"}))
         resp = client.put("/api/v1/customers/1", json={"name": "Updated"})
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "Updated"
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.update_customer = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.update_customer = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.put("/api/v1/customers/9999", json={"name": "X"})
         assert resp.status_code == 404
 
@@ -315,9 +313,7 @@ class TestDeleteCustomerEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.delete_customer = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.delete_customer = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.delete("/api/v1/customers/9999")
         assert resp.status_code == 404
 
@@ -332,9 +328,7 @@ class TestAddTagEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.add_tag = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.add_tag = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.post("/api/v1/customers/9999/tags", json={"tag": "vip"})
         assert resp.status_code == 404
 
@@ -353,9 +347,7 @@ class TestRemoveTagEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.remove_tag = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.remove_tag = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.delete("/api/v1/customers/9999/tags/vip")
         assert resp.status_code == 404
 
@@ -375,9 +367,7 @@ class TestChangeStatusEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.change_status = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.change_status = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.put("/api/v1/customers/9999/status", json={"status": "active"})
         assert resp.status_code == 404
 
@@ -397,9 +387,7 @@ class TestAssignOwnerEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.assign_owner = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.assign_owner = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.put("/api/v1/customers/9999/owner", json={"owner_id": 1})
         assert resp.status_code == 404
 
@@ -507,9 +495,18 @@ def client_with_score_service(monkeypatch):
 
 class TestScoreEndpoints:
     def test_post_score_returns_data(self, client_with_score_service):
+        from models.score import ScoreTier
+        from services.score_service import ScoreResult
+
         client, _cust, score_svc = client_with_score_service
         score_svc.calculate_score = AsyncMock(
-            return_value=(85, "B", ["engagement_level"], ["Increase touchpoints with targeted campaigns"], [])
+            return_value=ScoreResult(
+                score=85,
+                tier=ScoreTier.B,
+                top_factors=["engagement_level"],
+                recommendations=["Increase touchpoints with targeted campaigns"],
+                similar_leads=[],
+            )
         )
         resp = client.post("/api/v1/customers/1/score")
         assert resp.status_code == 200
@@ -523,9 +520,18 @@ class TestScoreEndpoints:
         score_svc.calculate_score.assert_called_once_with(1, tenant_id=1, include_ai=True)
 
     def test_get_score_returns_data_with_factors(self, client_with_score_service):
+        from models.score import ScoreTier
+        from services.score_service import ScoreResult
+
         client, _cust, score_svc = client_with_score_service
         score_svc.get_score = AsyncMock(
-            return_value=(75, "B", ["deal_velocity"], ["Accelerate pipeline with limited-time offers"], [])
+            return_value=ScoreResult(
+                score=75,
+                tier=ScoreTier.B,
+                top_factors=["deal_velocity"],
+                recommendations=["Accelerate pipeline with limited-time offers"],
+                similar_leads=[],
+            )
         )
         resp = client.get("/api/v1/customers/1/score")
         assert resp.status_code == 200

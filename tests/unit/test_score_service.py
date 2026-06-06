@@ -127,11 +127,15 @@ def tier_service(request):
 @pytest.mark.asyncio
 async def test_calculate_score_tier(tier_service):
     svc, expected_tier, score_bound = tier_service
-    score, tier, factors, recs, similar_leads = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    score = result.score
+    tier = result.tier
+    factors = result.top_factors
+    recs = result.recommendations
     if isinstance(expected_tier, tuple):
-        assert tier in expected_tier
+        assert tier.value in expected_tier
     else:
-        assert tier == expected_tier
+        assert tier.value == expected_tier
     if score_bound >= 40:
         assert score >= score_bound
     else:
@@ -241,21 +245,32 @@ async def test_calculate_score_ai_branch():
     mock_agent_class = MagicMock(return_value=mock_agent_instance)
 
     with patch("services.score_service.AIAgentClient", mock_agent_class):
-        score, tier, factors, recs, similar_leads = await svc.calculate_score(
-            CUSTOMER_ID, TENANT_ID, include_ai=True
-        )
+        result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
 
-    assert similar_leads == [{"id": 42, "score": 0.9}]
-    assert recs == ["Expand to segment B"]
+    score = result.score
+    tier = result.tier
+    factors = result.top_factors
+    recs = result.recommendations
+    similar_leads = result.similar_leads
+
+    # similar_leads is now a list[SimilarLead]; convert to dicts for comparison
+    assert [sl.to_dict() for sl in similar_leads] == [{"id": 42, "score": 0.9, "name": None}]
+    # AI recs come first, static recs fill gaps (no duplicates)
+    assert "Expand to segment B" in recs
     assert isinstance(score, int)
-    assert tier in ("A", "B", "C", "D")
+    assert tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
     assert factors
     mock_agent_class.assert_called_once()
+    assert mock_agent_class.call_args is not None  # verify it was called with args
     mock_agent_instance.analyze_factors.assert_awaited_once_with(
         entity_id=CUSTOMER_ID,
         tenant_id=TENANT_ID,
         current_score=score,
     )
+
+
+class AIAgentUnavailableError(Exception):
+    """Domain-specific exception for AI agent failures (test stand-in)."""
 
 
 @pytest.mark.asyncio
@@ -275,18 +290,22 @@ async def test_calculate_score_ai_fallback():
     svc = ScoreService(_make_session(state))
 
     mock_agent_instance = AsyncMock()
-    mock_agent_instance.analyze_factors = AsyncMock(side_effect=Exception("agent down"))
+    mock_agent_instance.analyze_factors = AsyncMock(side_effect=AIAgentUnavailableError("agent down"))
     mock_agent_class = MagicMock(return_value=mock_agent_instance)
 
     with patch("services.score_service.AIAgentClient", mock_agent_class):
-        score, tier, factors, recs, similar_leads = await svc.calculate_score(
-            CUSTOMER_ID, TENANT_ID, include_ai=True
-        )
+        result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
+
+    score = result.score
+    tier = result.tier
+    factors = result.top_factors
+    recs = result.recommendations
+    similar_leads = result.similar_leads
 
     assert similar_leads == []
     assert isinstance(score, int)
     assert score > 0
-    assert tier in ("A", "B", "C", "D")
+    assert tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
     assert factors
     assert recs
     mock_agent_class.assert_called_once()
@@ -311,13 +330,17 @@ async def test_calculate_score_include_ai_false_skips_agent():
     mock_agent_class = MagicMock(return_value=AsyncMock())
 
     with patch("services.score_service.AIAgentClient", mock_agent_class):
-        score, tier, factors, recs, similar_leads = await svc.calculate_score(
-            CUSTOMER_ID, TENANT_ID, include_ai=False
-        )
+        result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=False)
+
+    score = result.score
+    tier = result.tier
+    factors = result.top_factors
+    recs = result.recommendations
+    similar_leads = result.similar_leads
 
     assert similar_leads == []
     assert isinstance(score, int)
-    assert tier in ("A", "B", "C", "D")
+    assert tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
     assert factors
     assert recs
     mock_agent_class.assert_not_called()

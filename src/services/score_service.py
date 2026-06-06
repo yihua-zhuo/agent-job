@@ -14,17 +14,25 @@ with an empty ``similar_leads`` list — the static score is never lost.
 
 from __future__ import annotations
 
+import logging
+from dataclasses import dataclass, field
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
-from models.score import ScoreTier
+from models.score import ScoreTier, SimilarLead
 from pkg.errors.app_exceptions import NotFoundException
 
 try:
     from services.ai_agent_client import AIAgentClient  # type: ignore[import-not-found]
 except ImportError:
     AIAgentClient = None  # type: ignore[assignment,misc]
+
+logger = logging.getLogger(__name__)
+
+DEFAULT_SCORE = 50
+DEFAULT_TIER = ScoreTier.C
 
 FIELD_WEIGHTS: dict[str, int] = {
     "engagement_level": 30,
@@ -52,9 +60,52 @@ MAX_TOP_FACTORS = 3
 MAX_SIMILAR_LEADS = 10
 
 
+@dataclass
+class ScoreResult:
+    """Typed result returned by calculate_score / get_score.
+
+    Using a dataclass instead of a positional tuple keeps callers
+    resilient to field reordering and self-documenting at call sites.
+    """
+
+    score: int
+    tier: ScoreTier
+    top_factors: list[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
+    similar_leads: list[SimilarLead] = field(default_factory=list)
+
+    def to_tuple(self) -> tuple[int, str, list[str], list[str], list[dict]]:
+        """Legacy 5-tuple form for callers that still index positionally."""
+        return (
+            self.score,
+            self.tier.value,
+            self.top_factors,
+            self.recommendations,
+            [sl.to_dict() if hasattr(sl, "to_dict") else sl for sl in self.similar_leads],
+        )
+
+    def __iter__(self):
+        """Allow tuple-style unpacking: ``score, tier, factors, recs, similar = result``."""
+        return iter(self.to_tuple())
+
+
 class ScoreService:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, ai_client: AIAgentClient | None = None):
         self.session = session
+        self._ai_client = ai_client
+
+    def _get_ai_client(self) -> AIAgentClient | None:
+        """Return the injected AI client, or construct one if not injected.
+
+        If ``AIAgentClient`` is not importable (TBD module), returns ``None``
+        and the caller degrades gracefully.
+        """
+        if self._ai_client is not None:
+            return self._ai_client
+        if AIAgentClient is None:
+            logger.warning("AIAgentClient not available; AI scoring disabled")
+            return None
+        return AIAgentClient()
 
     async def ai_annotate_score(
         self,
@@ -68,30 +119,46 @@ class ScoreService:
         empty dict on any failure (timeout, non-200, malformed payload, missing
         client). ``similar_leads`` is capped at ``MAX_SIMILAR_LEADS`` items.
         """
-        if AIAgentClient is None:
+        client = self._get_ai_client()
+        if client is None:
             return {}
         try:
-            agent = AIAgentClient()
-            result = await agent.analyze_factors(
+            result = await client.analyze_factors(
                 entity_id=customer_id,
                 tenant_id=tenant_id,
                 current_score=current_score,
             )
-        except Exception:
+        except Exception as exc:
+            logger.warning("AI agent call failed for customer %s: %s", customer_id, exc)
             return {}
 
         if not isinstance(result, dict):
             return {}
 
-        similar_leads = result.get("similar_leads") or []
+        similar_leads_raw = result.get("similar_leads") or []
         recommendations = result.get("recommendations") or []
-        if not isinstance(similar_leads, list):
-            similar_leads = []
+        if not isinstance(similar_leads_raw, list):
+            similar_leads_raw = []
         if not isinstance(recommendations, list):
             recommendations = []
 
+        parsed: list[SimilarLead] = []
+        for item in similar_leads_raw[:MAX_SIMILAR_LEADS]:
+            if not isinstance(item, dict):
+                continue
+            try:
+                parsed.append(
+                    SimilarLead(
+                        id=int(item.get("id", 0)),
+                        score=float(item.get("score", 0.0)),
+                        name=item.get("name"),
+                    )
+                )
+            except (TypeError, ValueError):
+                continue
+
         return {
-            "similar_leads": similar_leads[:MAX_SIMILAR_LEADS],
+            "similar_leads": parsed,
             "recommendations": recommendations,
         }
 
@@ -100,7 +167,7 @@ class ScoreService:
         customer_id: int,
         tenant_id: int,
         include_ai: bool = True,
-    ) -> tuple[int, str, list[str], list[str], list[dict]]:
+    ) -> ScoreResult:
         result = await self.session.execute(
             select(CustomerModel).where(
                 CustomerModel.id == customer_id,
@@ -112,12 +179,15 @@ class ScoreService:
             raise NotFoundException("Customer")
 
         score_factors = customer.score_factors
-        similar_leads: list[dict] = []
+        similar_leads: list[SimilarLead] = []
         top_factors: list[str] = []
         recommendations: list[str] = []
+        tier: ScoreTier
+        score: int
 
         if not score_factors:
-            score, tier = 50, ScoreTier.C.value
+            score = DEFAULT_SCORE
+            tier = DEFAULT_TIER
         else:
             total = 0
             contributions: dict[str, int] = {}
@@ -146,18 +216,32 @@ class ScoreService:
                 similar_leads = ai_similar
             ai_recs = ai_data.get("recommendations") or []
             if ai_recs:
-                recommendations = ai_recs
+                # AI recommendations are authoritative when present;
+                # static FIELD_RECOMMENDATIONS are the fallback when AI is
+                # absent or returns nothing. Merge: AI first, static fills gaps.
+                static_keys = [f for f in top_factors if f in FIELD_RECOMMENDATIONS]
+                static_recs = [FIELD_RECOMMENDATIONS[f] for f in static_keys]
+                merged = list(ai_recs)
+                for rec in static_recs:
+                    if rec not in merged:
+                        merged.append(rec)
+                recommendations = merged
 
-        return score, tier, top_factors, recommendations, similar_leads
+        return ScoreResult(
+            score=score,
+            tier=tier,
+            top_factors=top_factors,
+            recommendations=recommendations,
+            similar_leads=similar_leads,
+        )
 
     async def get_score(
         self,
         customer_id: int,
         tenant_id: int,
         include_ai: bool = True,
-    ) -> tuple[int, str, list[str], list[str], list[dict]]:
-        result = await self.calculate_score(customer_id, tenant_id, include_ai=include_ai)
-        score, _tier, top_factors, recommendations, _similar_leads = result
-        if not top_factors and not recommendations:
+    ) -> ScoreResult:
+        score_result = await self.calculate_score(customer_id, tenant_id, include_ai=include_ai)
+        if not score_result.top_factors and not score_result.recommendations:
             raise NotFoundException("Score")
-        return result
+        return score_result

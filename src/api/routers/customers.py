@@ -19,6 +19,7 @@ from db.models.customer_enrichment import CustomerEnrichmentModel
 from db.repositories import CustomerRepository
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.customer import CustomerStatus
+from models.score import ScoreResponse
 from pkg.errors.app_exceptions import ForbiddenException
 from services.customer_service import CustomerService
 from services.lead_routing_service import LeadRoutingService
@@ -568,18 +569,17 @@ async def calculate_customer_score(
     ``similar_leads`` is omitted from the response.
     """
     service = ScoreService(session)
-    result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
-    data: dict = {
-        "score": result[0],
-        "tier": result[1],
-        "top_factors": result[2],
-        "recommendations": result[3],
-    }
-    if result[4]:
-        data["similar_leads"] = result[4]
+    score_result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
+    response = ScoreResponse(
+        score=score_result.score,
+        tier=score_result.tier.value,
+        top_factors=score_result.top_factors,
+        recommendations=score_result.recommendations,
+        similar_leads=score_result.similar_leads or None,
+    )
     return {
         "success": True,
-        "data": data,
+        "data": response.to_dict(),
         "message": "客户评分计算成功",
     }
 
@@ -587,22 +587,24 @@ async def calculate_customer_score(
 @customers_router.get("/{customer_id}/score")
 async def get_customer_score(
     customer_id: int,
-    include_ai: bool = Query(True, description="Call AI agent for similar_leads enrichment"),
+    include_ai: bool = Query(
+        False,
+        description="Call AI agent for similar_leads enrichment (read path skips AI by default for lower latency)",
+    ),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     """Get the current score for a customer. Returns 404 if the customer has never been scored."""
     service = ScoreService(session)
-    result = await service.get_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
-    data: dict = {
-        "score": result[0],
-        "tier": result[1],
-        "top_factors": result[2],
-        "recommendations": result[3],
-    }
-    if result[4]:
-        data["similar_leads"] = result[4]
+    score_result = await service.get_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
+    response = ScoreResponse(
+        score=score_result.score,
+        tier=score_result.tier.value,
+        top_factors=score_result.top_factors,
+        recommendations=score_result.recommendations,
+        similar_leads=score_result.similar_leads or None,
+    )
     return {
         "success": True,
-        "data": data,
+        "data": response.to_dict(),
     }
