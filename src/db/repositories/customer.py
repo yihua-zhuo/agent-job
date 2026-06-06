@@ -59,11 +59,18 @@ class CustomerRepository(BaseRepository):
 
         offset = (page - 1) * page_size
         if order_by_score:
-            order_clause = func.coalesce(CustomerModel.score, 0).desc()
+            order_clauses = (
+                func.coalesce(CustomerModel.score, 0).desc(),
+                CustomerModel.created_at.desc(),
+                CustomerModel.id.desc(),
+            )
         else:
-            order_clause = CustomerModel.created_at.desc()
+            order_clauses = (
+                CustomerModel.created_at.desc(),
+                CustomerModel.id.desc(),
+            )
         result = await self.session.execute(
-            select(CustomerModel).where(and_(*conditions)).order_by(order_clause).offset(offset).limit(page_size)
+            select(CustomerModel).where(and_(*conditions)).order_by(*order_clauses).offset(offset).limit(page_size)
         )
         return result.scalars().all(), total
 

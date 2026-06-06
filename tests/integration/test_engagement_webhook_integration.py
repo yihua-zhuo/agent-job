@@ -7,7 +7,7 @@ Run against a real PostgreSQL database (Supabase via DATABASE_URL env var):
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
@@ -54,8 +54,6 @@ async def _seed_customer(
 
 async def _seed_tenant(async_session: AsyncSession, tenant_id: int) -> None:
     """Insert a tenant row so FK references are satisfied. Idempotent — no-op if already present."""
-    from sqlalchemy import select
-
     result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
     if result.scalar_one_or_none() is not None:
         return
@@ -97,13 +95,14 @@ class TestEngagementWebhookIntegration:
             metadata=metadata,
         )
         # EventService uses flush() (Rule 121 — routers own commit).
-        # Commit here so the re-read below sees the row.
-        await async_session.commit()
+        # Flush here so the re-read below sees the row.
+        await async_session.flush()
 
         assert event.id is not None
         assert event.tenant_id == tenant_id
         assert event.customer_id == customer_id
         assert event.event_type == "email_open"
+        # event_metadata is the ORM attribute name (column: engagement_events.event_metadata)
         assert event.event_metadata == metadata
         assert event.created_at is not None
 
@@ -143,12 +142,8 @@ class TestEngagementWebhookIntegration:
             customer_id=customer_id,
             event_type="email_open",
         )
-        # EventService uses flush() (Rule 121 — routers own commit).
-        # Commit here so ScoreService's select sees the new score_factors-free
-        # customer row (the seed above already flushed, so this commit is
-        # a no-op for that row, but the service call's flush needs commit
-        # for the new event row — the cross-test read in test 3 needs it).
-        await async_session.commit()
+        # Flush to make the new event row visible to subsequent reads.
+        await async_session.flush()
         result = await score_svc.calculate_score(
             customer_id=customer_id, tenant_id=tenant_id
         )
@@ -160,10 +155,15 @@ class TestEngagementWebhookIntegration:
     async def test_cross_tenant_isolation_event_not_visible(
         self, db_schema, tenant_id, tenant_id_2, async_session
     ):
-        """An event recorded for tenant A is invisible from tenant B's perspective."""
+        """An event recorded for tenant A is invisible from tenant B's perspective.
+
+        Also verifies that events for tenant B's customer are not visible from
+        tenant A's view (full Rule 126 cross-tenant negative test).
+        """
         await _seed_tenant(async_session, tenant_id)
         await _seed_tenant(async_session, tenant_id_2)
         customer_id_a = await _seed_customer(async_session, tenant_id)
+        customer_id_b = await _seed_customer(async_session, tenant_id_2)
 
         from services.event_service import EventService
 
@@ -173,10 +173,15 @@ class TestEngagementWebhookIntegration:
             customer_id=customer_id_a,
             event_type="email_open",
         )
-        # Commit so the event row is visible to the cross-tenant score check.
-        await async_session.commit()
+        await svc.record_engagement_event(
+            tenant_id=tenant_id_2,
+            customer_id=customer_id_b,
+            event_type="website_visit",
+        )
+        # Flush to make both event rows visible to subsequent reads.
+        await async_session.flush()
 
-        # From tenant B's perspective the customer does not exist (different tenant_id filter)
+        # From tenant B's perspective customer A does not exist (different tenant_id filter)
         # so a fresh ScoreService call must raise NotFoundException rather than return stale state.
         from services.score_service import ScoreService
         from pkg.errors.app_exceptions import NotFoundException
@@ -186,6 +191,17 @@ class TestEngagementWebhookIntegration:
             await score_svc.calculate_score(
                 customer_id=customer_id_a, tenant_id=tenant_id_2
             )
+
+        # And tenant A must not see tenant B's events.
+        events_for_a = await async_session.execute(
+            select(EngagementEventModel).where(
+                EngagementEventModel.tenant_id == tenant_id
+            )
+        )
+        a_events = events_for_a.scalars().all()
+        assert all(ev.tenant_id == tenant_id for ev in a_events)
+        assert len(a_events) == 1
+        assert a_events[0].customer_id == customer_id_a
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -235,7 +251,7 @@ class TestLeadTierAndOrderByScore:
         low_id = await _seed_customer(async_session, tenant_id, score=10)
         mid_id = await _seed_customer(async_session, tenant_id, score=50)
         high_id = await _seed_customer(async_session, tenant_id, score=90)
-        await _seed_customer(async_session, tenant_id, score=None)  # NULL → 0
+        null_id = await _seed_customer(async_session, tenant_id, score=None)  # NULL → 0
 
         repo = CustomerRepository(async_session)
         items, total = await repo.list_customers(tenant_id=tenant_id, order_by_score=True)
@@ -244,13 +260,12 @@ class TestLeadTierAndOrderByScore:
         ids_in_order = [c.id for c in items]
         assert ids_in_order.index(high_id) < ids_in_order.index(mid_id)
         assert ids_in_order.index(mid_id) < ids_in_order.index(low_id)
+        assert ids_in_order[-1] == null_id
 
     async def test_default_ordering_unchanged_without_order_by_score(
         self, db_schema, tenant_id, async_session
     ):
         """Without order_by_score the default created_at DESC ordering is preserved."""
-        from datetime import datetime, timedelta, timezone
-
         await _seed_tenant(async_session, tenant_id)
         # Seed customers with explicit, distinct created_at timestamps so DESC ordering is deterministic
         base = datetime.now(timezone.utc)
@@ -297,7 +312,12 @@ class TestLeadTierAndOrderByScore:
     async def test_lead_tier_invalid_raises_validation_in_service(
         self, db_schema, tenant_id, async_session
     ):
-        """Service-layer validation rejects unknown lead_tier values with ValidationException."""
+        """Service-layer validation rejects unknown lead_tier values with ValidationException.
+
+        Constructs the service inline with a real repository (not a router-wired
+        instance) so the test exercises the service's own validation path
+        without going through the FastAPI dependency injection machinery.
+        """
         await _seed_tenant(async_session, tenant_id)
         await _seed_customer(async_session, tenant_id)
 

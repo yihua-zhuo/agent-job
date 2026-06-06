@@ -1,4 +1,4 @@
-"""Unit tests for src/api/routers/events.py — engagement webhook endpoint tests."""
+"""Unit tests for src/api/routers/events.py — tests for the events webhook router and EventService validation path."""
 
 from __future__ import annotations
 
@@ -37,7 +37,13 @@ def mock_db_session():
 
 @pytest.fixture
 def app_with_overrides(monkeypatch, mock_db_session):
-    """Build a FastAPI app with the events router and override auth/db deps."""
+    """Build a FastAPI app with the events router and override auth/db deps.
+
+    This is a router-level delegation test — the EventService and ScoreService
+    classes are patched at the router module level with thin lambdas so we
+    exercise the router wiring only. The services' own SQL is covered by
+    integration tests.
+    """
     mock_event = MagicMock()
     mock_event.record_engagement_event = AsyncMock()
 
@@ -72,7 +78,7 @@ class TestEngagementWebhook:
 
         response = client.post(
             "/api/v1/events/engagement",
-            json={"customer_id": 1, "event_type": "email_open", "metadata": {"campaign": "spring"}},
+            json={"customer_id": 1, "event_type": "email_open", "event_metadata": {"campaign": "spring"}},
         )
 
         assert response.status_code == 200, response.text
@@ -96,7 +102,7 @@ class TestEngagementWebhook:
         assert call_kwargs["tenant_id"] == 1
         assert call_kwargs["customer_id"] == 42
         assert call_kwargs["event_type"] == "website_visit"
-        # metadata was not provided — defaults to None (EventService handles None)
+        # event_metadata was not provided — defaults to None (EventService handles None)
         assert call_kwargs["metadata"] is None
 
     def test_valid_engagement_triggers_score_recalculation(self, app_with_overrides):
@@ -146,6 +152,9 @@ class TestEngagementWebhook:
         )
 
         assert response.status_code == 422, response.text
+        # Pydantic 422 returns FastAPI's default validation error shape with "detail"
+        body = response.json()
+        assert "detail" in body or "message" in body
         # Neither service should be called when Pydantic validation fails
         mock_event.record_engagement_event.assert_not_called()
         mock_score.calculate_score.assert_not_called()
@@ -162,13 +171,14 @@ class TestEngagementWebhook:
         assert response.status_code == 422, response.text
         mock_event.record_engagement_event.assert_not_called()
 
-    def test_negative_customer_id_returns_422(self, app_with_overrides):
-        """POST /engagement with customer_id <= 0 returns 422 (Pydantic Field constraint)."""
+    @pytest.mark.parametrize("bad_id", [0, -1, -999])
+    def test_non_positive_customer_id_returns_422(self, app_with_overrides, bad_id):
+        """POST /engagement with customer_id <= 0 (boundary: 0, -1, -999) returns 422."""
         client, mock_event, _ = app_with_overrides
 
         response = client.post(
             "/api/v1/events/engagement",
-            json={"customer_id": 0, "event_type": "email_open"},
+            json={"customer_id": bad_id, "event_type": "email_open"},
         )
 
         assert response.status_code == 422, response.text
@@ -183,12 +193,31 @@ class TestEventServiceValidation:
         """EventService raises ValidationException for event_type not in the allowlist."""
         from services.event_service import EventService
 
+        # validation path does not touch the DB; MagicMock is safe here
         svc = EventService(MagicMock())
         with pytest.raises(ValidationException, match="event_type must be one of"):
             await svc.record_engagement_event(tenant_id=1, customer_id=1, event_type="bogus")
 
     @pytest.mark.asyncio
     async def test_valid_event_types_accepted(self):
-        """All event types in VALID_EVENT_TYPES are accepted by the service."""
+        """All event types in VALID_EVENT_TYPES are accepted by the service (exact equality)."""
+        from services.event_service import EventService
+
+        assert set(VALID_EVENT_TYPES) == {"email_open", "website_visit"}
+
         for event_type in VALID_EVENT_TYPES:
-            assert event_type in {"email_open", "website_visit"}
+            session = MagicMock()
+            session.add = MagicMock()
+            session.flush = AsyncMock()
+            session.refresh = AsyncMock()
+            # Customer existence check returns a row -> customer exists -> insert proceeds
+            existence_result = MagicMock()
+            existence_result.scalar_one_or_none.return_value = 1
+            session.execute = AsyncMock(return_value=existence_result)
+            svc = EventService(session)
+            await svc.record_engagement_event(
+                tenant_id=1,
+                customer_id=1,
+                event_type=event_type,
+            )
+            session.add.assert_called_once()

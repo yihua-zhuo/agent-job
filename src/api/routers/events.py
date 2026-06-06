@@ -17,10 +17,10 @@ router = APIRouter(prefix="/api/v1/events", tags=["events"])
 class EngagementEventRequest(BaseModel):
     customer_id: int = Field(..., gt=0)
     event_type: str = Field(..., pattern="^(email_open|website_visit)$")
-    metadata: dict | None = None
+    event_metadata: dict | None = None
 
 
-@router.post("/engagement")
+@router.post("/engagement", status_code=200)
 async def create_engagement_event(
     body: EngagementEventRequest,
     ctx: AuthContext = Depends(require_auth),
@@ -34,7 +34,7 @@ async def create_engagement_event(
         tenant_id=ctx.tenant_id,
         customer_id=body.customer_id,
         event_type=body.event_type,
-        metadata=body.metadata,
+        metadata=body.event_metadata,
     )
     result = await score_svc.calculate_score(
         customer_id=body.customer_id,
@@ -47,4 +47,5 @@ async def create_engagement_event(
             "score": result.score,
             "tier": result.tier_label,
         },
+        "message": "Engagement event recorded successfully",
     }
