@@ -19,6 +19,7 @@ from db.models.customer_enrichment import CustomerEnrichmentModel
 from db.repositories import CustomerRepository
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from models.customer import CustomerStatus
+from models.score import ScoreResponse
 from pkg.errors.app_exceptions import ForbiddenException
 from services.customer_service import CustomerService
 from services.lead_routing_service import LeadRoutingService
@@ -550,27 +551,35 @@ async def trigger_lead_recycle(
 # ---------------------------------------------------------------------------
 
 
-@customers_router.post("/{customer_id}/score")
+@customers_router.post("/{customer_id}/score", status_code=200)
 async def calculate_customer_score(
     customer_id: int,
+    include_ai: bool = Query(
+        False,
+        description=(
+            "Call AI agent for similar_leads enrichment. Set True to opt in; "
+            "default is False to keep latency low and avoid the external AI "
+            "dependency. AI failures degrade gracefully to a static score."
+        ),
+    ),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     """Trigger score calculation for a customer.
 
-    Returns 200 (per the file's convention for action endpoints, not 201).
     ScoreService is a stateless calculator that uses the session directly.
+
+    When ``include_ai`` is true the AI agent is called to enrich the response
+    with ``similar_leads``. The AI call degrades gracefully — if the agent is
+    unreachable, the static score is still returned and ``similar_leads`` is
+    omitted from the response.
     """
     service = ScoreService(session)
-    result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id)
+    score_result = await service.calculate_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
+    response = ScoreResponse.from_result(score_result)
     return {
         "success": True,
-        "data": {
-            "score": result[0],
-            "tier": result[1],
-            "top_factors": result[2],
-            "recommendations": result[3],
-        },
+        "data": response.to_dict(),
         "message": "客户评分计算成功",
     }
 
@@ -578,18 +587,22 @@ async def calculate_customer_score(
 @customers_router.get("/{customer_id}/score")
 async def get_customer_score(
     customer_id: int,
+    include_ai: bool = Query(
+        False,
+        description=(
+            "Call AI agent for similar_leads enrichment. Set True to opt in; "
+            "default is False to keep latency low and avoid the external AI "
+            "dependency."
+        ),
+    ),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
     """Get the current score for a customer. Returns 404 if the customer has never been scored."""
     service = ScoreService(session)
-    result = await service.get_score(customer_id, tenant_id=ctx.tenant_id)
+    score_result = await service.get_score(customer_id, tenant_id=ctx.tenant_id, include_ai=include_ai)
+    response = ScoreResponse.from_result(score_result)
     return {
         "success": True,
-        "data": {
-            "score": result[0],
-            "tier": result[1],
-            "top_factors": result[2],
-            "recommendations": result[3],
-        },
+        "data": response.to_dict(),
     }

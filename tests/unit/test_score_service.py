@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from unittest.mock import AsyncMock, MagicMock
+
+import httpx
 import pytest
 
 from models.score import ScoreTier
@@ -125,11 +128,15 @@ def tier_service(request):
 @pytest.mark.asyncio
 async def test_calculate_score_tier(tier_service):
     svc, expected_tier, score_bound = tier_service
-    score, tier, factors, recs = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    score = result.score
+    tier = result.tier
+    factors = result.top_factors
+    recs = result.recommendations
     if isinstance(expected_tier, tuple):
-        assert tier in expected_tier
+        assert tier.value in expected_tier
     else:
-        assert tier == expected_tier
+        assert tier.value == expected_tier
     if score_bound >= 40:
         assert score >= score_bound
     else:
@@ -182,7 +189,8 @@ async def test_top_factors_excludes_zero():
         },
     )
     svc = ScoreService(_make_session(state))
-    _, _, factors, _ = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    factors = result.top_factors
     assert "deal_velocity" not in factors
     assert "payment_history" not in factors
     assert all(f not in ("deal_velocity", "payment_history") for f in factors)
@@ -202,7 +210,199 @@ async def test_recommendations_match_top_factors():
         },
     )
     svc = ScoreService(_make_session(state))
-    _, _, factors, recs = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID)
+    factors = result.top_factors
+    recs = result.recommendations
     assert len(factors) == len(recs)
     for f, r in zip(factors, recs, strict=True):
         assert r == FIELD_RECOMMENDATIONS[f]
+
+
+# ---------------------------------------------------------------------------
+# AI agent branch tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_calculate_score_ai_branch():
+    """When the AI client returns data, similar_leads and recommendations are enriched."""
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 70,
+            "payment_history": 65,
+            "product_adoption": 60,
+        },
+    )
+
+    mock_agent = MagicMock()
+    mock_agent.analyze_factors = AsyncMock(
+        return_value={
+            "similar_leads": [{"id": 42, "score": 0.9}],
+            "recommendations": ["Expand to segment B"],
+        }
+    )
+
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
+
+    # similar_leads is populated from the AI client; assert only contract-guaranteed fields
+    assert len(result.similar_leads) == 1
+    sl = result.similar_leads[0]
+    assert sl.id == 42
+    assert sl.score == pytest.approx(0.9)
+    # AI recs come first, static recs fill gaps (no duplicates)
+    assert "Expand to segment B" in result.recommendations
+    assert isinstance(result.score, int)
+    assert result.tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
+    assert result.top_factors
+    mock_agent.analyze_factors.assert_awaited_once_with(
+        entity_id=CUSTOMER_ID,
+        tenant_id=TENANT_ID,
+        current_score=result.score,
+    )
+
+
+@pytest.mark.asyncio
+async def test_ai_recommendations_deduped_against_static():
+    """When AI returns one recommendation and the top factors yield static
+    recommendations, the AI rec comes first, the static recs follow, and
+    duplicate AI recs are not re-appended.
+    """
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 70,
+            "payment_history": 0,
+            "product_adoption": 0,
+        },
+    )
+
+    mock_agent = MagicMock()
+    # AI returns one rec that does NOT collide with any static FIELD_RECOMMENDATIONS
+    mock_agent.analyze_factors = AsyncMock(
+        return_value={
+            "similar_leads": [],
+            "recommendations": ["Expand to segment B"],
+        }
+    )
+
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
+
+    recs = result.recommendations
+    # AI rec is first; the 3 static recs (engagement/deal_velocity/support_health
+    # all have non-zero contributions and map to FIELD_RECOMMENDATIONS) follow.
+    assert recs[0] == "Expand to segment B"
+    static_recs = [r for r in recs if r in FIELD_RECOMMENDATIONS.values()]
+    assert len(static_recs) == 3
+    assert len(recs) == 4
+    assert len(set(recs)) == len(recs), f"recs contain duplicates: {recs}"
+
+
+@pytest.mark.asyncio
+async def test_ai_recommendations_duplicate_not_reappended():
+    """When AI returns a recommendation that matches a static rec, the
+    duplicate is not appended twice.
+    """
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 0,
+            "payment_history": 0,
+            "product_adoption": 0,
+        },
+    )
+
+    engagement_rec = FIELD_RECOMMENDATIONS["engagement_level"]
+    mock_agent = MagicMock()
+    mock_agent.analyze_factors = AsyncMock(
+        return_value={
+            "similar_leads": [],
+            "recommendations": [engagement_rec],  # exact duplicate of a static rec
+        }
+    )
+
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
+
+    recs = result.recommendations
+    # AI rec appears once, followed by the non-duplicate static rec (deal_velocity).
+    assert recs.count(engagement_rec) == 1, f"engagement_rec should appear exactly once: {recs}"
+    assert FIELD_RECOMMENDATIONS["deal_velocity"] in recs
+    assert len(set(recs)) == len(recs), f"recs contain duplicates: {recs}"
+
+
+@pytest.mark.asyncio
+async def test_calculate_score_ai_fallback(caplog):
+    """When the AI client raises a known transport error, scoring degrades gracefully
+    and the failure is logged at WARNING/ERROR level with context."""
+    import logging
+
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 70,
+            "payment_history": 65,
+            "product_adoption": 60,
+        },
+    )
+
+    mock_agent = MagicMock()
+    mock_agent.analyze_factors = AsyncMock(side_effect=httpx.HTTPError("agent down"))
+
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    with caplog.at_level(logging.WARNING, logger="services.score_service"):
+        result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=True)
+
+    assert result.similar_leads == []
+    assert isinstance(result.score, int)
+    assert result.score > 0
+    assert result.tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
+    assert result.top_factors
+    assert result.recommendations
+    # The AI failure must be logged with customer context
+    assert any(
+        "AI agent call failed" in record.message and str(CUSTOMER_ID) in record.message for record in caplog.records
+    )
+
+
+@pytest.mark.asyncio
+async def test_calculate_score_include_ai_false_skips_agent():
+    """When include_ai=False, the AI client is never invoked."""
+    state = MockState()
+    _seed_customer(
+        state,
+        {
+            "engagement_level": 80,
+            "deal_velocity": 75,
+            "support_health": 70,
+            "payment_history": 65,
+            "product_adoption": 60,
+        },
+    )
+
+    mock_agent = MagicMock()
+    mock_agent.analyze_factors = AsyncMock()
+
+    svc = ScoreService(_make_session(state), ai_client=mock_agent)
+    result = await svc.calculate_score(CUSTOMER_ID, TENANT_ID, include_ai=False)
+
+    assert result.similar_leads == []
+    assert isinstance(result.score, int)
+    assert result.tier in (ScoreTier.A, ScoreTier.B, ScoreTier.C, ScoreTier.D)
+    assert result.top_factors
+    assert result.recommendations
+    mock_agent.analyze_factors.assert_not_called()

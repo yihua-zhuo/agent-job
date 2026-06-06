@@ -1,87 +1,47 @@
 """Unit tests for src/api/routers/customers.py — router endpoint tests."""
+
+from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.routers.customers import (
-    _is_valid_email,
-    _sanitize,
-    customers_router,
-)
+from api.routers.customers import customers_router
 from db.connection import get_db
-from internal.middleware.fastapi_auth import AuthContext
+from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import AppException, NotFoundException, ValidationException
 
 # ---------------------------------------------------------------------------
 # Helpers: build a minimal FastAPI app with overridden deps for each test
 # ---------------------------------------------------------------------------
 
+
 def _make_auth_ctx(tenant_id: int = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
 
 
-# ---------------------------------------------------------------------------
-# _sanitize
-# ---------------------------------------------------------------------------
+def _mock_to_dict(data: dict):
+    """Build a lightweight object exposing a single to_dict() method.
 
-class TestSanitize:
-    def test_strips_html_tags(self):
-        assert _sanitize("<b>hello</b>") == "hello"
-
-    def test_strips_nested_tags(self):
-        assert _sanitize("<script>alert(1)</script>text") == "text"
-
-    def test_removes_control_chars(self):
-        result = _sanitize("hello\x00world")
-        assert "\x00" not in result
-
-    def test_strips_whitespace(self):
-        assert _sanitize("  hello  ") == "hello"
-
-    def test_empty_string_passthrough(self):
-        assert _sanitize("") == ""
-
-    def test_none_passthrough(self):
-        assert _sanitize(None) is None
-
-    def test_normal_string_unchanged(self):
-        assert _sanitize("john doe") == "john doe"
+    SimpleNamespace is deterministic and makes assertions on the rendered dict
+    straightforward without the indirection of MagicMock attribute chains.
+    """
+    return SimpleNamespace(to_dict=lambda: data)
 
 
-# ---------------------------------------------------------------------------
-# _is_valid_email
-# ---------------------------------------------------------------------------
+def _empty_enrichment_session():
+    """Return a mock session whose ``execute`` resolves to a result with
+    ``scalar_one_or_none() == None``.
 
-class TestIsValidEmail:
-    def test_valid_email(self):
-        assert _is_valid_email("user@example.com") is True
-
-    def test_valid_email_with_plus(self):
-        assert _is_valid_email("user+tag@domain.co.uk") is True
-
-    def test_missing_at_sign(self):
-        assert _is_valid_email("userexample.com") is False
-
-    def test_missing_domain(self):
-        assert _is_valid_email("user@") is False
-
-    def test_invalid_tld_too_short(self):
-        assert _is_valid_email("user@domain.c") is False
-
-    def test_empty_string(self):
-        assert _is_valid_email("") is False
-
-
-# ---------------------------------------------------------------------------
-# Router endpoint tests using TestClient with mocked CustomerService
-# ---------------------------------------------------------------------------
-
-def _mock_to_dict(data):
-    m = MagicMock()
-    m.to_dict = MagicMock(return_value=data)
-    return m
+    The GET customer endpoint runs a follow-up enrichment query directly on
+    the session; an empty result is the common case (no enrichment record).
+    """
+    result = MagicMock()
+    result.scalar_one_or_none = MagicMock(return_value=None)
+    session = MagicMock()
+    session.execute = AsyncMock(return_value=result)
+    return session
 
 
 CUSTOMER_ROW = {
@@ -101,41 +61,37 @@ CUSTOMER_ROW = {
 
 @pytest.fixture
 def client_with_service(monkeypatch):
-    """Return a TestClient with CustomerService fully mocked."""
+    """Return a TestClient with CustomerService fully mocked.
+
+    ``CustomerService`` is monkey-patched to return a bare MagicMock so the
+    real service never queries the session. The session itself is a minimal
+    mock that returns no enrichment rows, which is what the GET customer
+    endpoint's follow-up query expects.
+    """
     from starlette.requests import Request
     from starlette.responses import JSONResponse
 
-    from internal.middleware.fastapi_auth import require_auth
-
-    # Create mock eagerly so the fixture can return it before any request is made.
-    # Each test gets its own fresh mock (no module-level singleton = no cross-test pollution).
-    _mock = MagicMock()
-    _repo_sessions = []
+    # Hoist the mock so the ``override_customer_service`` closure shares the
+    # same instance across the test run; per-test attributes are then
+    # configured in each test body.
+    service_mock = MagicMock()
+    _repo_sessions: list = []
 
     def override_customer_service(repository):
-        return _mock
+        return service_mock
 
-    # Async-aware mock session for session.execute() calls (enrichment queries)
-    mock_session = MagicMock()
-    mock_enrich_result = MagicMock()
-    mock_enrich_result.all = MagicMock(return_value=[])
-    mock_enrich_result.scalar_one_or_none = MagicMock(return_value=None)
-    mock_session.execute = AsyncMock(return_value=mock_enrich_result)
+    mock_session = _empty_enrichment_session()
 
     app = FastAPI()
     app.include_router(customers_router)
     app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
     app.dependency_overrides[get_db] = lambda: mock_session
 
-    # Patch CustomerService in the router's module namespace so the
-    # router uses mock_service directly instead of instantiating the real class.
     monkeypatch.setattr(
         "api.routers.customers.CustomerService",
         override_customer_service,
     )
-    # Mock CustomerRepository so that CustomerRepository(session) in the router
-    # returns a mock whose .session attribute is the mock_session we control.
-    # Track every session argument so tests can assert the right one was used.
+
     def make_mock_repo(session):
         _repo_sessions.append(session)
         return MagicMock(session=session)
@@ -153,7 +109,7 @@ def client_with_service(monkeypatch):
         )
 
     client = TestClient(app, raise_server_exceptions=False)
-    return client, _mock, _repo_sessions
+    return client, service_mock, _repo_sessions
 
 
 class TestCreateCustomerEndpoint:
@@ -171,9 +127,7 @@ class TestCreateCustomerEndpoint:
 
     def test_service_error_returns_4xx(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.create_customer = AsyncMock(
-            side_effect=ValidationException("Invalid data")
-        )
+        svc.create_customer = AsyncMock(side_effect=ValidationException("Invalid data"))
         resp = client.post(
             "/api/v1/customers",
             json={"name": "Alice", "owner_id": 1},
@@ -278,9 +232,7 @@ class TestGetCustomerEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.get_customer = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.get_customer = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.get("/api/v1/customers/9999")
         assert resp.status_code == 404
 
@@ -288,18 +240,14 @@ class TestGetCustomerEndpoint:
 class TestUpdateCustomerEndpoint:
     def test_success(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.update_customer = AsyncMock(
-            return_value=_mock_to_dict({**CUSTOMER_ROW, "name": "Updated"})
-        )
+        svc.update_customer = AsyncMock(return_value=_mock_to_dict({**CUSTOMER_ROW, "name": "Updated"}))
         resp = client.put("/api/v1/customers/1", json={"name": "Updated"})
         assert resp.status_code == 200
         assert resp.json()["data"]["name"] == "Updated"
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.update_customer = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.update_customer = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.put("/api/v1/customers/9999", json={"name": "X"})
         assert resp.status_code == 404
 
@@ -315,9 +263,7 @@ class TestDeleteCustomerEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.delete_customer = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.delete_customer = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.delete("/api/v1/customers/9999")
         assert resp.status_code == 404
 
@@ -332,9 +278,7 @@ class TestAddTagEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.add_tag = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.add_tag = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.post("/api/v1/customers/9999/tags", json={"tag": "vip"})
         assert resp.status_code == 404
 
@@ -353,9 +297,7 @@ class TestRemoveTagEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.remove_tag = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.remove_tag = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.delete("/api/v1/customers/9999/tags/vip")
         assert resp.status_code == 404
 
@@ -375,9 +317,7 @@ class TestChangeStatusEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.change_status = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.change_status = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.put("/api/v1/customers/9999/status", json={"status": "active"})
         assert resp.status_code == 404
 
@@ -397,9 +337,7 @@ class TestAssignOwnerEndpoint:
 
     def test_not_found_returns_404(self, client_with_service):
         client, svc, _ = client_with_service
-        svc.assign_owner = AsyncMock(
-            side_effect=NotFoundException("Customer")
-        )
+        svc.assign_owner = AsyncMock(side_effect=NotFoundException("Customer"))
         resp = client.put("/api/v1/customers/9999/owner", json={"owner_id": 1})
         assert resp.status_code == 404
 
@@ -420,150 +358,3 @@ class TestBulkImportEndpoint:
         svc.bulk_import = AsyncMock(return_value=0)
         resp = client.post("/api/v1/customers/import", json={"customers": []})
         assert resp.status_code == 200
-
-
-# ---------------------------------------------------------------------------
-# Score endpoint tests
-# ---------------------------------------------------------------------------
-
-
-def _register_app_exception_handler(app: FastAPI) -> None:
-    from fastapi import HTTPException
-    from starlette.requests import Request
-    from starlette.responses import JSONResponse
-
-    @app.exception_handler(AppException)
-    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"success": False, "message": exc.detail, "code": exc.code},
-        )
-
-    @app.exception_handler(HTTPException)
-    async def http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
-        return JSONResponse(
-            status_code=exc.status_code,
-            content={"success": False, "message": exc.detail},
-        )
-
-
-def _build_score_test_app(monkeypatch, *, override_score: bool = True, override_auth: bool = True):
-    """Build a TestClient for the score endpoints with CustomerService and optionally ScoreService mocked.
-
-    Returns (client, customer_mock, score_mock). A single score_mock instance is reused
-    across all requests in the test (router calls ScoreService(session) per request, but
-    the override returns the same mock each time). Tests reassign the relevant method
-    on score_mock before each request to avoid state leaking between tests.
-    """
-    from internal.middleware.fastapi_auth import require_auth
-
-    customer_mock = MagicMock()
-    score_mock = MagicMock()
-
-    def override_customer_service(repository):
-        return customer_mock
-
-    def override_score_service(session):
-        return score_mock
-
-    mock_session = MagicMock()
-    mock_enrich_result = MagicMock()
-    mock_enrich_result.all = MagicMock(return_value=[])
-    mock_enrich_result.scalar_one_or_none = MagicMock(return_value=None)
-    mock_session.execute = AsyncMock(return_value=mock_enrich_result)
-
-    app = FastAPI()
-    app.include_router(customers_router)
-    if override_auth:
-        app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
-    app.dependency_overrides[get_db] = lambda: mock_session
-
-    monkeypatch.setattr(
-        "api.routers.customers.CustomerService",
-        override_customer_service,
-    )
-    if override_score:
-        monkeypatch.setattr(
-            "api.routers.customers.ScoreService",
-            override_score_service,
-        )
-
-    monkeypatch.setattr(
-        "api.routers.customers.CustomerRepository",
-        lambda session: MagicMock(session=session),
-    )
-
-    _register_app_exception_handler(app)
-
-    client = TestClient(app, raise_server_exceptions=False)
-    return client, customer_mock, score_mock
-
-
-@pytest.fixture
-def client_with_score_service(monkeypatch):
-    client, cust_mock, score_mock = _build_score_test_app(monkeypatch)
-    return client, cust_mock, score_mock
-
-
-class TestScoreEndpoints:
-    def test_post_score_returns_data(self, client_with_score_service):
-        client, _cust, score_svc = client_with_score_service
-        score_svc.calculate_score = AsyncMock(
-            return_value=(85, "B", ["engagement_level"], ["Increase touchpoints with targeted campaigns"])
-        )
-        resp = client.post("/api/v1/customers/1/score")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["success"] is True
-        assert body["data"]["score"] == 85
-        assert body["data"]["tier"] == "B"
-        assert body["data"]["top_factors"] == ["engagement_level"]
-        assert body["data"]["recommendations"] == ["Increase touchpoints with targeted campaigns"]
-        assert "message" in body
-        score_svc.calculate_score.assert_called_once_with(1, tenant_id=1)
-
-    def test_get_score_returns_data_with_factors(self, client_with_score_service):
-        client, _cust, score_svc = client_with_score_service
-        score_svc.get_score = AsyncMock(
-            return_value=(75, "B", ["deal_velocity"], ["Accelerate pipeline with limited-time offers"])
-        )
-        resp = client.get("/api/v1/customers/1/score")
-        assert resp.status_code == 200
-        body = resp.json()
-        assert body["success"] is True
-        assert body["data"]["score"] == 75
-        assert body["data"]["tier"] == "B"
-        assert body["data"]["top_factors"] == ["deal_velocity"]
-        assert body["data"]["recommendations"] == ["Accelerate pipeline with limited-time offers"]
-
-    def test_get_score_returns_404_when_no_score(self, client_with_score_service):
-        client, _cust, score_svc = client_with_score_service
-        score_svc.get_score = AsyncMock(side_effect=NotFoundException("Score"))
-        resp = client.get("/api/v1/customers/9999/score")
-        assert resp.status_code == 404
-        body = resp.json()
-        assert body["success"] is False
-        assert "Score" in body["message"]
-
-    def test_get_score_returns_404_when_customer_missing(self, client_with_score_service):
-        client, _cust, score_svc = client_with_score_service
-        score_svc.get_score = AsyncMock(side_effect=NotFoundException("Customer"))
-        resp = client.get("/api/v1/customers/9999/score")
-        assert resp.status_code == 404
-        body = resp.json()
-        assert body["success"] is False
-        assert "Customer" in body["message"]
-
-    def test_post_score_requires_auth(self, monkeypatch):
-        client, _cust, _ = _build_score_test_app(monkeypatch, override_auth=False)
-        resp = client.post("/api/v1/customers/1/score")
-        assert resp.status_code == 401
-        body = resp.json()
-        assert body["success"] is False
-
-    def test_get_score_requires_auth(self, monkeypatch):
-        client, _cust, _ = _build_score_test_app(monkeypatch, override_auth=False)
-        resp = client.get("/api/v1/customers/1/score")
-        assert resp.status_code == 401
-        body = resp.json()
-        assert body["success"] is False

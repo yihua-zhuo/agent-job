@@ -1,9 +1,26 @@
 """Score schemas for lead scoring."""
 
+from __future__ import annotations
+
 from enum import StrEnum
-from typing import Annotated, Any
+from typing import Annotated, Any, Protocol
 
 from pydantic import BaseModel, Field
+
+
+class ScoreResultLike(Protocol):
+    """Structural type for objects that can be mapped to ScoreResponse.
+
+    Decouples the schema from the service's dataclass so the router doesn't
+    depend on the concrete ``ScoreResult`` type.
+    """
+
+    score: int
+    tier_label: str
+    score_factors: dict[str, int] | None
+    top_factors: list[str]
+    recommendations: list[str]
+    similar_leads: list[SimilarLead]
 
 
 class ScoreTier(StrEnum):
@@ -11,6 +28,18 @@ class ScoreTier(StrEnum):
     B = "B"
     C = "C"
     D = "D"
+
+
+class SimilarLead(BaseModel):
+    """A single similar-lead entry returned by AI enrichment."""
+
+    id: Annotated[int, Field(gt=0)]
+    score: float
+    name: str | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        """Render as a plain dict."""
+        return {"id": self.id, "score": self.score, "name": self.name}
 
 
 class ScoreRequest(BaseModel):
@@ -46,16 +75,44 @@ class ScoreResponse(BaseModel):
 
     score: int | None = None
     tier: str | None = None
-    score_factors: dict | None = None
-    top_factors: list | None = None
-    recommendations: list | None = None
+    score_factors: dict[str, int] | None = None
+    top_factors: list[str] | None = None
+    recommendations: list[str] | None = None
+    similar_leads: list[SimilarLead] | None = None
+
+    @classmethod
+    def from_result(cls, result: ScoreResultLike) -> ScoreResponse:
+        """Build a ScoreResponse from a result object.
+
+        Decouples the router from the service's internal type representation
+        (e.g. ScoreTier enum → tier string) and keeps the field mapping in one
+        place so schema changes are not scattered across routers.
+        """
+        return cls(
+            score=result.score,
+            tier=result.tier_label,
+            score_factors=result.score_factors,
+            top_factors=result.top_factors,
+            recommendations=result.recommendations,
+            similar_leads=result.similar_leads or None,
+        )
 
     def to_dict(self) -> dict[str, Any]:
-        """Render as a plain dict."""
-        return {
+        """Render as a plain dict.
+
+        ``score``, ``tier``, ``score_factors``, ``top_factors``, and
+        ``recommendations`` are always present (even when None) for a
+        consistent response shape. ``similar_leads`` is conditionally omitted
+        when ``None`` so callers can distinguish "no enrichment" from an
+        explicit empty list.
+        """
+        data: dict[str, Any] = {
             "score": self.score,
             "tier": self.tier,
             "score_factors": self.score_factors,
             "top_factors": self.top_factors,
             "recommendations": self.recommendations,
         }
+        if self.similar_leads is not None:
+            data["similar_leads"] = [sl.to_dict() for sl in self.similar_leads]
+        return data

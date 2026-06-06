@@ -4,16 +4,47 @@ Reads the persisted ``score_factors`` JSON column on ``CustomerModel`` (populate
 upstream scoring pipeline), sums each factor's contribution, clamps to 0–100, classifies
 into a tier (A/B/C/D), surfaces the top contributing factors, and returns actionable
 recommendations. No AI / LLM calls are made in this module.
+
+When ``include_ai`` is ``True``, ``calculate_score`` also calls
+``AIAgentClient.analyze_factors`` to enrich the result with ``similar_leads`` and
+AI-generated recommendations. The default is ``False`` so callers (especially
+routers and workers) must opt in to the AI dependency. The AI call is wrapped
+in a try/except so that agent unavailability or malformed payloads degrade
+gracefully to a static score with an empty ``similar_leads`` list — the static
+score is never lost.
 """
 
 from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
+from typing import Protocol
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
-from models.score import ScoreTier
+from models.score import ScoreTier, SimilarLead
 from pkg.errors.app_exceptions import NotFoundException
+
+logger = logging.getLogger(__name__)
+
+
+class _AIAgentClientProtocol(Protocol):
+    """Structural type for an injected AI client. The real ``AIAgentClient``
+    (when implemented) is expected to satisfy this protocol."""
+
+    async def analyze_factors(
+        self,
+        *,
+        entity_id: int,
+        tenant_id: int,
+        current_score: int,
+    ) -> dict: ...
+
+
+DEFAULT_SCORE = 50
+DEFAULT_TIER = ScoreTier.C
 
 FIELD_WEIGHTS: dict[str, int] = {
     "engagement_level": 30,
@@ -38,13 +69,109 @@ FIELD_RECOMMENDATIONS: dict[str, str] = {
 }
 
 MAX_TOP_FACTORS = 3
+MAX_SIMILAR_LEADS = 10
+
+
+@dataclass
+class ScoreResult:
+    """Typed result returned by calculate_score / get_score.
+
+    Using a dataclass instead of a positional tuple keeps callers
+    resilient to field reordering and self-documenting at call sites.
+    """
+
+    score: int
+    tier: ScoreTier
+    score_factors: dict[str, int] | None = None
+    top_factors: list[str] = field(default_factory=list)
+    recommendations: list[str] = field(default_factory=list)
+    similar_leads: list[SimilarLead] = field(default_factory=list)
+
+    @property
+    def tier_label(self) -> str:
+        """Return the string form of the tier (decouples callers from the enum)."""
+        return self.tier.value
 
 
 class ScoreService:
-    def __init__(self, session: AsyncSession):
+    def __init__(self, session: AsyncSession, ai_client: _AIAgentClientProtocol | None = None):
         self.session = session
+        self._ai_client = ai_client
 
-    async def calculate_score(self, customer_id: int, tenant_id: int) -> tuple[int, str, list[str], list[str]]:
+    async def ai_annotate_score(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        current_score: int,
+    ) -> dict:
+        """Call the AI Agent Framework for deeper factor analysis.
+
+        Returns a dict with ``similar_leads`` and ``recommendations`` keys, or an
+        empty dict on any failure (timeout, non-200, malformed payload, missing
+        client). ``similar_leads`` is capped at ``MAX_SIMILAR_LEADS`` items.
+
+        Sentinel: ``recommendations`` is ``None`` when the AI did not return a
+        recommendations key (or returned a non-list), and an empty list ``[]``
+        when the AI explicitly returned an empty list. The caller distinguishes
+        "AI absent" from "AI had nothing to suggest".
+        """
+        client = self._ai_client
+        if client is None:
+            return {}
+        try:
+            result = await client.analyze_factors(
+                entity_id=customer_id,
+                tenant_id=tenant_id,
+                current_score=current_score,
+            )
+        except Exception as exc:
+            logger.warning("AI agent call failed for customer %s: %s", customer_id, exc)
+            return {}
+
+        if not isinstance(result, dict):
+            return {}
+
+        similar_leads_raw = result.get("similar_leads") or []
+        if not isinstance(similar_leads_raw, list):
+            similar_leads_raw = []
+
+        # Distinguish key-absent/non-list (None sentinel) from empty list
+        # (explicitly empty from the AI).
+        raw_recs = result.get("recommendations")
+        if raw_recs is not None and not isinstance(raw_recs, list):
+            recommendations: list | None = None
+        else:
+            recommendations = raw_recs
+
+        parsed: list[SimilarLead] = []
+        for item in similar_leads_raw[:MAX_SIMILAR_LEADS]:
+            if not isinstance(item, dict):
+                continue
+            raw_id = item.get("id")
+            if not isinstance(raw_id, int) or raw_id <= 0:
+                continue
+            try:
+                parsed.append(
+                    SimilarLead(
+                        id=raw_id,
+                        score=float(item.get("score", 0.0)),
+                        name=item.get("name"),
+                    )
+                )
+            except (TypeError, ValueError):
+                continue
+
+        return {
+            "similar_leads": parsed,
+            "recommendations": recommendations,
+        }
+
+    async def calculate_score(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        include_ai: bool = False,
+    ) -> ScoreResult:
         result = await self.session.execute(
             select(CustomerModel).where(
                 CustomerModel.id == customer_id,
@@ -56,34 +183,89 @@ class ScoreService:
             raise NotFoundException("Customer")
 
         score_factors = customer.score_factors
+        similar_leads: list[SimilarLead] = []
+        top_factors: list[str] = []
+        recommendations: list[str] = []
+        tier: ScoreTier
+        score: int
+
         if not score_factors:
-            return 50, ScoreTier.C.value, [], []
+            score = DEFAULT_SCORE
+            tier = DEFAULT_TIER
+        else:
+            total = 0
+            contributions: dict[str, int] = {}
+            for field_name, weight in FIELD_WEIGHTS.items():
+                raw_value = score_factors.get(field_name, 0)
+                try:
+                    factor_score = int(raw_value)
+                except (TypeError, ValueError):
+                    factor_score = 0
+                factor_score = max(0, min(100, factor_score))
+                contributions[field_name] = factor_score
+                # Integer-division: weights are percentages that sum to 100,
+                # so floor division gives an exact integer total.
+                total += factor_score * weight // 100
 
-        total = 0
-        contributions: dict[str, int] = {}
-        for field_name, weight in FIELD_WEIGHTS.items():
-            factor_score = int(score_factors.get(field_name, 0))
-            factor_score = max(0, min(100, factor_score))
-            contributions[field_name] = factor_score
-            total += factor_score * weight // 100
+            score = max(0, min(100, total))
 
-        score = max(0, min(100, total))
+            tier = ScoreTier.D
+            for threshold, t in TIER_BOUNDARIES:
+                if score >= threshold:
+                    tier = t
+                    break
 
-        tier = ScoreTier.D
-        for threshold, t in TIER_BOUNDARIES:
-            if score >= threshold:
-                tier = t
-                break
+            sorted_contrib = sorted(contributions.items(), key=lambda kv: kv[1], reverse=True)
+            top_factors = [k for k, v in sorted_contrib[:MAX_TOP_FACTORS] if v > 0]
+            recommendations = [FIELD_RECOMMENDATIONS[f] for f in top_factors if f in FIELD_RECOMMENDATIONS]
 
-        sorted_contrib = sorted(contributions.items(), key=lambda kv: kv[1], reverse=True)
-        top_factors = [k for k, v in sorted_contrib[:MAX_TOP_FACTORS] if v > 0]
-        recommendations = [FIELD_RECOMMENDATIONS[f] for f in top_factors if f in FIELD_RECOMMENDATIONS]
+        if include_ai:
+            ai_data = await self.ai_annotate_score(customer_id, tenant_id, score)
+            ai_similar = ai_data.get("similar_leads") or []
+            if ai_similar:
+                similar_leads = ai_similar
+            # Sentinel: ``None`` means the AI call failed or the key was
+            # missing/non-list — keep the static recommendations.
+            # A non-empty list is authoritative; an empty list means
+            # "AI ran successfully with no recs" — static recs still apply.
+            ai_recs_raw = ai_data.get("recommendations")
+            if isinstance(ai_recs_raw, list) and ai_recs_raw:
+                # AI recommendations are authoritative when present;
+                # static FIELD_RECOMMENDATIONS are the fallback when AI is
+                # absent or returns nothing. Merge: AI first, static fills gaps.
+                static_keys = [f for f in top_factors if f in FIELD_RECOMMENDATIONS]
+                static_recs = [FIELD_RECOMMENDATIONS[f] for f in static_keys]
+                merged = list(ai_recs_raw)
+                for rec in static_recs:
+                    if rec not in merged:
+                        merged.append(rec)
+                recommendations = merged
 
-        return score, tier.value, top_factors, recommendations
+        return ScoreResult(
+            score=score,
+            tier=tier,
+            score_factors=score_factors,
+            top_factors=top_factors,
+            recommendations=recommendations,
+            similar_leads=similar_leads,
+        )
 
-    async def get_score(self, customer_id: int, tenant_id: int) -> tuple[int, str, list[str], list[str]]:
-        result = await self.calculate_score(customer_id, tenant_id)
-        score, _tier, top_factors, recommendations = result
-        if not top_factors and not recommendations:
+    async def get_score(
+        self,
+        customer_id: int,
+        tenant_id: int,
+        include_ai: bool = False,
+    ) -> ScoreResult:
+        # Fail fast: 404s for unscored/missing customers must never trigger
+        # the AI dependency. The persisted factor check runs before any
+        # scoring work, so unscored customers raise without an AI call.
+        result = await self.session.execute(
+            select(CustomerModel).where(
+                CustomerModel.id == customer_id,
+                CustomerModel.tenant_id == tenant_id,
+            )
+        )
+        customer = result.scalar_one_or_none()
+        if customer is None or not customer.score_factors:
             raise NotFoundException("Score")
-        return result
+        return await self.calculate_score(customer_id, tenant_id, include_ai=include_ai)
