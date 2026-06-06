@@ -9,9 +9,10 @@
 - Note: No cron configured — manual runs only
 
 ## cron 状态
-- Job ID: 无配置（当前为手动心跳检查）
-- 测试：待检查
-- 待提交：待检查
+- Job ID: `db67bfcc-5a19-4251-a9e3-1d6b531cf00f` (security-hourly)
+- Schedule: `0 * * * *` UTC (hourly)
+- Status: ✅ 01:57 Jun 6 重新配置成功
+- Note: 已恢复每小时的 cron job
 
 ## 输出报告格式（如需要发送）
 📊 待更新
