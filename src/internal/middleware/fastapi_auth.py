@@ -55,23 +55,14 @@ async def get_auth_creds(
     return credentials.credentials
 
 
-async def require_auth(request: Request) -> AuthContext:
-    """Decode JWT and populate request.state, mirrors Flask `require_auth` decorator."""
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="缺少认证 Token")
-
-    token = auth_header[7:]
+def _decode_jwt(token: str) -> AuthContext:
+    """Decode a JWT token and return an AuthContext. Raises HTTPException(401) on any error."""
     secret = get_jwt_secret()
-    print(f"[DEBUG] require_auth token={token[:20]!r}..., secret={secret!r}")
     try:
         payload = jwt.decode(token, secret, algorithms=[JWT_ALGORITHM], options={"verify_aud": False})
-        print(f"[DEBUG] payload={payload}")
     except jwt.ExpiredSignatureError:
-        print("[DEBUG] ExpiredSignatureError")
         raise HTTPException(status_code=401, detail="Token 已过期")
-    except jwt.InvalidTokenError as e:
-        print(f"[DEBUG] InvalidTokenError: {e}")
+    except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="无效的 Token")
 
     user_id = payload.get("user_id")
@@ -80,10 +71,19 @@ async def require_auth(request: Request) -> AuthContext:
 
     raw_tenant_id = payload.get("tenant_id")
     tenant_id = int(raw_tenant_id) if raw_tenant_id is not None else None
-
-    roles = payload.get("roles", [])
-
+    roles = payload.get("roles")
+    if roles is None:
+        single_role = payload.get("role")
+        roles = [single_role] if single_role else []
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=roles)
+
+
+async def require_auth(request: Request) -> AuthContext:
+    """Decode JWT and populate request.state, mirrors Flask `require_auth` decorator."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="缺少认证 Token")
+    return _decode_jwt(auth_header[7:])
 
 
 async def get_current_tenant_id(request: Request) -> int:
