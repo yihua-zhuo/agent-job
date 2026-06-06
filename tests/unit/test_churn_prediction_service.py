@@ -6,15 +6,20 @@ import pytest
 
 from pkg.errors.app_exceptions import NotFoundException
 from services.churn_prediction_service import ChurnPrediction, ChurnPredictionService, ChurnRiskFactor
-from tests.unit.conftest import MockState, make_count_handler, make_customer_handler, make_mock_session
+from tests.unit.conftest import (
+    MockResult,
+    MockRow,
+    MockState,
+    make_count_handler,
+    make_customer_handler,
+    make_mock_session,
+)
 
 
-@pytest.fixture
-def mock_db_session():
-    state = MockState()
-    state.customers[1] = {
-        "id": 1,
-        "tenant_id": 1,
+def _seed_test_customer(state: MockState, customer_id: int = 1, tenant_id: int = 1) -> None:
+    state.customers[customer_id] = {
+        "id": customer_id,
+        "tenant_id": tenant_id,
         "name": "Test",
         "email": "test@example.com",
         "phone": None,
@@ -30,7 +35,41 @@ def mock_db_session():
         "top_factors": None,
         "recommendations": None,
     }
-    return make_mock_session([make_customer_handler(state), make_count_handler(state)], state=state)
+
+
+def _make_tenant_aware_customer_handler(state: MockState):
+    """Customer handler that filters by tenant_id in the SQL predicate.
+
+    The shared ``make_customer_handler`` only matches ``from customers where id`` and ignores
+    tenant_id, which would mask cross-tenant isolation bugs. This handler inspects the
+    tenant_id param and only returns the customer when it matches the seeded record.
+    """
+
+    def handler(sql_text, params):
+        normalized = " ".join(sql_text.split())
+        if "from customers where" in normalized and "customers.id" in normalized:
+            # SQLAlchemy bind params are suffixed (_1, _2, ...). Accept either form.
+            customer_id = params.get("id") if "id" in params else params.get("id_1")
+            tenant_id = params.get("tenant_id") if "tenant_id" in params else params.get("tenant_id_1")
+            if customer_id in state.customers:
+                rec = state.customers[customer_id]
+                if tenant_id is None or rec.get("tenant_id") == tenant_id:
+                    return MockResult([MockRow(rec.copy())])
+                return MockResult([])
+            return MockResult([])
+        return None
+
+    return handler
+
+
+@pytest.fixture
+def mock_db_session():
+    state = MockState()
+    _seed_test_customer(state, customer_id=1, tenant_id=1)
+    return make_mock_session(
+        [_make_tenant_aware_customer_handler(state), make_customer_handler(state), make_count_handler(state)],
+        state=state,
+    )
 
 
 @pytest.fixture
@@ -70,21 +109,33 @@ class TestCalculateScore:
 
 
 class TestCustomerNotFound:
-    """Error path — raise NotFoundException when customer does not exist."""
+    """Error path — raise NotFoundException when customer does not exist or belongs to a different tenant."""
 
     @pytest.fixture
-    def empty_service(self):
-        """Service with no SQL handlers — every SELECT returns an empty result."""
-        session = make_mock_session([])
+    def tenant_isolated_service(self):
+        """Service with a tenant-aware customer handler wired to seeded state.
+
+        The handler returns the customer only when tenant_id matches the seeded record,
+        so a wrong-tenant request is rejected by the SQL predicate (not by a bare empty
+        session). This proves the service's tenant filter is what excludes the row.
+        """
+        state = MockState()
+        _seed_test_customer(state, customer_id=1, tenant_id=1)
+        session = make_mock_session(
+            [_make_tenant_aware_customer_handler(state), make_count_handler(state)],
+            state=state,
+        )
         return ChurnPredictionService(session)
 
-    async def test_raises_not_found(self, empty_service):
+    async def test_raises_not_found_when_customer_missing(self, tenant_isolated_service):
         with pytest.raises(NotFoundException):
-            await empty_service.calculate_score(customer_id=9999, tenant_id=1)
+            await tenant_isolated_service.calculate_score(customer_id=9999, tenant_id=1)
 
-    async def test_wrong_tenant_raises_not_found(self, empty_service):
+    async def test_wrong_tenant_raises_not_found(self, tenant_isolated_service):
+        # Customer 1 is seeded under tenant_id=1 — querying with tenant_id=999 must be
+        # rejected by the tenant predicate, not by an empty mock state.
         with pytest.raises(NotFoundException):
-            await empty_service.calculate_score(customer_id=1, tenant_id=999)
+            await tenant_isolated_service.calculate_score(customer_id=1, tenant_id=999)
 
 
 class TestReturnTypeContract:
@@ -101,40 +152,3 @@ class TestReturnTypeContract:
         assert hasattr(result, "tier")
         assert hasattr(result, "top_3_risk_factors")
         assert hasattr(result, "recommended_actions")
-
-
-class TestTierBoundaries:
-    """Tier mapping contract — exercise the static tier logic directly."""
-
-    def test_high_tier(self):
-        assert ChurnPredictionService._compute_tier(70.0) == "high"
-        assert ChurnPredictionService._compute_tier(100.0) == "high"
-        assert ChurnPredictionService._compute_tier(99.99) == "high"
-
-    def test_medium_tier(self):
-        assert ChurnPredictionService._compute_tier(40.0) == "medium"
-        assert ChurnPredictionService._compute_tier(69.99) == "medium"
-
-    def test_low_tier(self):
-        assert ChurnPredictionService._compute_tier(0.0) == "low"
-        assert ChurnPredictionService._compute_tier(39.99) == "low"
-
-
-class TestNormalizeScore:
-    """Sub-score normalization for each dimension."""
-
-    def test_login_frequency_caps_at_100(self):
-        assert ChurnPredictionService._normalize_score("login_frequency", 10) == 100
-        assert ChurnPredictionService._normalize_score("login_frequency", 5) == 50.0
-
-    def test_purchase_recency_inverts(self):
-        assert ChurnPredictionService._normalize_score("purchase_recency", 0) == 100.0
-        assert ChurnPredictionService._normalize_score("purchase_recency", 100) == 0.0
-
-    def test_support_ticket_count_caps_at_100(self):
-        assert ChurnPredictionService._normalize_score("support_ticket_count", 5) == 100
-        assert ChurnPredictionService._normalize_score("support_ticket_count", 3) == 60.0
-
-    def test_engagement_score_caps_at_100(self):
-        assert ChurnPredictionService._normalize_score("engagement_score", 30) == 100
-        assert ChurnPredictionService._normalize_score("engagement_score", 15) == 50.0

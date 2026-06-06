@@ -4,6 +4,7 @@ Computes a weighted churn score from four customer dimensions and returns
 a ``ChurnPrediction`` dataclass. No DB writes — all queries are read-only.
 """
 
+import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 
@@ -52,7 +53,7 @@ class ChurnPredictionService:
         "login_frequency": "login frequency in the last 30 days",
         "purchase_recency": "days since the last won opportunity",
         "support_ticket_count": "open/pending support ticket burden",
-        "engagement_score": "overall activity-based engagement",
+        "engagement_score": "diversity of activity types in the last 30 days",
     }
 
     def __init__(self, session: AsyncSession):
@@ -70,26 +71,48 @@ class ChurnPredictionService:
         now = datetime.now(UTC)
         login_window = now - timedelta(days=30)
 
-        login_result = await self.session.execute(
-            select(func.count(ActivityModel.id)).where(
-                and_(
-                    ActivityModel.tenant_id == tenant_id,
-                    ActivityModel.customer_id == customer_id,
-                    ActivityModel.created_at >= login_window,
+        login_result, engagement_result, purchase_result, ticket_result = await asyncio.gather(
+            self.session.execute(
+                select(func.count(ActivityModel.id)).where(
+                    and_(
+                        ActivityModel.tenant_id == tenant_id,
+                        ActivityModel.customer_id == customer_id,
+                        ActivityModel.created_at >= login_window,
+                    )
                 )
-            )
+            ),
+            self.session.execute(
+                select(func.count(func.distinct(ActivityModel.type))).where(
+                    and_(
+                        ActivityModel.tenant_id == tenant_id,
+                        ActivityModel.customer_id == customer_id,
+                        ActivityModel.created_at >= login_window,
+                    )
+                )
+            ),
+            self.session.execute(
+                select(func.max(OpportunityModel.created_at)).where(
+                    and_(
+                        OpportunityModel.tenant_id == tenant_id,
+                        OpportunityModel.customer_id == customer_id,
+                        OpportunityModel.stage == "won",
+                    )
+                )
+            ),
+            self.session.execute(
+                select(func.count(TicketModel.id)).where(
+                    and_(
+                        TicketModel.tenant_id == tenant_id,
+                        TicketModel.customer_id == customer_id,
+                        TicketModel.status.in_(("open", "pending")),
+                    )
+                )
+            ),
         )
-        login_frequency = int(login_result.scalar() or 0)
 
-        purchase_result = await self.session.execute(
-            select(func.max(OpportunityModel.created_at)).where(
-                and_(
-                    OpportunityModel.tenant_id == tenant_id,
-                    OpportunityModel.customer_id == customer_id,
-                    OpportunityModel.stage == "won",
-                )
-            )
-        )
+        login_frequency = int(login_result.scalar() or 0)
+        engagement_diversity = int(engagement_result.scalar() or 0)
+
         last_purchase = purchase_result.scalar()
         if last_purchase is not None:
             if last_purchase.tzinfo is None:
@@ -98,40 +121,31 @@ class ChurnPredictionService:
         else:
             purchase_recency_days = 90
 
-        ticket_result = await self.session.execute(
-            select(func.count(TicketModel.id)).where(
-                and_(
-                    TicketModel.tenant_id == tenant_id,
-                    TicketModel.customer_id == customer_id,
-                    TicketModel.status.in_(("open", "pending")),
-                )
-            )
-        )
         support_ticket_count = int(ticket_result.scalar() or 0)
 
         return {
             "login_frequency": login_frequency,
             "purchase_recency_days": purchase_recency_days,
             "support_ticket_count": support_ticket_count,
-            "engagement_score_raw": login_frequency,
+            "engagement_score_raw": engagement_diversity,
         }
 
     @staticmethod
     def _normalize_score(name: str, raw: float) -> float:
-        """Map a raw dimension value to a 0-100 sub-score.
+        """Map a raw dimension value to a 0-100 health sub-score.
 
         Higher sub-score = healthier / lower churn risk for that dimension.
-        Support tickets and purchase recency are inverted: more tickets or
-        more days = lower health.
+        Each branch returns a true health score, so the caller can sum them
+        directly without double-inverting.
         """
         if name == "login_frequency":
             return min(raw / 10 * 100, 100)
         if name == "purchase_recency":
             return max(0.0, 100.0 - raw)
         if name == "support_ticket_count":
-            return min(raw / 5 * 100, 100)
+            return max(0.0, 100.0 - min(raw / 5 * 100, 100))
         if name == "engagement_score":
-            return min(raw / 30 * 100, 100)
+            return min(raw / 5 * 100, 100)
         return 0.0
 
     @staticmethod
@@ -160,20 +174,15 @@ class ChurnPredictionService:
         """Compute churn score, tier, top factors, and recommended actions."""
         raw = await self._fetch_raw_metrics(customer_id, tenant_id)
 
-        login_score = self._normalize_score("login_frequency", raw["login_frequency"])
-        purchase_score = self._normalize_score("purchase_recency", raw["purchase_recency_days"])
-        support_score = self._normalize_score("support_ticket_count", raw["support_ticket_count"])
-        engagement_score = self._normalize_score("engagement_score", raw["engagement_score_raw"])
-
-        raw_total = login_score * 0.25 + purchase_score * 0.25 + (100 - support_score) * 0.25 + engagement_score * 0.25
+        name_to_score = {
+            "login_frequency": self._normalize_score("login_frequency", raw["login_frequency"]),
+            "purchase_recency": self._normalize_score("purchase_recency", raw["purchase_recency_days"]),
+            "support_ticket_count": self._normalize_score("support_ticket_count", raw["support_ticket_count"]),
+            "engagement_score": self._normalize_score("engagement_score", raw["engagement_score_raw"]),
+        }
+        raw_total = sum(score * self.WEIGHTS[name] for name, score in name_to_score.items())
         score = round(min(raw_total, 100.0), 2)
 
-        name_to_score = {
-            "login_frequency": login_score,
-            "purchase_recency": purchase_score,
-            "support_ticket_count": support_score,
-            "engagement_score": engagement_score,
-        }
         top_3_risk_factors = self._build_top_3_factors(name_to_score)
 
         recommended_actions: list[str] = []

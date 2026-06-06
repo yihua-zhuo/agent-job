@@ -1,5 +1,3 @@
-I now have all the information needed. The dev-plan's test approach using `make_count_handler` will work for activity counts (via `make_activity_handler`), but for tickets and opportunities the mocks return hardcoded values. I need to account for this in the test plan. The test assertions should focus on structural correctness (score in 0-100, valid tier, 3 risk factors, list of actions) rather than precise numeric values.
-
 # Implementation Plan — Issue #573
 
 ## Goal
@@ -31,22 +29,22 @@ Reading order followed:
    - **login_frequency**: `SELECT count(ActivityModel.id) WHERE tenant_id=? AND customer_id=? AND created_at >= now - 30d`. Fallback to 0 if no activity.
    - **purchase_recency**: `SELECT max(OpportunityModel.created_at) WHERE tenant_id=? AND customer_id=? AND stage='won'`. Compute `days_since`; normalize tz-naive to UTC. Fallback to 90 days if no won opportunity.
    - **support_ticket_count**: `SELECT count(TicketModel.id) WHERE tenant_id=? AND customer_id=? AND status IN ('open','pending')`. Fallback to 0.
-   - **engagement_score_raw**: Reuse login_count as proxy (activity count, to be normalized later).
+   - **engagement_score_raw**: `SELECT count(DISTINCT ActivityModel.type) WHERE tenant_id=? AND customer_id=? AND created_at >= now - 30d`. Counts distinct activity *types* (call, email, meeting, ...) — a separate signal from login_frequency so the two sub-scores carry independent information.
    - Return `dict` with keys: `login_frequency`, `purchase_recency_days`, `support_ticket_count`, `engagement_score_raw`.
 
 3. **Implement `_normalize_score`, `_compute_tier`, and `_build_top_3_factors` private methods.**
-   - `_normalize_score(name, raw) -> float` maps each dimension's raw value to 0-100:
-     - `login_frequency`: `min(raw / 10 * 100, 100)` — 10+ logins = full score.
-     - `purchase_recency`: `max(0.0, 100.0 - raw)` — 0 days = full score, 90+ days = 0.
-     - `support_ticket_count`: `min(raw / 5 * 100, 100)` — 5+ tickets = full score (this is "health score" — low ticket count = healthy).
-     - `engagement_score`: `min(raw / 30 * 100, 100)` — 30+ activities = full score.
+   - `_normalize_score(name, raw) -> float` maps each dimension's raw value to a true 0-100 health sub-score (higher = healthier, so the weighted sum is a direct sum with no double-inversions):
+     - `login_frequency`: `min(raw / 10 * 100, 100)` — 10+ logins = full health.
+     - `purchase_recency`: `max(0.0, 100.0 - raw)` — 0 days = full health, 90+ days = 0.
+     - `support_ticket_count`: `max(0.0, 100.0 - min(raw / 5 * 100, 100))` — 0 tickets = full health, 5+ tickets = 0.
+     - `engagement_score`: `min(raw / 5 * 100, 100)` — 5+ distinct activity types = full health.
    - `_compute_tier(score) -> str`: `>= 70` → `"high"`, `>= 40` → `"medium"`, `< 40` → `"low"`.
    - `_build_top_3_factors(name_to_score) -> list[ChurnRiskFactor]`: sort dimensions by sub-score descending, return top 3 as `ChurnRiskFactor(name, weight, score, description)` objects.
 
 4. **Implement `async calculate_score(self, customer_id: int, tenant_id: int) -> ChurnPrediction`.**
    - Call `_fetch_raw_metrics` to get raw values.
-   - Normalize each dimension to 0-100 sub-score via `_normalize_score`.
-   - Compute weighted total: `login_score * 0.25 + purchase_score * 0.25 + (100 - support_score) * 0.25 + engagement_score * 0.25`. (Support score is inverted: more tickets → higher churn contribution.)
+   - Normalize each dimension to 0-100 sub-score via `_normalize_score` (each branch returns a true health score — high = healthy, so the weighted sum is direct).
+   - Compute weighted total as `sum(sub * self.WEIGHTS[k] for k, sub in name_to_score.items())` — the WEIGHTS constant is the single source of truth, no hardcoded 0.25 literals.
    - Clamp to [0, 100] with `min(score, 100.0)`, round to 2 decimal places.
    - Determine `tier` via `_compute_tier`.
    - Build `top_3_risk_factors` via `_build_top_3_factors`.
