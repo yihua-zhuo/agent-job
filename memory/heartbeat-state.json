@@ -1,6 +1,6 @@
 {
   "lastChecks": {
-    "cron": 1779462600,
+    "cron": 1780711020,
     "test_count": 1776490320,
     "security_sync": 1779345824
   },
@@ -20,14 +20,9 @@
       "lastError": "Channel is required when multiple channels configured: telegram, qqbot"
     },
     "security-hourly": {
-      "id": "3c40b43c-5298-4ae0-a655-5b87e04151fc",
+      "id": "db67bfcc-5a19-4251-a9e3-1d6b531cf00f",
       "status": "ok",
-      "lastDelivered": true,
-      "lastSuccess": "2026-05-19T17:03:44Z",
-      "projects": 50,
-      "members": 12,
-      "gitlabApiCalls": 109,
-      "errors": 0
+      "note": "restored Jun 6"
     }
   }
 }
