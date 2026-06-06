@@ -420,3 +420,139 @@ class TestBulkImportEndpoint:
         svc.bulk_import = AsyncMock(return_value=0)
         resp = client.post("/api/v1/customers/import", json={"customers": []})
         assert resp.status_code == 200
+
+
+# ---------------------------------------------------------------------------
+# Score endpoint tests
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def client_with_score_service(monkeypatch):
+    """TestClient with both CustomerService and ScoreService mocked."""
+    from starlette.requests import Request
+    from starlette.responses import JSONResponse
+
+    from internal.middleware.fastapi_auth import require_auth
+
+    _customer_mock = MagicMock()
+    _score_mock = MagicMock()
+    _repo_sessions = []
+
+    def override_customer_service(repository):
+        return _customer_mock
+
+    def override_score_service(session):
+        return _score_mock
+
+    mock_session = MagicMock()
+    mock_enrich_result = MagicMock()
+    mock_enrich_result.all = MagicMock(return_value=[])
+    mock_enrich_result.scalar_one_or_none = MagicMock(return_value=None)
+    mock_session.execute = AsyncMock(return_value=mock_enrich_result)
+
+    app = FastAPI()
+    app.include_router(customers_router)
+    app.dependency_overrides[require_auth] = lambda: _make_auth_ctx()
+    app.dependency_overrides[get_db] = lambda: mock_session
+
+    monkeypatch.setattr(
+        "api.routers.customers.CustomerService",
+        override_customer_service,
+    )
+    monkeypatch.setattr(
+        "api.routers.customers.ScoreService",
+        override_score_service,
+    )
+
+    def make_mock_repo(session):
+        _repo_sessions.append(session)
+        return MagicMock(session=session)
+
+    monkeypatch.setattr(
+        "api.routers.customers.CustomerRepository",
+        make_mock_repo,
+    )
+
+    @app.exception_handler(AppException)
+    async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"success": False, "message": exc.detail, "code": exc.code},
+        )
+
+    client = TestClient(app, raise_server_exceptions=False)
+    return client, _customer_mock, _score_mock
+
+
+class TestScoreEndpoints:
+    def test_post_score_returns_data(self, client_with_score_service):
+        client, _cust, score_svc = client_with_score_service
+        score_svc.calculate_score = AsyncMock(
+            return_value=(85, "B", ["engagement_level"], ["Increase touchpoints with targeted campaigns"])
+        )
+        resp = client.post("/api/v1/customers/1/score")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["score"] == 85
+        assert body["data"]["tier"] == "B"
+        assert body["data"]["top_factors"] == ["engagement_level"]
+        assert body["data"]["recommendations"] == ["Increase touchpoints with targeted campaigns"]
+
+    def test_get_score_returns_data(self, client_with_score_service):
+        client, _cust, score_svc = client_with_score_service
+        score_svc.get_score = AsyncMock(
+            return_value=(75, "B", ["deal_velocity"], ["Accelerate pipeline with limited-time offers"])
+        )
+        resp = client.get("/api/v1/customers/1/score")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["success"] is True
+        assert body["data"]["score"] == 75
+        assert body["data"]["tier"] == "B"
+        assert body["data"]["top_factors"] == ["deal_velocity"]
+        assert body["data"]["recommendations"] == ["Accelerate pipeline with limited-time offers"]
+
+    def test_get_score_returns_404_when_no_score(self, client_with_score_service):
+        client, _cust, score_svc = client_with_score_service
+        score_svc.get_score = AsyncMock(return_value=(50, "C", [], []))
+        resp = client.get("/api/v1/customers/9999/score")
+        assert resp.status_code == 404
+
+    def test_post_score_requires_auth(self, monkeypatch):
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+
+        app = FastAPI()
+        app.include_router(customers_router)
+        # No dependency override for require_auth — request will lack auth
+
+        @app.exception_handler(AppException)
+        async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"success": False, "message": exc.detail, "code": exc.code},
+            )
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.post("/api/v1/customers/1/score")
+        assert resp.status_code == 401
+
+    def test_get_score_requires_auth(self, monkeypatch):
+        from starlette.requests import Request
+        from starlette.responses import JSONResponse
+
+        app = FastAPI()
+        app.include_router(customers_router)
+
+        @app.exception_handler(AppException)
+        async def app_exception_handler(request: Request, exc: AppException) -> JSONResponse:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={"success": False, "message": exc.detail, "code": exc.code},
+            )
+
+        client = TestClient(app, raise_server_exceptions=False)
+        resp = client.get("/api/v1/customers/1/score")
+        assert resp.status_code == 401
