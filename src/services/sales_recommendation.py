@@ -7,6 +7,8 @@ import hashlib
 import random
 from dataclasses import dataclass
 
+from sqlalchemy.ext.asyncio import AsyncSession
+
 
 @dataclass
 class ProductRecommendation:
@@ -59,8 +61,9 @@ class SalesRecommendationService:
         "enterprise": ["premium"],
     }
 
-    def __init__(self):
+    def __init__(self, session: AsyncSession | None = None):
         """初始化服务"""
+        self.session = session
         self._customer_cache: dict[int, dict] = {}
 
     def _get_mock_customer_data(self, tenant_id: int, customer_id: int) -> dict:
@@ -268,3 +271,27 @@ class SalesRecommendationService:
         conversion_prob = base_prob * market_sentiment * competition_factor
 
         return round(min(max(conversion_prob, 0.0), 1.0), 2)
+
+    async def get_recommendations(self, opportunity_id: int, tenant_id: int) -> dict:
+        """获取商机完整推荐结果。"""
+        conversion_prob = self.predict_conversion_probability(opportunity_id)
+        similar = self.get_similar_customers(tenant_id, opportunity_id)
+        next_action = self.get_next_best_action(tenant_id, opportunity_id)
+        return {
+            "opportunity_id": opportunity_id,
+            "conversion_probability": conversion_prob,
+            "similar_opportunities": [
+                {
+                    "customer_id": s.customer_id,
+                    "current_tier": s.current_tier,
+                    "monthly_revenue": s.monthly_revenue,
+                }
+                for s in similar
+            ],
+            "next_best_action": {
+                "action": next_action.action,
+                "target": next_action.target,
+                "reason": next_action.reason,
+                "confidence": next_action.confidence,
+            },
+        }
