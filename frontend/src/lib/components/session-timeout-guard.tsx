@@ -14,9 +14,11 @@ import { Button } from "@/components/ui/button";
 
 const IDLE_TIMEOUT_MS = 25 * 60 * 1000;   // 25 min — warning appears
 const LOGOUT_TIMEOUT_MS = 30 * 60 * 1000; // 30 min — forced logout
+const ACTIVITY_THROTTLE_MS = 1000;        // re-arm timers at most once per second
 
 export function SessionTimeoutGuard() {
-  const { isAuthenticated, clearAuth } = useAuthStore();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
   const router = useRouter();
   const [showWarning, setShowWarning] = useState(false);
   const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -38,7 +40,13 @@ export function SessionTimeoutGuard() {
     if (!isAuthenticated()) return;
     scheduleWarning();
 
-    function onActivity() { scheduleWarning(); }
+    let lastActivityAt = 0;
+    function onActivity() {
+      const now = performance.now();
+      if (now - lastActivityAt < ACTIVITY_THROTTLE_MS) return;
+      lastActivityAt = now;
+      scheduleWarning();
+    }
     window.addEventListener("mousemove", onActivity);
     window.addEventListener("mousedown", onActivity);
     window.addEventListener("keydown", onActivity);

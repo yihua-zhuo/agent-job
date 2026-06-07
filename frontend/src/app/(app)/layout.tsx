@@ -17,9 +17,12 @@ const STORAGE_KEY = "crm_sidebar_collapsed";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [collapsed, setCollapsed] = useState(() => {
-    try { return localStorage.getItem(STORAGE_KEY) === "true"; } catch { return false; }
-  });
+  const [collapsed, setCollapsed] = useState(false);
+  const [collapsedHydrated, setCollapsedHydrated] = useState(false);
+  useEffect(() => {
+    try { setCollapsed(localStorage.getItem(STORAGE_KEY) === "true"); } catch {}
+    setCollapsedHydrated(true);
+  }, []);
   const pathname = usePathname();
   const quickAdd = useQuickAddTask();
   const create = useCreateTask();
@@ -34,8 +37,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   useEffect(() => {
+    if (!collapsedHydrated) return;
     try { localStorage.setItem(STORAGE_KEY, String(collapsed)); } catch {}
-  }, [collapsed]);
+  }, [collapsed, collapsedHydrated]);
 
   return (
     <AuthGuard>

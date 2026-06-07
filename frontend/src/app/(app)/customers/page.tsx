@@ -1,5 +1,5 @@
 "use client";
-import { useState, useRef, useCallback, useEffect, Suspense } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo, Suspense } from "react";
 import { useSearchParams } from "next/navigation";
 import { useTableState } from "@/lib/hooks/useTableState";
 import { ColumnDef } from "@tanstack/react-table";
@@ -345,6 +345,8 @@ interface CreateForm {
 
 const blankCreateForm: CreateForm = { name: "", email: "", phone: "", company: "", status: "lead" };
 
+const CUSTOMER_SEARCHABLE_KEYS = ["name", "email", "phone"];
+
 function CustomersPageInner() {
   const searchParams = useSearchParams();
 
@@ -368,7 +370,10 @@ function CustomersPageInner() {
   const [showDelete, setShowDelete] = useState(false);
   const deleteCustomer = useDeleteCustomer();
 
-  const [savedViews, setSavedViews] = useState<SavedView[]>(() => loadViews());
+  const [savedViews, setSavedViews] = useState<SavedView[]>([]);
+  useEffect(() => {
+    setSavedViews(loadViews());
+  }, []);
   const [showSaveDialog, setShowSaveDialog] = useState(false);
   const [newViewName, setNewViewName] = useState("");
 
@@ -390,33 +395,38 @@ function CustomersPageInner() {
 
   const { data, isLoading, isError, refetch, isFetching } = useCustomers(page, pageSize);
 
+  const refetchRef = useRef(refetch);
+  refetchRef.current = refetch;
   useEffect(() => {
-    if (!refetch) return;
-    const interval = setInterval(() => { refetch(); }, 30_000);
+    const interval = setInterval(() => { refetchRef.current?.(); }, 30_000);
     return () => clearInterval(interval);
-  }, [refetch]);
+  }, []);
 
   const { widths, onMouseDown } = useColumnResize({
     name: 160, email: 200, phone: 140, status: 120, company: 160, created_at: 120,
   });
 
-  const rawItems = data?.data?.items ?? [];
+  const rawItems = data?.data?.items;
   const info = data?.data;
 
-  const items: CustomerRowData[] = rawItems.map((c) => ({
-    id: Number(c.id),
-    name: String(c.name ?? ""),
-    email: String(c.email ?? ""),
-    phone: String(c.phone ?? ""),
-    status: String(c.status ?? ""),
-    company: String(c.company ?? ""),
-    created_at: String(c.created_at ?? ""),
-  }));
+  const items: CustomerRowData[] = useMemo(
+    () =>
+      (rawItems ?? []).map((c) => ({
+        id: Number(c.id),
+        name: String(c.name ?? ""),
+        email: String(c.email ?? ""),
+        phone: String(c.phone ?? ""),
+        status: String(c.status ?? ""),
+        company: String(c.company ?? ""),
+        created_at: String(c.created_at ?? ""),
+      })),
+    [rawItems]
+  );
 
   const { table, globalFilter, setGlobalFilter } = useTableState({
     data: items,
     columns: customerColumns,
-    searchableKeys: ["name", "email", "phone"],
+    searchableKeys: CUSTOMER_SEARCHABLE_KEYS,
   });
 
   const clearSearch = useCallback(() => {

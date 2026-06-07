@@ -4,16 +4,15 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/lib/store/auth-store";
-import { Providers } from "@/lib/components/providers";
 import { Input } from "@/components/ui/input";
 
 const loginSchema = z.object({
-  username: z.string().min(1, "Username is required").email("Please enter a valid email address"),
+  username: z.string().min(1, "Username is required"),
   password: z.string().min(1, "Password is required"),
 });
 type LoginForm = z.infer<typeof loginSchema>;
 
-function LoginForm() {
+export default function LoginPage() {
   const router = useRouter();
   const form = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -27,7 +26,7 @@ function LoginForm() {
   const onSubmit = form.handleSubmit(async (values) => {
     try {
       await login({ username: values.username, password: values.password });
-      router.push("/dashboard");
+      router.push("/");
     } catch {
       // error is exposed via the store; nothing more to do here
     }
@@ -78,10 +77,3 @@ function LoginForm() {
   );
 }
 
-export default function LoginPage() {
-  return (
-    <Providers>
-      <LoginForm />
-    </Providers>
-  );
-}

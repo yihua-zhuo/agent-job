@@ -85,7 +85,8 @@ function NavGroup({
 }
 
 export function AppSidebar({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const { user, clearAuth } = useAuthStore();
+  const user = useAuthStore((s) => s.user);
+  const clearAuth = useAuthStore((s) => s.clearAuth);
   const router = useRouter();
   const { data: notifData } = useNotifications(1, false);
   // notifications endpoint returns unread_count alongside the paginated items;

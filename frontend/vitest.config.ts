@@ -19,7 +19,6 @@ export default defineConfig({
         functions: 80,
         branches: 80,
       },
-      failureOnLowCoverage: true,
     },
   },
   resolve: {

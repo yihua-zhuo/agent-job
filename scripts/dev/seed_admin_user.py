@@ -7,12 +7,13 @@ the bcrypt password hash matches what login expects) and flips status to
 ``active`` so the OAuth2 password flow succeeds immediately.
 
 Env vars (all optional, defaults are for LOCAL DEV ONLY):
-    DATABASE_URL    Required. e.g. ``postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db``
-    SEED_USERNAME   default ``admin``
-    SEED_EMAIL      default ``admin@example.com``
-    SEED_PASSWORD   default ``Admin12345``  (must meet UserService validator)
-    SEED_ROLE       default ``admin``
-    SEED_TENANT_ID  default ``1``
+    DATABASE_URL      Required. e.g. ``postgresql+asyncpg://test_user:test_pass@localhost:5432/test_db``
+    SEED_USERNAME     default ``admin``
+    SEED_EMAIL        default ``admin@example.com``
+    SEED_PASSWORD     default ``Admin12345``  (must meet UserService validator)
+    SEED_ROLE         default ``admin``
+    SEED_TENANT_ID    default ``1``
+    SEED_TENANT_NAME  default ``Default Tenant``
 
 Designed to be invoked from the Makefile after ``db-up`` + ``migrate``.
 """
@@ -24,9 +25,10 @@ import os
 import sys
 
 # scripts/dev/ runs with PYTHONPATH=src set by the Makefile target.
-from sqlalchemy import and_, select
+from sqlalchemy import and_, select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from db.models.tenant import TenantModel
 from db.models.user import UserModel
 from services.auth_service import AuthService
 
@@ -47,6 +49,7 @@ async def main() -> int:
     password = env("SEED_PASSWORD", "Admin12345")
     role = env("SEED_ROLE", "admin")
     tenant_id = int(env("SEED_TENANT_ID", "1"))
+    tenant_name = env("SEED_TENANT_NAME", "Default Tenant")
 
     # AuthService requires a non-empty secret. The seed script doesn't issue
     # any tokens — it only needs the constructor to succeed — so pass a
@@ -58,6 +61,8 @@ async def main() -> int:
 
     try:
         async with session_factory() as session:
+            await _ensure_tenant(session, tenant_id, tenant_name)
+
             existing = await session.execute(
                 select(UserModel).where(
                     and_(UserModel.username == username, UserModel.tenant_id == tenant_id)
@@ -94,6 +99,28 @@ async def main() -> int:
             return 0
     finally:
         await engine.dispose()
+
+
+async def _ensure_tenant(session, tenant_id: int, tenant_name: str) -> None:
+    existing = await session.execute(select(TenantModel).where(TenantModel.id == tenant_id))
+    row = existing.scalar_one_or_none()
+    if row is not None:
+        print(f"tenant already exists: id={row.id} name={row.name} status={row.status}")
+        return
+
+    tenant = TenantModel(id=tenant_id, name=tenant_name)
+    session.add(tenant)
+    await session.flush()
+    # Explicit id insert bypasses the sequence; align it so future
+    # auto-generated tenants don't collide on the primary key.
+    await session.execute(
+        text(
+            "SELECT setval(pg_get_serial_sequence('tenants', 'id'), "
+            "GREATEST((SELECT MAX(id) FROM tenants), 1))"
+        )
+    )
+    await session.commit()
+    print(f"created tenant: id={tenant.id} name={tenant.name} status={tenant.status}")
 
 
 def _print_login_hint(username: str, password: str) -> None:
