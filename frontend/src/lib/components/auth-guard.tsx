@@ -1,17 +1,21 @@
 "use client";
 import { useRouter } from "next/navigation";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useAuthStore } from "@/lib/store/auth-store";
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const isHydrated = useAuthStore((s) => s.isHydrated);
-  const isAuthenticated = useAuthStore((s) => s.isAuthenticated());
+  const [mounted, setMounted] = useState(false);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   useEffect(() => {
-    if (isHydrated && !isAuthenticated) router.push("/login");
-  }, [isHydrated, isAuthenticated, router]);
+    setMounted(true);
+  }, []);
 
-  if (!isHydrated || !isAuthenticated) return null;
+  useEffect(() => {
+    if (mounted && !isAuthenticated()) router.push("/login");
+  }, [mounted, isAuthenticated, router]);
+
+  if (!mounted || !isAuthenticated()) return null;
   return <>{children}</>;
 }

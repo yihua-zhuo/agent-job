@@ -111,7 +111,7 @@ describe("LoginPage", () => {
   });
 
   describe("auth store wiring", () => {
-    it("calls authStore.login once with username and password on valid submit, then redirects to /dashboard", async () => {
+    it("calls authStore.login once with username and password on valid submit, then redirects to /", async () => {
       mockLogin.mockResolvedValue(undefined);
 
       const user = userEvent.setup();
@@ -128,11 +128,11 @@ describe("LoginPage", () => {
         password: "correctpassword",
       });
       await waitFor(() => {
-        expect(mockPush).toHaveBeenCalledWith("/dashboard");
+        expect(mockPush).toHaveBeenCalledWith("/");
       });
     });
 
-    it("does not redirect to /dashboard when login throws", async () => {
+    it("does not redirect to / when login throws", async () => {
       mockLogin.mockRejectedValue(new Error("Invalid credentials"));
 
       const user = userEvent.setup();
@@ -144,7 +144,7 @@ describe("LoginPage", () => {
       await waitFor(() => {
         expect(mockLogin).toHaveBeenCalled();
       });
-      expect(mockPush).not.toHaveBeenCalledWith("/dashboard");
+      expect(mockPush).not.toHaveBeenCalledWith("/");
     });
 
     it("renders the inline error text when authStore.error is set (invalid credentials)", () => {
