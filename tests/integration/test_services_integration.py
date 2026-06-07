@@ -58,7 +58,7 @@ class TestWorkflowIntegration:
         )
         return reg.id
 
-    async def test_create_and_get_workflow(self, db_schema, tenant_id, async_session):
+    async def test_create_and_get_workflow(self, db_schema, async_session):
         tid = await self._seed_tenant(async_session)
         uid = await self._seed_user(tid, async_session)
         svc = WorkflowService(async_session)
@@ -73,9 +73,15 @@ class TestWorkflowIntegration:
         )
         assert result.name == "Lead Follow-up"
         assert result.status == "draft"
+        assert result.description == "Auto-follow-up on new leads"
+        assert result.conditions == [{"field": "status", "operator": "==", "value": "new"}]
+        assert result.actions == [{"type": "email.send", "template": "welcome"}]
 
         fetched = await svc.get_workflow(result.id, tenant_id=tid)
         assert fetched.name == "Lead Follow-up"
+        assert fetched.description == "Auto-follow-up on new leads"
+        assert fetched.conditions == [{"field": "status", "operator": "==", "value": "new"}]
+        assert fetched.actions == [{"type": "email.send", "template": "welcome"}]
 
     async def test_workflow_activate_and_pause(self, db_schema, tenant_id, async_session):
         tid = await self._seed_tenant(async_session)
@@ -93,8 +99,16 @@ class TestWorkflowIntegration:
         activated = await svc.activate_workflow(created.id, tenant_id=tid)
         assert activated.status == "active"
 
+        # Re-fetch from DB to confirm status persisted
+        refetched = await svc.get_workflow(created.id, tenant_id=tid)
+        assert refetched.status == "active"
+
         paused = await svc.pause_workflow(created.id, tenant_id=tid)
         assert paused.status == "paused"
+
+        # Re-fetch to confirm pause persisted
+        refetched_paused = await svc.get_workflow(created.id, tenant_id=tid)
+        assert refetched_paused.status == "paused"
 
     async def test_workflow_evaluate_conditions(self, db_schema, tenant_id, async_session):
         tid = await self._seed_tenant(async_session)
@@ -121,6 +135,26 @@ class TestWorkflowIntegration:
             created.id, {"amount": 500, "stage": "new"}, tenant_id=tid,
         )
         assert no_match is False
+
+        # Partial match: amount matches but stage doesn't — should fail (all must match)
+        partial_match = await svc.evaluate_conditions(
+            created.id, {"amount": 50000, "stage": "new"}, tenant_id=tid,
+        )
+        assert partial_match is False
+
+        # Empty conditions list — should match everything
+        empty_cond_wf = await svc.create_workflow(
+            name="Empty Conditions",
+            trigger_type="manual",
+            created_by=uid,
+            tenant_id=tid,
+            conditions=[],
+            actions=[],
+        )
+        empty_match = await svc.evaluate_conditions(
+            empty_cond_wf.id, {"anything": "goes"}, tenant_id=tid,
+        )
+        assert empty_match is True
 
     async def test_workflow_execute_not_found(self, db_schema, tenant_id, async_session):
         """execute_workflow with a non-existent id raises NotFoundException."""

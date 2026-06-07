@@ -13,19 +13,22 @@ class WorkflowModel(Base):
     """Workflow entity mapped to the `workflows` table."""
 
     __tablename__ = "workflows"
+    __table_args__ = (Index("ix_workflows_tenant_id_status", "tenant_id", "status"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     tenant_id: Mapped[int] = mapped_column(
-        ForeignKey("tenants.id", ondelete="CASCADE"), default=0, nullable=False, index=True
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", server_default="manual", nullable=False)
     trigger_config: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
-    actions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
-    conditions: Mapped[list] = mapped_column(JSONB, default=list, nullable=False)
+    actions: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
+    conditions: Mapped[list] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="draft", server_default="draft", nullable=False)
-    created_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    created_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -37,11 +40,11 @@ class WorkflowModel(Base):
             "tenant_id": self.tenant_id,
             "name": self.name,
             "description": self.description,
-            "trigger_type": self.trigger_type or "manual",
-            "trigger_config": self.trigger_config or {},
-            "actions": self.actions or [],
-            "conditions": self.conditions or [],
-            "status": self.status or "draft",
+            "trigger_type": self.trigger_type,
+            "trigger_config": self.trigger_config,
+            "actions": self.actions,
+            "conditions": self.conditions,
+            "status": self.status,
             "created_by": self.created_by,
             "created_at": self.created_at.isoformat() if self.created_at else None,
             "updated_at": self.updated_at.isoformat() if self.updated_at else None,
@@ -61,9 +64,11 @@ class WorkflowExecutionModel(Base):
     workflow_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), default=0, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
-    triggered_by: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    triggered_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="running", nullable=False)
@@ -96,7 +101,7 @@ class WorkflowNodeModel(Base):
     workflow_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), default=0, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id"), nullable=False, index=True)
     node_type: Mapped[str] = mapped_column(String(50), default="action", nullable=False)
     definition_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
     input: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)

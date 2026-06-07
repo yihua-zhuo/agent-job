@@ -4,10 +4,13 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from collections.abc import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.routers.recommendations import recommendations_router
+from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from main import register_exception_handlers
 from pkg.errors.app_exceptions import NotFoundException
@@ -27,6 +30,11 @@ def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(recommendations_router)
     register_exception_handlers(app)
+
+    async def _noop_db() -> AsyncGenerator[AsyncSession, None]:
+        yield None  # type: ignore[misc]
+
+    app.dependency_overrides[get_db] = _noop_db
 
     if auth_ctx is not None:
         app.dependency_overrides[require_auth] = lambda: auth_ctx

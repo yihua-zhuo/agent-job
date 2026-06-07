@@ -46,7 +46,7 @@ class TestWorkflowModelIntegration:
             actions=[{"type": "email.send", "template": "welcome"}],
             conditions=[{"field": "status", "operator": "==", "value": "new"}],
             status="draft",
-            created_by=1,
+            created_by=None,
         )
         async_session.add(workflow)
         await async_session.flush()
@@ -61,7 +61,7 @@ class TestWorkflowModelIntegration:
         assert workflow.actions == [{"type": "email.send", "template": "welcome"}]
         assert workflow.conditions == [{"field": "status", "operator": "==", "value": "new"}]
         assert workflow.status == "draft"
-        assert workflow.created_by == 1
+        assert workflow.created_by is None
         assert workflow.created_at is not None
         assert workflow.updated_at is not None
 
@@ -96,7 +96,7 @@ class TestWorkflowModelIntegration:
             actions=complex_actions,
             conditions=complex_conditions,
             status="active",
-            created_by=1,
+            created_by=None,
         )
         async_session.add(workflow)
         await async_session.flush()
@@ -128,7 +128,7 @@ class TestWorkflowModelIntegration:
             actions=[],
             conditions=[],
             status="active",
-            created_by=1,
+            created_by=None,
         )
         async_session.add(workflow)
         await async_session.flush()
@@ -165,16 +165,19 @@ class TestWorkflowModelIntegration:
             actions=[],
             conditions=[],
             status="draft",
-            created_by=1,
+            created_by=None,
         )
         async_session.add(workflow)
         await async_session.flush()
+
+        from datetime import datetime
+        started_before = datetime.now(UTC)
 
         execution = WorkflowExecutionModel(
             workflow_id=workflow.id,
             tenant_id=tid,
             trigger_type="manual",
-            triggered_by=3,
+            triggered_by=None,
             status="running",
         )
         async_session.add(execution)
@@ -184,14 +187,13 @@ class TestWorkflowModelIntegration:
         assert execution.id is not None
         assert execution.workflow_id == workflow.id
         assert execution.trigger_type == "manual"
-        assert execution.triggered_by == 3
+        assert execution.triggered_by is None
         assert execution.started_at is not None
         assert execution.completed_at is None
         assert execution.status == "running"
         assert execution.result is None
 
         # Complete the execution
-        from datetime import datetime
         execution.status = "success"
         execution.result = {"steps_executed": 2, "duration_ms": 150}
         execution.completed_at = datetime.now(UTC)
@@ -201,6 +203,8 @@ class TestWorkflowModelIntegration:
         assert execution.status == "success"
         assert execution.result == {"steps_executed": 2, "duration_ms": 150}
         assert execution.completed_at is not None
+        # completed_at should be >= the time we started this test, not from 1970
+        assert execution.completed_at >= started_before
 
     async def test_workflow_update_persists(self, db_schema, async_session):
         """Updating a workflow field and flushing persists the change."""
@@ -213,7 +217,7 @@ class TestWorkflowModelIntegration:
             actions=[],
             conditions=[],
             status="draft",
-            created_by=1,
+            created_by=None,
         )
         async_session.add(workflow)
         await async_session.flush()
@@ -241,7 +245,7 @@ class TestWorkflowModelIntegration:
             actions=[],
             conditions=[],
             status="draft",
-            created_by=1,
+            created_by=None,
         )
         async_session.add(workflow)
         await async_session.flush()
@@ -256,3 +260,62 @@ class TestWorkflowModelIntegration:
         async_session.expire_all()
         result = await async_session.execute(select(WorkflowModel).where(WorkflowModel.id == wf_id))
         assert result.scalar_one_or_none() is None
+
+    async def test_to_dict_serialization(self, db_schema, async_session):
+        """WorkflowModel.to_dict() returns all expected keys with correct types."""
+        tid = await _seed_tenant(async_session)
+        workflow = WorkflowModel(
+            tenant_id=tid,
+            name="Serialize Me",
+            description="Testing serialization",
+            trigger_type="manual",
+            trigger_config={},
+            actions=[],
+            conditions=[],
+            status="draft",
+            created_by=None,
+        )
+        d = workflow.to_dict()
+        expected_keys = {
+            "id", "tenant_id", "name", "description", "trigger_type",
+            "trigger_config", "actions", "conditions", "status",
+            "created_by", "created_at", "updated_at",
+        }
+        assert set(d.keys()) == expected_keys
+        assert d["name"] == "Serialize Me"
+        assert d["tenant_id"] == tid
+        assert d["description"] == "Testing serialization"
+        assert d["trigger_type"] == "manual"
+        assert isinstance(d["trigger_config"], dict)
+        assert isinstance(d["actions"], list)
+        assert isinstance(d["conditions"], list)
+
+    async def test_json_fields_empty_values_roundtrip(self, db_schema, async_session):
+        """Empty dicts, empty lists, and None for JSONB columns round-trip without corruption."""
+        tid = await _seed_tenant(async_session)
+        workflow = WorkflowModel(
+            tenant_id=tid,
+            name="Edge Case Workflow",
+            trigger_type="manual",
+            trigger_config={},
+            actions=[],
+            conditions=[],
+            status="draft",
+            created_by=None,
+        )
+        async_session.add(workflow)
+        await async_session.flush()
+        await async_session.refresh(workflow)
+
+        assert workflow.trigger_config == {}
+        assert workflow.actions == []
+        assert workflow.conditions == []
+
+        from sqlalchemy import select
+        result = await async_session.execute(
+            select(WorkflowModel).where(WorkflowModel.id == workflow.id)
+        )
+        fetched = result.scalar_one()
+        assert fetched.trigger_config == {}
+        assert fetched.actions == []
+        assert fetched.conditions == []
