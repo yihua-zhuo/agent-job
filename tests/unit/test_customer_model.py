@@ -1,8 +1,8 @@
 """
 Unit tests for Customer model.
 """
-import pytest
 from datetime import datetime
+
 from src.models.customer import Customer, CustomerStatus
 
 
@@ -16,7 +16,7 @@ class TestCustomerModel:
             email="test@example.com",
             owner_id=1
         )
-        
+
         assert customer.name == "Test Customer"
         assert customer.email == "test@example.com"
         assert customer.owner_id == 1
@@ -46,9 +46,9 @@ class TestCustomerModel:
             status=CustomerStatus.LEAD,
             tags=["vip", "enterprise"]
         )
-        
+
         result = customer.to_dict()
-        
+
         assert result["id"] == 1
         assert result["name"] == "Test Customer"
         assert result["email"] == "test@example.com"
@@ -74,9 +74,9 @@ class TestCustomerModel:
             "created_at": "2024-01-01T00:00:00",
             "updated_at": "2024-01-01T00:00:00"
         }
-        
+
         customer = Customer.from_dict(data)
-        
+
         assert customer.id == 1
         assert customer.name == "Test Customer"
         assert customer.email == "test@example.com"
@@ -94,15 +94,15 @@ class TestCustomerModel:
             owner_id=1,
             tags=["tag1", "tag2"]
         )
-        
+
         assert len(customer.tags) == 2
         assert "tag1" in customer.tags
         assert "tag2" in customer.tags
-        
+
         # Test adding tags
         customer.tags.append("tag3")
         assert len(customer.tags) == 3
-        
+
         # Test removing tags
         customer.tags.remove("tag1")
         assert len(customer.tags) == 2

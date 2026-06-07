@@ -1,18 +1,15 @@
 """Unit tests for src/api/routers/ai.py — AI router endpoint tests."""
 
-import time
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
-from api.routers.ai import ai_router, _check_rate_limit, _rate_limit_store, _RATE_LIMIT_MAX
-from internal.ai_gateway import AIResponse
-from internal.middleware.fastapi_auth import AuthContext
+from api.routers.ai import _RATE_LIMIT_MAX, _check_rate_limit, _rate_limit_store, ai_router
 from db.connection import get_db
+from internal.middleware.fastapi_auth import AuthContext
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -46,9 +43,10 @@ def mock_db_session():
 @pytest.fixture
 def client_with_service(monkeypatch, mock_db_session):
     """Return a TestClient with AIService fully mocked."""
-    from internal.middleware.fastapi_auth import require_auth
     from starlette.requests import Request
     from starlette.responses import JSONResponse
+
+    from internal.middleware.fastapi_auth import require_auth
     from pkg.errors.app_exceptions import AppException
 
     mock_service = MagicMock()
@@ -279,9 +277,10 @@ class TestRateLimitIntegration:
         for _ in range(30):
             _check_rate_limit(999, 99)
 
-        from internal.middleware.fastapi_auth import require_auth
         from starlette.requests import Request
         from starlette.responses import JSONResponse
+
+        from internal.middleware.fastapi_auth import require_auth
         from pkg.errors.app_exceptions import AppException
 
         app = FastAPI()

@@ -114,7 +114,7 @@ function RuleRow({
       </td>
       <td className="px-3 py-3">
         <span className="text-sm text-muted-foreground">
-          {formatDate(rule.last_run ?? rule.updated_at ?? rule.created_at)}
+          {formatDate(rule.last_run ?? rule.updated_at ?? rule.created_at ?? "")}
         </span>
       </td>
       <td className="px-3 py-3 w-10">
@@ -214,7 +214,7 @@ export default function AutomationRulesPage() {
       {/* Table */}
       <div className="rounded-md border mt-4 overflow-auto">
         <table className="w-full text-sm min-w-[640px]">
-          <thead className="sticky top-[calc(2.5rem+72px)] z-10 bg-muted/60 backdrop-blur-sm">
+          <thead className="bg-muted/60">
             <tr className="border-b border-border">
               <th className="px-3 py-2.5 text-left text-xs uppercase tracking-wide text-muted-foreground font-semibold">
                 Name

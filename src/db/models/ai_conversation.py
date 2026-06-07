@@ -1,11 +1,19 @@
 """AI Conversation and Message ORM models."""
 
 from datetime import datetime
+from enum import StrEnum
 
-from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, Text, func
+from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from db.base import Base
+
+
+class MessageRole(StrEnum):
+    """ORM-safe enum for AI message roles — rejected at the ORM layer before reaching the DB."""
+
+    USER = "user"
+    ASSISTANT = "assistant"
 
 
 class AIConversationModel(Base):
@@ -14,12 +22,17 @@ class AIConversationModel(Base):
     __tablename__ = "ai_conversations"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(
+        # No FK constraint: system-owned conversations (e.g. internal AI ops) have no
+        # associated user_id and must be representable.  Gate user-row existence at
+        # the service/application layer instead.
+        Integer,
+        nullable=False,
+        index=True,
     )
+    title: Mapped[str | None] = mapped_column(String(200), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
     )
@@ -55,18 +68,20 @@ class AIMessageModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     conversation_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("ai_conversations.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer,
+        ForeignKey("ai_conversations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,  # indexed via composite ix_ai_messages_tenant_conv; explicit index redundant but harmless
     )
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    role: Mapped[str] = mapped_column(String(20), nullable=False)  # "user" | "assistant"
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    role: Mapped[MessageRole] = mapped_column(String(20), nullable=False)  # "user" | "assistant"; StrEnum enforces the value set at the service/ORM layer
     content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), server_default=func.now(), nullable=False
-    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     __table_args__ = (
         # Index for fetching messages in order per tenant + conversation
         Index("ix_ai_messages_tenant_conv", "tenant_id", "conversation_id"),
+        CheckConstraint("role IN ('user', 'assistant')", name="ck_ai_messages_role"),
         {"sqlite_autoincrement": True},
     )
 

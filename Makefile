@@ -1,4 +1,4 @@
-.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix
+.PHONY: help test test-unit test-integration test-web test-all lint format check db-up db-down migrate migrate-new fix format-check db-shell install install-dev venv trigger-fix act-implement act-build act-review act-monitor act-repair seed-user dev-up app-up
 
 # Create a local virtualenv on demand and use it by default.
 VENV_DIR := .venv
@@ -21,7 +21,7 @@ COMPOSE := docker compose -f configs/docker-compose.test.yml
 # it. The POSIX `VAR=value command` inline form does NOT work in Windows
 # cmd.exe (Make's default shell on Windows), so use Make's per-target export
 # directive — works on Linux, macOS, and Windows without forcing a shell.
-test-integration test-web migrate migrate-new: export DATABASE_URL = $(TEST_DB_URL)
+test-integration test-web migrate migrate-new seed-user dev-up app-up: export DATABASE_URL = $(TEST_DB_URL)
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-18s\033[0m %s\n", $$1, $$2}'
@@ -98,6 +98,122 @@ migrate-new: venv
 	@if [ -z "$(MSG)" ]; then echo "Usage: make migrate-new MSG=\"describe change\""; exit 1; fi
 	$(PYTHON) -m alembic revision --autogenerate -m "$(MSG)"
 
+# ── Dev seeds + one-shot bring-up ──────────────────────────────────────────
+# Idempotent: re-running is safe (the script no-ops when the user exists).
+# Defaults: admin / admin@example.com / Admin12345 / role=admin / tenant_id=1.
+# Override via env: SEED_USERNAME=... SEED_PASSWORD=... make seed-user
+seed-user: ## Seed a login-capable admin user (idempotent)
+seed-user: venv
+	$(PYTHON) scripts/dev/seed_admin_user.py
+
+# Bring the dev stack from zero to "ready to start the backend" in one go:
+#   1. start docker compose test-db
+#   2. wait until Postgres accepts connections (alembic upgrade is the gate)
+#   3. apply migrations to head
+#   4. seed the default admin user
+# After this, run the backend (e.g. uvicorn src.main:app --reload) and you
+# can immediately POST /api/v1/auth/login with the printed credentials.
+dev-up: ## Start db, create schema, seed admin user (idempotent)
+dev-up: db-up
+	@echo "── waiting for postgres ──"
+	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
+		if $(COMPOSE) exec -T test-db pg_isready -U test_user >/dev/null 2>&1; then \
+			echo "test-db ready"; break; \
+		fi; \
+		sleep 1; \
+		if [ "$$i" = "15" ]; then echo "test-db did not become ready in 15s" >&2; exit 1; fi; \
+	done
+	$(PYTHON) scripts/dev/create_schema.py
+	@$(MAKE) seed-user
+	@echo
+	@echo "── dev stack ready ──"
+	@echo "DATABASE_URL=$(TEST_DB_URL)"
+	@echo "next: make app-up   (or: PYTHONPATH=src $(PYTHON) -m uvicorn main:app --reload)"
+
+APP_LOG := logs/app.log
+
+app-up: ## Run the FastAPI backend with --reload, tee logs to logs/app.log
+app-up: venv
+	@mkdir -p logs
+	@echo "── streaming logs to $(APP_LOG) ──"
+	$(PYTHON) -u -m uvicorn main:app --reload 2>&1 | tee $(APP_LOG)
+
 trigger-fix: venv
 	@if [ -z "$(ISSUE)" ]; then echo "Usage: make trigger-fix ISSUE=123"; exit 1; fi
-	$(PYTHON) "scripts/ci/trigger_fix_for_issue.py" $(ISSUE)
+	$(PYTHON) ".agent-actions/scripts/trigger_fix_for_issue.py" $(ISSUE)
+
+# ── Local CI via act ───────────────────────────────────────────────────────
+# Runs the implement-ready-issues workflow in a local Docker runner via `act`.
+# Pass ISSUE=<n> to target a specific issue; omit to pick the oldest ready one
+# (same semantics as the scheduled run).
+#
+# Requirements:
+#   • brew install act
+#   • .secrets contains real ANTHROPIC_API_KEY and GITHUB_TOKEN (act cannot
+#     read GitHub repo secrets; see .secrets.example).
+#   • Docker is running — the workflow runs `docker compose` from inside the
+#     runner, so we mount the host socket via --bind + -v.
+#
+# Side effects: in --bind mode act operates on the working tree directly. If
+# the workflow gets to `git push`, it will push to the real origin and open a
+# real PR with the token in .secrets. Use a throwaway issue/branch if testing.
+ACT_IMAGE := act-runner-with-gh:latest
+
+act-build: ## Build the custom act runner image (catthehacker + gh CLI)
+	docker build --platform linux/amd64 -t $(ACT_IMAGE) -f .act/Dockerfile .act
+
+act-implement: ## Trigger implement-ready-issues.yml locally via act (ISSUE=123 to target one)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/implement-ready-issues.yml \
+		-j implement \
+		$(if $(ISSUE),--input issue_number=$(ISSUE),) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock
+
+# Triggers the PR-reviewer agent. Heads up: this can enable auto-merge on
+# real open PRs and dispatch fix-pr-comments runs. Use a throwaway GH_TOKEN
+# (or expect real side effects on github.com).
+act-review: ## Trigger review-open-prs.yml locally via act (PR=123 logs intent; agent still scans all open PRs)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/review-open-prs.yml \
+		-j review \
+		$(if $(PR),--input pr_number=$(PR),) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock
+
+# Triggers the issue-monitor agent (now also generates dev-plan boards for
+# ready issues). By default writes boards to docs/dev-plan/issues/ and pushes
+# to master via the .secrets GITHUB_TOKEN. Set DRY=1 to write to /tmp without
+# committing — the recommended way to smoke-test changes to the generator.
+act-monitor: ## Trigger monitor-issues.yml locally via act (DRY=1 to skip commit+push)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/monitor-issues.yml \
+		-j validate \
+		$(if $(DRY),--env DEV_PLAN_DRY_RUN=1,) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock
+
+# Sweeps docs/dev-plan/ for boards with broken markdown links and asks Claude
+# to repair them. MAX=N to override the per-run cap (default 5). DRY=1 to
+# skip the final commit/push (boards are still rewritten in the working tree
+# for inspection).
+act-repair: ## Trigger repair-doc-links.yml locally via act (MAX=10 to lift cap; DRY=1 to skip commit)
+	@command -v act >/dev/null 2>&1 || { echo "act not installed. Run: brew install act"; exit 1; }
+	@docker image inspect $(ACT_IMAGE) >/dev/null 2>&1 || { echo "Runner image missing. Run: make act-build"; exit 1; }
+	@test -s .secrets || { echo ".secrets is empty. Populate ANTHROPIC_API_KEY and GITHUB_TOKEN (see .secrets.example)."; exit 1; }
+	act workflow_dispatch \
+		-W .github/workflows/repair-doc-links.yml \
+		-j repair \
+		$(if $(MAX),--input max_repair=$(MAX),) \
+		$(if $(DRY),--env DEV_PLAN_DRY_RUN=1,) \
+		--bind \
+		--container-daemon-socket /var/run/docker.sock

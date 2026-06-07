@@ -38,8 +38,8 @@ from typing import Annotated
 from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from db.base import Base
 from internal.db.engine import (
+    Base,
     async_session_scope,
     create_async_engine_from_env,
     create_engine_from_env,

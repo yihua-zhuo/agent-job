@@ -1,8 +1,19 @@
-"""AI Chat Gateway — async adapter for the AI backend (stub / MiniMax-M2.7)."""
+"""AI Chat Gateway — async adapter for the AI backend.
+
+This module is a **stub implementation** — no real AI backend is wired in.
+``_call_gateway`` returns hardcoded, deterministic replies regardless of message
+content or history, which is suitable only for unit-test stability.
+
+For the real MiniMax-M2.7 integration, replace ``_call_gateway`` with a client
+that calls the actual endpoint. Track progress in: https://github.com/yihua-zhuo/agent-job/issues
+"""
 
 import hashlib
-from dataclasses import dataclass
+import logging
+from dataclasses import dataclass, field
 from typing import Any
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -12,6 +23,8 @@ class AIResponse:
     reply: str
     suggestions: list[str] | None = None
     actions: list[dict] | None = None
+    conversation_id: int | None = None
+    tool_calls: list[dict] = field(default_factory=list)
 
 
 class AIChatGateway:
@@ -34,54 +47,63 @@ class AIChatGateway:
         """
         return await self._call_gateway(messages, context or {})
 
-    async def _call_gateway(
-        self, messages: list[dict[str, str]], context: dict[str, Any]
-    ) -> AIResponse:
+    async def _call_gateway(self, messages: list[dict[str, str]], context: dict[str, Any]) -> AIResponse:
         """Inner call — replace this method to wire in a real MiniMax-M2.7 endpoint.
 
         The stub below is deterministic so unit tests are stable.  It uses a
         hash of the last user message so identical questions always produce the
         same answer.
+
+        Note: calls from CopilotService and AIService pass real CRM context data
+        (customer counts, ticket counts, etc.) via the context argument, so the
+        stub only affects reply selection logic — it is not a correctness issue
+        for the gateway itself.
         """
-        last_message = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
-        customer_count = int(context.get("customer_count") or 0)
-        open_ticket_count = int(context.get("open_ticket_count") or 0)
-        opportunity_count = int(context.get("opportunity_count") or 0)
-        recent_customers = context.get("recent_customers") or []
-        open_ticket_subjects = context.get("open_ticket_subjects") or []
+        logger.debug("ai_gateway._call_gateway: messages=%d, context_keys=%s", len(messages), list(context.keys()))
+        try:
+            last_message = next((m["content"] for m in reversed(messages) if m["role"] == "user"), "")
+            customer_count = int(context.get("customer_count") or 0)
+            open_ticket_count = int(context.get("open_ticket_count") or 0)
+            opportunity_count = int(context.get("opportunity_count") or 0)
+            recent_customers = context.get("recent_customers") or []
+            open_ticket_subjects = context.get("open_ticket_subjects") or []
 
-        context_seed = repr(
-            {
-                "customer_count": customer_count,
-                "open_ticket_count": open_ticket_count,
-                "opportunity_count": opportunity_count,
-                "recent_customers": recent_customers[:3],
-                "open_ticket_subjects": open_ticket_subjects[:3],
-            }
-        )
-        seed = int(hashlib.sha256(f"{last_message}|{context_seed}".encode()).hexdigest()[:8], 16)
+            context_seed = repr(
+                {
+                    "customer_count": customer_count,
+                    "open_ticket_count": open_ticket_count,
+                    "opportunity_count": opportunity_count,
+                    "recent_customers": recent_customers[:3],
+                    "open_ticket_subjects": open_ticket_subjects[:3],
+                }
+            )
+            seed = int(hashlib.sha256(f"{last_message}|{context_seed}".encode()).hexdigest()[:8], 16)
 
-        replies = [
-            f"Based on your CRM data, you have {customer_count} customers and {opportunity_count} open opportunities. "
-            "Would you like me to generate a summary report?",
-            f"I've analyzed your pipeline. There are {(seed % 3) + 1} deals in the qualification stage "
-            f"totaling approximately ${(seed % 50) + 10}K in potential revenue.",
-            f"Your team has {open_ticket_count} open tickets. "
-            f"The average resolution time this week is {(seed % 12) + 2} hours.",
-        ]
-        reply = replies[seed % len(replies)]
+            replies = [
+                f"Based on your CRM data, you have {customer_count} customers and {opportunity_count} open opportunities. "
+                "Would you like me to generate a summary report?",
+                f"I've analyzed your pipeline. There are {(seed % 3) + 1} deals in the qualification stage "
+                f"totaling approximately ${(seed % 50) + 10}K in potential revenue.",
+                f"Your team has {open_ticket_count} open tickets. "
+                f"The average resolution time this week is {(seed % 12) + 2} hours.",
+            ]
+            reply = replies[seed % len(replies)]
 
-        suggestions = ["Show pipeline"]
-        actions = [{"type": "navigate", "label": "View Pipeline", "path": "/sales"}]
-        if customer_count:
-            label = f"Review {recent_customers[0]}" if recent_customers else "View Customers"
-            suggestions.insert(0, "Show customers")
-            actions.insert(0, {"type": "navigate", "label": label, "path": "/customers"})
-        else:
-            suggestions.insert(0, "Create first customer")
-            actions.insert(0, {"type": "navigate", "label": "Add Customer", "path": "/customers/new"})
-        if open_ticket_count:
-            suggestions.append("Summarize tickets")
-            actions.append({"type": "navigate", "label": "View Tickets", "path": "/tickets"})
+            suggestions = ["Show pipeline"]
+            actions = [{"type": "navigate", "label": "View Pipeline", "path": "/sales"}]
+            if customer_count:
+                label = f"Review {recent_customers[0]}" if recent_customers else "View Customers"
+                suggestions.insert(0, "Show customers")
+                actions.insert(0, {"type": "navigate", "label": label, "path": "/customers"})
+            else:
+                suggestions.insert(0, "Create first customer")
+                actions.insert(0, {"type": "navigate", "label": "Add Customer", "path": "/customers/new"})
+            if open_ticket_count:
+                suggestions.append("Summarize tickets")
+                actions.append({"type": "navigate", "label": "View Tickets", "path": "/tickets"})
 
-        return AIResponse(reply=reply, suggestions=suggestions, actions=actions)
+            logger.debug("ai_gateway._call_gateway: reply selected (seed=%d)", seed)
+            return AIResponse(reply=reply, suggestions=suggestions, actions=actions)
+        except Exception:
+            logger.exception("ai_gateway._call_gateway failed")
+            raise

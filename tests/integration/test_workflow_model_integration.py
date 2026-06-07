@@ -27,7 +27,7 @@ async def _seed_tenant(async_session) -> int:
         plan="pro",
         admin_email=f"admin_{suffix}@example.com",
     )
-    return result["id"]
+    return result.id
 
 
 @pytest.mark.integration
@@ -116,9 +116,10 @@ class TestWorkflowModelIntegration:
         assert fetched.conditions == complex_conditions
         assert fetched.trigger_config == complex_trigger_config
 
-    async def test_tenant_isolation_wrong_tenant_returns_none(self, db_schema, tenant_id, tenant_id_2, async_session):
-        """Querying with the wrong tenant_id returns None (no data leak across tenants)."""
+    async def test_tenant_isolation_wrong_tenant_returns_none(self, db_schema, async_session):
+        """Querying with a different tenant_id returns None (no data leak across tenants)."""
         tid = await _seed_tenant(async_session)
+        other_tid = await _seed_tenant(async_session)
         workflow = WorkflowModel(
             tenant_id=tid,
             name="Tenant A Workflow",
@@ -143,11 +144,11 @@ class TestWorkflowModelIntegration:
         )
         assert result.scalar_one_or_none() is not None
 
-        # Negative query with wrong tenant_id returns None
+        # Negative query with a different tenant_id returns None
         result = await async_session.execute(
             select(WorkflowModel).where(
                 WorkflowModel.id == workflow.id,
-                WorkflowModel.tenant_id == tenant_id_2,
+                WorkflowModel.tenant_id == other_tid,
             )
         )
         assert result.scalar_one_or_none() is None
@@ -171,6 +172,7 @@ class TestWorkflowModelIntegration:
 
         execution = WorkflowExecutionModel(
             workflow_id=workflow.id,
+            tenant_id=tid,
             trigger_type="manual",
             triggered_by=3,
             status="running",

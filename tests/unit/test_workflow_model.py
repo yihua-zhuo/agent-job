@@ -1,23 +1,8 @@
 """Unit tests for WorkflowModel."""
 
 from datetime import UTC, datetime
-from unittest.mock import MagicMock
-
-import pytest
 
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
-
-
-@pytest.fixture
-def mock_db_session():
-    """Minimal mock session for tests that don't require real DB."""
-    session = MagicMock()
-    session.add = MagicMock()
-    session.commit = MagicMock()
-    session.flush = MagicMock()
-    session.refresh = MagicMock()
-    session.execute = MagicMock()
-    return session
 
 
 class TestWorkflowModel:

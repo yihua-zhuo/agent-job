@@ -5,7 +5,13 @@
 
 import hashlib
 import random
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from db.models.opportunity import OpportunityModel
+from pkg.errors.app_exceptions import NotFoundException
 
 
 @dataclass
@@ -28,6 +34,14 @@ class SalesActionRecommendation:
     reason: str
     confidence: float
 
+    def to_dict(self) -> dict:
+        return {
+            "action": self.action,
+            "target": self.target,
+            "reason": self.reason,
+            "confidence": self.confidence,
+        }
+
 
 @dataclass
 class SimilarCustomer:
@@ -39,9 +53,44 @@ class SimilarCustomer:
     usage_rate: float
     satisfaction_score: float
 
+    def to_dict(self) -> dict:
+        return {
+            "customer_id": self.customer_id,
+            "current_tier": self.current_tier,
+            "monthly_revenue": self.monthly_revenue,
+            "usage_rate": self.usage_rate,
+            "satisfaction_score": self.satisfaction_score,
+        }
+
+
+@dataclass
+class RecommendationResult:
+    """商机完整推荐结果"""
+
+    opportunity_id: int
+    conversion_probability: float
+    similar_opportunities: list[SimilarCustomer] = field(default_factory=list)
+    next_best_action: SalesActionRecommendation | None = None
+
+    def to_dict(self) -> dict:
+        return {
+            "opportunity_id": self.opportunity_id,
+            "conversion_probability": self.conversion_probability,
+            "similar_opportunities": [s.to_dict() for s in self.similar_opportunities],
+            "next_best_action": self.next_best_action.to_dict() if self.next_best_action else None,
+        }
+
 
 class SalesRecommendationService:
     """销售推荐服务"""
+
+    # Hash-derived ID scan range for similar-customer lookup (synthetic data only).
+    _MAX_SCAN_RANGE = 1000
+    # Upper bound on similar-customer lookups per call.
+    _SIMILAR_SCAN_LIMIT = 10
+    # Confidence-score bounds for `get_next_best_action` (non-security, recommendation only).
+    _CONFIDENCE_MIN = 0.6
+    _CONFIDENCE_MAX = 0.95
 
     # 产品目录
     PRODUCTS = {
@@ -59,41 +108,65 @@ class SalesRecommendationService:
         "enterprise": ["premium"],
     }
 
-    def __init__(self):
-        """初始化服务"""
-        self._customer_cache: dict[int, dict] = {}
+    def __init__(self, session: AsyncSession, seed: int | None = None):
+        """初始化服务。`seed` 控制随机行为以保证测试可复现。"""
+        self.session = session
+        self._seed = seed
+
+    def _rng_for(self, *parts: object) -> random.Random:
+        """Return a fresh RNG seeded from the service seed and stable inputs.
+
+        Using a per-call RNG (rather than a shared ``self._rng`` cursor) keeps
+        random outputs input-dependent and order-independent: every helper
+        that needs randomness derives it from the same stable identifiers.
+        """
+        material = ":".join(str(p) for p in parts)
+        if self._seed is not None:
+            material = f"{self._seed}:{material}"
+        digest = hashlib.sha256(material.encode()).hexdigest()
+        return random.Random(int(digest[:16], 16))  # noqa: S311 - non-cryptographic recommendation scoring
 
     def _get_mock_customer_data(self, tenant_id: int, customer_id: int) -> dict:
         """获取模拟客户数据"""
-        import hashlib
-
         seed = int(hashlib.sha256(f"{tenant_id}:{customer_id}".encode()).hexdigest()[:8], 16)
 
         tier_index = seed % 4
         tiers = list(self.PRODUCTS.keys())
         current_tier = tiers[tier_index]
 
+        rng = self._rng_for("customer", tenant_id, customer_id)
         return {
             "customer_id": customer_id,
             "current_tier": current_tier,
             "usage_rate": (seed % 80 + 20) / 100.0,
             "monthly_revenue": self.PRODUCTS[current_tier]["price"],
-            "purchase_history": random.sample(tiers, (seed % 3) + 1),
-            "browsing_history": random.sample(tiers, (seed % 4) + 1),
+            "purchase_history": rng.sample(tiers, (seed % 3) + 1),
+            "browsing_history": rng.sample(tiers, (seed % 4) + 1),
             "satisfaction_score": (seed % 100) / 100.0,
         }
 
     def _get_similar_customers_by_tier(self, tenant_id: int, tier: str, limit: int = 5) -> list[int]:
         """基于层级获取相似客户ID"""
-        random.seed(42)  # 固定随机种子保证一致性
         tier_index = list(self.PRODUCTS.keys()).index(tier)
         similar = [
             i
-            for i in range(1, 1000)
+            for i in range(1, self._MAX_SCAN_RANGE)
             if int(hashlib.sha256(f"{tenant_id}:{i}".encode()).hexdigest()[:8], 16) % 4 == tier_index
         ][:limit]
-        random.seed()  # 重置随机种子
         return similar
+
+    async def _resolve_customer_id(self, opportunity_id: int, tenant_id: int) -> int:
+        """通过 DB 查询解析商机关联的 customer_id。如果商机不存在则抛出 NotFoundException。"""
+        result = await self.session.execute(
+            select(OpportunityModel.customer_id).where(
+                OpportunityModel.id == opportunity_id,
+                OpportunityModel.tenant_id == tenant_id,
+            )
+        )
+        row = result.first()
+        if row is None:
+            raise NotFoundException("Opportunity")
+        return row[0]
 
     def get_next_best_action(self, tenant_id: int, customer_id: int) -> SalesActionRecommendation:
         """
@@ -130,7 +203,12 @@ class SalesRecommendationService:
             action=action,
             target=target,
             reason=reason,
-            confidence=round(random.uniform(0.6, 0.95), 2),  # noqa: S311 - non-security recommendation scoring
+            confidence=round(
+                self._rng_for("next_best_action", tenant_id, customer_id).uniform(
+                    self._CONFIDENCE_MIN, self._CONFIDENCE_MAX
+                ),
+                2,
+            ),
         )
 
     def recommend_cross_sell(self, tenant_id: int, customer_id: int) -> list[ProductRecommendation]:
@@ -156,7 +234,7 @@ class SalesRecommendationService:
                     browsing_scores[related] = browsing_scores.get(related, 0) + 0.2
 
         # 3. 基于相似客户的推荐
-        similar_customers = self._get_similar_customers_by_tier(tenant_id, current_tier, limit=10)
+        similar_customers = self._get_similar_customers_by_tier(tenant_id, current_tier, limit=self._SIMILAR_SCAN_LIMIT)
         for sim_cid in similar_customers:
             sim_data = self._get_mock_customer_data(tenant_id, sim_cid)
             for product in sim_data["purchase_history"]:
@@ -246,14 +324,12 @@ class SalesRecommendationService:
 
         return similar_customers
 
-    def predict_conversion_probability(self, opportunity_id: int) -> float:
+    def predict_conversion_probability(self, opportunity_id: int, tenant_id: int) -> float:
         """
         预测商机成交概率（增强版）
         结合：历史数据、市场情绪、竞争分析
         """
-        import hashlib
-
-        seed = int(hashlib.sha256(str(opportunity_id).encode()).hexdigest()[:8], 16)
+        seed = int(hashlib.sha256(f"{tenant_id}:{opportunity_id}".encode()).hexdigest()[:8], 16)
 
         # 基础概率 (历史数据)
         base_prob = 0.3 + (seed % 50) / 100.0
@@ -268,3 +344,20 @@ class SalesRecommendationService:
         conversion_prob = base_prob * market_sentiment * competition_factor
 
         return round(min(max(conversion_prob, 0.0), 1.0), 2)
+
+    async def get_recommendations(self, opportunity_id: int, tenant_id: int) -> RecommendationResult:
+        """获取商机完整推荐结果。
+
+        接受 `opportunity_id` + `tenant_id`，通过 DB 查询解析关联的 customer_id，
+        然后组装转换概率、相似客户和下一步最佳行动。
+        """
+        customer_id = await self._resolve_customer_id(opportunity_id, tenant_id)
+        conversion_prob = self.predict_conversion_probability(opportunity_id, tenant_id)
+        similar = self.get_similar_customers(tenant_id, customer_id)
+        next_action = self.get_next_best_action(tenant_id, customer_id)
+        return RecommendationResult(
+            opportunity_id=opportunity_id,
+            conversion_probability=conversion_prob,
+            similar_opportunities=similar,
+            next_best_action=next_action,
+        )

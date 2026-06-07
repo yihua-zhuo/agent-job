@@ -224,8 +224,8 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                   </Avatar>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
-                      <span className="text-sm font-medium">Agent {reply.created_by}</span>
-                      {reply.is_internal && (
+                      <span className="text-sm font-medium">Agent {String(reply.created_by ?? "")}</span>
+                      {Boolean(reply.is_internal) && (
                         <span className="inline-flex items-center gap-1 text-xs bg-yellow-100 text-yellow-800 px-1.5 py-0.5 rounded-full">
                           <LockIcon className="h-3 w-3" />
                           Internal
@@ -319,7 +319,7 @@ export default function TicketDetailPage({ params }: { params: Promise<{ id: str
                 </div>
               </div>
 
-              {ticket.response_deadline && (
+              {Boolean(ticket.response_deadline) && (
                 <div className="pt-2 border-t">
                   <span className="text-xs text-muted-foreground block mb-1.5">SLA Timer</span>
                   <SLATimer

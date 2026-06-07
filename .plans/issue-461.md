@@ -20,7 +20,7 @@ Create (verify existence of) `src/db/models/workflow.py` with `WorkflowModel` su
 2. **Confirm `alembic/env.py`** — verify it imports `import db.models  # noqa: F401` which auto-discovers all models including `workflow.py`. No changes required.
 
 3. **Spin up a clean local `alembic_dev` DB** (per CLAUDE.md):
-   ```
+   ```bash
    docker compose -f configs/docker-compose.test.yml up -d test-db
    docker exec configs-test-db-1 psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;"
    docker exec configs-test-db-1 psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"
@@ -30,20 +30,20 @@ Create (verify existence of) `src/db/models/workflow.py` with `WorkflowModel` su
    ```
 
 4. **Run autogenerate against alembic_dev**:
-   ```
+   ```bash
    alembic revision --autogenerate -m "add_workflow_model"
    ```
    Open `alembic/versions/<new_revision>_add_workflow_model.py` and review carefully. Autogenerate produces correct column types for scalar fields but may not correctly infer JSONB — verify that `conditions` and `actions` use `postgresql.JSONB(astext_type=sa.Text())` rather than plain `JSON`. Also verify `server_default=sa.text('now()')` on timestamp columns. Fill in `downgrade()` if autogenerate left it blank.
 
 5. **Verify migration applies cleanly**:
-   ```
+   ```bash
    alembic upgrade head
    alembic downgrade -1
    alembic upgrade head
    ```
 
 6. **Run a drift check** (second autogen should produce empty diff; delete the revision file if both `upgrade()` and `downgrade()` are `pass`):
-   ```
+   ```bash
    alembic revision --autogenerate -m "drift_check"
    ```
 

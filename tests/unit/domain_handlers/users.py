@@ -92,10 +92,20 @@ def make_user_handler(state: MockState):
                 return MockResult([MockRow({"id": 1, "tenant_id": 0, "username": "existing", "email": "existing@test.com", "password_hash": None, "role": "user", "status": "pending", "full_name": None, "bio": None, "created_at": now, "updated_at": now})])
             return MockResult([])
 
-        if "where id" in sql_text:
-            user_id = params.get("id")
+        if "where id" in sql_text or "users.id" in sql_text:
+            # SQLAlchemy compiles `id = :id_1` so check both bare and _N-suffixed keys
+            user_id = None
+            tenant_id = None
+            for k, v in params.items():
+                if k == "id" or k.startswith("id_"):
+                    user_id = v
+                if k == "tenant_id" or k.startswith("tenant_id"):
+                    tenant_id = v
             if user_id in state.users:
-                return MockResult([MockRow(state.users[user_id].copy())])
+                rec = state.users[user_id]
+                if tenant_id is not None and rec.get("tenant_id") != tenant_id:
+                    return MockResult([])
+                return MockResult([MockRow(rec.copy())])
             if user_id in state.deleted_user_ids:
                 return MockResult([])
             fixtures = {
@@ -104,6 +114,8 @@ def make_user_handler(state: MockState):
             }
             if user_id in fixtures:
                 row = fixtures[user_id].copy()
+                if tenant_id is not None and row.get("tenant_id") != tenant_id:
+                    return MockResult([])
                 now = dt.utcnow()
                 row["created_at"] = now
                 row["updated_at"] = now
