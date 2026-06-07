@@ -8,8 +8,7 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.tenant import TenantModel
-from db.models.user import UserModel
+from db.models.identity import TenantModel, UserModel
 from pkg.constants.tenant_constants import VALID_PLANS
 from pkg.errors.app_exceptions import ForbiddenException, NotFoundException, ValidationException
 

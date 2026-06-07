@@ -13,7 +13,7 @@ import pytest
 import pytest_asyncio
 
 from db.models.ai_conversation import AIConversationModel, AIMessageModel
-from db.models.tenant import TenantModel
+from db.models.identity import TenantModel
 from pkg.errors.app_exceptions import NotFoundException
 from services.ai_service import AIService
 

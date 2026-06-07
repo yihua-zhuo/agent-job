@@ -8,10 +8,10 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models.identity import UserModel
 from db.models.notification import NotificationModel
 from db.models.reminder import ReminderModel
 from db.models.smart_notification import Channel, Priority, SmartNotificationModel, Timing
-from db.models.user import UserModel
 from pkg.constants.notification_constants import (
     NOTIFICATION_PARAMS_MAX_BYTES,
     PAYLOAD_PARAMS_ALLOWED_KEYS,

@@ -468,7 +468,7 @@ async def get_customer_assignment(
     if customer.owner_id is not None and customer.owner_id > 0:
         from sqlalchemy import and_, select
 
-        from db.models.user import UserModel
+        from db.models.identity import UserModel
 
         user_result = await session.execute(
             select(UserModel.full_name).where(

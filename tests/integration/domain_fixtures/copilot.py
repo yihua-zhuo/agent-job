@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert
 
 from db.models.conversation import ConversationModel
 from db.models.conversation_message import ConversationMessageModel
-from db.models.user import UserModel
+from db.models.identity import UserModel
 
 
 async def seed_conversation(async_session, tenant_id: int, user_id: int):

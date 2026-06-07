@@ -15,7 +15,7 @@ import uuid
 import pytest
 import pytest_asyncio
 
-from db.models.tenant import TenantModel
+from db.models.identity import TenantModel
 from models.marketing import CampaignType, TriggerType
 from models.ticket import (
     SLALevel,

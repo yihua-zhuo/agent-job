@@ -13,7 +13,7 @@ class TestTenantIntegration:
     async def test_insert_and_select_tenant_with_slug_and_usage_limits(
         self, db_schema, tenant_id, async_session
     ):
-        from db.models.tenant import TenantModel
+        from db.models.identity import TenantModel
 
         now = datetime.now(UTC)
         tenant = TenantModel(
@@ -104,7 +104,7 @@ class TestTenantIntegration:
     async def test_tenant_default_slug_applied_when_omitted(
         self, db_schema, tenant_id, async_session
     ):
-        from db.models.tenant import TenantModel
+        from db.models.identity import TenantModel
 
         now = datetime.now(UTC)
         tenant = TenantModel(
@@ -125,7 +125,7 @@ class TestTenantIntegration:
     async def test_tenant_accepts_explicit_empty_slug(
         self, db_schema, tenant_id, async_session
     ):
-        from db.models.tenant import TenantModel
+        from db.models.identity import TenantModel
 
         now = datetime.now(UTC)
         tenant = TenantModel(

@@ -21,7 +21,7 @@ from tests.integration.domain_fixtures.churn_prediction import seed_churn_custom
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def _seed_tenant(async_session, tenant_id: int) -> int:
     """Seed the primary tenant for all tests in this module."""
-    from db.models.tenant import TenantModel
+    from db.models.identity import TenantModel
 
     tenant = TenantModel(
         id=tenant_id,
@@ -37,7 +37,7 @@ async def _seed_tenant(async_session, tenant_id: int) -> int:
 @pytest_asyncio.fixture(scope="function")
 async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
     """Seed a second tenant for cross-tenant isolation tests. Opt-in only."""
-    from db.models.tenant import TenantModel
+    from db.models.identity import TenantModel
 
     tenant = TenantModel(
         id=tenant_id_2,

@@ -8,7 +8,7 @@ from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.user import UserModel
+from db.models.identity import UserModel
 from pkg.errors.app_exceptions import (
     ConflictException,
     NotFoundException,
