@@ -11,9 +11,10 @@ Tests use the db_schema fixture which auto-creates and drops tables per test
 from __future__ import annotations
 
 import uuid
-from datetime import UTC
+from datetime import UTC, datetime
 
 import pytest
+from sqlalchemy import select
 
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
 from services.tenant_service import TenantService
@@ -107,10 +108,7 @@ class TestWorkflowModelIntegration:
         assert workflow.trigger_config == complex_trigger_config
 
         # Re-fetch from DB to confirm round-trip
-        from sqlalchemy import select
-        result = await async_session.execute(
-            select(WorkflowModel).where(WorkflowModel.id == workflow.id)
-        )
+        result = await async_session.execute(select(WorkflowModel).where(WorkflowModel.id == workflow.id))
         fetched = result.scalar_one()
         assert fetched.actions == complex_actions
         assert fetched.conditions == complex_conditions
@@ -132,8 +130,6 @@ class TestWorkflowModelIntegration:
         )
         async_session.add(workflow)
         await async_session.flush()
-
-        from sqlalchemy import select
 
         # Confirm the row IS present for the owning tenant
         result = await async_session.execute(
@@ -170,7 +166,6 @@ class TestWorkflowModelIntegration:
         async_session.add(workflow)
         await async_session.flush()
 
-        from datetime import datetime
         started_before = datetime.now(UTC)
 
         execution = WorkflowExecutionModel(
@@ -226,10 +221,7 @@ class TestWorkflowModelIntegration:
         workflow.name = "Updated Name"
         await async_session.flush()
 
-        from sqlalchemy import select
-        result = await async_session.execute(
-            select(WorkflowModel).where(WorkflowModel.id == workflow.id)
-        )
+        result = await async_session.execute(select(WorkflowModel).where(WorkflowModel.id == workflow.id))
         fetched = result.scalar_one()
         assert fetched.status == "active"
         assert fetched.name == "Updated Name"
@@ -254,41 +246,10 @@ class TestWorkflowModelIntegration:
         await async_session.delete(workflow)
         await async_session.flush()
 
-        from sqlalchemy import select
-
         # Expire the identity map so the re-fetch hits the DB directly
         async_session.expire_all()
         result = await async_session.execute(select(WorkflowModel).where(WorkflowModel.id == wf_id))
         assert result.scalar_one_or_none() is None
-
-    async def test_to_dict_serialization(self, db_schema, async_session):
-        """WorkflowModel.to_dict() returns all expected keys with correct types."""
-        tid = await _seed_tenant(async_session)
-        workflow = WorkflowModel(
-            tenant_id=tid,
-            name="Serialize Me",
-            description="Testing serialization",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=None,
-        )
-        d = workflow.to_dict()
-        expected_keys = {
-            "id", "tenant_id", "name", "description", "trigger_type",
-            "trigger_config", "actions", "conditions", "status",
-            "created_by", "created_at", "updated_at",
-        }
-        assert set(d.keys()) == expected_keys
-        assert d["name"] == "Serialize Me"
-        assert d["tenant_id"] == tid
-        assert d["description"] == "Testing serialization"
-        assert d["trigger_type"] == "manual"
-        assert isinstance(d["trigger_config"], dict)
-        assert isinstance(d["actions"], list)
-        assert isinstance(d["conditions"], list)
 
     async def test_json_fields_empty_values_roundtrip(self, db_schema, async_session):
         """Empty dicts, empty lists, and None for JSONB columns round-trip without corruption."""
@@ -311,10 +272,7 @@ class TestWorkflowModelIntegration:
         assert workflow.actions == []
         assert workflow.conditions == []
 
-        from sqlalchemy import select
-        result = await async_session.execute(
-            select(WorkflowModel).where(WorkflowModel.id == workflow.id)
-        )
+        result = await async_session.execute(select(WorkflowModel).where(WorkflowModel.id == workflow.id))
         fetched = result.scalar_one()
         assert fetched.trigger_config == {}
         assert fetched.actions == []

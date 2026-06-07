@@ -2,7 +2,9 @@
 
 from datetime import UTC, datetime
 
-from db.models.workflow import WorkflowExecutionModel, WorkflowModel
+import pytest
+
+from db.models.workflow import WorkflowExecutionModel, WorkflowModel, WorkflowNodeModel
 
 
 class TestWorkflowModel:
@@ -39,158 +41,32 @@ class TestWorkflowModel:
         assert d["created_at"] == now.isoformat()
         assert d["updated_at"] == now.isoformat()
 
-    def test_conditions_defaults_to_empty_list_when_none(self):
-        """conditions is [] when the field is omitted (uses column default)."""
-        workflow = WorkflowModel(
-            id=1,
-            tenant_id=1,
-            name="No conditions",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=None,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        assert workflow.conditions == []
-        assert workflow.to_dict()["conditions"] == []
-
-    def test_actions_defaults_to_empty_list_when_none(self):
-        """actions is [] when the field is omitted (uses column default)."""
-        workflow = WorkflowModel(
-            id=1,
-            tenant_id=1,
-            name="No actions",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=None,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        assert workflow.actions == []
-        assert workflow.to_dict()["actions"] == []
-
-    def test_trigger_config_defaults_to_empty_dict_when_none(self):
-        """trigger_config is {} when the field is omitted (uses column default)."""
-        workflow = WorkflowModel(
-            id=1,
-            tenant_id=1,
-            name="No config",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=None,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        assert workflow.trigger_config == {}
-        assert workflow.to_dict()["trigger_config"] == {}
-
-    def test_status_default_is_draft(self):
-        """status serializes as 'draft' in to_dict() when set to draft."""
-        workflow = WorkflowModel(
-            id=1,
-            tenant_id=1,
-            name="Default status",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=None,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        assert workflow.to_dict()["status"] == "draft"
-
-    def test_trigger_type_default_serializes_as_manual(self):
-        """trigger_type serializes as 'manual' in to_dict() when set to manual."""
-        workflow = WorkflowModel(
-            id=1,
-            tenant_id=1,
-            name="Default trigger",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=None,
-            created_at=datetime.now(UTC),
-            updated_at=datetime.now(UTC),
-        )
-        assert workflow.to_dict()["trigger_type"] == "manual"
-
-    def test_created_at_isoformat(self):
-        """created_at is serialized as ISO string in to_dict."""
+    @pytest.mark.parametrize(
+        "field,serialized",
+        [
+            ("conditions", []),
+            ("actions", []),
+            ("trigger_config", {}),
+        ],
+    )
+    def test_default_serialization_for_jsonb_fields(self, field, serialized):
+        """to_dict() serializes empty list/dict defaults correctly for JSONB fields."""
         now = datetime.now(UTC)
-        workflow = WorkflowModel(
-            id=1,
-            tenant_id=1,
-            name="Time test",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=None,
-            created_at=now,
-            updated_at=now,
-        )
-        d = workflow.to_dict()
-        assert isinstance(d["created_at"], str)
-        assert d["created_at"] == now.isoformat()
-
-    def test_updated_at_isoformat(self):
-        """updated_at is serialized as ISO string in to_dict."""
-        now = datetime.now(UTC)
-        workflow = WorkflowModel(
-            id=1,
-            tenant_id=1,
-            name="Time test",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=None,
-            created_at=now,
-            updated_at=now,
-        )
-        d = workflow.to_dict()
-        assert isinstance(d["updated_at"], str)
-        assert d["updated_at"] == now.isoformat()
-
-    def test_to_dict_with_explicit_defaults(self):
-        """to_dict returns the explicit default values as set (not coerced)."""
-        now = datetime.now(UTC)
-        workflow = WorkflowModel(
-            id=5,
-            tenant_id=99,
-            name="With Defaults",
-            description="Desc",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=1,
-            created_at=now,
-            updated_at=now,
-        )
-        d = workflow.to_dict()
-        assert d["id"] == 5
-        assert d["tenant_id"] == 99
-        assert d["name"] == "With Defaults"
-        assert d["status"] == "draft"
-        assert d["trigger_type"] == "manual"
-        assert d["description"] == "Desc"
+        kwargs = {
+            "id": 1,
+            "tenant_id": 1,
+            "name": "Test",
+            "trigger_type": "manual",
+            "trigger_config": {},
+            "actions": [],
+            "conditions": [],
+            "status": "draft",
+            "created_by": None,
+            "created_at": now,
+            "updated_at": now,
+        }
+        workflow = WorkflowModel(**kwargs)
+        assert workflow.to_dict()[field] == serialized
 
     def test_to_dict_description_none(self):
         """to_dict returns description=None when not set."""
@@ -210,6 +86,25 @@ class TestWorkflowModel:
         )
         d = workflow.to_dict()
         assert d["description"] is None
+
+    def test_to_dict_created_at_none(self):
+        """to_dict returns created_at=None when the field is None."""
+        workflow = WorkflowModel(
+            id=7,
+            tenant_id=1,
+            name="No Timestamp",
+            trigger_type="manual",
+            trigger_config={},
+            actions=[],
+            conditions=[],
+            status="draft",
+            created_by=1,
+            created_at=None,
+            updated_at=None,
+        )
+        d = workflow.to_dict()
+        assert d["created_at"] is None
+        assert d["updated_at"] is None
 
 
 class TestWorkflowExecutionModel:
@@ -273,9 +168,68 @@ class TestWorkflowExecutionModel:
         )
         d = execution.to_dict()
         assert set(d.keys()) == {
-            "id", "workflow_id", "tenant_id", "trigger_type", "triggered_by",
-            "started_at", "completed_at", "status", "result",
+            "id",
+            "workflow_id",
+            "tenant_id",
+            "trigger_type",
+            "triggered_by",
+            "started_at",
+            "completed_at",
+            "status",
+            "result",
         }
         assert d["id"] == 2
         assert d["workflow_id"] == 20
         assert d["status"] == "running"
+
+
+class TestWorkflowNodeModel:
+    """Tests for WorkflowNodeModel."""
+
+    def test_to_dict_returns_all_expected_keys(self):
+        """to_dict() includes node fields with correct types."""
+        now = datetime.now(UTC)
+        node = WorkflowNodeModel(
+            id=1,
+            workflow_id=10,
+            tenant_id=42,
+            node_type="action",
+            definition_json={"action": "send_email"},
+            input={"to": "user@example.com"},
+            output={"sent": True},
+            status="completed",
+            execution_order=1,
+            created_at=now,
+            updated_at=now,
+        )
+        d = node.to_dict()
+        assert d["id"] == 1
+        assert d["workflow_id"] == 10
+        assert d["tenant_id"] == 42
+        assert d["node_type"] == "action"
+        assert d["definition_json"] == {"action": "send_email"}
+        assert d["input"] == {"to": "user@example.com"}
+        assert d["output"] == {"sent": True}
+        assert d["status"] == "completed"
+        assert d["execution_order"] == 1
+        assert d["created_at"] == now.isoformat()
+        assert d["updated_at"] == now.isoformat()
+
+    def test_to_dict_output_none(self):
+        """to_dict returns output=None when not set."""
+        now = datetime.now(UTC)
+        node = WorkflowNodeModel(
+            id=2,
+            workflow_id=10,
+            tenant_id=1,
+            node_type="condition",
+            definition_json={},
+            input={},
+            output=None,
+            status="pending",
+            execution_order=0,
+            created_at=now,
+            updated_at=now,
+        )
+        d = node.to_dict()
+        assert d["output"] is None

@@ -32,7 +32,7 @@ def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
     register_exception_handlers(app)
 
     async def _noop_db() -> AsyncGenerator[AsyncSession, None]:
-        yield None  # type: ignore[misc]
+        yield AsyncMock(spec=AsyncSession)
 
     app.dependency_overrides[get_db] = _noop_db
 
