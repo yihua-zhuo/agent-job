@@ -18,7 +18,6 @@ jobs:
   unit-test:
     name: Unit Tests
     runs-on: ubuntu-latest
-    needs: coordinator
     services:
       postgres:
         image: postgres:16
