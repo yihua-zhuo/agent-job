@@ -10,10 +10,29 @@ Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 from __future__ import annotations
 
 import pytest
+import pytest_asyncio
 
 from db.models.ai_conversation import AIConversationModel, AIMessageModel
+from db.models.tenant import TenantModel
 from pkg.errors.app_exceptions import NotFoundException
 from services.ai_service import AIService
+
+
+# ── Seed tenant so FK constraints on ai_conversations and ai_messages are satisfied ──
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_tenant(async_session, tenant_id: int) -> int:
+    tenant = TenantModel(id=tenant_id, name="AI Integration Test Tenant", plan="free", status="active")
+    async_session.add(tenant)
+    await async_session.flush()
+    return tenant_id
+
+
+@pytest_asyncio.fixture(scope="function", autouse=True)
+async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
+    tenant = TenantModel(id=tenant_id_2, name="AI Integration Test Tenant 2", plan="free", status="active")
+    async_session.add(tenant)
+    await async_session.flush()
+    return tenant_id_2
 
 
 @pytest.mark.integration

@@ -4,12 +4,13 @@ Services raise AppException on errors (caught by global handler in main.py).
 Router wraps successful results in {"success": True, "data": ..., "message": ...}.
 """
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Body, Depends, Path, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
+from pkg.errors.app_exceptions import ForbiddenException
 from services.tenant_service import TenantService
 
 tenants_router = APIRouter(prefix="/api/v1/tenants", tags=["tenants"])
@@ -64,9 +65,9 @@ async def create_tenant(
         name=body.name,
         plan=body.plan,
         admin_email=body.admin_email,
-        **({"settings": body.settings} if body.settings else {}),
+        settings=body.settings,
     )
-    return {"success": True, "data": data, "message": "租户创建成功"}
+    return {"success": True, "data": data.to_dict(), "message": "Tenant created successfully"}
 
 
 @tenants_router.get("/stats")
@@ -75,8 +76,8 @@ async def get_tenant_stats(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    data = await service.get_tenant_stats(ctx.tenant_id)
-    return {"success": True, "data": data}
+    data = await service.get_tenant_stats(tenant_id=ctx.tenant_id, requesting_tenant_id=ctx.tenant_id)
+    return {"success": True, "data": data.to_dict()}
 
 
 @tenants_router.get("/usage")
@@ -85,19 +86,25 @@ async def get_tenant_usage(
     session: AsyncSession = Depends(get_db),
 ):
     service = TenantService(session)
-    data = await service.get_tenant_usage(ctx.tenant_id)
-    return {"success": True, "data": data}
+    data = await service.get_tenant_usage(tenant_id=ctx.tenant_id, requesting_tenant_id=ctx.tenant_id)
+    return {"success": True, "data": data.to_dict()}
 
 
 @tenants_router.get("/{tenant_id}")
 async def get_tenant(
-    tenant_id: int,
+    tenant_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """Fetch a tenant by ID.
+
+    Authorization is enforced by TenantService._get_tenant_or_404: if
+    requesting_tenant_id does not match tenant_id, a ForbiddenException is
+    raised before any data is returned. No pre-check is needed here.
+    """
     service = TenantService(session)
-    data = await service.get_tenant(tenant_id)
-    return {"success": True, "data": data}
+    data = await service.get_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id)
+    return {"success": True, "data": data.to_dict()}
 
 
 @tenants_router.get("")
@@ -108,30 +115,28 @@ async def list_tenants(
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
 ):
+    """List all tenants visible to the requesting tenant.
+
+    requesting_tenant_id is passed to the service to enforce access control:
+    callers only see tenants they are permitted to access (typically their own).
+    """
     service = TenantService(session)
-    items, total = await service.list_tenants(page=page, page_size=page_size)
-    return _paginated(items, total, page, page_size)
+    items, total = await service.list_tenants(
+        page=page, page_size=page_size, search=search, requesting_tenant_id=ctx.tenant_id
+    )
+    return _paginated([item.to_dict() for item in items], total, page, page_size)
 
 
 @tenants_router.put("/{tenant_id}")
 async def update_tenant(
-    tenant_id: int,
-    body: TenantUpdate,
+    tenant_id: int = Path(..., ge=1),
     ctx: AuthContext = Depends(require_auth),
     session: AsyncSession = Depends(get_db),
+    body: TenantUpdate = Body(...),
 ):
+    if tenant_id != ctx.tenant_id:
+        raise ForbiddenException("Cannot access other tenants")
     service = TenantService(session)
-    update_data = body.model_dump(exclude_none=True)
-    data = await service.update_tenant(tenant_id, **update_data)
-    return {"success": True, "data": data, "message": "租户更新成功"}
-
-
-@tenants_router.delete("/{tenant_id}")
-async def delete_tenant(
-    tenant_id: int,
-    ctx: AuthContext = Depends(require_auth),
-    session: AsyncSession = Depends(get_db),
-):
-    service = TenantService(session)
-    data = await service.delete_tenant(tenant_id)
-    return {"success": True, "data": data, "message": "租户删除成功"}
+    update_data = body.model_dump(exclude_unset=True, exclude_none=True)
+    data = await service.update_tenant(tenant_id, requesting_tenant_id=ctx.tenant_id, **update_data)
+    return {"success": True, "data": data.to_dict(), "message": "Tenant updated"}

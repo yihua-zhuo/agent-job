@@ -1,9 +1,9 @@
 """Unit tests for src/main.py — exception handlers and app factory changes."""
-import pytest
-from unittest.mock import MagicMock, patch, AsyncMock
-from fastapi.testclient import TestClient
-from fastapi import FastAPI, HTTPException
+from unittest.mock import patch
 
+import pytest
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 
 # ---------------------------------------------------------------------------
 # Helpers: build a minimal app with the same exception handlers as main.py
@@ -11,8 +11,9 @@ from fastapi import FastAPI, HTTPException
 
 def _make_test_app() -> FastAPI:
     """Create a minimal FastAPI app with the same exception handlers used in main.py."""
-    from fastapi.responses import JSONResponse
     from fastapi import Request
+    from fastapi.responses import JSONResponse
+
     from pkg.errors.app_exceptions import AppException
 
     app = FastAPI()
@@ -122,8 +123,8 @@ class TestGenericExceptionHandler:
 
 class TestAppExceptionHandler:
     def test_app_exception_returns_correct_status(self):
+
         from pkg.errors.app_exceptions import AppException
-        from fastapi.responses import JSONResponse
 
         app = _make_test_app()
 

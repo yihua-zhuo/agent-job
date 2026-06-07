@@ -127,10 +127,71 @@ class TestMarketingServiceIntegration:
             subject="Test",
         )
         cid = created.id
+        wrong_tenant_id = tenant_id + 9999
 
-        # another tenant cannot see it
+        # another tenant cannot get it
         with pytest.raises(NotFoundException):
-            await svc.get_campaign(cid, tenant_id=tenant_id + 9999)
+            await svc.get_campaign(cid, tenant_id=wrong_tenant_id)
+
+        # another tenant cannot update it
+        with pytest.raises(NotFoundException):
+            await svc.update_campaign(cid, tenant_id=wrong_tenant_id, name="Hijacked")
+
+        # another tenant cannot delete it
+        with pytest.raises(NotFoundException):
+            await svc.delete_campaign(cid, tenant_id=wrong_tenant_id)
+
+        # another tenant cannot list it
+        items, total = await svc.list_campaigns(tenant_id=wrong_tenant_id)
+        assert all(c.id != cid for c in items)
+        assert total == 0
+
+    async def test_create_with_non_default_status_and_type(self, db_schema, tenant_id, async_session):
+        """Creating a campaign with non-default status and type is honored."""
+        uid = await self._seed_user(async_session, tenant_id)
+        svc = MarketingService(async_session)
+        suffix = uuid.uuid4().hex[:8]
+
+        created = await svc.create_campaign(
+            name=f"Non-Default {suffix}",
+            campaign_type=CampaignType.EMAIL,
+            content="Body",
+            created_by=uid,
+            tenant_id=tenant_id,
+            subject="Test",
+            status=CampaignStatus.SCHEDULED,
+        )
+        assert created.type == CampaignType.EMAIL.value
+        assert created.status == CampaignStatus.SCHEDULED.value
+
+        fetched = await svc.get_campaign(created.id, tenant_id=tenant_id)
+        assert fetched.type == CampaignType.EMAIL.value
+        assert fetched.status == CampaignStatus.SCHEDULED.value
+
+    async def test_sent_at_set_on_launch(self, db_schema, tenant_id, async_session):
+        """launch_campaign sets sent_at to current UTC timestamp."""
+        uid = await self._seed_user(async_session, tenant_id)
+        svc = MarketingService(async_session)
+        suffix = uuid.uuid4().hex[:8]
+
+        created = await svc.create_campaign(
+            name=f"Launch Test {suffix}",
+            campaign_type=CampaignType.EMAIL,
+            content="Body",
+            created_by=uid,
+            tenant_id=tenant_id,
+            subject="Test",
+            status=CampaignStatus.DRAFT,
+        )
+        assert created.sent_at is None
+
+        launched = await svc.launch_campaign(created.id, tenant_id=tenant_id)
+        assert launched.sent_at is not None
+        assert launched.status == CampaignStatus.ACTIVE.value
+
+        fetched = await svc.get_campaign(created.id, tenant_id=tenant_id)
+        assert fetched.sent_at is not None
+        assert fetched.status == CampaignStatus.ACTIVE.value
 
     async def test_list_pagination(self, db_schema, tenant_id, async_session):
         uid = await self._seed_user(async_session, tenant_id)

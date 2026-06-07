@@ -86,9 +86,7 @@ async def chat(
     svc = AIService(session)
 
     if request.conversation_id is None:
-        conversation = await svc.create_conversation(
-            tenant_id=ctx.tenant_id, user_id=ctx.user_id, title=None
-        )
+        conversation = await svc.create_conversation(tenant_id=ctx.tenant_id, user_id=ctx.user_id, title=None)
         conversation_id = conversation.id
     else:
         conversation_id = request.conversation_id
@@ -118,9 +116,7 @@ async def create_conversation(
     _check_rate_limit(ctx.tenant_id, ctx.user_id)
 
     svc = AIService(session)
-    conversation = await svc.create_conversation(
-        tenant_id=ctx.tenant_id, user_id=ctx.user_id, title=request.title
-    )
+    conversation = await svc.create_conversation(tenant_id=ctx.tenant_id, user_id=ctx.user_id, title=request.title)
 
     response = ConversationResponse(
         id=conversation.id,

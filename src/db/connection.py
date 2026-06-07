@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from typing import Annotated
 
+from fastapi import Depends
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 # Lazily-initialised singletons exposed as public module-level names.
@@ -24,7 +26,7 @@ def _build_engine(url: str) -> AsyncEngine:
         user_part, password = credentials.rsplit(":", 1)
         host_port = url[creds_end + 1 :]
         last_colon = host_port.rfind(":")
-        host = host_port[:last_colon]
+        _host = host_port[:last_colon]
         port_and_path = host_port[last_colon + 1 :]
         if "/" in port_and_path:
             port, path = port_and_path.split("/", 1)
@@ -46,7 +48,7 @@ def _build_engine(url: str) -> AsyncEngine:
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
         url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-    return create_async_engine(url, pool_pre_ping=True, pool_size=5, connect_args=connect_args or None)
+    return create_async_engine(url, pool_pre_ping=True, pool_size=5, connect_args=connect_args or {})
 
 
 def _init_engine(url: str):
@@ -129,9 +131,6 @@ def reset_engine(database_url: str):
 # ---------------------------------------------------------------------------
 # FastAPI dependency — use this in route handlers via Depends(get_session)
 # ---------------------------------------------------------------------------
-from typing import Annotated
-
-from fastapi import Depends
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
@@ -145,7 +144,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         async def list_users(session: AsyncSession = Depends(get_db)):
             ...
     """
-    _lazy_init()
+    ensure_engine()
     session: AsyncSession = async_session_maker()  # type: ignore
     try:
         yield session

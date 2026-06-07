@@ -13,6 +13,7 @@ import uuid
 
 import pytest
 
+from db.repositories.customer import CustomerRepository
 from models.customer import CustomerStatus
 from pkg.errors.app_exceptions import NotFoundException
 from services.customer_service import CustomerService
@@ -38,7 +39,7 @@ async def _seed_user(async_session, tenant_id: int = 1) -> int:
     return reg.id
 
 
-async def _seed_customer(async_session, tenant_id: int = 1, **overrides):
+async def _seed_customer(async_session, tenant_id: int, **overrides):
     """Create a customer and return the CustomerModel."""
     cust_svc = CustomerService(async_session)
     suffix = uuid.uuid4().hex[:8]
@@ -84,7 +85,7 @@ class TestCustomerServiceIntegration:
         )
         assert result is not None
         assert result.company == "Acme Corp"
-        assert result.status == "customer"
+        assert result.status == CustomerStatus.CUSTOMER.value
 
     async def test_update_customer(self, db_schema, tenant_id, async_session):
         cust_svc = CustomerService(async_session)
@@ -202,7 +203,7 @@ class TestCustomerServiceIntegration:
         cust_svc = CustomerService(async_session)
         suffix = uuid.uuid4().hex[:8]
         customers = [
-            {"name": f"Bulk {suffix} {i}", "email": f"bulk_{suffix}_{i}@example.com", "owner_id": 1}
+            {"name": f"Bulk {suffix} {i}", "email": f"bulk_{suffix}_{i}@example.com"}
             for i in range(3)
         ]
         result = await cust_svc.bulk_import(customers, tenant_id=tenant_id)
@@ -538,7 +539,6 @@ class TestCustomerCountByStatusIntegration:
         # Verify counts via service layer using tenant sessions
         cust_svc = CustomerService(async_session)
         result_t1 = await cust_svc.count_by_status(tenant_id=tenant_id_web)
-        await async_session.commit()
         result_t2 = await cust_svc.count_by_status(tenant_id=tenant_id_2_web)
 
         assert result_t1[CustomerStatus.LEAD] == 2

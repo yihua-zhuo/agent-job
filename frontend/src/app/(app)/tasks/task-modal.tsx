@@ -75,7 +75,7 @@ export function TaskModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const { data: customerData } = useSearchCustomers(debouncedSearch);
+  const { data: customerData } = useSearchCustomers(debouncedSearch ?? "");
 
   const isEdit = !!task;
 

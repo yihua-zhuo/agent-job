@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import Boolean, DateTime, Integer, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
@@ -12,10 +12,14 @@ class ReminderModel(Base):
     """Reminder entity mapped to the `reminders` table."""
 
     __tablename__ = "reminders"
+    __table_args__ = (
+        Index("ix_reminders_tenant_remind_at", "tenant_id", "remind_at"),
+        Index("ix_reminders_tenant_user_remind_at", "tenant_id", "user_id", "remind_at"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
-    user_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)
     remind_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)

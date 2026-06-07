@@ -1,0 +1,98 @@
+name: Pipeline · Schema Drift
+
+# Daily sweep: detect drift between src/db/models/*.py and the alembic head,
+# hand-trim a new migration via Claude, and open a PR.
+#
+# Designed to complement the migration-drift check in ci.yml — that job FAILS
+# the PR if drift exists; this workflow closes the loop by auto-producing the
+# missing migration on a cadence.
+on:
+  schedule:
+    # 03:23 UTC — off-peak vs. the doc-sync (03:17) and repair (04:07) jobs.
+    - cron: '23 3 * * *'
+  workflow_dispatch:
+
+# One drift sweep at a time. Two runs racing would push to the same branch
+# and clobber each other's commit.
+concurrency:
+  group: pipeline-schema-drift
+  cancel-in-progress: false
+
+env:
+  PYTHON_VERSION: '3.11'
+
+jobs:
+  drift-sweep:
+    name: Auto-merge schema drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Need write token so the script can push the auto/schema-drift-<date> branch.
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Checkout agent-actions (CI scripts)
+        # Skip when .agent-actions/ already exists (local act --bind path).
+        if: hashFiles('.agent-actions/scripts/*.py') == ''
+        uses: actions/checkout@v4
+        with:
+          repository: yihua-zhuo/agent-actions
+          ref: main
+          path: .agent-actions
+          token: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Set up claude
+        run: |
+          if ! command -v claude &>/dev/null; then
+            npm install -g @anthropic-ai/claude-code
+          fi
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]" 2>/dev/null || pip install -e . || pip install -r requirements.txt
+
+      - name: Start Postgres
+        run: docker compose -f configs/docker-compose.test.yml up -d --wait test-db
+
+      - name: Create clean alembic_dev DB
+        # MUST be a separate DB from test_db. test_db gets populated by
+        # Base.metadata.create_all in tests/integration/conftest.py, which
+        # would yield an empty autogen diff and silently mask real drift.
+        run: |
+          docker compose -f configs/docker-compose.test.yml exec -T test-db \
+            psql -U test_user -d postgres -c "DROP DATABASE IF EXISTS alembic_dev;"
+          docker compose -f configs/docker-compose.test.yml exec -T test-db \
+            psql -U test_user -d postgres -c "CREATE DATABASE alembic_dev;"
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Run drift sweep
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          GH_TOKEN: ${{ secrets.COMMIT_GITHUB_TOKEN || secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          DATABASE_URL: postgresql+asyncpg://test_user:test_pass@localhost:5432/alembic_dev
+          PYTHONPATH: src
+        run: python3 .agent-actions/scripts/check_schema_drift.py
+
+      - name: Tear down Postgres
+        if: always()
+        run: docker compose -f configs/docker-compose.test.yml down -v || true

@@ -27,9 +27,7 @@ class AIService:
     # Conversation CRUD
     # -------------------------------------------------------------------------
 
-    async def create_conversation(
-        self, tenant_id: int, user_id: int, title: str | None = None
-    ) -> AIConversationModel:
+    async def create_conversation(self, tenant_id: int, user_id: int, title: str | None = None) -> AIConversationModel:
         """Create a new AI conversation record."""
         now = datetime.now(UTC)
         conversation = AIConversationModel(
@@ -162,9 +160,7 @@ class AIService:
 
         return reply_response
 
-    async def _build_message_history(
-        self, conversation_id: int, tenant_id: int
-    ) -> list[dict[str, str]]:
+    async def _build_message_history(self, conversation_id: int, tenant_id: int) -> list[dict[str, str]]:
         """Return conversation messages as a list of {role, content} dicts."""
         msgs = await self.get_conversation_messages(conversation_id, tenant_id, limit=50)
         return [{"role": m.role, "content": m.content} for m in msgs]

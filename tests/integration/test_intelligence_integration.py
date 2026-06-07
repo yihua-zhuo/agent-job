@@ -10,6 +10,7 @@ if str(_src_root) not in sys.path:
 
 import pytest
 
+from db.repositories.customer import CustomerRepository
 from pkg.errors.app_exceptions import NotFoundException
 from services.churn_prediction import ChurnPredictionService
 from services.customer_service import CustomerService
@@ -118,12 +119,13 @@ class TestChurnPredictionService:
             assert a.priority in ("high", "medium", "low")
 
 
+@pytest.mark.integration
 class TestSalesRecommendationService:
     """Test SalesRecommendationService - recommendations and predictions."""
 
     @pytest.fixture
-    def svc(self):
-        return SalesRecommendationService()
+    def svc(self, async_session):
+        return SalesRecommendationService(async_session)
 
     def test_get_next_best_action(self, svc):
         result = svc.get_next_best_action(tenant_id=1, customer_id=1)
@@ -183,10 +185,10 @@ class TestSalesRecommendationService:
             assert s.monthly_revenue
 
     def test_predict_conversion_probability(self, svc):
-        prob = svc.predict_conversion_probability(opportunity_id=1)
+        prob = svc.predict_conversion_probability(opportunity_id=1, tenant_id=1)
         assert 0 <= prob <= 1
         # Deterministic
-        prob2 = svc.predict_conversion_probability(opportunity_id=1)
+        prob2 = svc.predict_conversion_probability(opportunity_id=1, tenant_id=1)
         assert prob == prob2
 
     def test_product_catalog_integrity(self, svc):

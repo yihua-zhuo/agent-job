@@ -2,10 +2,11 @@
 Unit tests for src/utils/file_helper.py — FileHelper class
 Covers: read_csv, write_csv, read_excel, write_excel, detect_file_format
 """
-import pytest
+
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / 'src'))
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "src"))
 
 from utils.file_helper import FileHelper
 
@@ -21,7 +22,7 @@ class TestReadCsv:
 
     def test_read_csv_utf8(self):
         """UTF-8 encoded CSV with Chinese characters."""
-        content = f"name,age,city\n{ZH_NAME},25,{ZH_CITY}\n{ZH2_NAME},30,{ZH2_CITY}".encode('utf-8')
+        content = f"name,age,city\n{ZH_NAME},25,{ZH_CITY}\n{ZH2_NAME},30,{ZH2_CITY}".encode()
         result = FileHelper.read_csv(content)
         assert len(result) == 2
         assert result[0]["name"] == ZH_NAME
@@ -30,7 +31,7 @@ class TestReadCsv:
 
     def test_read_csv_utf8_sig_bom(self):
         """UTF-8-sig BOM is stripped so DictReader sees clean headers."""
-        content = "name,age,city\nAlice,30,NYC".encode('utf-8-sig')  # adds BOM
+        content = "name,age,city\nAlice,30,NYC".encode("utf-8-sig")  # adds BOM
         result = FileHelper.read_csv(content)
         assert len(result) == 1
         assert result[0]["name"] == "Alice"
@@ -38,7 +39,7 @@ class TestReadCsv:
     def test_read_csv_gbk_fallback(self):
         """Bytes valid in GBK but not UTF-8 trigger GBK fallback."""
         # 0xC0 is a lead byte in GBK; alone it's invalid UTF-8 but valid GBK
-        content = b'\xc0\xc1,name\nBob,25'  # \xc0\xc1 forms a valid GBK character
+        content = b"\xc0\xc1,name\nBob,25"  # \xc0\xc1 forms a valid GBK character
         result = FileHelper.read_csv(content)
         assert len(result) == 1
         # GBK decodes \xc0\xc1 to a Chinese character, \xc1 as part of another
@@ -100,7 +101,7 @@ class TestWriteCsv:
         """Output starts with UTF-8 BOM for Excel compatibility."""
         data = [{"name": "Alice"}]
         result = FileHelper.write_csv(data, ["name"])
-        assert result.startswith(b'\xef\xbb\xbf')
+        assert result.startswith(b"\xef\xbb\xbf")
 
     def test_write_csv_empty_data_returns_empty_bytes(self):
         """Empty data list returns b''."""
@@ -111,29 +112,29 @@ class TestWriteCsv:
         """Column order in output matches the columns parameter."""
         data = [{"name": "Alice", "age": "30", "city": "NYC"}]
         result = FileHelper.write_csv(data, ["city", "name", "age"])
-        decoded = result.decode('utf-8-sig')
-        header = decoded.split('\n')[0]
+        decoded = result.decode("utf-8-sig")
+        header = decoded.split("\n")[0]
         assert header.startswith("city,name,age")
 
     def test_write_csv_ignores_extra_keys(self):
         """Keys not in columns list are ignored (extrasaction='ignore')."""
         data = [{"name": "Alice", "secret": "hidden"}]
         result = FileHelper.write_csv(data, ["name"])
-        decoded = result.decode('utf-8-sig')
+        decoded = result.decode("utf-8-sig")
         assert "secret" not in decoded
 
     def test_write_csv_missing_keys_empty(self):
         """Dicts missing some columns get empty values."""
         data = [{"name": "Alice"}]  # missing 'age'
         result = FileHelper.write_csv(data, ["name", "age"])
-        decoded = result.decode('utf-8-sig')
+        decoded = result.decode("utf-8-sig")
         assert "Alice" in decoded
 
     def test_write_csv_chinese_characters(self):
         """Chinese characters encoded correctly with BOM."""
         data = [{"name": ZH_NAME, "city": ZH_CITY}]
         result = FileHelper.write_csv(data, ["name", "city"])
-        decoded = result.decode('utf-8-sig')
+        decoded = result.decode("utf-8-sig")
         assert ZH_NAME in decoded
         assert ZH_CITY in decoded
 
@@ -143,8 +144,10 @@ class TestReadExcel:
 
     def _make_excel_bytes(self, rows):
         """Helper: create Excel bytes from list of lists."""
-        from openpyxl import Workbook
         from io import BytesIO
+
+        from openpyxl import Workbook
+
         wb = Workbook()
         ws = wb.active
         for row in rows:
@@ -157,11 +160,13 @@ class TestReadExcel:
 
     def test_read_excel_basic(self):
         """Basic Excel reading with Chinese data."""
-        content = self._make_excel_bytes([
-            ["name", "age", "city"],
-            [ZH_NAME, "25", ZH_CITY],
-            [ZH2_NAME, "30", ZH2_CITY],
-        ])
+        content = self._make_excel_bytes(
+            [
+                ["name", "age", "city"],
+                [ZH_NAME, "25", ZH_CITY],
+                [ZH2_NAME, "30", ZH2_CITY],
+            ]
+        )
         result = FileHelper.read_excel(content)
         assert len(result) == 2
         assert result[0]["name"] == ZH_NAME
@@ -169,13 +174,15 @@ class TestReadExcel:
 
     def test_read_excel_skips_empty_rows(self):
         """Rows where all cells are None/empty are skipped."""
-        content = self._make_excel_bytes([
-            ["name", "age"],
-            [ZH_NAME, "25"],
-            [None, None],
-            [ZH2_NAME, "30"],
-            [],
-        ])
+        content = self._make_excel_bytes(
+            [
+                ["name", "age"],
+                [ZH_NAME, "25"],
+                [None, None],
+                [ZH2_NAME, "30"],
+                [],
+            ]
+        )
         result = FileHelper.read_excel(content)
         assert len(result) == 2
 
@@ -212,8 +219,10 @@ class TestWriteExcel:
         """Sheet name is set correctly."""
         data = [{"name": "Alice"}]
         result = FileHelper.write_excel(data, "MySheet")
-        from openpyxl import load_workbook
         from io import BytesIO
+
+        from openpyxl import load_workbook
+
         wb = load_workbook(BytesIO(result))
         assert wb.active.title == "MySheet"
         wb.close()
@@ -222,8 +231,10 @@ class TestWriteExcel:
         """Headers are written in row 1."""
         data = [{"name": "Alice", "city": "NYC"}]
         result = FileHelper.write_excel(data, "Test")
-        from openpyxl import load_workbook
         from io import BytesIO
+
+        from openpyxl import load_workbook
+
         wb = load_workbook(BytesIO(result))
         ws = wb.active
         assert ws.cell(row=1, column=1).value == "name"
@@ -234,8 +245,10 @@ class TestWriteExcel:
         """Data rows start at row 2."""
         data = [{"name": "Alice"}, {"name": "Bob"}]
         result = FileHelper.write_excel(data, "Test")
-        from openpyxl import load_workbook
         from io import BytesIO
+
+        from openpyxl import load_workbook
+
         wb = load_workbook(BytesIO(result))
         ws = wb.active
         assert ws.cell(row=2, column=1).value == "Alice"

@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.activity import ActivityModel
 from db.models.ticket import TicketModel
+from db.models.ticket_categorization import CategorizationFeedbackModel, TicketCategorizationModel
 from db.models.ticket_reply import TicketReplyModel
 from models.ticket import (
     SLA_CONFIGS,
@@ -253,6 +254,60 @@ class TicketService:
         await self.session.flush()
         await self.session.refresh(reply)
         return reply
+
+    async def submit_categorization_feedback(
+        self,
+        ticket_id: int,
+        tenant_id: int,
+        user_id: int,
+        corrected_category: str | None = None,
+        corrected_priority: str | None = None,
+    ) -> CategorizationFeedbackModel:
+        """Record a human override for an LLM-assigned ticket categorization.
+
+        Sets TicketCategorizationModel.human_override = True and appends a
+        CategorizationFeedbackModel audit row.
+
+        Args:
+            ticket_id: Primary key of the ticket.
+            tenant_id: Tenant context.
+            user_id: ID of the user who provided the correction.
+            corrected_category: Human-corrected category (optional).
+            corrected_priority: Human-corrected priority (optional).
+
+        Returns:
+            The newly created CategorizationFeedbackModel (persisted and refreshed).
+
+        Raises:
+            NotFoundException: No TicketCategorizationModel exists for the ticket.
+        """
+        cat_result = await self.session.execute(
+            select(TicketCategorizationModel).where(
+                and_(
+                    TicketCategorizationModel.ticket_id == ticket_id,
+                    TicketCategorizationModel.tenant_id == tenant_id,
+                )
+            )
+        )
+        categorization = cat_result.scalar_one_or_none()
+        if categorization is None:
+            raise NotFoundException("TicketCategorization")
+
+        categorization.human_override = True
+
+        feedback = CategorizationFeedbackModel(
+            ticket_id=ticket_id,
+            tenant_id=tenant_id,
+            original_category=categorization.category_type,
+            original_priority=categorization.priority,
+            corrected_category=corrected_category,
+            corrected_priority=corrected_priority,
+            corrected_by=user_id,
+        )
+        self.session.add(feedback)
+        await self.session.flush()
+        await self.session.refresh(feedback)
+        return feedback
 
     async def change_status(
         self,

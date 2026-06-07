@@ -3,6 +3,7 @@
 Services raise AppException subclasses on errors (caught by global handler in main.py).
 Router wraps successful returns in {"success": True, "data": ...} dicts.
 """
+
 import math
 
 from fastapi import APIRouter, Depends, Query
@@ -101,6 +102,7 @@ async def create_campaign(
         content=body.content or "",
         created_by=ctx.user_id,
         tenant_id=ctx.tenant_id,
+        status=body.status,
         subject=body.subject,
         target_audience=body.target_audience,
     )
@@ -154,3 +156,18 @@ async def delete_campaign(
     svc = MarketingService(session)
     campaign = await svc.delete_campaign(campaign_id, tenant_id=ctx.tenant_id)
     return {"success": True, "data": campaign.to_dict()}
+
+
+@marketing_router.get("/campaigns/{campaign_id}/stats")
+async def get_campaign_stats(
+    campaign_id: int,
+    ctx: AuthContext = Depends(require_auth),
+    session: AsyncSession = Depends(get_db),
+):
+    svc = MarketingService(session)
+    stats = await svc.get_campaign_stats(campaign_id, tenant_id=ctx.tenant_id)
+    return {
+        "success": True,
+        "data": stats,
+        "message": "Campaign stats retrieved successfully",
+    }
