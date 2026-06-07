@@ -119,6 +119,7 @@ class TestChurnPredictionService:
             assert a.priority in ("high", "medium", "low")
 
 
+@pytest.mark.integration
 class TestSalesRecommendationService:
     """Test SalesRecommendationService - recommendations and predictions."""
 
@@ -184,10 +185,10 @@ class TestSalesRecommendationService:
             assert s.monthly_revenue
 
     def test_predict_conversion_probability(self, svc):
-        prob = svc.predict_conversion_probability(opportunity_id=1)
+        prob = svc.predict_conversion_probability(opportunity_id=1, tenant_id=1)
         assert 0 <= prob <= 1
         # Deterministic
-        prob2 = svc.predict_conversion_probability(opportunity_id=1)
+        prob2 = svc.predict_conversion_probability(opportunity_id=1, tenant_id=1)
         assert prob == prob2
 
     def test_product_catalog_integrity(self, svc):

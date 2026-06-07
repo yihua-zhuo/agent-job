@@ -188,7 +188,12 @@ class ChurnPredictionService:
         ]
 
     async def calculate_score(self, customer_id: int, tenant_id: int) -> ChurnPrediction:
-        """Compute churn score, tier, top factors, and recommended actions."""
+        """Compute churn score, tier, top factors, and recommended actions.
+
+        ``ChurnPrediction.score`` is a health score (higher = healthier /
+        lower churn risk). The tier label is computed from the inverted
+        (churn-risk) value so that ``"high"`` correctly means high churn risk.
+        """
         raw = await self._fetch_raw_metrics(customer_id, tenant_id)
 
         name_to_score = {
@@ -198,14 +203,15 @@ class ChurnPredictionService:
             "engagement_score": self._normalize_score("engagement_score", raw["engagement_score_raw"]),
         }
         raw_total = sum(score * self.WEIGHTS[name] for name, score in name_to_score.items())
-        score = round(max(0.0, min(raw_total, 100.0)), 2)
+        health_score = round(max(0.0, min(raw_total, 100.0)), 2)
+        churn_risk = round(max(0.0, min(100.0 - health_score, 100.0)), 2)
 
         top_3_risk_factors = self._build_top_3_factors(name_to_score)
 
         return ChurnPrediction(
             customer_id=customer_id,
-            score=score,
-            tier=self._compute_tier(score),
+            score=health_score,
+            tier=self._compute_tier(churn_risk),
             top_3_risk_factors=top_3_risk_factors,
             recommended_actions=self._build_recommended_actions(raw),
         )
@@ -291,13 +297,14 @@ class ChurnPredictionService:
                 "engagement_score": self._normalize_score("engagement_score", raw["engagement_score_raw"]),
             }
             raw_total = sum(score * self.WEIGHTS[name] for name, score in name_to_score.items())
-            score = round(max(0.0, min(raw_total, 100.0)), 2)
+            health_score = round(max(0.0, min(raw_total, 100.0)), 2)
+            churn_risk = round(max(0.0, min(100.0 - health_score, 100.0)), 2)
 
             found.append(
                 ChurnPrediction(
                     customer_id=cid,
-                    score=score,
-                    tier=self._compute_tier(score),
+                    score=health_score,
+                    tier=self._compute_tier(churn_risk),
                     top_3_risk_factors=self._build_top_3_factors(name_to_score),
                     recommended_actions=self._build_recommended_actions(raw),
                 )

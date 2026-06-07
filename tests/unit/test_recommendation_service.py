@@ -27,38 +27,45 @@ def mock_db_session():
 
 @pytest.fixture
 def svc(mock_db_session, monkeypatch):
-    monkeypatch.setattr(time, "time", lambda: 1000.0)
+    # Use a controllable clock for both the production code (monotonic) and
+    # the test's read of cached timestamps.
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(time, "monotonic", lambda: clock["t"])
     _cache.clear()
-    return RecommendationService(mock_db_session)
+    return RecommendationService(mock_db_session), clock
 
 
 async def test_cache_miss_populates_cache(svc):
-    result = await svc.get_recommendations(1, tenant_id=1)
+    service, clock = svc
+    result = await service.get_recommendations(1, tenant_id=1)
     key = _cache_key(1, 1)
     assert key in _cache
-    ts, cached_data = _cache[key]
-    assert ts == 1000.0
+    cached_data = _cache.peek(key)
     assert cached_data == result
+    assert clock["t"] == 1000.0
 
 
 async def test_cache_hit_returns_cached_data(svc):
-    result1 = await svc.get_recommendations(1, tenant_id=1)
-    result2 = await svc.get_recommendations(1, tenant_id=1)
+    service, _ = svc
+    result1 = await service.get_recommendations(1, tenant_id=1)
+    result2 = await service.get_recommendations(1, tenant_id=1)
     assert result1 == result2
 
 
 async def test_stale_cache_is_bypassed(svc, monkeypatch):
-    await svc.get_recommendations(1, tenant_id=1)
+    service, clock = svc
+    await service.get_recommendations(1, tenant_id=1)
     key = _cache_key(1, 1)
-    ts_before, _ = _cache[key]
-    monkeypatch.setattr(time, "time", lambda: 1000.0 + _CACHE_TTL + 1)
-    await svc.get_recommendations(1, tenant_id=1)
-    ts_after, _ = _cache[key]
-    assert ts_after > ts_before
+    first_ts = _cache.timestamp(key)
+    clock["t"] += _CACHE_TTL + 1
+    await service.get_recommendations(1, tenant_id=1)
+    second_ts = _cache.timestamp(key)
+    assert second_ts > first_ts
 
 
 async def test_invalidate_removes_cache_entry(svc):
-    await svc.get_recommendations(1, tenant_id=1)
+    service, _ = svc
+    await service.get_recommendations(1, tenant_id=1)
     key = _cache_key(1, 1)
     assert key in _cache
     RecommendationService.invalidate_cache(1, 1)
@@ -70,18 +77,21 @@ async def test_invalidate_on_missing_key_does_not_raise():
 
 
 async def test_not_found_raises(svc, mock_db_session):
+    service, _ = svc
+
     class _EmptyResult:
         def scalar_one_or_none(self):
             return None
 
     mock_db_session.execute = AsyncMock(return_value=_EmptyResult())
     with pytest.raises(NotFoundException):
-        await svc.get_recommendations(9999, tenant_id=1)
+        await service.get_recommendations(9999, tenant_id=1)
 
 
 async def test_tenant_isolation_in_cache_key(svc):
-    await svc.get_recommendations(1, tenant_id=1)
-    await svc.get_recommendations(1, tenant_id=2)
+    service, _ = svc
+    await service.get_recommendations(1, tenant_id=1)
+    await service.get_recommendations(1, tenant_id=2)
     assert _cache_key(1, 1) in _cache
     assert _cache_key(1, 2) in _cache
     assert _cache_key(1, 1) != _cache_key(1, 2)

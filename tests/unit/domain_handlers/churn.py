@@ -46,8 +46,13 @@ def make_tenant_aware_customer_handler(state: MockState):
             return None
         if "where" not in normalized:
             return None
+        # Only intercept single-row lookups (id + tenant_id) — that's the
+        # isolation contract this handler exists to enforce. List/count
+        # queries (no id bind) fall through to the regular customer handler.
         customer_id = _bind_value(params, "id")
         tenant_id = _bind_value(params, "tenant_id")
+        if customer_id is None or tenant_id is None:
+            return None
         if customer_id not in state.customers:
             return MockResult([])
         rec = state.customers[customer_id]
