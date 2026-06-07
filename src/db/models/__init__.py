@@ -11,6 +11,16 @@ import importlib
 import pkgutil
 
 from db.base import Base
+from db.models.identity import (  # noqa: F401 — re-exported via __all__ / globals()
+    DepartmentModel,
+    OrganizationModel,
+    PermissionModel,
+    RoleModel,
+    RolePermissionModel,
+    TenantModel,
+    UserModel,
+    UserRoleModel,
+)
 from internal.db.models import (  # noqa: F401 — auto-discovery populates globals from module
     IdentityDepartmentModel,
     IdentityOrganizationModel,
