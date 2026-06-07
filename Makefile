@@ -113,7 +113,7 @@ seed-user: venv
 #   4. seed the default admin user
 # After this, run the backend (e.g. uvicorn src.main:app --reload) and you
 # can immediately POST /api/v1/auth/login with the printed credentials.
-dev-up: ## Start db, apply migrations, seed admin user (idempotent)
+dev-up: ## Start db, create schema, seed admin user (idempotent)
 dev-up: db-up
 	@echo "── waiting for postgres ──"
 	@for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
@@ -123,7 +123,7 @@ dev-up: db-up
 		sleep 1; \
 		if [ "$$i" = "15" ]; then echo "test-db did not become ready in 15s" >&2; exit 1; fi; \
 	done
-	@$(MAKE) migrate
+	$(PYTHON) scripts/dev/create_schema.py
 	@$(MAKE) seed-user
 	@echo
 	@echo "── dev stack ready ──"
