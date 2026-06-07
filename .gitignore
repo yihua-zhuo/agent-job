@@ -24,3 +24,4 @@ code-review-result.json
 .agent-actions
 logs/
 .playwright-mcp
+.plans

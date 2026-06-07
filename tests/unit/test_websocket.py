@@ -8,7 +8,7 @@ import pytest
 from starlette.status import WS_1008_POLICY_VIOLATION
 from starlette.websockets import WebSocketDisconnect
 
-_TEST_SECRET = "test-secret-32-chars-minimum-xx"  # noqa: S105
+_TEST_SECRET = "test-secret-32-chars-minimum-xxx"  # noqa: S105
 
 
 @pytest.fixture(scope="session", autouse=True)
