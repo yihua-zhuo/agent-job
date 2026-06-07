@@ -19,9 +19,7 @@ def _make_auth_ctx(tenant_id: int | None = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
 
 
-def _build_app(
-    auth_ctx: AuthContext | None = None,
-) -> FastAPI:
+def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
     """Build a FastAPI app with the router, exception handlers, and dependency overrides.
 
     `auth_ctx=None` means require_auth is NOT overridden (to test 401).
