@@ -1,6 +1,6 @@
 {
   "lastChecks": {
-    "cron": 1780772624,
+    "cron": 1780790580,
     "test_count": 1776490320,
     "security_sync": 1779345824
   },
@@ -21,10 +21,11 @@
     },
     "security-hourly": {
       "id": "db67bfcc-5a19-4251-a9e3-1d6b531cf00f",
-      "status": "ok",
-      "lastRunStatus": "ok",
-      "lastDelivered": true,
-      "consecutiveErrors": 0
+      "status": "error",
+      "lastRunStatus": "error",
+      "lastError": "Invalid email or password",
+      "consecutiveErrors": 2,
+      "note": "cron disabled pending credential update"
     }
   }
 }
