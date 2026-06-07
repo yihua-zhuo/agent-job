@@ -69,14 +69,14 @@ class RecommendationResult:
 
     opportunity_id: int
     conversion_probability: float
-    similar_opportunities: list[dict] = field(default_factory=list)
+    similar_opportunities: list[SimilarCustomer] = field(default_factory=list)
     next_best_action: SalesActionRecommendation | None = None
 
     def to_dict(self) -> dict:
         return {
             "opportunity_id": self.opportunity_id,
             "conversion_probability": self.conversion_probability,
-            "similar_opportunities": self.similar_opportunities,
+            "similar_opportunities": [s.to_dict() for s in self.similar_opportunities],
             "next_best_action": self.next_best_action.to_dict() if self.next_best_action else None,
         }
 
@@ -111,7 +111,20 @@ class SalesRecommendationService:
     def __init__(self, session: AsyncSession, seed: int | None = None):
         """初始化服务。`seed` 控制随机行为以保证测试可复现。"""
         self.session = session
-        self._rng = random.Random(seed)  # noqa: S311 - non-cryptographic recommendation scoring
+        self._seed = seed
+
+    def _rng_for(self, *parts: object) -> random.Random:
+        """Return a fresh RNG seeded from the service seed and stable inputs.
+
+        Using a per-call RNG (rather than a shared ``self._rng`` cursor) keeps
+        random outputs input-dependent and order-independent: every helper
+        that needs randomness derives it from the same stable identifiers.
+        """
+        material = ":".join(str(p) for p in parts)
+        if self._seed is not None:
+            material = f"{self._seed}:{material}"
+        digest = hashlib.sha256(material.encode()).hexdigest()
+        return random.Random(int(digest[:16], 16))  # noqa: S311 - non-cryptographic recommendation scoring
 
     def _get_mock_customer_data(self, tenant_id: int, customer_id: int) -> dict:
         """获取模拟客户数据"""
@@ -121,13 +134,14 @@ class SalesRecommendationService:
         tiers = list(self.PRODUCTS.keys())
         current_tier = tiers[tier_index]
 
+        rng = self._rng_for("customer", tenant_id, customer_id)
         return {
             "customer_id": customer_id,
             "current_tier": current_tier,
             "usage_rate": (seed % 80 + 20) / 100.0,
             "monthly_revenue": self.PRODUCTS[current_tier]["price"],
-            "purchase_history": self._rng.sample(tiers, (seed % 3) + 1),
-            "browsing_history": self._rng.sample(tiers, (seed % 4) + 1),
+            "purchase_history": rng.sample(tiers, (seed % 3) + 1),
+            "browsing_history": rng.sample(tiers, (seed % 4) + 1),
             "satisfaction_score": (seed % 100) / 100.0,
         }
 
@@ -189,7 +203,12 @@ class SalesRecommendationService:
             action=action,
             target=target,
             reason=reason,
-            confidence=round(self._rng.uniform(self._CONFIDENCE_MIN, self._CONFIDENCE_MAX), 2),  # noqa: S311 - non-security recommendation scoring
+            confidence=round(
+                self._rng_for("next_best_action", tenant_id, customer_id).uniform(
+                    self._CONFIDENCE_MIN, self._CONFIDENCE_MAX
+                ),
+                2,
+            ),
         )
 
     def recommend_cross_sell(self, tenant_id: int, customer_id: int) -> list[ProductRecommendation]:
@@ -339,13 +358,6 @@ class SalesRecommendationService:
         return RecommendationResult(
             opportunity_id=opportunity_id,
             conversion_probability=conversion_prob,
-            similar_opportunities=[
-                {
-                    "customer_id": s.customer_id,
-                    "current_tier": s.current_tier,
-                    "monthly_revenue": s.monthly_revenue,
-                }
-                for s in similar
-            ],
+            similar_opportunities=similar,
             next_best_action=next_action,
         )

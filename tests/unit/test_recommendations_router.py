@@ -97,6 +97,15 @@ class TestGetRecommendations:
         assert body["success"] is False
         assert body["code"] == "INTERNAL_ERROR"
 
+    def test_missing_tenant_returns_422(self, mocked_service_client):
+        client, svc = mocked_service_client
+        svc.get_recommendations = AsyncMock(return_value=mocked_service_client[1].get_recommendations.return_value)
+        # Override auth to return a context with tenant_id = None
+        client.app.dependency_overrides[require_auth] = lambda: _make_auth_ctx(tenant_id=None)
+        resp = client.get("/api/v1/sales/opportunities/1/recommendations")
+        assert resp.status_code == 422
+        svc.get_recommendations.assert_not_called()
+
     def test_missing_auth_returns_401(self, no_auth_client):
         client = no_auth_client
         resp = client.get("/api/v1/sales/opportunities/1/recommendations")

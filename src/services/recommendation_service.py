@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.opportunity import OpportunityModel
 from pkg.errors.app_exceptions import NotFoundException
-from services.sales_recommendation import SalesActionRecommendation, SalesRecommendationService
+from services.sales_recommendation import SalesActionRecommendation, SalesRecommendationService, SimilarCustomer
 
 _CACHE_TTL = 3600.0  # seconds
 _CACHE_MAX_ENTRIES = 1024
@@ -82,14 +82,14 @@ class CachedRecommendationResult:
     opportunity_id: int
     conversion_probability: float
     next_best_action: SalesActionRecommendation
-    similar_opportunities: list[dict] = field(default_factory=list)
+    similar_opportunities: list[SimilarCustomer] = field(default_factory=list)
 
     def to_dict(self) -> dict:
         return {
             "opportunity_id": self.opportunity_id,
             "conversion_probability": self.conversion_probability,
             "next_best_action": self.next_best_action.to_dict(),
-            "similar_opportunities": self.similar_opportunities,
+            "similar_opportunities": [s.to_dict() for s in self.similar_opportunities],
         }
 
 
@@ -117,14 +117,7 @@ class RecommendationService:
             opportunity_id=opportunity_id,
             conversion_probability=self._sales_svc.predict_conversion_probability(opportunity_id, tenant_id),
             next_best_action=self._sales_svc.get_next_best_action(tenant_id, opp.customer_id),
-            similar_opportunities=[
-                {
-                    "customer_id": s.customer_id,
-                    "current_tier": s.current_tier,
-                    "monthly_revenue": s.monthly_revenue,
-                }
-                for s in similar
-            ],
+            similar_opportunities=similar,
         )
         _cache.set(key, data)
         return data
