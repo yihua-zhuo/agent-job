@@ -144,6 +144,13 @@ class UserService:
         )
         return result.scalar_one_or_none()
 
+    async def get_user_name(self, user_id: int, tenant_id: int) -> str | None:
+        """Fetch a user's display name by id (tenant-scoped). Returns None if not found."""
+        result = await self.session.execute(
+            select(UserModel.full_name).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
+        )
+        return result.scalar_one_or_none()
+
     async def list_users(
         self,
         page: int = 1,

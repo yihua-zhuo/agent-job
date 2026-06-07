@@ -1,4 +1,11 @@
-"""Seed helpers for copilot integration tests."""
+"""Seed helpers for copilot integration tests.
+
+Note: helpers in this module are plain async functions that take the
+``async_session`` as a positional argument, matching the convention used by
+other ``tests/integration/domain_fixtures/*`` modules. They are not wrapped as
+pytest fixtures because callers in ``test_copilot_integration.py`` invoke them
+directly with the session fixture (e.g. ``await seed_conversation(async_session, tid, uid)``).
+"""
 
 from __future__ import annotations
 

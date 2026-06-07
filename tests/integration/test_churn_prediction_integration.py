@@ -7,13 +7,17 @@ Run against a real PostgreSQL database (DATABASE_URL env var):
 Requires DATABASE_URL (or TEST_DATABASE_URL) pointing at a live Postgres instance.
 Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 """
+
 from __future__ import annotations
 
 import pytest
 import pytest_asyncio
 
 from db.models.churn_prediction import ChurnPredictionModel, ChurnTier
-from tests.integration.domain_fixtures.churn_prediction import seed_churn_customer
+from tests.integration.domain_fixtures.churn_prediction import (
+    seed_churn_customer,
+    seed_churn_tenant,
+)
 
 
 # `_seed_tenant` is autouse for this module, so every test gets a primary tenant.
@@ -21,33 +25,13 @@ from tests.integration.domain_fixtures.churn_prediction import seed_churn_custom
 @pytest_asyncio.fixture(scope="function", autouse=True)
 async def _seed_tenant(async_session, tenant_id: int) -> int:
     """Seed the primary tenant for all tests in this module."""
-    from db.models.identity import TenantModel
-
-    tenant = TenantModel(
-        id=tenant_id,
-        name="Churn Integration Test Tenant",
-        plan="free",
-        status="active",
-    )
-    async_session.add(tenant)
-    await async_session.flush()
-    return tenant_id
+    return await seed_churn_tenant(async_session, tenant_id)
 
 
 @pytest_asyncio.fixture(scope="function")
 async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
     """Seed a second tenant for cross-tenant isolation tests. Opt-in only."""
-    from db.models.identity import TenantModel
-
-    tenant = TenantModel(
-        id=tenant_id_2,
-        name="Churn Integration Test Tenant 2",
-        plan="free",
-        status="active",
-    )
-    async_session.add(tenant)
-    await async_session.flush()
-    return tenant_id_2
+    return await seed_churn_tenant(async_session, tenant_id_2, name="Churn Integration Test Tenant 2")
 
 
 @pytest.mark.integration
@@ -156,9 +140,7 @@ class TestChurnPredictionIntegration:
         assert d["updated_at"] is not None
         assert d["updated_at"] >= d["created_at"]  # updated_at is set on insert; allow microsecond drift
 
-    async def test_tenant_isolation(
-        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant_2
-    ):
+    async def test_tenant_isolation(self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant_2):
         """Predictions are isolated by tenant_id."""
         customer_id_1 = await seed_churn_customer(async_session, tenant_id)
         customer_id_2 = await seed_churn_customer(async_session, tenant_id_2)
@@ -185,18 +167,14 @@ class TestChurnPredictionIntegration:
         from sqlalchemy import select
 
         result = await async_session.execute(
-            select(ChurnPredictionModel).where(
-                ChurnPredictionModel.tenant_id == tenant_id
-            )
+            select(ChurnPredictionModel).where(ChurnPredictionModel.tenant_id == tenant_id)
         )
         rows = result.scalars().all()
         assert len(rows) == 1
         assert rows[0].score == 90.0
 
         result_2 = await async_session.execute(
-            select(ChurnPredictionModel).where(
-                ChurnPredictionModel.tenant_id == tenant_id_2
-            )
+            select(ChurnPredictionModel).where(ChurnPredictionModel.tenant_id == tenant_id_2)
         )
         rows_2 = result_2.scalars().all()
         assert len(rows_2) == 1

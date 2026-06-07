@@ -23,6 +23,7 @@ from pkg.errors.app_exceptions import ForbiddenException
 from services.customer_service import CustomerService
 from services.lead_routing_service import LeadRoutingService
 from services.score_service import ScoreService
+from services.user_service import UserService
 
 customers_router = APIRouter(prefix="/api/v1/customers", tags=["customers"])
 CUSTOMER_STATUS_PATTERN = "^(" + "|".join(re.escape(status.value) for status in CustomerStatus) + ")$"
@@ -466,16 +467,8 @@ async def get_customer_assignment(
     # Fetch assigned user name if owner_id != 0
     assigned_to_name = None
     if customer.owner_id is not None and customer.owner_id > 0:
-        from sqlalchemy import and_, select
-
-        from db.models.identity import UserModel
-
-        user_result = await session.execute(
-            select(UserModel.full_name).where(
-                and_(UserModel.id == customer.owner_id, UserModel.tenant_id == ctx.tenant_id)
-            )
-        )
-        assigned_to_name = user_result.scalar_one_or_none()
+        user_svc = UserService(session)
+        assigned_to_name = await user_svc.get_user_name(customer.owner_id, tenant_id=ctx.tenant_id)
 
     return {
         "success": True,

@@ -1,7 +1,7 @@
 """Unit tests for src/api/routers/recommendations.py."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
@@ -31,11 +31,30 @@ def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
 
     if auth_ctx is not None:
         app.dependency_overrides[require_auth] = lambda: auth_ctx
-    # Override get_db to avoid touching a real database in unit tests
+
+    # Override get_db to avoid touching a real database in unit tests.
+    # Use make_mock_session([]) so we have a properly-shaped AsyncSession mock
+    # (handlers list is empty because these tests mock the service layer
+    # entirely; the session is never actually used to execute SQL).
     async def _noop_session():
-        yield MagicMock()
+        yield _empty_mock_session()
+
     app.dependency_overrides[get_db] = _noop_session
     return app
+
+
+def _empty_mock_session():
+    """Return a no-op AsyncSession mock with no SQL handlers.
+
+    The recommendations router tests stub RecommendationService at the module
+    level (see `mocked_service_client`), so the session injected by `get_db`
+    is never used to execute SQL. We still pass a structurally valid mock
+    rather than a bare MagicMock so any incidental attribute access
+    (e.g. global exception handlers) does not silently no-op.
+    """
+    from tests.unit.conftest import make_mock_session
+
+    return make_mock_session([])
 
 
 @pytest.fixture

@@ -1,5 +1,3 @@
-Good — I now have a complete understanding. Files that import `from db.models import TenantModel` (i.e. from the package) rely on the auto-discovery in `__init__.py` which finds the stub re-exports. Once we remove the old files, the identity module's direct import in `__init__.py` will keep `TenantModel` accessible. Here's the final plan:
-
 # Implementation Plan — Issue #428
 
 ## Goal
@@ -80,12 +78,14 @@ Reading order followed:
   - `PYTHONPATH=src pytest tests/integration/ -v` → all passed, exit 0
   - `ruff check src/` → 0 errors
   - `ruff check tests/` → 0 errors
+  - `ruff format --check src/ tests/` → 0 errors
 
 ## Acceptance Criteria
 - `grep -rn "from db\.models\.\(tenant\|user\|rbac\)" src/ tests/ --include="*.py"` returns 0 lines
 - `src/db/models/tenant.py`, `src/db/models/user.py`, and `src/db/models/rbac.py` no longer exist
 - `PYTHONPATH=src pytest tests/unit/ -v` exits 0 with all tests passing
 - `ruff check src/` exits 0 with no errors
+- `ruff format --check src/ tests/` exits 0 with no errors
 - `src/db/models/identity` is the sole import path for `TenantModel`, `UserModel`, `RoleModel`, `PermissionModel`, `RolePermissionModel`, and `UserRoleModel` across the entire codebase
 
 ## Risks / Open Questions
