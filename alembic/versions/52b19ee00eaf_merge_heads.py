@@ -48,6 +48,23 @@ depends_on: str | Sequence[str] | None = None
 
 
 def upgrade() -> None:
+    # Guard: when alembic walks `upgrade head[s]`, the original parallel
+    # branches (a52e1317da90, e646948c549a, add_agent_tasks_001, afa7c3f333bd,
+    # c94d682d4b04, db63fcd03ab9, e1f2a3b4c5d6, f18b406b982a) are ancestors of
+    # the final head and run before this migration — so import_jobs, etc.
+    # already exist by the time we get here. This migration's DDL replay only
+    # matters for DBs that arrived via 82ecf4a34e34 *without* visiting those
+    # heads (a rare repair path). Detect the common case and skip.
+    bind = op.get_bind()
+    already_applied = bind.execute(
+        sa.text(
+            "SELECT 1 FROM information_schema.tables "
+            "WHERE table_schema = current_schema() AND table_name = 'import_jobs'"
+        )
+    ).first()
+    if already_applied is not None:
+        return
+
     # ── a52e1317da90: import_jobs + export_jobs ─────────────────────────────
     op.create_table(
         "import_jobs",

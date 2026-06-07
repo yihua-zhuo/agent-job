@@ -20,15 +20,18 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Create the churn_predictions table, enum, indexes, and constraints."""
-    churntier = sa.Enum("high", "medium", "low", name="churntier")
+    churntier = postgresql.ENUM("high", "medium", "low", name="churntier")
     churntier.create(op.get_bind(), checkfirst=True)
+    column_churntier = postgresql.ENUM(
+        "high", "medium", "low", name="churntier", create_type=False
+    )
     op.create_table(
         "churn_predictions",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
         sa.Column("tenant_id", sa.Integer(), nullable=False),
         sa.Column("customer_id", sa.Integer(), nullable=False),
         sa.Column("score", sa.Float(), nullable=False),
-        sa.Column("tier", churntier, nullable=False),
+        sa.Column("tier", column_churntier, nullable=False),
         sa.Column(
             "factors",
             postgresql.JSONB(),
