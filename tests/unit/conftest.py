@@ -52,9 +52,10 @@ from tests.unit.domain_handlers.sla import (  # noqa: F401, E402
 class MockRow:
     """Simulates a SQLAlchemy Row returned by result.fetchone() / scalars()."""
 
-    def __init__(self, mapping):
+    def __init__(self, mapping, _scalar=None):
         self._mapping = mapping
         self._is_sequence = isinstance(mapping, (list, tuple))
+        self._scalar = _scalar
         if not self._is_sequence:
             for json_key in ("tags", "conditions", "actions", "settings", "usage_limits"):
                 if json_key in self._mapping and isinstance(self._mapping[json_key], str):
@@ -148,6 +149,8 @@ class MockResult:
         first = self._rows[0] if self._rows else None
         if isinstance(first, (list, tuple)):
             return first[0]
+        if hasattr(first, "_scalar") and first._scalar is not None:
+            return first._scalar
         return first
 
     def scalar(self):

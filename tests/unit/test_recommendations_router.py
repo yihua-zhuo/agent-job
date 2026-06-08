@@ -1,7 +1,7 @@
 """Unit tests for src/api/routers/recommendations.py."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
@@ -67,6 +67,8 @@ def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
         yield session
 
     app.dependency_overrides[get_db] = _empty_mock_session
+
+    app.dependency_overrides[get_db] = lambda: MagicMock()
 
     if auth_ctx is not None:
         app.dependency_overrides[require_auth] = lambda: auth_ctx

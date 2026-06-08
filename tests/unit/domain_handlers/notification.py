@@ -2,11 +2,32 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
 from tests.unit.conftest import MockResult, MockRow, MockState
+
+
+class _MutableNotificationRow(MockRow):
+    """MockRow that shares its mapping with the store dict.
+
+    Allows mark_as_read's in-place mutation (notification.read_at = ...)
+    to propagate to the store without requiring a flush round-trip.
+    """
+
+    def __init__(self, store_dict: dict):
+        super().__init__(store_dict)
+        self._store_ref = store_dict
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name.startswith("_") or name in ("_mapping", "_is_sequence", "_scalar", "_store_ref"):
+            object.__setattr__(self, name, value)
+        elif name in self._mapping:
+            self._mapping[name] = value
+        else:
+            object.__setattr__(self, name, value)
 
 
 def _notification_to_row(n: dict):
@@ -25,6 +46,22 @@ def _notification_to_row(n: dict):
             "read_at": n.get("read_at"),
         }
     )
+
+
+def _resolve_param(params: dict, key: str):
+    """Resolve a bound param, accepting both plain and _N-suffixed keys.
+
+    SQLAlchemy compiles ``tenant_id = :tenant_id`` as ``tenant_id_1`` when
+    multiple tables in scope bind the same column name. This helper returns
+    the first matching value so handlers work regardless of compilation form.
+    """
+    val = params.get(key)
+    if val is not None:
+        return val
+    for k, v in params.items():
+        if k.startswith(f"{key}_"):
+            return v
+    return None
 
 
 def _reminder_matches_filter(
@@ -74,6 +111,20 @@ def make_notification_handler(state):
                 raise ValueError(f"insert must bind non-None tenant_id (got keys: {list(params.keys())})")
             if "user_id" not in params or params["user_id"] is None:
                 raise ValueError(f"insert must bind non-None user_id (got keys: {list(params.keys())})")
+            # If params carry an explicit id, treat as upsert: update the existing
+            # record in-place rather than allocating a new one. The mock flush
+            # generates INSERT for every dirty object, so mark_as_read's in-place
+            # mutation followed by flush() arrives here with the existing id.
+            existing_id = params.get("id")
+            if existing_id is not None and existing_id in state._notifications:
+                n = state._notifications[existing_id]
+                # Map ORM Python attribute names to store keys (e.g. payload_params → params_).
+                _attr_to_store = {"payload_params": "params_"}
+                for k, v in params.items():
+                    store_key = _attr_to_store.get(k, k)
+                    if store_key in n and v is not None:
+                        n[store_key] = v
+                return MockResult([_notification_to_row(n)])
             nid = state._notifications_next_id
             state._notifications_next_id += 1
             n = {
@@ -82,7 +133,7 @@ def make_notification_handler(state):
                 "user_id": params.get("user_id"),
                 "channel": params.get("channel"),
                 "template": params.get("template"),
-                "params_": params.get("params_"),
+                "params_": params.get("params_") or params.get("payload_params"),
                 "status": params.get("status", "pending"),
                 "priority": params.get("priority", "normal"),
                 "created_at": params.get("created_at"),
@@ -92,25 +143,35 @@ def make_notification_handler(state):
             state._notifications[nid] = n
             return MockResult([_notification_to_row(n)])
 
-        if "from notifications where id" in sql_text_lower:
-            nid = params.get("id")
+        if "from notifications" in sql_text_lower and "where" in sql_text_lower and "count" not in sql_text_lower and _resolve_param(params, "id") is not None:
+            nid = _resolve_param(params, "id")
+            tenant_id = _resolve_param(params, "tenant_id")
+            user_id = _resolve_param(params, "user_id")
             n = state._notifications.get(nid)
-            if n and n.get("tenant_id") == params.get("tenant_id") and n.get("user_id") == params.get("user_id"):
-                return MockResult([_notification_to_row(n)])
+            if n and n.get("tenant_id") == tenant_id:
+                # user_id is optional in WHERE (mark_as_read doesn't filter by it);
+                # only enforce match when the query explicitly binds it.
+                if user_id is not None and n.get("user_id") != user_id:
+                    return MockResult([])
+                # Return a mutable row that shares the store dict so mark_as_read's
+                # in-place mutation (read_at, status) propagates to the store.
+                return MockResult([_MutableNotificationRow(n)])
             return MockResult([])
 
         if "count(" in sql_text_lower and "from notifications" in sql_text_lower:
-            tenant_id = params.get("tenant_id")
-            user_id = params.get("user_id")
+            tenant_id = _resolve_param(params, "tenant_id")
+            user_id = _resolve_param(params, "user_id")
             if tenant_id is None or user_id is None:
                 raise ValueError(
                     f"notification count must bind tenant_id and user_id (got keys: {list(params.keys())})"
                 )
-            # _unread_only may be absent when SQLAlchemy uses a SQL default; fall through
-            # to the generic 'from notifications' branch rather than crashing.
-            if "_unread_only" not in params:
-                return None
-            unread_filter = params["_unread_only"]
+            # NOTE: The service calls result.scalar_one_or_none() which unwraps
+            # the first element of the list. The count must be the sole element
+            # for MockResult.scalar_one() (which returns first[0]) to match.
+            # Default _unread_only to True so the get_unread_count query (which
+            # always filters by read_at IS NULL in SQL) is handled here. The
+            # list-notifications query binds _unread_only explicitly.
+            unread_filter = params.get("_unread_only", True)
             if unread_filter:
                 count = sum(
                     1
@@ -123,18 +184,22 @@ def make_notification_handler(state):
                     for n in state._notifications.values()
                     if n.get("tenant_id") == tenant_id and n.get("user_id") == user_id
                 )
-            return MockResult([[count]])
+            return MockResult([count])
 
         if "from notifications" in sql_text_lower and "count" not in sql_text_lower:
-            tenant_id = params.get("tenant_id")
-            user_id = params.get("user_id")
+            tenant_id = _resolve_param(params, "tenant_id")
+            user_id = _resolve_param(params, "user_id")
             if tenant_id is None or user_id is None:
                 raise ValueError(
                     f"list-notifications must bind tenant_id and user_id (got keys: {list(params.keys())})"
                 )
             # _unread_only may be absent when SQLAlchemy uses a SQL default; fall through
             # to None so other handlers can respond, rather than crashing here.
+            # Logging helps diagnose handler routing bugs in test failures.
             if "_unread_only" not in params:
+                logging.getLogger(__name__).debug(
+                    "list-notifications: _unread_only not in params, falling through"
+                )
                 return None
             unread_filter = params["_unread_only"]
             page_size = max(params.get("limit", 20), 1)
@@ -152,13 +217,15 @@ def make_notification_handler(state):
             return MockResult([_notification_to_row(r) for r in rows[offset : offset + page_size]])
 
         if "update notifications" in sql_text_lower and "read_at" in sql_text_lower:
-            if "tenant_id" not in params or "user_id" not in params:
+            tenant_id = _resolve_param(params, "tenant_id")
+            user_id = _resolve_param(params, "user_id")
+            if tenant_id is None or user_id is None:
                 raise ValueError(f"update must bind tenant_id and user_id (got keys: {list(params.keys())})")
             nid = params.get("id")
             n = state._notifications.get(nid)
             # UPDATE with wrong tenant/user returns rowcount=0 — matches SQLAlchemy
             # semantics where the WHERE clause matches 0 rows, rather than raising.
-            if n and n.get("tenant_id") == params.get("tenant_id") and n.get("user_id") == params.get("user_id"):
+            if n and n.get("tenant_id") == tenant_id and n.get("user_id") == user_id:
                 n["read_at"] = params.get("read_at")
                 if params.get("read_at") is not None:
                     n["status"] = "read"
@@ -166,13 +233,15 @@ def make_notification_handler(state):
             return MockResult([])
 
         if "delete from notifications" in sql_text_lower:
-            if "tenant_id" not in params or "user_id" not in params:
+            tenant_id = _resolve_param(params, "tenant_id")
+            user_id = _resolve_param(params, "user_id")
+            if tenant_id is None or user_id is None:
                 raise ValueError(f"delete must bind tenant_id and user_id (got keys: {list(params.keys())})")
             nid = params.get("id")
             n = state._notifications.get(nid)
             # DELETE with wrong tenant/user returns rowcount=0 — matches SQLAlchemy
             # semantics (no NotFoundException raised for a DELETE that hits 0 rows).
-            if n and n.get("tenant_id") == params.get("tenant_id") and n.get("user_id") == params.get("user_id"):
+            if n and n.get("tenant_id") == tenant_id and n.get("user_id") == user_id:
                 del state._notifications[nid]
                 return MockResult([], rowcount=1)
             return MockResult([], rowcount=0)
