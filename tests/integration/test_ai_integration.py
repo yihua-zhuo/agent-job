@@ -7,15 +7,26 @@ Run against a real PostgreSQL database (DATABASE_URL env var):
 Requires DATABASE_URL (or TEST_DATABASE_URL) pointing at a live Postgres instance.
 Each test gets a fresh schema via TRUNCATE CASCADE (see conftest.py).
 """
+
 from __future__ import annotations
 
 import pytest
 import pytest_asyncio
 
 from db.models.ai_conversation import AIConversationModel, AIMessageModel
-from db.models.tenant import TenantModel
+from db.models.identity import TenantModel
+from internal.ai_gateway import AIChatGateway, AIResponse
 from pkg.errors.app_exceptions import NotFoundException
 from services.ai_service import AIService
+
+
+class StubAIChatGateway(AIChatGateway):
+    """Stub gateway for integration tests — returns deterministic replies without
+    touching the real AI backend, so the test exercises persistence, not the gateway.
+    """
+
+    async def chat(self, messages, context=None) -> AIResponse:
+        return AIResponse(reply="stub-reply", suggestions=[], actions=[])
 
 
 # ── Seed tenant so FK constraints on ai_conversations and ai_messages are satisfied ──
@@ -41,10 +52,8 @@ class TestAIConversationIntegration:
 
     async def test_create_and_get_conversation(self, db_schema, tenant_id, async_session):
         """POST /conversation creates a record retrievable by ID."""
-        svc = AIService(async_session)
-        conv = await svc.create_conversation(
-            tenant_id=tenant_id, user_id=999, title="Test Conversation"
-        )
+        svc = AIService(async_session, gateway=StubAIChatGateway())
+        conv = await svc.create_conversation(tenant_id=tenant_id, user_id=999, title="Test Conversation")
         await async_session.commit()
 
         fetched = await svc.get_conversation(conv.id, tenant_id, user_id=999)
@@ -55,7 +64,7 @@ class TestAIConversationIntegration:
 
     async def test_list_conversations(self, db_schema, tenant_id, async_session):
         """list_conversations returns paginated results."""
-        svc = AIService(async_session)
+        svc = AIService(async_session, gateway=StubAIChatGateway())
         # Create two conversations
         await svc.create_conversation(tenant_id=tenant_id, user_id=999, title="Chat A")
         await svc.create_conversation(tenant_id=tenant_id, user_id=999, title="Chat B")
@@ -67,7 +76,7 @@ class TestAIConversationIntegration:
 
     async def test_get_conversation_404_for_wrong_tenant(self, db_schema, tenant_id, async_session):
         """Conversation from tenant A is not accessible to tenant B."""
-        svc = AIService(async_session)
+        svc = AIService(async_session, gateway=StubAIChatGateway())
         conv = await svc.create_conversation(tenant_id=tenant_id, user_id=999, title="Private")
         await async_session.commit()
 
@@ -76,7 +85,7 @@ class TestAIConversationIntegration:
 
     async def test_get_conversation_404_for_wrong_user(self, db_schema, tenant_id, async_session):
         """Conversation from user A is not accessible to user B."""
-        svc = AIService(async_session)
+        svc = AIService(async_session, gateway=StubAIChatGateway())
         conv = await svc.create_conversation(tenant_id=tenant_id, user_id=999, title="Private")
         await async_session.commit()
 
@@ -85,7 +94,7 @@ class TestAIConversationIntegration:
 
     async def test_get_conversation_404_missing(self, db_schema, tenant_id, async_session):
         """Non-existent conversation raises NotFoundException."""
-        svc = AIService(async_session)
+        svc = AIService(async_session, gateway=StubAIChatGateway())
         with pytest.raises(NotFoundException):
             await svc.get_conversation(conversation_id=999999, tenant_id=tenant_id, user_id=999)
 
@@ -96,7 +105,7 @@ class TestAIMessageIntegration:
 
     async def test_send_message_stores_both_messages(self, db_schema, tenant_id, async_session):
         """send_message stores user message and assistant reply."""
-        svc = AIService(async_session)
+        svc = AIService(async_session, gateway=StubAIChatGateway())
 
         # Create conversation
         conv = await svc.create_conversation(tenant_id=tenant_id, user_id=999, title="Chat")
@@ -124,7 +133,7 @@ class TestAIMessageIntegration:
 
     async def test_conversation_updated_at_changes(self, db_schema, tenant_id, async_session):
         """Sending a message updates the conversation's updated_at timestamp."""
-        svc = AIService(async_session)
+        svc = AIService(async_session, gateway=StubAIChatGateway())
         conv = await svc.create_conversation(tenant_id=tenant_id, user_id=999, title="Chat")
         await async_session.commit()
         original_updated = conv.updated_at
@@ -149,7 +158,7 @@ class TestAIContextEnrichment:
 
     async def test_enrich_context_returns_counts(self, db_schema, tenant_id, async_session):
         """_enrich_context returns summary counts for CRM entities."""
-        svc = AIService(async_session)
+        svc = AIService(async_session, gateway=StubAIChatGateway())
         context = await svc._enrich_context(tenant_id=tenant_id, user_id=999)
 
         assert "customer_count" in context

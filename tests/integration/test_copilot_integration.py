@@ -23,7 +23,7 @@ class TestCopilotIntegration:
         """POST /copilot/chat returns 200 with {"success": True, ...}."""
         from sqlalchemy import select
 
-        from db.models.user import UserModel
+        from db.models.identity import UserModel
 
         # Get the actual user ID for tenant 1 from the auth token by querying the DB.
         result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
@@ -48,7 +48,7 @@ class TestCopilotIntegration:
         """GET /copilot/{conv_id}/history returns {"success": True, "messages": [...], "total": N}}."""
         from sqlalchemy import select
 
-        from db.models.user import UserModel
+        from db.models.identity import UserModel
 
         result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
         user = result.scalar_one_or_none()
@@ -76,7 +76,7 @@ class TestCopilotIntegration:
         """History endpoint returns at most 20 messages even when more are seeded."""
         from sqlalchemy import select
 
-        from db.models.user import UserModel
+        from db.models.identity import UserModel
 
         result = await async_session.execute(select(UserModel).where(UserModel.tenant_id == tenant_id_web))
         user = result.scalar_one_or_none()

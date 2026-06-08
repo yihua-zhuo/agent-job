@@ -17,8 +17,7 @@ from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.rbac import RoleModel
-from db.models.user import UserModel
+from db.models.identity import RoleModel, UserModel  # noqa: F401, F811  (re-imported in test bodies)
 from pkg.errors.app_exceptions import NotFoundException, ValidationException
 from services.rbac_service import DEFAULT_PERMISSIONS, RBACService
 
@@ -246,7 +245,7 @@ class TestRBACIntegration:
         # Verify tenant_id on the user_roles row (not just the role object)
         from sqlalchemy import and_, select
 
-        from db.models.rbac import UserRoleModel
+        from db.models.identity import UserRoleModel
         result = await async_session.execute(
             select(UserRoleModel).where(
                 and_(
@@ -281,7 +280,7 @@ class TestRBACIntegration:
         # Verify tenant_id on the user_roles row
         from sqlalchemy import and_, select
 
-        from db.models.rbac import UserRoleModel
+        from db.models.identity import UserRoleModel
         result = await async_session.execute(
             select(UserRoleModel).where(
                 and_(
@@ -514,7 +513,7 @@ class TestRoleManagementAPI:
     async def test_update_system_role_permissions_returns_403(
         self, api_client: AsyncClient, async_session: AsyncSession, db_schema
     ):
-        from db.models.rbac import RoleModel
+        from db.models.identity import RoleModel
         result = await async_session.execute(
             select(RoleModel).where(RoleModel.name == "admin")
         )
@@ -528,8 +527,7 @@ class TestRoleManagementAPI:
     async def test_assign_role_to_user_persists_binding(
         self, api_client: AsyncClient, async_session: AsyncSession, db_schema
     ):
-        from db.models.rbac import RoleModel
-        from db.models.user import UserModel
+        from db.models.identity import RoleModel, UserModel
         result = await async_session.execute(
             select(RoleModel).where(RoleModel.name == "admin")
         )
@@ -652,7 +650,7 @@ class TestRoleManagementAPI:
         from httpx import AsyncClient as _AC
 
         from db.connection import get_db
-        from db.models.tenant import TenantModel
+        from db.models.identity import TenantModel
         from main import app as _app
         from services.user_service import UserService
 

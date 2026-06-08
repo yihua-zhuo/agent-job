@@ -15,8 +15,13 @@ from datetime import UTC, datetime
 from sqlalchemy import and_, delete, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.rbac import PermissionModel, RoleModel, RolePermissionModel, UserRoleModel
-from db.models.user import UserModel
+from db.models.identity import (
+    PermissionModel,
+    RoleModel,
+    RolePermissionModel,
+    UserModel,
+    UserRoleModel,
+)
 from pkg.errors.app_exceptions import (
     ConflictException,
     ForbiddenException,

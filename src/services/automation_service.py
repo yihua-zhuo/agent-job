@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.automation_log import AutomationLogModel
 from db.models.automation_rule import AutomationRuleModel
-from db.models.user import UserModel
+from db.models.identity import UserModel
 from pkg.errors.app_exceptions import AppException, NotFoundException
 from services.notification_service import NotificationService
 from services.task_service import TaskService

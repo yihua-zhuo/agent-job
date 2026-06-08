@@ -40,7 +40,7 @@ DEFAULT_PERMISSION_RECORDS = [
 
 def _make_role(**kwargs):
     """Build a RoleModel instance with given attrs, using current UTC time."""
-    from db.models.rbac import RoleModel
+    from db.models.identity import RoleModel
     now = dt.now(UTC)
     return RoleModel(
         id=kwargs.get("id", 0),
@@ -56,7 +56,7 @@ def _make_role(**kwargs):
 
 def _make_permission(**kwargs):
     """Build a PermissionModel instance with given attrs."""
-    from db.models.rbac import PermissionModel
+    from db.models.identity import PermissionModel
     now = dt.now(UTC)
     return PermissionModel(
         id=kwargs.get("id", 0),

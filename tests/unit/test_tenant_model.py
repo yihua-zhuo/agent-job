@@ -4,7 +4,7 @@ from datetime import datetime as dt
 
 import pytest
 
-from db.models.tenant import TenantModel
+from db.models.identity import TenantModel
 
 
 class TestTenantModel:

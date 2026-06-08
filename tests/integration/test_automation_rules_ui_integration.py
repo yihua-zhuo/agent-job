@@ -13,7 +13,7 @@ from __future__ import annotations
 import pytest
 import pytest_asyncio
 
-from db.models.tenant import TenantModel
+from db.models.identity import TenantModel
 
 pytestmark = pytest.mark.integration
 

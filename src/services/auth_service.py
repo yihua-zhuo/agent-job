@@ -8,7 +8,7 @@ import jwt
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.user import UserModel
+from db.models.identity import UserModel
 from pkg.errors.app_exceptions import (
     NotFoundException,
     UnauthorizedException,

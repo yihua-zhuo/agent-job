@@ -8,7 +8,7 @@ from sqlalchemy import and_, delete, func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.models.user import UserModel
+from db.models.identity import UserModel
 from pkg.errors.app_exceptions import (
     ConflictException,
     NotFoundException,
@@ -141,6 +141,13 @@ class UserService:
         """Fetch a user by email within a tenant."""
         result = await self.session.execute(
             select(UserModel).where(and_(UserModel.tenant_id == tenant_id, UserModel.email == email))
+        )
+        return result.scalar_one_or_none()
+
+    async def get_user_name(self, user_id: int, tenant_id: int) -> str | None:
+        """Fetch a user's display name by id (tenant-scoped). Returns None if not found."""
+        result = await self.session.execute(
+            select(UserModel.full_name).where(and_(UserModel.id == user_id, UserModel.tenant_id == tenant_id))
         )
         return result.scalar_one_or_none()
 

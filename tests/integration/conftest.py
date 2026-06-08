@@ -33,6 +33,7 @@ if str(_src_root) not in sys.path:
 
 import pytest
 import pytest_asyncio
+from db.models.identity import TenantModel
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -256,8 +257,6 @@ async def _seed_tenant(async_session, tenant_id: int) -> int:
 
     Returns the tenant_id (same as input, for caller convenience).
     """
-    from db.models.tenant import TenantModel
-
     tenant = TenantModel(
         id=tenant_id,
         name="Integration Test Tenant",
@@ -272,8 +271,6 @@ async def _seed_tenant(async_session, tenant_id: int) -> int:
 @pytest_asyncio.fixture
 async def _seed_tenant_2(async_session, tenant_id_2: int) -> int:
     """Seed the second tenant record for cross-tenant isolation tests."""
-    from db.models.tenant import TenantModel
-
     tenant = TenantModel(
         id=tenant_id_2,
         name="Integration Test Tenant 2",
@@ -379,8 +376,6 @@ async def auth_headers_web(db_schema, tenant_id_web, async_session) -> dict[str,
     # Seed tenant only if it doesn't already exist (idempotent — prevents
     # duplicate-key errors when another fixture already created it).
     from sqlalchemy import select
-
-    from db.models.tenant import TenantModel
     from services.user_service import UserService
 
     result = await async_session.execute(select(TenantModel).where(TenantModel.id == tenant_id_web))
@@ -432,7 +427,6 @@ async def auth_headers_tenant_2(async_session, tenant_id_2_web) -> dict[str, str
     os.environ["JWT_SECRET_KEY"] = TEST_JWT_SECRET
     from sqlalchemy import select
 
-    from db.models.tenant import TenantModel
     from services.user_service import UserService
 
     # Seed tenant only if it doesn't already exist (idempotent — prevents

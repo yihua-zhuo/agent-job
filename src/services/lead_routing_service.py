@@ -8,9 +8,8 @@ from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models.customer import CustomerModel
+from db.models.identity import TenantModel, UserModel
 from db.models.routing_rule import RoutingRuleModel
-from db.models.tenant import TenantModel
-from db.models.user import UserModel
 from models.routing import SUPPORTED_FIELDS, ConditionOperator, LeadAssignPreview, RuleCondition
 from pkg.errors.app_exceptions import ValidationException
 
