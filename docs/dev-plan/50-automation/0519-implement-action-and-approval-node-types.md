@@ -79,7 +79,7 @@ TBD - 待验证：`src/workflow/nodes/`目录及基础节点骨架（#518 成果
 
 ### 3.3 新增能力
 
-- **Node class**：`ActionNode(BaseNode)` — 接收 `action_name: str`, `service_name: str`, `` `params` `` 配置，执行注入的 service 方法- **Node class**：`ApprovalNode(BaseNode)` — 接收 `approvers: list[int]`，执行时将 execution标记为 pending，回调后触发后续节点
+- **Node class**：`ActionNode(BaseNode)` — 接收 `action_name: str`, `service_name: str`, TBD - 待验证：params dict 配置字段 配置，执行注入的 service 方法- **Node class**：`ApprovalNode(BaseNode)` — 接收 `approvers: list[int]`，执行时将 execution标记为 pending，回调后触发后续节点
 - **Engine method**：`WorkflowEngine.approve(execution_id: int, approver_id: int, tenant_id: int) -> bool` — 验证审批人权限，调用对应 approval node resume，执行后续节点链
 - **API endpoint**：`POST /workflows/executions/{execution_id}/approve` — 请求体 `{"approver_id": int}`, 返回 `{"success": true, "data": {...}}`
 - **Node execution status**：`PENDING` 状态（approval node 专用），engine 侧识别并等待---

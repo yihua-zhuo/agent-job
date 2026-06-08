@@ -16,7 +16,7 @@
 
 ### 1.1 为什么做
 
-当前仓库已有 [`src/db/models/rbac.py`](../../../src/db/models/rbac.py) 中定义的 ORM 模型类和 `RBACService`，但数据库中尚无对应的物理表。`roles`、`permissions`、`user_roles` 三层表不存在，导致基于数据库的角色-权限赋权和查询无法工作，所有权限判断均依赖代码中硬编码的 `DEFAULT_ROLES` / `DEFAULT_PERMISSIONS` 枚举，而非持久化数据。
+当前仓库已有 [`src/db/models/identity.py`](../../../src/db/models/identity.py) 中定义的 ORM 模型类和 `RBACService`，但数据库中尚无对应的物理表。`roles`、`permissions`、`user_roles` 三层表不存在，导致基于数据库的角色-权限赋权和查询无法工作，所有权限判断均依赖代码中硬编码的 `DEFAULT_ROLES` / `DEFAULT_PERMISSIONS` 枚举，而非持久化数据。
 
 ### 1.2 做完后
 
@@ -34,7 +34,7 @@
 - `alembic upgrade head` exit 0，生成 `roles`/`permissions`/`role_permissions`/`user_roles` 四张表
 - `alembic downgrade -1` exit 0，四张表被正确删除
 - `alembic revision --autogenerate -m drift_check` 产生空迁移（pass 两处）
-- `ruff check src/db/models/rbac.py` exit 0
+- `ruff check src/db/models/identity.py` exit 0
 
 ---
 
@@ -42,7 +42,7 @@
 
 ### 2.1 现有实现
 
-入口文件：[`src/db/models/rbac.py`](../../../src/db/models/rbac.py) L{1}-L{30}
+入口文件：[`src/db/models/identity.py`](../../../src/db/models/identity.py) L{1}-L{30}
 
 ```python
 1:  """RBAC ORM models — roles, permissions, user role assignments."""
@@ -68,7 +68,7 @@
 ### 2.2 涉及文件清单
 
 - 要改：
-  - [`alembic/env.py`](../../../alembic/env.py) — 无需改动，`import db.models` 通过 `pkgutil` 自动发现 `rbac.py` 中的模型
+  - [`alembic/env.py`](../../../alembic/env.py) — 无需改动，`import db.models` 通过 `pkgutil` 自动发现 `identity.py` 中的模型
 - 要建：
   - `alembic/versions/<new_id>_add_rbac_tables.py` — 创建 roles / permissions / role_permissions / user_roles 四张表并 seed 数据
 
@@ -92,15 +92,15 @@
 
 | 路径 | 改动要点 |
 |------|---------|
-| [`src/db/models/rbac.py`](../../../src/db/models/rbac.py) | 无需修改 — ORM 模型已存在且与迁移 schema 一致 |
+| [`src/db/models/identity.py`](../../../src/db/models/identity.py) | 无需修改 — ORM 模型已存在且与迁移 schema 一致 |
 | [`alembic/env.py`](../../../alembic/env.py) | 无需修改 — `import db.models` 已通过 pkgutil 自动发现所有模型 |
 
 ### 3.3 新增能力
 
-- **ORM model**：`RoleModel` in `src/db/models/rbac.py`（已存在，对应 `roles` 表）
-- **ORM model**：`PermissionModel` in `src/db/models/rbac.py`（已存在，对应 `permissions` 表）
-- **ORM model**：`RolePermissionModel` in `src/db/models/rbac.py`（已存在，对应 `role_permissions` 表）
-- **ORM model**：`UserRoleModel` in `src/db/models/rbac.py`（已存在，对应 `user_roles` 表）
+- **ORM model**：`RoleModel` in `src/db/models/identity.py`（已存在，对应 `roles` 表）
+- **ORM model**：`PermissionModel` in `src/db/models/identity.py`（已存在，对应 `permissions` 表）
+- **ORM model**：`RolePermissionModel` in `src/db/models/identity.py`（已存在，对应 `role_permissions` 表）
+- **ORM model**：`UserRoleModel` in `src/db/models/identity.py`（已存在，对应 `user_roles` 表）
 - **Migration**：`alembic upgrade head` 创建 `roles` / `permissions` / `role_permissions` / `user_roles` 四张表，并 seed 5 个预定义角色（owner, admin, manager, member, viewer）和所有 permission 行
 
 ---
@@ -120,7 +120,7 @@
 
 - 多租户：`user_roles` 每条记录必须含 `tenant_id`，所有索引包含 `tenant_id`
 - `roles.tenant_id = 0` 保留给系统预定义角色；自定义角色由具体 tenant_id 区分
-- `alembic/env.py` 中 `import db.models` 通过 `pkgutil.iter_modules` 自动发现 `rbac.py`，无需显式 import
+- `alembic/env.py` 中 `import db.models` 通过 `pkgutil.iter_modules` 自动发现 `identity.py`，无需显式 import
 
 ### 4.4 已知坑
 
@@ -310,7 +310,7 @@ alembic revision --autogenerate -m drift_check
 ### Step 5: Lint 检查
 
 ```bash
-ruff check src/db/models/rbac.py
+ruff check src/db/models/identity.py
 ```
 
 **完成判定**：exit 0（无输出）
@@ -319,7 +319,7 @@ ruff check src/db/models/rbac.py
 
 ## 6. 验收
 
-- [ ] `ruff check src/db/models/rbac.py` → 0 errors
+- [ ] `ruff check src/db/models/identity.py` → 0 errors
 - [ ] `alembic upgrade head` → exit 0 且输出 `done`
 - [ ] `alembic downgrade -1` → exit 0，四张表（roles, permissions, role_permissions, user_roles）已删除
 - [ ] `alembic upgrade head` → exit 0（再次升级成功）
@@ -355,7 +355,7 @@ gh pr create --base master --title "feat(#640): add RBAC database schema and ORM
 
 ## 9. 参考
 
-- 现有 ORM 模型：[`src/db/models/rbac.py`](../../../src/db/models/rbac.py)
+- 现有 ORM 模型：[`src/db/models/identity.py`](../../../src/db/models/identity.py)
 - 现有 RBACService：[`src/services/rbac_service.py`](../../../src/services/rbac_service.py)
 - 同类迁移参考：[`alembic/versions/9d8e7f6a5b3c_add_auth_tables.py`](../../../alembic/versions/9d8e7f6a5b3c_add_auth_tables.py)
 - 父 issue：#38

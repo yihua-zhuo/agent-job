@@ -70,7 +70,7 @@
                 if field not in row or not row[field]:
                     errors.append(f"第{row_num}行: 缺少必填字段 '{field}'")
                 elif field in self.validation_rules:
-                    if not self.validation_rules[field](row[field]):
+                    if not self.validation_rules[field]TBD - 待验证：Python代码块内函数调用(row[field]):
                         errors.append(f"第{row_num}行: 字段 '{field}' 格式不正确")
 
         seen = set()

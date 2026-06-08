@@ -320,9 +320,9 @@ gh pr create --base master --title "feat(auth): backend auth endpoints (#538)" -
 
 | 位置 | 原内容 | 改为 |
 |---|---|---|
-| 元数据/依赖行 | `[Auth 基础层（JWT/加密工具）](../00-foundations/0537-build-backend-auth-base-jwt-encrypt-helpers.md)` | `TBD - 待验证：`../00-foundations/` 下 #537 Auth 基础层文档的实际文件名 |
-| 元数据/赋能行 | `[全系统接入 auth 中间件](../20-sales/...)` | `TBD - 待验证：`../20-sales/` 下全系统接入 auth 中间件板块文档路径 |
-| 元数据/赋能行 | `[用户角色权限体系](../30-tickets/...)` | `TBD - 待验证：`../30-tickets/` 下用户角色权限体系板块文档路径 |
+| 元数据/依赖行 | TBD - 待验证：`../00-foundations/` 下 #537 Auth 基础层文档的实际文件名 | `TBD - 待验证：`../00-foundations/` 下 #537 Auth 基础层文档的实际文件名` |
+| 元数据/赋能行 | TBD - 待验证：`../20-sales/` 下全系统接入 auth 中间件板块文档路径 | `TBD - 待验证：`../20-sales/` 下全系统接入 auth 中间件板块文档路径` |
+| 元数据/赋能行 | TBD - 待验证：`../30-tickets/` 下用户角色权限体系板块文档路径 | `TBD - 待验证：`../30-tickets/` 下用户角色权限体系板块文档路径` |
 | §9 参考 | `#537（Auth 基础层：JWT/加密工具）` | `TBD - 待验证：`../00-foundations/` 下 #537 Auth 基础层文档的实际文件名（Auth 基础层：JWT/加密工具）` |
 
 ---

@@ -365,7 +365,7 @@ gh pr create --base master --title "feat(automation): add workflow_logs ORM mode
 ## 9. 参考
 
 - 同类参考实现：[`src/db/models/workflow.py`](../../../src/db/models/workflow.py) — WorkflowExecutionModel 的 to_dict + FK 风格
-- 同类参考实现：[`src/db/models/rbac.py`](../../../src/db/models/rbac.py) L99-123 — tenant_id + FK + to_dict 组合
+- 同类参考实现：TBD - 待验证：src/db/models/ 下不存在 rbac.py（L99-123 处无 tenant_id + FK + to_dict 组合参考）
 - 父 issue / 关联：#651（workflow 可观测性父 issue）、#658（WorkflowExecutionModel 依赖）
 
 ---
