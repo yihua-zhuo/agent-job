@@ -139,6 +139,9 @@ def make_notification_handler(state):
                 raise ValueError(
                     f"notification count must bind tenant_id and user_id (got keys: {list(params.keys())})"
                 )
+            # Default _unread_only to True so the get_unread_count query (which
+            # always filters by read_at IS NULL in SQL) is handled here. The
+            # list-notifications query binds _unread_only explicitly.
             unread_filter = params.get("_unread_only", True)
             if unread_filter:
                 count = sum(
