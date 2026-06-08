@@ -6,7 +6,7 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 # Lazily-initialised singletons exposed as public module-level names.
@@ -165,10 +165,16 @@ def reset_engine(database_url: str):
 # ---------------------------------------------------------------------------
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency that provides an async SQLAlchemy session.
 
     Commits on normal exit, rolls back on exception, always closes the session.
+
+    The active session is also attached to ``request.state.db`` so that
+    global exception handlers (e.g. ``integrity_error_handler``) can
+    reach it for best-effort rollback when the handler returns a
+    response rather than re-raising into this dependency's rollback
+    path.
 
     Usage::
 
@@ -178,6 +184,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     ensure_engine()
     session: AsyncSession = async_session_maker()  # type: ignore
+    request.state.db = session
     try:
         yield session
         await session.commit()
@@ -186,6 +193,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         raise
     finally:
         await session.close()
+        if getattr(request.state, "db", None) is session:
+            request.state.db = None
 
 
 # Convenience type alias for route dependency injection

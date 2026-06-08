@@ -45,12 +45,11 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
 
     Services should raise ConflictException explicitly when possible; this
     handler catches DB-level integrity errors that escape past the service
-    layer (e.g. UNIQUE or FK violations from raw SQL). Because the
-    IntegrityError leaves the session in a failed-transaction state and the
-    global handler returns a response (rather than re-raising into the
-    ``get_db`` dependency's rollback path), we must roll back explicitly
-    before constructing the response — otherwise the session is unusable
-    for the next request.
+    layer (e.g. UNIQUE or FK violations from raw SQL). The ``get_db()``
+    dependency already rolls back on exception, but this handler returns
+    a response rather than re-raising — so we roll back defensively on
+    the session attached to ``request.state.db`` to avoid leaving the
+    session in a failed-transaction state for the next request.
     """
     request_id = _resolve_request_id(request)
     await _rollback_request_session(request)
@@ -75,10 +74,18 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
 async def _rollback_request_session(request: Request) -> None:
     """Roll back the per-request session if one is attached to ``request.state``.
 
-    Best-effort: if no session is attached (e.g. the route did not depend on
-    ``get_db``), or rollback itself fails, we swallow the error — the user
-    is still going to receive the 409 envelope and a botched rollback is
-    strictly better than a stuck transaction that crashes the next request.
+    Defence-in-depth guard for sessions attached via ``request.state.db``
+    by the ``get_db()`` dependency. The dependency already rolls back on
+    any exception before the global handler runs, so this rollback is
+    redundant in the normal case — but covers the narrow window where a
+    handler returns a response without re-raising (e.g. the IntegrityError
+    handler converts to a 409 envelope).
+
+    Best-effort: if no session is attached (e.g. the route did not depend
+    on ``get_db``), or rollback itself fails, we swallow the error — the
+    user is still going to receive the 409 envelope and a botched rollback
+    is strictly better than a stuck transaction that crashes the next
+    request.
     """
     session = getattr(request.state, "db", None)
     if session is None:

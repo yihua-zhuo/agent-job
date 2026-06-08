@@ -31,13 +31,16 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def _fk_constraint_name(table_name: str, column_name: str) -> str | None:
-    """Return the actual FK constraint name for table_name/column_name, or None.
+    """Return the FK constraint name for table_name/column_name, or None.
 
-    Looks up pg_constraint to find a single FK constraint on the given column.
-    Returns None if no constraint exists. If multiple constraints are found
-    (which would be a schema problem in its own right), we return the first
-    match and let the caller decide — Alembic's batch_alter_table will surface
-    a clear error.
+    Single-column FK lookups only. For composite FKs, the conkey array
+    contains multiple attnums and the equality check would match the first
+    column only; expand the query to match all conkey elements for
+    composite support.
+
+    Returns None if no constraint exists. If multiple constraints match
+    (which would be a schema problem in its own right), the caller surfaces
+    a clear error via Alembic's batch_alter_table.
     """
     bind = op.get_bind()
     row = bind.execute(
@@ -60,11 +63,10 @@ def _fk_constraint_name(table_name: str, column_name: str) -> str | None:
 def upgrade() -> None:
     """Drop and recreate the FK with ondelete='CASCADE'.
 
-    Wrapped in batch_alter_table so the constraint change is atomic:
-    if create_foreign_key fails, the dropped constraint is restored
-    in the same transaction and the column is never left without
-    referential integrity. The constraint name is resolved at runtime
-    so a rename by a concurrent migration doesn't crash this one.
+    The drop and create run in the same Alembic transaction, so the
+    column is never left without referential integrity. The constraint
+    name is resolved at runtime so a rename by a concurrent migration
+    doesn't crash this one.
     """
     fk_name = _fk_constraint_name("workflow_executions", "tenant_id")
     with op.batch_alter_table("workflow_executions") as batch_op:

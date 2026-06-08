@@ -60,10 +60,10 @@ class WorkflowExecutionModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workflow_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
     )
     tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", server_default="manual", nullable=False)
     triggered_by: Mapped[int | None] = mapped_column(
@@ -99,10 +99,10 @@ class WorkflowNodeModel(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     workflow_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
     )
     tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
     node_type: Mapped[str] = mapped_column(String(50), default="action", server_default="action", nullable=False)
     definition_json: Mapped[dict] = mapped_column(

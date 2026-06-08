@@ -39,6 +39,7 @@ def upgrade() -> None:
         "workflows",
         "created_by",
         existing_type=sa.Integer(),
+        existing_nullable=False,
         nullable=True,
     )
 
@@ -49,8 +50,8 @@ def downgrade() -> None:
     After the upgrade, existing rows may have NULL created_by. The
     downgrade backfills NULLs to the smallest existing user id in the
     same tenant when possible; if no users exist for a tenant, the
-    backfill uses NULL (which causes the alter_column to fail and
-    surface the issue to the operator rather than silently inserting
+    backfill leaves the row NULL (which causes the alter_column to fail
+    and surface the issue to the operator rather than silently inserting
     a fake sentinel value).
 
     The original migration (b2c3dce4b714) used nullable=False with no
@@ -59,19 +60,21 @@ def downgrade() -> None:
     inserted id is always a real, referentially-valid user row.
     """
     bind = op.get_bind()
-    # Backfill NULL created_by with the smallest user id in the same
-    # tenant. The WHERE clause guarantees w.created_by IS NULL, so the
-    # second COALESCE argument would be a dead value; we rely on the
-    # subquery returning NULL naturally for orphan tenants with no users
-    # (which will then fail the NOT NULL constraint and surface the
-    # issue to the operator rather than silently inserting a fake
-    # sentinel value).
+    # CTE-based backfill: precompute the per-tenant minimum user id once,
+    # then JOIN. This is O(N + M) where N = workflows with NULL
+    # created_by and M = users — a correlated subquery would be O(N × M)
+    # on a large tenant.
     bind.execute(
         text(
             """
+            WITH per_tenant_user AS (
+                SELECT tenant_id, MIN(id) AS uid FROM users GROUP BY tenant_id
+            )
             UPDATE workflows w
-            SET created_by = (SELECT MIN(u.id) FROM users u WHERE u.tenant_id = w.tenant_id)
-            WHERE w.created_by IS NULL
+            SET created_by = ptu.uid
+            FROM per_tenant_user ptu
+            WHERE w.tenant_id = ptu.tenant_id
+              AND w.created_by IS NULL
             """
         )
     )
@@ -79,5 +82,6 @@ def downgrade() -> None:
         "workflows",
         "created_by",
         existing_type=sa.Integer(),
+        existing_nullable=True,
         nullable=False,
     )
