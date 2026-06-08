@@ -9,10 +9,10 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.exception_handlers import register_exception_handlers
 from api.routers.recommendations import recommendations_router
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from main import register_exception_handlers
 from pkg.errors.app_exceptions import NotFoundException
 from services.recommendation_service import CachedRecommendationResult
 from services.sales_recommendation import SalesActionRecommendation

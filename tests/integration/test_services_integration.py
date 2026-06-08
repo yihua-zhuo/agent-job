@@ -63,10 +63,10 @@ class TestWorkflowIntegration:
         uid = await self._seed_user(tid, async_session)
         svc = WorkflowService(async_session)
         result = await svc.create_workflow(
+            tenant_id=tid,
             name="Lead Follow-up",
             trigger_type="lead_created",
             created_by=uid,
-            tenant_id=tid,
             description="Auto-follow-up on new leads",
             conditions=[{"field": "status", "operator": "==", "value": "new"}],
             actions=[{"type": "email.send", "template": "welcome"}],
@@ -83,15 +83,15 @@ class TestWorkflowIntegration:
         assert fetched.conditions == [{"field": "status", "operator": "==", "value": "new"}]
         assert fetched.actions == [{"type": "email.send", "template": "welcome"}]
 
-    async def test_workflow_activate_and_pause(self, db_schema, tenant_id, async_session):
+    async def test_workflow_activate_and_pause(self, db_schema, async_session):
         tid = await self._seed_tenant(async_session)
         uid = await self._seed_user(tid, async_session)
         svc = WorkflowService(async_session)
         created = await svc.create_workflow(
+            tenant_id=tid,
             name="Activation Test",
             trigger_type="deal_created",
             created_by=uid,
-            tenant_id=tid,
             conditions=[],
             actions=[],
         )
@@ -110,15 +110,15 @@ class TestWorkflowIntegration:
         refetched_paused = await svc.get_workflow(created.id, tenant_id=tid)
         assert refetched_paused.status == "paused"
 
-    async def test_workflow_evaluate_conditions(self, db_schema, tenant_id, async_session):
+    async def test_workflow_evaluate_conditions(self, db_schema, async_session):
         tid = await self._seed_tenant(async_session)
         uid = await self._seed_user(tid, async_session)
         svc = WorkflowService(async_session)
         created = await svc.create_workflow(
+            tenant_id=tid,
             name="Condition Test",
             trigger_type="deal_created",
             created_by=uid,
-            tenant_id=tid,
             conditions=[
                 {"field": "amount", "operator": ">=", "value": 10000},
                 {"field": "stage", "operator": "contains", "value": "qualified"},
@@ -127,44 +127,100 @@ class TestWorkflowIntegration:
         )
 
         match = await svc.evaluate_conditions(
-            created.id, {"amount": 50000, "stage": "qualified"}, tenant_id=tid,
+            workflow_id=created.id,
+            context={"amount": 50000, "stage": "qualified"},
+            tenant_id=tid,
         )
         assert match is True
 
         no_match = await svc.evaluate_conditions(
-            created.id, {"amount": 500, "stage": "new"}, tenant_id=tid,
+            workflow_id=created.id,
+            context={"amount": 500, "stage": "new"},
+            tenant_id=tid,
         )
         assert no_match is False
 
         # Partial match: amount matches but stage doesn't — should fail (all must match)
         partial_match = await svc.evaluate_conditions(
-            created.id, {"amount": 50000, "stage": "new"}, tenant_id=tid,
+            workflow_id=created.id,
+            context={"amount": 50000, "stage": "new"},
+            tenant_id=tid,
         )
         assert partial_match is False
 
         # Empty conditions list — should match everything
         empty_cond_wf = await svc.create_workflow(
+            tenant_id=tid,
             name="Empty Conditions",
             trigger_type="manual",
             created_by=uid,
-            tenant_id=tid,
             conditions=[],
             actions=[],
         )
         empty_match = await svc.evaluate_conditions(
-            empty_cond_wf.id, {"anything": "goes"}, tenant_id=tid,
+            workflow_id=empty_cond_wf.id,
+            context={"anything": "goes"},
+            tenant_id=tid,
         )
         assert empty_match is True
 
-    async def test_workflow_execute_not_found(self, db_schema, tenant_id, async_session):
+    async def test_workflow_execute_not_found(self, db_schema, async_session):
         """execute_workflow with a non-existent id raises NotFoundException."""
         svc = WorkflowService(async_session)
+        # Use a non-existent tenant_id to confirm the lookup fails fast.
         with pytest.raises(NotFoundException):
             await svc.execute_workflow(
                 workflow_id=999_999_999,
                 context={"amount": 1000},
-                tenant_id=tenant_id,
+                tenant_id=0,
             )
+
+    async def test_workflow_cross_tenant_isolation(
+        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant, _seed_tenant_2
+    ):
+        """WorkflowService.get_workflow must raise NotFoundException when called
+        with a different tenant_id than the one that owns the workflow (Rule 126)."""
+        svc = WorkflowService(async_session)
+        uid1 = await self._seed_user(tenant_id, async_session)
+        uid2 = await self._seed_user(tenant_id_2, async_session)
+
+        # Create a workflow under tenant 1
+        wf1 = await svc.create_workflow(
+            tenant_id=tenant_id,
+            name="T1 Workflow",
+            trigger_type="manual",
+            created_by=uid1,
+            conditions=[],
+            actions=[],
+        )
+
+        # Create a workflow under tenant 2
+        wf2 = await svc.create_workflow(
+            tenant_id=tenant_id_2,
+            name="T2 Workflow",
+            trigger_type="manual",
+            created_by=uid2,
+            conditions=[],
+            actions=[],
+        )
+
+        # Each tenant can read its own workflow
+        fetched1 = await svc.get_workflow(wf1.id, tenant_id=tenant_id)
+        assert fetched1.id == wf1.id
+        fetched2 = await svc.get_workflow(wf2.id, tenant_id=tenant_id_2)
+        assert fetched2.id == wf2.id
+
+        # Cross-tenant reads must raise NotFoundException
+        with pytest.raises(NotFoundException):
+            await svc.get_workflow(wf1.id, tenant_id=tenant_id_2)
+        with pytest.raises(NotFoundException):
+            await svc.get_workflow(wf2.id, tenant_id=tenant_id)
+
+        # Cross-tenant state transitions must also raise NotFoundException
+        with pytest.raises(NotFoundException):
+            await svc.activate_workflow(wf1.id, tenant_id=tenant_id_2)
+        with pytest.raises(NotFoundException):
+            await svc.pause_workflow(wf2.id, tenant_id=tenant_id)
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────

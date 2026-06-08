@@ -1,4 +1,12 @@
-"""Unit tests for WorkflowModel."""
+"""Unit tests for WorkflowModel.
+
+Note: constraint enforcement for nullable=False fields (tenant_id, name,
+trigger_type) is exercised by integration tests against a real DB.
+At the Python level, SQLAlchemy constructs instances lazily without
+validating non-null fields; a missing required field will only fail
+at flush time. See tests/integration/test_workflow_model_integration.py
+for constraint coverage.
+"""
 
 from datetime import UTC, datetime
 
@@ -106,6 +114,19 @@ class TestWorkflowModel:
         assert d["created_at"] is None
         assert d["updated_at"] is None
 
+    def test_model_buildable_without_required_fields_at_python_level(self):
+        """SQLAlchemy constructs instances lazily. nullable=False enforcement
+        is a DB-level constraint, not a Python-level one. This test documents
+        that gap — constraint enforcement is covered by integration tests
+        (test_workflow_model_integration.py).
+        """
+        # No tenant_id, name, trigger_type — all nullable=False in the model.
+        # Python construction succeeds; DB flush would fail.
+        workflow = WorkflowModel()
+        assert workflow.tenant_id is None
+        assert workflow.name is None
+        assert workflow.trigger_type is None
+
 
 class TestWorkflowExecutionModel:
     """Tests for WorkflowExecutionModel."""
@@ -141,6 +162,7 @@ class TestWorkflowExecutionModel:
         execution = WorkflowExecutionModel(
             id=1,
             workflow_id=10,
+            tenant_id=1,
             trigger_type="manual",
             triggered_by=5,
             started_at=now,
