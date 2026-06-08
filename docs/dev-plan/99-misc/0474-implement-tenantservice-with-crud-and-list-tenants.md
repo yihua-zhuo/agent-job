@@ -139,7 +139,7 @@ N/A — 无新依赖引入，使用项目已有包（SQLAlchemy 2.x async、pyte
 
 ### Step 1:确认 Tenant ORM 模型并设计 tenant_handler mock
 
-确认 #473 已创建的 `Tenant` ORM模型的字段名（`id`, `tenant_uuid`, `name`, `status`, `plan`, `quota`, `usage` 等），读取 [`src/db/models/tenant.py`](../../../src/db/models/tenant.py) 确认 schema。参考 `make_customer_handler` 工厂模式，在 `tests/unit/conftest.py` 新增 `make_tenant_handler(state)`，支持 SELECT / INSERT / UPDATE / DELETE 四类操作的 mock拦截。
+确认 #473 已创建的 `Tenant` ORM模型的字段名（`id`, `tenant_uuid`, `name`, `status`, `plan`, `quota`, `usage` 等），读取 `src/db/models/tenant.py` TBD - 待验证：#473 合并后确认文件路径与 schema。参考 `make_customer_handler` 工厂模式，在 `tests/unit/conftest.py` 新增 `make_tenant_handler(state)`，支持 SELECT / INSERT / UPDATE / DELETE 四类操作的 mock拦截。
 
 操作：
 - a) 读取 `src/db/models/tenant.py`，确认字段名和 `__tablename__`

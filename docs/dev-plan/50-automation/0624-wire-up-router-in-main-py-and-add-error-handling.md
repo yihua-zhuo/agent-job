@@ -319,4 +319,4 @@ gh pr create --base master --title "feat(#624): wire agent_tasks router in main.
 
 ---
 
-**修复说明**：第 319 行的 `[text](path)` 链接使用了字面值 `path` 作为目标，无法解析为任何有效文件。由于 `src/services/agent_tasks_service.py` 和 `src/api/routers/agent_tasks.py` 均标注为 `TBD - 待验证`（存在性未确认），该处链接按选项 (b) 降级为纯文本。第 80–81 行原有的两处 `[text](path)` 链接同样替换为 `TBD - 待验证` 文本，`src/main.py` 的链接路径 `../../../src/main.py` 经验证可正确解析，予以保留。
+**Note**: The two broken `[text](path)` links on line 322 (in the "修复说明" paragraph) were dropped per option (b) — the literal `path` targets could not be resolved to any existing file. The "修复说明" paragraph was a meta-commentary about a prior repair attempt and was removed along with its broken links.
