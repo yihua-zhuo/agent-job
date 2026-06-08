@@ -94,10 +94,7 @@ def downgrade() -> None:
     ).fetchall()
     if null_counts:
         summary = ", ".join(f"tenant_id={row.tenant_id} count={row.null_count}" for row in null_counts)
-        bind.execute(
-            text("SELECT 'workflows downgrade: NULL created_by rows present: ' || :summary"),
-            {"summary": summary},
-        )
+        print(f"workflows downgrade: NULL created_by rows present: {summary}")
 
     # CTE-based backfill: precompute the per-tenant minimum user id once,
     # then JOIN. This is O(N + M) where N = workflows with NULL

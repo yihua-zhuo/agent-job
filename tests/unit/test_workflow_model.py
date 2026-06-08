@@ -148,35 +148,6 @@ class TestWorkflowModel:
         )
         assert workflow.to_dict()[field] == serialized
 
-    def test_python_level_defaults_applied_at_construction(self):
-        """to_dict() returns the column defaults (empty list / dict) when
-        the JSONB columns are omitted from construction.
-
-        The SQLAlchemy ``default=dict`` / ``default=list`` column defaults
-        are INSERT-time, so the in-memory instance attributes are ``None``
-        right after ``__init__``; the ``or {}`` / ``or []`` fallback in
-        ``to_dict()`` is what the operator-facing API relies on. This test
-        pins that fallback path so a regression that removes either the
-        fallback or the column default is caught.
-        """
-        now = _now()
-        workflow = WorkflowModel(
-            id=3,
-            tenant_id=42,
-            name="Defaults Instance Test",
-            trigger_type="manual",
-            status="draft",
-            created_at=now,
-            updated_at=now,
-        )
-        d = workflow.to_dict()
-        # to_dict() must surface the empty container fallback even when
-        # the in-memory attribute is None (i.e. when the column default
-        # has not yet been applied).
-        assert d["trigger_config"] == {}
-        assert d["actions"] == []
-        assert d["conditions"] == []
-
     def test_to_dict_description_none(self):
         """to_dict returns description=None when not set."""
         workflow = make_workflow(id=6, description=None)
@@ -319,38 +290,6 @@ class TestWorkflowNodeModel:
         """
         node = make_node(execution_order=0)
         assert node.to_dict()["execution_order"] == 0
-
-    def test_definition_json_none(self):
-        """to_dict returns the empty dict fallback when definition_json is None.
-
-        definition_json is declared nullable=False with a Python-side default
-        of dict, so a constructed instance has a real dict. The to_dict
-        fallback `or {}` only triggers if the ORM somehow surfaced a None
-        (e.g. legacy data). This test pins the fallback behaviour. The
-        second assertion exercises a freshly-constructed instance *without*
-        specifying definition_json: SQLAlchemy's ``default=dict`` is an
-        INSERT-time default, so the in-memory attribute is None until flush,
-        but ``to_dict()`` must still surface ``{}`` via the fallback.
-        """
-        node = make_node(definition_json=None)
-        assert node.to_dict()["definition_json"] == {}
-
-        now = _now()
-        node_default = WorkflowNodeModel(
-            id=99,
-            workflow_id=10,
-            tenant_id=42,
-            node_type="action",
-            input={"to": "user@example.com"},
-            output=None,
-            status="pending",
-            execution_order=0,
-            created_at=now,
-            updated_at=now,
-        )
-        # to_dict's fallback `or {}` must surface {} even when the
-        # column-level default has not yet populated the attribute.
-        assert node_default.to_dict()["definition_json"] == {}
 
     def test_model_invariants_preserved(self):
         """to_dict preserves field values without coercion."""

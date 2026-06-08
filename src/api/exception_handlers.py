@@ -209,6 +209,7 @@ def _resolve_request_id(request: Request) -> str:
     """
     request_id = getattr(request.state, "request_id", None)
     if request_id is None:
+        # Health-check / internal calls may bypass the request-id middleware.
         request_id = uuid.uuid4().hex
         request.state.request_id = request_id
     return request_id

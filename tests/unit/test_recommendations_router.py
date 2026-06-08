@@ -62,11 +62,11 @@ def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
     app.add_exception_handler(RequestValidationError, _validation_error_handler)
     app.add_exception_handler(Exception, _generic_exception_handler)
 
-    async def _noop_session():
+    async def _empty_mock_session():
         session = AsyncMock()
         yield session
 
-    app.dependency_overrides[get_db] = _noop_session
+    app.dependency_overrides[get_db] = _empty_mock_session
 
     if auth_ctx is not None:
         app.dependency_overrides[require_auth] = lambda: auth_ctx

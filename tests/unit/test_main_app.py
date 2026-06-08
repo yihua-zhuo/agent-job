@@ -5,6 +5,22 @@ import pytest
 from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 
+
+@pytest.fixture(autouse=True)
+def _patch_main_db_dependencies():
+    """Patch DB-touching functions before any test imports main.
+
+    ``src/main.py`` executes ``app = create_app()`` at module level (line 82),
+    and ``create_app`` registers the lifespan handler that calls
+    ``ensure_engine()`` and ``dispose_async_engine()``. If a test imports
+    ``main`` before the patch context activates, those engine calls fire
+    against the real DB. Autouse-patching at fixture time keeps the import
+    safe regardless of which test runs first.
+    """
+    with patch("db.connection.ensure_engine"), patch("db.connection.dispose_async_engine"), \
+         patch("httpx.AsyncClient"):
+        yield
+
 # ---------------------------------------------------------------------------
 # Helpers: build a minimal app with the same exception handlers as main.py
 # ---------------------------------------------------------------------------
@@ -179,33 +195,29 @@ class TestCreateApp:
         if str(src) not in sys.path:
             sys.path.insert(0, str(src))
 
-        with patch("db.connection.ensure_engine"):
-            from main import create_app
-            app = create_app()
-            assert isinstance(app, FastAPI)
+        from main import create_app
+        app = create_app()
+        assert isinstance(app, FastAPI)
 
     def test_app_includes_customers_router(self):
         """Routes for /api/v1/customers are registered."""
-        with patch("db.connection.ensure_engine"):
-            from main import create_app
-            app = create_app()
-            routes = [r.path for r in app.routes]
-            customer_routes = [r for r in routes if "customers" in r]
-            assert len(customer_routes) > 0
+        from main import create_app
+        app = create_app()
+        routes = [r.path for r in app.routes]
+        customer_routes = [r for r in routes if "customers" in r]
+        assert len(customer_routes) > 0
 
     def test_app_includes_sales_router(self):
         """Routes for /api/v1/sales are registered."""
-        with patch("db.connection.ensure_engine"):
-            from main import create_app
-            app = create_app()
-            routes = [r.path for r in app.routes]
-            sales_routes = [r for r in routes if "sales" in r]
-            assert len(sales_routes) > 0
+        from main import create_app
+        app = create_app()
+        routes = [r.path for r in app.routes]
+        sales_routes = [r for r in routes if "sales" in r]
+        assert len(sales_routes) > 0
 
     def test_app_has_health_check(self):
         """GET / health check route is present."""
-        with patch("db.connection.ensure_engine"):
-            from main import create_app
-            app = create_app()
-            routes = [r.path for r in app.routes]
-            assert "/" in routes
+        from main import create_app
+        app = create_app()
+        routes = [r.path for r in app.routes]
+        assert "/" in routes

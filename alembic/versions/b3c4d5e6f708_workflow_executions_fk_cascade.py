@@ -36,13 +36,14 @@ depends_on: Union[str, Sequence[str], None] = None
 _FK_NAME = "fk_workflow_executions_tenant_id"
 
 
-def _find_existing_fk_name() -> str:
-    """Return the FK constraint name on workflow_executions.tenant_id.
+def _find_existing_fk_name() -> str | None:
+    """Return the FK constraint name on workflow_executions.tenant_id, or None.
 
-    Looks up pg_constraint to find the FK on the tenant_id column. Falls
-    back to the hardcoded ``_FK_NAME`` if no constraint is found, so the
-    migration is safe to run on databases where the FK was never created
-    (e.g. partial application state).
+    Looks up pg_constraint to find the FK on the tenant_id column. Returns
+    ``None`` if no constraint exists so the caller can guard the drop —
+    passing a hardcoded fallback to ``drop_constraint`` would fail with
+    'constraint does not exist' on databases where the FK was never
+    created (e.g. partial application state).
     """
     bind = op.get_bind()
     name = bind.execute(
@@ -58,7 +59,7 @@ def _find_existing_fk_name() -> str:
             """
         )
     ).scalar()
-    return name or _FK_NAME
+    return name
 
 
 def upgrade() -> None:
@@ -69,9 +70,10 @@ def upgrade() -> None:
     """
     fk_name = _find_existing_fk_name()
     with op.batch_alter_table("workflow_executions") as batch_op:
-        batch_op.drop_constraint(fk_name, type_="foreignkey")
+        if fk_name:
+            batch_op.drop_constraint(fk_name, type_="foreignkey")
         batch_op.create_foreign_key(
-            fk_name,
+            _FK_NAME,
             "tenants",
             ["tenant_id"],
             ["id"],
@@ -87,11 +89,12 @@ def downgrade() -> None:
     """
     fk_name = _find_existing_fk_name()
     with op.batch_alter_table("workflow_executions") as batch_op:
-        batch_op.drop_constraint(fk_name, type_="foreignkey")
+        if fk_name:
+            batch_op.drop_constraint(fk_name, type_="foreignkey")
         # The ondelete value here matches the original pre-drift
         # state from 9e805b1493a6 (no ondelete = NO ACTION).
         batch_op.create_foreign_key(
-            fk_name,
+            _FK_NAME,
             "tenants",
             ["tenant_id"],
             ["id"],

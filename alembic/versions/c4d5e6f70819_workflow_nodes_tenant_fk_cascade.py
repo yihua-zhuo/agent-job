@@ -95,16 +95,16 @@ def upgrade() -> None:
         )
 
     fk_name = _find_existing_fk_name("workflow_nodes")
-    with op.batch_alter_table("workflow_nodes") as batch_op:
-        if fk_name is not None:
-            batch_op.drop_constraint(fk_name, type_="foreignkey")
-        batch_op.create_foreign_key(
-            _FK_NAME,
-            "tenants",
-            ["tenant_id"],
-            ["id"],
-            ondelete="CASCADE",
-        )
+    if fk_name is not None:
+        op.drop_constraint(fk_name, "workflow_nodes", type_="foreignkey")
+    op.create_foreign_key(
+        _FK_NAME,
+        "workflow_nodes",
+        "tenants",
+        ["tenant_id"],
+        ["id"],
+        ondelete="CASCADE",
+    )
 
 
 def downgrade() -> None:
@@ -124,14 +124,14 @@ def downgrade() -> None:
     existing CASCADE FK and remove the create entirely.
     """
     fk_name = _find_existing_fk_name("workflow_nodes")
-    with op.batch_alter_table("workflow_nodes") as batch_op:
-        if fk_name is not None:
-            batch_op.drop_constraint(fk_name, type_="foreignkey")
-        # NOTE: This creates a NO-ACTION FK, NOT a removal of the FK.
-        # See the docstring for the rationale.
-        batch_op.create_foreign_key(
-            _FK_NAME,
-            "tenants",
-            ["tenant_id"],
-            ["id"],
-        )
+    if fk_name is not None:
+        op.drop_constraint(fk_name, "workflow_nodes", type_="foreignkey")
+    # NOTE: This creates a NO-ACTION FK, NOT a removal of the FK.
+    # See the docstring for the rationale.
+    op.create_foreign_key(
+        _FK_NAME,
+        "workflow_nodes",
+        "tenants",
+        ["tenant_id"],
+        ["id"],
+    )

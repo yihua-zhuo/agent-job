@@ -66,7 +66,7 @@ class WorkflowModel(Base):
     __table_args__ = (Index("ix_workflows_tenant_id_status", "tenant_id", "status"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
+    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(String(2000), nullable=True)
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", server_default="manual", nullable=False)
@@ -76,7 +76,7 @@ class WorkflowModel(Base):
     actions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
     conditions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
     status: Mapped[str] = mapped_column(String(50), default="draft", server_default="draft", nullable=False)
-    created_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -113,11 +113,11 @@ class WorkflowExecutionModel(Base):
         Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
     )
     tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", server_default="manual", nullable=False)
     triggered_by: Mapped[int | None] = mapped_column(
-        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
     )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -152,7 +152,7 @@ class WorkflowNodeModel(Base):
         Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
     )
     tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
     )
     node_type: Mapped[str] = mapped_column(String(50), default="action", server_default="action", nullable=False)
     definition_json: Mapped[dict[str, Any]] = mapped_column(
