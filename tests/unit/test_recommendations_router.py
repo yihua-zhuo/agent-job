@@ -1,13 +1,14 @@
 """Unit tests for src/api/routers/recommendations.py."""
 
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from api.routers.recommendations import recommendations_router
+from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from main import register_exception_handlers
 from pkg.errors.app_exceptions import NotFoundException
@@ -27,6 +28,8 @@ def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
     app = FastAPI()
     app.include_router(recommendations_router)
     register_exception_handlers(app)
+
+    app.dependency_overrides[get_db] = lambda: MagicMock()
 
     if auth_ctx is not None:
         app.dependency_overrides[require_auth] = lambda: auth_ctx

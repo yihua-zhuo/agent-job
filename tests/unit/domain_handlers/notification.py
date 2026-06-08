@@ -139,6 +139,9 @@ def make_notification_handler(state):
                 raise ValueError(
                     f"notification count must bind tenant_id and user_id (got keys: {list(params.keys())})"
                 )
+            # NOTE: The service calls result.scalar_one_or_none() which unwraps
+            # the first element of the list. The count must be the sole element
+            # for MockResult.scalar_one() (which returns first[0]) to match.
             # Default _unread_only to True so the get_unread_count query (which
             # always filters by read_at IS NULL in SQL) is handled here. The
             # list-notifications query binds _unread_only explicitly.
@@ -166,7 +169,12 @@ def make_notification_handler(state):
                 )
             # _unread_only may be absent when SQLAlchemy uses a SQL default; fall through
             # to None so other handlers can respond, rather than crashing here.
+            # Logging helps diagnose handler routing bugs in test failures.
             if "_unread_only" not in params:
+                import logging
+                logging.getLogger(__name__).debug(
+                    "list-notifications: _unread_only not in params, falling through"
+                )
                 return None
             unread_filter = params["_unread_only"]
             page_size = max(params.get("limit", 20), 1)

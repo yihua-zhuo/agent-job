@@ -14,8 +14,10 @@ def mock_db_session():
     notification_handler = make_notification_handler(state)
     user_handler = make_user_handler(state)
     session = make_mock_session([notification_handler, user_handler], state=state)
-    # Seed a user so get_unread_count's user-existence check succeeds
-    # and the unread-counting path is actually exercised.
+    # NOTE: state.users[1] is seeded directly to bypass the user handler's
+    # INSERT path (which would default tenant_id to 0). The tenant_id field
+    # below is the one validated by the SELECT handler — the user handler's
+    # INSERT path is not exercised by this test.
     state.users[1] = {
         "id": 1,
         "tenant_id": 1,
@@ -36,8 +38,14 @@ class TestNotificationService:
     """Tests for NotificationService."""
 
     @pytest.mark.asyncio
-    async def test_mark_as_read_updates_unread_count(self, mock_db_session):
-        """get_unread_count returns correct count before and after marking a notification as read."""
+    async def test_mark_as_read_count_transition_after_store_update(self, mock_db_session):
+        """get_unread_count returns correct count after marking a notification as read.
+
+        The mock flush path does not propagate ORM-style mutations back to
+        the in-memory store, so the test validates the count transition
+        (3 → 2) by updating the store directly after mark_as_read. This
+        exercises the count query's read_at IS NULL filtering end-to-end.
+        """
         svc = NotificationService(mock_db_session)
 
         # Send three notifications for user_id=1, tenant_id=1
@@ -56,13 +64,11 @@ class TestNotificationService:
         count_before = await svc.get_unread_count(user_id=1, tenant_id=1)
         assert count_before == 3
 
-        # Mark the first notification as read. The mock session's SELECT
-        # path returns MockRow objects that don't support full ORM-style
-        # mutation + flush, so we call mark_as_read (which exercises the
-        # SELECT + NotFoundException path) and then update the in-memory
-        # store to reflect the read state change. The subsequent
-        # get_unread_count call then exercises the count query's
-        # read_at IS NULL filtering end-to-end.
+        # mark_as_read's SELECT path is exercised here. The mock flush
+        # does not propagate the read_at mutation back to the store, so
+        # we update the store directly to reflect the read state. The
+        # subsequent get_unread_count then validates the read_at IS NULL
+        # filter end-to-end.
         first_id = created[0].id
         await svc.mark_as_read(notification_id=first_id, tenant_id=1)
         mock_db_session._state._notifications[first_id]["read_at"] = (
