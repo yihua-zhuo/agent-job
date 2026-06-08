@@ -51,7 +51,6 @@ def upgrade() -> None:
             op.f("ix_workflows_tenant_id_status"),
             "workflows",
             ["tenant_id", "status"],
-            unique=False,
             postgresql_concurrently=True,
         )
 

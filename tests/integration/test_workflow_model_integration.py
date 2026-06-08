@@ -193,8 +193,9 @@ class TestWorkflowModelIntegration:
         assert execution.status == "success"
         assert execution.result == {"steps_executed": 2, "duration_ms": 150}
         assert execution.completed_at is not None
-        # Assert year is sane — a direct >= comparison is flaky because now(UTC) can precede the just-persisted started_at by microseconds.
-        assert execution.completed_at.year > 2020
+        # started_at and completed_at are both auto-set by the DB; assert
+        # ordering rather than exact values.
+        assert execution.started_at <= execution.completed_at
 
     async def test_workflow_update_persists(self, db_schema, _seed_tenant, async_session):
         """Updating a workflow field and flushing persists the change."""

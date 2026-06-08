@@ -18,6 +18,7 @@ from middleware.logging import LoggingMiddleware, logger
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle — keep async engine warm."""
     ensure_engine()
+    # Shared LLM HTTP client — consumed by services that call external LLM APIs.
     app.state.llm_http_client = httpx.AsyncClient(timeout=30.0)
     logger.info("app_started", env=settings.env, app_name=settings.app_name)
     yield

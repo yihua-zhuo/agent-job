@@ -34,7 +34,25 @@ def upgrade() -> None:
 
     No data backfill needed: we are making a NOT NULL column NULLable,
     which is always safe (no constraint violation can occur).
+
+    Guarded against re-runs: a second invocation against an already-nullable
+    column is a no-op. While ``alter_column ... nullable=True`` is harmless
+    in PostgreSQL, skipping it keeps the migration aligned with the
+    re-run-guard pattern used by the sibling index migration
+    (a1c2d3e4f5a7) and surfaces drift more loudly if the column is in an
+    unexpected state.
     """
+    bind = op.get_bind()
+    is_nullable = bind.execute(
+        text(
+            """
+            SELECT is_nullable FROM information_schema.columns
+            WHERE table_name = 'workflows' AND column_name = 'created_by'
+            """
+        )
+    ).scalar()
+    if is_nullable == "YES":
+        return
     op.alter_column(
         "workflows",
         "created_by",
@@ -60,6 +78,27 @@ def downgrade() -> None:
     inserted id is always a real, referentially-valid user row.
     """
     bind = op.get_bind()
+    # Diagnostic: log the per-tenant NULL row counts *before* the backfill
+    # so operators can see which tenants will be affected if the backfill
+    # is unable to find a user.
+    null_counts = bind.execute(
+        text(
+            """
+            SELECT tenant_id, COUNT(*) AS null_count
+            FROM workflows
+            WHERE created_by IS NULL
+            GROUP BY tenant_id
+            ORDER BY tenant_id
+            """
+        )
+    ).fetchall()
+    if null_counts:
+        summary = ", ".join(f"tenant_id={row.tenant_id} count={row.null_count}" for row in null_counts)
+        bind.execute(
+            text("SELECT 'workflows downgrade: NULL created_by rows present: ' || :summary"),
+            {"summary": summary},
+        )
+
     # CTE-based backfill: precompute the per-tenant minimum user id once,
     # then JOIN. This is O(N + M) where N = workflows with NULL
     # created_by and M = users — a correlated subquery would be O(N × M)

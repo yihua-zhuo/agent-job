@@ -179,20 +179,14 @@ class TestCreateApp:
         if str(src) not in sys.path:
             sys.path.insert(0, str(src))
 
-        with (
-            patch("db.connection.ensure_engine"),
-            patch("db.connection._dispose_engine_unsafe"),
-        ):
+        with patch("db.connection.ensure_engine"):
             from main import create_app
             app = create_app()
             assert isinstance(app, FastAPI)
 
     def test_app_includes_customers_router(self):
         """Routes for /api/v1/customers are registered."""
-        with (
-            patch("db.connection.ensure_engine"),
-            patch("db.connection._dispose_engine_unsafe"),
-        ):
+        with patch("db.connection.ensure_engine"):
             from main import create_app
             app = create_app()
             routes = [r.path for r in app.routes]
@@ -201,10 +195,7 @@ class TestCreateApp:
 
     def test_app_includes_sales_router(self):
         """Routes for /api/v1/sales are registered."""
-        with (
-            patch("db.connection.ensure_engine"),
-            patch("db.connection._dispose_engine_unsafe"),
-        ):
+        with patch("db.connection.ensure_engine"):
             from main import create_app
             app = create_app()
             routes = [r.path for r in app.routes]
@@ -213,10 +204,7 @@ class TestCreateApp:
 
     def test_app_has_health_check(self):
         """GET / health check route is present."""
-        with (
-            patch("db.connection.ensure_engine"),
-            patch("db.connection._dispose_engine_unsafe"),
-        ):
+        with patch("db.connection.ensure_engine"):
             from main import create_app
             app = create_app()
             routes = [r.path for r in app.routes]

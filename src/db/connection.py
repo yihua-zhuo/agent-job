@@ -26,7 +26,6 @@ def _build_engine(url: str) -> AsyncEngine:
         user_part, password = credentials.rsplit(":", 1)
         host_port = url[creds_end + 1 :]
         last_colon = host_port.rfind(":")
-        _host = host_port[:last_colon]
         port_and_path = host_port[last_colon + 1 :]
         if "/" in port_and_path:
             port, path = port_and_path.split("/", 1)

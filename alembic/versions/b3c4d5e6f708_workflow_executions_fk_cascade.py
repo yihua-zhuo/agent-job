@@ -19,6 +19,8 @@ context.
 
 from typing import Sequence, Union
 
+from sqlalchemy import text
+
 from alembic import op
 
 
@@ -28,10 +30,35 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-# Original FK name created by migration 9e805b1493a6. The drop+create
+# Fallback FK name used when no existing FK can be resolved. The drop+create
 # pair in upgrade()/downgrade() both reference the same name (PostgreSQL
 # renames the constraint to whatever create_foreign_key supplies).
 _FK_NAME = "fk_workflow_executions_tenant_id"
+
+
+def _find_existing_fk_name() -> str:
+    """Return the FK constraint name on workflow_executions.tenant_id.
+
+    Looks up pg_constraint to find the FK on the tenant_id column. Falls
+    back to the hardcoded ``_FK_NAME`` if no constraint is found, so the
+    migration is safe to run on databases where the FK was never created
+    (e.g. partial application state).
+    """
+    bind = op.get_bind()
+    name = bind.execute(
+        text(
+            """
+            SELECT conname FROM pg_constraint
+            WHERE conrelid = 'workflow_executions'::regclass
+              AND contype = 'f'
+              AND conkey = ARRAY[(SELECT attnum FROM pg_attribute
+                                   WHERE attrelid = 'workflow_executions'::regclass
+                                     AND attname = 'tenant_id')]::smallint[]
+            LIMIT 1
+            """
+        )
+    ).scalar()
+    return name or _FK_NAME
 
 
 def upgrade() -> None:
@@ -40,10 +67,11 @@ def upgrade() -> None:
     The drop and create run in the same Alembic transaction, so the
     column is never left without referential integrity.
     """
+    fk_name = _find_existing_fk_name()
     with op.batch_alter_table("workflow_executions") as batch_op:
-        batch_op.drop_constraint(_FK_NAME, type_="foreignkey")
+        batch_op.drop_constraint(fk_name, type_="foreignkey")
         batch_op.create_foreign_key(
-            _FK_NAME,
+            fk_name,
             "tenants",
             ["tenant_id"],
             ["id"],
@@ -57,12 +85,13 @@ def downgrade() -> None:
     ACTION). This matches the original definition before this
     migration added CASCADE.
     """
+    fk_name = _find_existing_fk_name()
     with op.batch_alter_table("workflow_executions") as batch_op:
-        batch_op.drop_constraint(_FK_NAME, type_="foreignkey")
+        batch_op.drop_constraint(fk_name, type_="foreignkey")
         # The ondelete value here matches the original pre-drift
         # state from 9e805b1493a6 (no ondelete = NO ACTION).
         batch_op.create_foreign_key(
-            _FK_NAME,
+            fk_name,
             "tenants",
             ["tenant_id"],
             ["id"],

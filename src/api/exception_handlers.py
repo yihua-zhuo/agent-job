@@ -4,6 +4,7 @@ Kept lightweight (no app factory imports) so unit tests can apply the same
 JSON envelopes without pulling in the full application stack.
 """
 
+import re
 import uuid
 import weakref
 
@@ -16,6 +17,42 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from middleware.logging import logger
 from pkg.errors.app_exceptions import AppException, ConflictException
+
+
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Render HTTPException (and its FastAPI subclass) with the project envelope.
+
+    Without this, a 404 or 405 would still flow through Starlette's default
+    handler, but the body wouldn't match the project JSON shape. Re-raising
+    inside the generic ``Exception`` handler isn't enough either — FastAPI
+    dispatches by MRO, and we want the response to use the same
+    ``success``/``request_id`` envelope as every other error.
+
+    Structured ``exc.detail`` payloads (lists/dicts raised by routers and
+    middleware) are preserved and returned as a ``detail`` field alongside
+    a generic ``message`` so clients can still rely on ``message`` always
+    being a string. String details are passed through directly as
+    ``message`` (the common case for ``HTTPException(status_code=404,
+    detail="Resource not found")``).
+    """
+    request_id = _resolve_request_id(request)
+    detail = exc.detail
+    if isinstance(detail, str):
+        message = detail
+        extra: dict = {}
+    else:
+        message = "HTTP error"
+        extra = {"detail": jsonable_encoder(detail)}
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "message": message,
+            "request_id": request_id,
+            **extra,
+        },
+        headers=getattr(exc, "headers", None),
+    )
 
 
 # ── Module-level handler references (named functions keep FastAPI's
@@ -95,22 +132,19 @@ async def request_validation_error_handler(request: Request, exc: RequestValidat
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all for any unhandled exception.
 
-    HTTPException (and its Starlette equivalent) is re-raised so Starlette's
-    own dispatch path produces the canonical 4xx response — registering a
-    bare ``Exception`` handler would otherwise intercept every HTTPException
-    and turn 404/405/etc. into 500s (Rule 92 — proper HTTP status codes).
-
     AppException is registered separately and dispatched first by FastAPI
-    based on the MRO. For everything else we log the exception class name
-    plus a sanitised message string and request_id to give operators enough
-    diagnostic context to triage production failures without leaking
-    sensitive details (e.g. connection strings, query parameters). The
-    full traceback is emitted via ``exc_info=True`` on a separate log line
+    based on the MRO. StarletteHTTPException is also handled by a
+    dedicated handler (registered above the bare ``Exception`` handler)
+    and dispatched by MRO before this catch-all runs, so this handler
+    only ever sees non-HTTPException errors.
+
+    For everything else we log the exception class name plus a sanitised
+    message string and request_id to give operators enough diagnostic
+    context to triage production failures without leaking sensitive
+    details (e.g. connection strings, query parameters). The full
+    traceback is emitted via ``exc_info=True`` on a separate log line
     below.
     """
-    if isinstance(exc, StarletteHTTPException):
-        # Let Starlette render the canonical HTTPException response.
-        raise exc
     request_id = _resolve_request_id(request)
     message = _sanitise_message(str(exc))
     logger.error(
@@ -132,6 +166,12 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
+# Pattern to detect hex-encoded API keys or secrets (32+ hex characters
+# in a row). Catches things like long random tokens that don't start with
+# a known prefix.
+_HEX_SECRET_RE = re.compile(r"\b[0-9a-f]{32,}\b", re.IGNORECASE)
+
+
 def _sanitise_message(message: str) -> str:
     """Strip obvious secret-bearing substrings from exception messages.
 
@@ -142,9 +182,21 @@ def _sanitise_message(message: str) -> str:
     structured fields.
     """
     lower = message.lower()
-    for marker in ("password=", "passwd=", "://", "secret=", "token=", "api_key="):
+    for marker in (
+        "password=",
+        "passwd=",
+        "://",
+        "secret=",
+        "token=",
+        "api_key=",
+        "bearer ",
+        # JWTs start with "eyJ" (base64-encoded JSON header)
+        "eyj",
+    ):
         if marker in lower:
             return "[message redacted — contains secret-like content]"
+    if _HEX_SECRET_RE.search(message):
+        return "[message redacted — contains secret-like content]"
     return message
 
 
@@ -184,30 +236,3 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
     _REGISTERED_APPS.add(app)
-
-
-async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    """Render HTTPException (and its FastAPI subclass) with the project envelope.
-
-    Without this, a 404 or 405 would still flow through Starlette's default
-    handler, but the body wouldn't match the project JSON shape. Re-raising
-    inside the generic ``Exception`` handler isn't enough either — FastAPI
-    dispatches by MRO, and we want the response to use the same
-    ``success``/``request_id`` envelope as every other error.
-
-    We deliberately do NOT add a ``code`` field here: ``HTTPException`` is
-    used by FastAPI internals (404 from missing route, 405 from method
-    not allowed) and 3rd-party middleware. A free-form code is more
-    confusing than a missing one. Operators and clients that need a code
-    can derive it from ``status_code``.
-    """
-    request_id = _resolve_request_id(request)
-    return JSONResponse(
-        status_code=exc.status_code,
-        content={
-            "success": False,
-            "message": exc.detail if isinstance(exc.detail, str) else "HTTP error",
-            "request_id": request_id,
-        },
-        headers=getattr(exc, "headers", None),
-    )
