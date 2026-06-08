@@ -4,14 +4,11 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
-from collections.abc import AsyncGenerator
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.exception_handlers import register_exception_handlers
 from api.routers.recommendations import recommendations_router
-from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import NotFoundException
 from services.recommendation_service import CachedRecommendationResult
@@ -26,15 +23,12 @@ def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
     """Build a FastAPI app with the router, exception handlers, and dependency overrides.
 
     `auth_ctx=None` means require_auth is NOT overridden (to test 401).
+    The DB session is not exercised: RecommendationService is monkeypatched
+    away in the test fixture, so get_db is never invoked.
     """
     app = FastAPI()
     app.include_router(recommendations_router)
     register_exception_handlers(app)
-
-    async def _noop_db() -> AsyncGenerator[AsyncSession, None]:
-        yield AsyncMock(spec=AsyncSession)
-
-    app.dependency_overrides[get_db] = _noop_db
 
     if auth_ctx is not None:
         app.dependency_overrides[require_auth] = lambda: auth_ctx

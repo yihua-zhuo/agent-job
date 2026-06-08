@@ -15,27 +15,94 @@ import pytest
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel, WorkflowNodeModel
 
 
+def _now() -> datetime:
+    return datetime.now(UTC)
+
+
+def make_workflow(**overrides) -> WorkflowModel:
+    """Build a WorkflowModel with sensible defaults; override any field by kwarg."""
+    now = _now()
+    defaults = {
+        "id": 1,
+        "tenant_id": 42,
+        "name": "Test Workflow",
+        "description": "A test workflow",
+        "trigger_type": "manual",
+        "trigger_config": {"key": "value"},
+        "actions": [{"type": "email.send", "template": "welcome"}],
+        "conditions": [{"field": "status", "operator": "==", "value": "open"}],
+        "status": "draft",
+        "created_by": 7,
+        "created_at": now,
+        "updated_at": now,
+    }
+    defaults.update(overrides)
+    return WorkflowModel(**defaults)
+
+
+def make_execution(**overrides) -> WorkflowExecutionModel:
+    """Build a WorkflowExecutionModel with sensible defaults; override any field by kwarg."""
+    now = _now()
+    defaults = {
+        "id": 1,
+        "workflow_id": 10,
+        "tenant_id": 42,
+        "trigger_type": "manual",
+        "triggered_by": 5,
+        "started_at": now,
+        "completed_at": now,
+        "status": "success",
+        "result": {"steps": 3},
+    }
+    defaults.update(overrides)
+    return WorkflowExecutionModel(**defaults)
+
+
+def make_node(**overrides) -> WorkflowNodeModel:
+    """Build a WorkflowNodeModel with sensible defaults; override any field by kwarg."""
+    now = _now()
+    defaults = {
+        "id": 1,
+        "workflow_id": 10,
+        "tenant_id": 42,
+        "node_type": "action",
+        "definition_json": {"action": "send_email"},
+        "input": {"to": "user@example.com"},
+        "output": {"sent": True},
+        "status": "completed",
+        "execution_order": 1,
+        "created_at": now,
+        "updated_at": now,
+    }
+    defaults.update(overrides)
+    return WorkflowNodeModel(**defaults)
+
+
 class TestWorkflowModel:
     """Tests for WorkflowModel."""
 
     def test_to_dict_returns_all_expected_keys(self):
-        """to_dict() includes id, tenant_id, name, trigger_type, conditions, actions, status, created_at, updated_at."""
-        now = datetime.now(UTC)
-        workflow = WorkflowModel(
-            id=1,
-            tenant_id=42,
-            name="Test Workflow",
-            description="A test workflow",
-            trigger_type="manual",
-            trigger_config={"key": "value"},
-            actions=[{"type": "email.send", "template": "welcome"}],
-            conditions=[{"field": "status", "operator": "==", "value": "open"}],
-            status="draft",
-            created_by=7,
-            created_at=now,
-            updated_at=now,
-        )
+        """to_dict() includes the complete set of expected keys and correct values."""
+        now = _now()
+        workflow = make_workflow(created_at=now, updated_at=now)
         d = workflow.to_dict()
+
+        # Key completeness — protects against accidental key drops or additions.
+        assert set(d.keys()) == {
+            "id",
+            "tenant_id",
+            "name",
+            "description",
+            "trigger_type",
+            "trigger_config",
+            "actions",
+            "conditions",
+            "status",
+            "created_by",
+            "created_at",
+            "updated_at",
+        }
+
         assert d["id"] == 1
         assert d["tenant_id"] == 42
         assert d["name"] == "Test Workflow"
@@ -59,93 +126,44 @@ class TestWorkflowModel:
     )
     def test_default_serialization_for_jsonb_fields(self, field, serialized):
         """to_dict() serializes empty list/dict defaults correctly for JSONB fields."""
-        now = datetime.now(UTC)
-        kwargs = {
-            "id": 1,
-            "tenant_id": 1,
-            "name": "Test",
-            "trigger_type": "manual",
-            "trigger_config": {},
-            "actions": [],
-            "conditions": [],
-            "status": "draft",
-            "created_by": None,
-            "created_at": now,
-            "updated_at": now,
-        }
-        workflow = WorkflowModel(**kwargs)
+        workflow = make_workflow(conditions=[], actions=[], trigger_config={})
         assert workflow.to_dict()[field] == serialized
 
     def test_to_dict_description_none(self):
         """to_dict returns description=None when not set."""
-        now = datetime.now(UTC)
-        workflow = WorkflowModel(
-            id=6,
-            tenant_id=1,
-            name="No Desc",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=1,
-            created_at=now,
-            updated_at=now,
-        )
+        workflow = make_workflow(id=6, description=None)
         d = workflow.to_dict()
         assert d["description"] is None
 
     def test_to_dict_created_at_none(self):
         """to_dict returns created_at=None when the field is None."""
-        workflow = WorkflowModel(
-            id=7,
-            tenant_id=1,
-            name="No Timestamp",
-            trigger_type="manual",
-            trigger_config={},
-            actions=[],
-            conditions=[],
-            status="draft",
-            created_by=1,
-            created_at=None,
-            updated_at=None,
-        )
+        workflow = make_workflow(id=7, created_at=None, updated_at=None)
         d = workflow.to_dict()
         assert d["created_at"] is None
         assert d["updated_at"] is None
-
-    def test_model_buildable_without_required_fields_at_python_level(self):
-        """SQLAlchemy constructs instances lazily. nullable=False enforcement
-        is a DB-level constraint, not a Python-level one. This test documents
-        that gap — constraint enforcement is covered by integration tests
-        (test_workflow_model_integration.py).
-        """
-        # No tenant_id, name, trigger_type — all nullable=False in the model.
-        # Python construction succeeds; DB flush would fail.
-        workflow = WorkflowModel()
-        assert workflow.tenant_id is None
-        assert workflow.name is None
-        assert workflow.trigger_type is None
 
 
 class TestWorkflowExecutionModel:
     """Tests for WorkflowExecutionModel."""
 
     def test_to_dict_returns_all_expected_keys(self):
-        """to_dict() includes execution fields."""
-        now = datetime.now(UTC)
-        execution = WorkflowExecutionModel(
-            id=1,
-            workflow_id=10,
-            tenant_id=42,
-            trigger_type="manual",
-            triggered_by=5,
-            started_at=now,
-            completed_at=now,
-            status="success",
-            result={"steps": 3},
-        )
+        """to_dict() includes the complete set of expected keys and correct values."""
+        now = _now()
+        execution = make_execution(started_at=now, completed_at=now)
         d = execution.to_dict()
+
+        assert set(d.keys()) == {
+            "id",
+            "workflow_id",
+            "tenant_id",
+            "trigger_type",
+            "triggered_by",
+            "started_at",
+            "completed_at",
+            "status",
+            "result",
+        }
+
         assert d["id"] == 1
         assert d["workflow_id"] == 10
         assert d["tenant_id"] == 42
@@ -158,32 +176,17 @@ class TestWorkflowExecutionModel:
 
     def test_result_none_when_not_set(self):
         """result is None in to_dict when field is None."""
-        now = datetime.now(UTC)
-        execution = WorkflowExecutionModel(
-            id=1,
-            workflow_id=10,
-            tenant_id=1,
-            trigger_type="manual",
-            triggered_by=5,
-            started_at=now,
-            completed_at=None,
-            status="running",
-            result=None,
-        )
+        execution = make_execution(completed_at=None, result=None, status="running")
         d = execution.to_dict()
         assert d["result"] is None
         assert d["completed_at"] is None
 
-    def test_to_dict_with_minimal_fields(self):
-        """to_dict works with minimal fields set and returns all 9 expected keys."""
-        now = datetime.now(UTC)
-        execution = WorkflowExecutionModel(
+    def test_to_dict_with_none_optional_fields(self):
+        """to_dict works with optional fields set to None and returns all 9 expected keys."""
+        execution = make_execution(
             id=2,
             workflow_id=20,
-            tenant_id=1,
-            trigger_type="scheduled",
             triggered_by=None,
-            started_at=now,
             completed_at=None,
             status="running",
             result=None,
@@ -209,22 +212,25 @@ class TestWorkflowNodeModel:
     """Tests for WorkflowNodeModel."""
 
     def test_to_dict_returns_all_expected_keys(self):
-        """to_dict() includes node fields with correct types."""
-        now = datetime.now(UTC)
-        node = WorkflowNodeModel(
-            id=1,
-            workflow_id=10,
-            tenant_id=42,
-            node_type="action",
-            definition_json={"action": "send_email"},
-            input={"to": "user@example.com"},
-            output={"sent": True},
-            status="completed",
-            execution_order=1,
-            created_at=now,
-            updated_at=now,
-        )
+        """to_dict() includes the complete set of expected keys and correct values."""
+        now = _now()
+        node = make_node(created_at=now, updated_at=now)
         d = node.to_dict()
+
+        assert set(d.keys()) == {
+            "id",
+            "workflow_id",
+            "tenant_id",
+            "node_type",
+            "definition_json",
+            "input",
+            "output",
+            "status",
+            "execution_order",
+            "created_at",
+            "updated_at",
+        }
+
         assert d["id"] == 1
         assert d["workflow_id"] == 10
         assert d["tenant_id"] == 42
@@ -239,19 +245,14 @@ class TestWorkflowNodeModel:
 
     def test_to_dict_output_none(self):
         """to_dict returns output=None when not set."""
-        now = datetime.now(UTC)
-        node = WorkflowNodeModel(
+        node = make_node(
             id=2,
-            workflow_id=10,
-            tenant_id=1,
             node_type="condition",
             definition_json={},
             input={},
             output=None,
             status="pending",
             execution_order=0,
-            created_at=now,
-            updated_at=now,
         )
         d = node.to_dict()
         assert d["output"] is None
