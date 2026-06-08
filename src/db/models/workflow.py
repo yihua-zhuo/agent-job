@@ -1,12 +1,61 @@
 """Workflow ORM models."""
 
 from datetime import datetime
+from enum import StrEnum
 
 from sqlalchemy import DateTime, ForeignKey, Index, Integer, String, func, text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
 from db.base import Base
+
+
+class WorkflowStatus(StrEnum):
+    """Workflow lifecycle states.
+
+    Used by services and callers to pass typed values; the model column
+    is still String(50) (matching the existing migration) so the schema
+    is unchanged. Application-side coercion via this enum prevents
+    out-of-domain values from reaching the DB.
+    """
+
+    DRAFT = "draft"
+    ACTIVE = "active"
+    PAUSED = "paused"
+    ARCHIVED = "archived"
+
+
+class WorkflowTriggerType(StrEnum):
+    """Workflow trigger kinds."""
+
+    MANUAL = "manual"
+    SCHEDULED = "scheduled"
+    EVENT = "event"
+
+
+class ExecutionStatus(StrEnum):
+    """Workflow execution lifecycle states."""
+
+    RUNNING = "running"
+    SUCCESS = "success"
+    FAILED = "failed"
+
+
+class NodeType(StrEnum):
+    """Workflow node kinds."""
+
+    ACTION = "action"
+    CONDITION = "condition"
+    TRIGGER = "trigger"
+
+
+class NodeStatus(StrEnum):
+    """Workflow node lifecycle states."""
+
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
 
 
 class WorkflowModel(Base):
@@ -63,7 +112,7 @@ class WorkflowExecutionModel(Base):
         Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
     )
     tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", server_default="manual", nullable=False)
     triggered_by: Mapped[int | None] = mapped_column(
@@ -102,7 +151,7 @@ class WorkflowNodeModel(Base):
         Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
     )
     tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
     node_type: Mapped[str] = mapped_column(String(50), default="action", server_default="action", nullable=False)
     definition_json: Mapped[dict] = mapped_column(

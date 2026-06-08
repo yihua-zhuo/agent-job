@@ -181,7 +181,7 @@ class TestCreateApp:
 
         with (
             patch("db.connection.ensure_engine"),
-            patch("db.connection.dispose_engine"),
+            patch("db.connection._dispose_engine_unsafe"),
         ):
             from main import create_app
             app = create_app()
@@ -191,7 +191,7 @@ class TestCreateApp:
         """Routes for /api/v1/customers are registered."""
         with (
             patch("db.connection.ensure_engine"),
-            patch("db.connection.dispose_engine"),
+            patch("db.connection._dispose_engine_unsafe"),
         ):
             from main import create_app
             app = create_app()
@@ -203,7 +203,7 @@ class TestCreateApp:
         """Routes for /api/v1/sales are registered."""
         with (
             patch("db.connection.ensure_engine"),
-            patch("db.connection.dispose_engine"),
+            patch("db.connection._dispose_engine_unsafe"),
         ):
             from main import create_app
             app = create_app()
@@ -215,7 +215,7 @@ class TestCreateApp:
         """GET / health check route is present."""
         with (
             patch("db.connection.ensure_engine"),
-            patch("db.connection.dispose_engine"),
+            patch("db.connection._dispose_engine_unsafe"),
         ):
             from main import create_app
             app = create_app()

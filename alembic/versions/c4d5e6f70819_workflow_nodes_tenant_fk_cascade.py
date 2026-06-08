@@ -27,19 +27,20 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def _fk_constraint_name(table_name: str, column_name: str) -> str | None:
-    """Return the actual FK constraint name for table_name/column_name, or None.
+# FK name used for both the CASCADE form (upgrade) and the NO-ACTION
+# form (downgrade). 185055a0d4f0 did not create a named constraint for
+# this column, so a concurrent/adjacent migration that already added a
+# constraint under a different name will be the one being dropped.
+_FK_NAME = "fk_workflow_nodes_tenant_id"
 
-    Looks up pg_constraint to find a single FK constraint on the given column.
-    Returns None if no constraint exists. If multiple constraints are found
-    (which would be a schema problem in its own right), we return the first
-    match and let the caller decide — Alembic's batch_alter_table will surface
-    a clear error.
 
-    NOTE: single-column FK lookups only. For composite FKs, the conkey array
-    would contain multiple attnums and the equality check would silently
-    miss; expand the query to match all conkey elements for composite
-    support.
+def _find_existing_fk_name(table_name: str) -> str | None:
+    """Return the first FK constraint name on *table_name*'s tenant_id, or None.
+
+    Looks up pg_constraint to find a single FK constraint on the tenant_id
+    column. Returns None if no constraint exists. The downgrade path uses
+    this to drop an FK that may have been added by a different migration
+    under a different name (the original 185055a0d4f0 created no FK at all).
     """
     bind = op.get_bind()
     row = bind.execute(
@@ -50,29 +51,53 @@ def _fk_constraint_name(table_name: str, column_name: str) -> str | None:
               AND contype = 'f'
               AND conkey = ARRAY[(SELECT attnum FROM pg_attribute
                                    WHERE attrelid = :table::regclass
-                                     AND attname = :column)]::smallint[]
+                                     AND attname = 'tenant_id')]::smallint[]
             LIMIT 1
             """
         ),
-        {"table": table_name, "column": column_name},
+        {"table": table_name},
     ).first()
     return row[0] if row is not None else None
 
 
 def upgrade() -> None:
-    """Drop and recreate the FK with ondelete='CASCADE'.
+    """Add the missing tenant_id FK with ondelete='CASCADE'.
 
-    The drop and create run in the same Alembic transaction, so the column
-    is never left without referential integrity. The constraint name is
-    resolved at runtime so a rename by a concurrent migration doesn't crash
-    this one and the migration is safe when the FK is absent.
+    Pre-flight: bail out with a clear error if any workflow_nodes row
+    references a tenant_id that no longer exists in the tenants table —
+    PostgreSQL would otherwise reject the constraint creation with a
+    less actionable error.
+
+    The drop and create run in the same Alembic transaction, so the
+    column is never left without referential integrity. The constraint
+    name is resolved at runtime so a rename by a concurrent migration
+    doesn't crash this one and the migration is safe when the FK is
+    absent.
     """
-    fk_name = _fk_constraint_name("workflow_nodes", "tenant_id")
+    bind = op.get_bind()
+    orphan = bind.execute(
+        text(
+            """
+            SELECT 1 FROM workflow_nodes wn
+            LEFT JOIN tenants t ON t.id = wn.tenant_id
+            WHERE t.id IS NULL
+            LIMIT 1
+            """
+        )
+    ).first()
+    if orphan is not None:
+        raise RuntimeError(
+            "Cannot create workflow_nodes.tenant_id FK: orphan rows reference "
+            "non-existent tenants. Clean up workflow_nodes with missing "
+            "tenant_ids before running this migration."
+        )
+
+    fk_name = _find_existing_fk_name("workflow_nodes")
     with op.batch_alter_table("workflow_nodes") as batch_op:
         if fk_name is not None:
             batch_op.drop_constraint(fk_name, type_="foreignkey")
         batch_op.create_foreign_key(
-            "fk_workflow_nodes_tenant_id",
+            _FK_NAME,
             "tenants",
             ["tenant_id"],
             ["id"],
@@ -82,23 +107,22 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Restore the FK to the pre-drift state defined by migration
-    185055a0d4f0 (no ondelete behavior specified — i.e. default NO
-    ACTION). This matches the original definition before this
-    migration added CASCADE.
+    185055a0d4f0.
 
-    NOTE: this creates a NO-ACTION FK rather than removing the FK entirely,
-    because migration 185055a0d4f0 created the column without any FK
-    constraint at all. A subsequent upgrade of this migration will restore
-    the CASCADE FK.
+    NOTE on downgrade truthfulness: 185055a0d4f0 created the column with
+    no FK constraint at all. A true revert would therefore *remove* the
+    FK (not recreate it with NO ACTION). We choose to recreate a NO-ACTION
+    FK here because the column is part of the broader tenant-id pattern
+    and removing the FK entirely would be a regression for any subsequent
+    migration that assumes FK enforcement is in place. A subsequent upgrade
+    of this migration will restore the CASCADE FK.
     """
-    fk_name = _fk_constraint_name("workflow_nodes", "tenant_id")
+    fk_name = _find_existing_fk_name("workflow_nodes")
     with op.batch_alter_table("workflow_nodes") as batch_op:
         if fk_name is not None:
             batch_op.drop_constraint(fk_name, type_="foreignkey")
-        # The ondelete value here matches the original pre-drift
-        # state from 185055a0d4f0 (no ondelete = NO ACTION).
         batch_op.create_foreign_key(
-            "fk_workflow_nodes_tenant_id",
+            _FK_NAME,
             "tenants",
             ["tenant_id"],
             ["id"],

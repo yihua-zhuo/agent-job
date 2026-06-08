@@ -19,8 +19,6 @@ context.
 
 from typing import Sequence, Union
 
-from sqlalchemy import text
-
 from alembic import op
 
 
@@ -30,50 +28,22 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-def _fk_constraint_name(table_name: str, column_name: str) -> str | None:
-    """Return the FK constraint name for table_name/column_name, or None.
-
-    Single-column FK lookups only. For composite FKs, the conkey array
-    contains multiple attnums and the equality check would match the first
-    column only; expand the query to match all conkey elements for
-    composite support.
-
-    Returns None if no constraint exists. If multiple constraints match
-    (which would be a schema problem in its own right), the caller surfaces
-    a clear error via Alembic's batch_alter_table.
-    """
-    bind = op.get_bind()
-    row = bind.execute(
-        text(
-            """
-            SELECT conname FROM pg_constraint
-            WHERE conrelid = :table::regclass
-              AND contype = 'f'
-              AND conkey = ARRAY[(SELECT attnum FROM pg_attribute
-                                   WHERE attrelid = :table::regclass
-                                     AND attname = :column)]::smallint[]
-            LIMIT 1
-            """
-        ),
-        {"table": table_name, "column": column_name},
-    ).first()
-    return row[0] if row is not None else None
+# Original FK name created by migration 9e805b1493a6. The drop+create
+# pair in upgrade()/downgrade() both reference the same name (PostgreSQL
+# renames the constraint to whatever create_foreign_key supplies).
+_FK_NAME = "fk_workflow_executions_tenant_id"
 
 
 def upgrade() -> None:
     """Drop and recreate the FK with ondelete='CASCADE'.
 
     The drop and create run in the same Alembic transaction, so the
-    column is never left without referential integrity. The constraint
-    name is resolved at runtime so a rename by a concurrent migration
-    doesn't crash this one.
+    column is never left without referential integrity.
     """
-    fk_name = _fk_constraint_name("workflow_executions", "tenant_id")
     with op.batch_alter_table("workflow_executions") as batch_op:
-        if fk_name is not None:
-            batch_op.drop_constraint(fk_name, type_="foreignkey")
+        batch_op.drop_constraint(_FK_NAME, type_="foreignkey")
         batch_op.create_foreign_key(
-            "fk_workflow_executions_tenant_id",
+            _FK_NAME,
             "tenants",
             ["tenant_id"],
             ["id"],
@@ -87,14 +57,12 @@ def downgrade() -> None:
     ACTION). This matches the original definition before this
     migration added CASCADE.
     """
-    fk_name = _fk_constraint_name("workflow_executions", "tenant_id")
     with op.batch_alter_table("workflow_executions") as batch_op:
-        if fk_name is not None:
-            batch_op.drop_constraint(fk_name, type_="foreignkey")
+        batch_op.drop_constraint(_FK_NAME, type_="foreignkey")
         # The ondelete value here matches the original pre-drift
         # state from 9e805b1493a6 (no ondelete = NO ACTION).
         batch_op.create_foreign_key(
-            "fk_workflow_executions_tenant_id",
+            _FK_NAME,
             "tenants",
             ["tenant_id"],
             ["id"],

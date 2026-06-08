@@ -12,6 +12,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy.exc import IntegrityError
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from middleware.logging import logger
 from pkg.errors.app_exceptions import AppException, ConflictException
@@ -46,13 +47,11 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     Services should raise ConflictException explicitly when possible; this
     handler catches DB-level integrity errors that escape past the service
     layer (e.g. UNIQUE or FK violations from raw SQL). The ``get_db()``
-    dependency already rolls back on exception, but this handler returns
-    a response rather than re-raising — so we roll back defensively on
-    the session attached to ``request.state.db`` to avoid leaving the
-    session in a failed-transaction state for the next request.
+    dependency already rolls back the session in its ``except`` branch
+    before re-raising into this handler, so no additional rollback is
+    needed here.
     """
     request_id = _resolve_request_id(request)
-    await _rollback_request_session(request)
     logger.error(
         "integrity_error",
         type=type(exc).__name__,
@@ -69,31 +68,6 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
             "request_id": request_id,
         },
     )
-
-
-async def _rollback_request_session(request: Request) -> None:
-    """Roll back the per-request session if one is attached to ``request.state``.
-
-    Defence-in-depth guard for sessions attached via ``request.state.db``
-    by the ``get_db()`` dependency. The dependency already rolls back on
-    any exception before the global handler runs, so this rollback is
-    redundant in the normal case — but covers the narrow window where a
-    handler returns a response without re-raising (e.g. the IntegrityError
-    handler converts to a 409 envelope).
-
-    Best-effort: if no session is attached (e.g. the route did not depend
-    on ``get_db``), or rollback itself fails, we swallow the error — the
-    user is still going to receive the 409 envelope and a botched rollback
-    is strictly better than a stuck transaction that crashes the next
-    request.
-    """
-    session = getattr(request.state, "db", None)
-    if session is None:
-        return
-    try:
-        await session.rollback()
-    except Exception:  # noqa: BLE001 — best-effort cleanup
-        logger.warning("integrity_error_handler_rollback_failed", exc_info=True)
 
 
 async def request_validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -121,14 +95,22 @@ async def request_validation_error_handler(request: Request, exc: RequestValidat
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all for any unhandled exception.
 
-    Only non-AppException exceptions reach here because AppException is
-    registered first and FastAPI dispatches by MRO. We log the exception
-    class name plus a sanitised message string and request_id to give
-    operators enough diagnostic context to triage production failures
-    without leaking sensitive details (e.g. connection strings, query
-    parameters). The full traceback is emitted via ``exc_info=True`` on a
-    separate log line below.
+    HTTPException (and its Starlette equivalent) is re-raised so Starlette's
+    own dispatch path produces the canonical 4xx response — registering a
+    bare ``Exception`` handler would otherwise intercept every HTTPException
+    and turn 404/405/etc. into 500s (Rule 92 — proper HTTP status codes).
+
+    AppException is registered separately and dispatched first by FastAPI
+    based on the MRO. For everything else we log the exception class name
+    plus a sanitised message string and request_id to give operators enough
+    diagnostic context to triage production failures without leaking
+    sensitive details (e.g. connection strings, query parameters). The
+    full traceback is emitted via ``exc_info=True`` on a separate log line
+    below.
     """
+    if isinstance(exc, StarletteHTTPException):
+        # Let Starlette render the canonical HTTPException response.
+        raise exc
     request_id = _resolve_request_id(request)
     message = _sanitise_message(str(exc))
     logger.error(
@@ -199,5 +181,33 @@ def register_exception_handlers(app: FastAPI) -> None:
     app.add_exception_handler(AppException, app_exception_handler)
     app.add_exception_handler(IntegrityError, integrity_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)
+    app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
     _REGISTERED_APPS.add(app)
+
+
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    """Render HTTPException (and its FastAPI subclass) with the project envelope.
+
+    Without this, a 404 or 405 would still flow through Starlette's default
+    handler, but the body wouldn't match the project JSON shape. Re-raising
+    inside the generic ``Exception`` handler isn't enough either — FastAPI
+    dispatches by MRO, and we want the response to use the same
+    ``success``/``request_id`` envelope as every other error.
+
+    We deliberately do NOT add a ``code`` field here: ``HTTPException`` is
+    used by FastAPI internals (404 from missing route, 405 from method
+    not allowed) and 3rd-party middleware. A free-form code is more
+    confusing than a missing one. Operators and clients that need a code
+    can derive it from ``status_code``.
+    """
+    request_id = _resolve_request_id(request)
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={
+            "success": False,
+            "message": exc.detail if isinstance(exc.detail, str) else "HTTP error",
+            "request_id": request_id,
+        },
+        headers=getattr(exc, "headers", None),
+    )
