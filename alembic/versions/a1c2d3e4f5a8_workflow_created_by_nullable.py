@@ -60,16 +60,17 @@ def downgrade() -> None:
     """
     bind = op.get_bind()
     # Backfill NULL created_by with the smallest user id in the same
-    # tenant. Falls back to NULL (which will fail the NOT NULL
-    # constraint) for orphan tenants with no users.
+    # tenant. The WHERE clause guarantees w.created_by IS NULL, so the
+    # second COALESCE argument would be a dead value; we rely on the
+    # subquery returning NULL naturally for orphan tenants with no users
+    # (which will then fail the NOT NULL constraint and surface the
+    # issue to the operator rather than silently inserting a fake
+    # sentinel value).
     bind.execute(
         text(
             """
             UPDATE workflows w
-            SET created_by = COALESCE(
-                (SELECT MIN(u.id) FROM users u WHERE u.tenant_id = w.tenant_id),
-                w.created_by
-            )
+            SET created_by = (SELECT MIN(u.id) FROM users u WHERE u.tenant_id = w.tenant_id)
             WHERE w.created_by IS NULL
             """
         )

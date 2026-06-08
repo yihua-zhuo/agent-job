@@ -45,9 +45,15 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
 
     Services should raise ConflictException explicitly when possible; this
     handler catches DB-level integrity errors that escape past the service
-    layer (e.g. UNIQUE or FK violations from raw SQL).
+    layer (e.g. UNIQUE or FK violations from raw SQL). Because the
+    IntegrityError leaves the session in a failed-transaction state and the
+    global handler returns a response (rather than re-raising into the
+    ``get_db`` dependency's rollback path), we must roll back explicitly
+    before constructing the response — otherwise the session is unusable
+    for the next request.
     """
     request_id = _resolve_request_id(request)
+    await _rollback_request_session(request)
     logger.error(
         "integrity_error",
         type=type(exc).__name__,
@@ -64,6 +70,23 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
             "request_id": request_id,
         },
     )
+
+
+async def _rollback_request_session(request: Request) -> None:
+    """Roll back the per-request session if one is attached to ``request.state``.
+
+    Best-effort: if no session is attached (e.g. the route did not depend on
+    ``get_db``), or rollback itself fails, we swallow the error — the user
+    is still going to receive the 409 envelope and a botched rollback is
+    strictly better than a stuck transaction that crashes the next request.
+    """
+    session = getattr(request.state, "db", None)
+    if session is None:
+        return
+    try:
+        await session.rollback()
+    except Exception:  # noqa: BLE001 — best-effort cleanup
+        logger.warning("integrity_error_handler_rollback_failed", exc_info=True)
 
 
 async def request_validation_error_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
@@ -92,18 +115,23 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     """Catch-all for any unhandled exception.
 
     Only non-AppException exceptions reach here because AppException is
-    registered first and FastAPI dispatches by MRO. We log only the
-    exception class name and request_id to avoid leaking sensitive
-    details (connection strings, query parameters) into logs.
+    registered first and FastAPI dispatches by MRO. We log the exception
+    class name plus a sanitised message string and request_id to give
+    operators enough diagnostic context to triage production failures
+    without leaking sensitive details (e.g. connection strings, query
+    parameters). The full traceback is emitted via ``exc_info=True`` on a
+    separate log line below.
     """
     request_id = _resolve_request_id(request)
+    message = _sanitise_message(str(exc))
     logger.error(
         "unhandled_exception",
         type=type(exc).__name__,
+        message=message,
         path=request.url.path,
         request_id=request_id,
-        exc_info=True,
     )
+    logger.error("unhandled_exception_traceback", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={
@@ -113,6 +141,22 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
             "request_id": request_id,
         },
     )
+
+
+def _sanitise_message(message: str) -> str:
+    """Strip obvious secret-bearing substrings from exception messages.
+
+    A defence-in-depth pass so that ``str(exc)`` (which may include
+    parts of a connection string or query parameters) does not end up
+    in structured logs verbatim. The full traceback at WARNING/ERROR
+    is still emitted via ``exc_info=True``; this only controls the
+    structured fields.
+    """
+    lower = message.lower()
+    for marker in ("password=", "passwd=", "://", "secret=", "token=", "api_key="):
+        if marker in lower:
+            return "[message redacted — contains secret-like content]"
+    return message
 
 
 def _resolve_request_id(request: Request) -> str:

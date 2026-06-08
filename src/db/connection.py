@@ -123,18 +123,29 @@ async def dispose_async_engine():
 def dispose_engine():
     """Sync dispose of the engine pool on FastAPI shutdown.
 
-    Retained for compatibility with code paths that run outside an
-    event loop. Prefer `dispose_async_engine` from async contexts.
+    Raises ``RuntimeError`` if called from inside a running event loop —
+    calling ``asyncio.new_event_loop()`` and ``run_until_complete`` on a
+    loop that is already running will deadlock and is almost always a
+    bug (callers should use ``dispose_async_engine`` from async code).
     """
     global engine, async_session_maker
     if engine is not None:
         import asyncio
 
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-        loop.run_until_complete(engine.dispose())
+            pass
+        else:
+            raise RuntimeError(
+                "dispose_engine() called from within a running event loop; "
+                "use await dispose_async_engine() instead."
+            )
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(engine.dispose())
+        finally:
+            loop.close()
     engine = None
     async_session_maker = None
 

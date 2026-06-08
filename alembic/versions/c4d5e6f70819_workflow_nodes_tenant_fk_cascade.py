@@ -59,10 +59,7 @@ def downgrade() -> None:
             type_="foreignkey",
         )
         # The ondelete value here matches the original pre-drift
-        # state from 185055a0d4f0 (no FK on tenant_id at all — we
-        # restore that by adding the FK without CASCADE so the model
-        # declaration is the only thing requiring the cascade behaviour
-        # going forward).
+        # state from 185055a0d4f0 (no ondelete = NO ACTION).
         batch_op.create_foreign_key(
             "fk_workflow_nodes_tenant_id",
             "tenants",

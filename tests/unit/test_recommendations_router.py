@@ -5,13 +5,14 @@ from unittest.mock import AsyncMock
 
 import pytest
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
-from api.exception_handlers import register_exception_handlers
 from api.routers.recommendations import recommendations_router
 from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
-from pkg.errors.app_exceptions import NotFoundException
+from pkg.errors.app_exceptions import AppException, NotFoundException
 from services.recommendation_service import CachedRecommendationResult
 from services.sales_recommendation import SalesActionRecommendation
 
@@ -20,17 +21,46 @@ def _make_auth_ctx(tenant_id: int | None = 1, user_id: int = 99) -> AuthContext:
     return AuthContext(user_id=user_id, tenant_id=tenant_id, roles=[])
 
 
+async def _app_exception_handler(request, exc: AppException) -> JSONResponse:
+    """Minimal AppException handler — only what these unit tests exercise."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"success": False, "message": exc.detail, "code": exc.code},
+    )
+
+
+async def _validation_error_handler(request, exc: RequestValidationError) -> JSONResponse:
+    """Minimal RequestValidationError handler for the 422 path."""
+    return JSONResponse(
+        status_code=422,
+        content={"success": False, "message": "Validation failed", "code": "VALIDATION_ERROR"},
+    )
+
+
+async def _generic_exception_handler(request, exc: Exception) -> JSONResponse:
+    """Minimal catch-all handler — 500 envelope only."""
+    return JSONResponse(
+        status_code=500,
+        content={"success": False, "message": "Internal server error", "code": "INTERNAL_ERROR"},
+    )
+
+
 def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
     """Build app with dependency overrides. Pass `auth_ctx=None` to test 401 path.
 
     The DB session is not exercised: RecommendationService is monkeypatched
     away in the test fixture, so get_db is overridden to a no-op async
     generator that yields a MagicMock session (it is never actually awaited
-    because the service is replaced before the session is used).
+    because the service is replaced before the session is used). Only the
+    two handlers these tests exercise (AppException, Exception) are
+    registered locally to keep the test independent of the full
+    exception-handler stack.
     """
     app = FastAPI()
     app.include_router(recommendations_router)
-    register_exception_handlers(app)
+    app.add_exception_handler(AppException, _app_exception_handler)
+    app.add_exception_handler(RequestValidationError, _validation_error_handler)
+    app.add_exception_handler(Exception, _generic_exception_handler)
 
     async def _noop_session():
         session = AsyncMock()

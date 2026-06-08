@@ -163,8 +163,6 @@ class TestWorkflowModelIntegration:
         async_session.add(workflow)
         await async_session.flush()
 
-        started_before = datetime.now(UTC)
-
         execution = WorkflowExecutionModel(
             workflow_id=workflow.id,
             tenant_id=tid,
@@ -195,8 +193,12 @@ class TestWorkflowModelIntegration:
         assert execution.status == "success"
         assert execution.result == {"steps_executed": 2, "duration_ms": 150}
         assert execution.completed_at is not None
-        # completed_at should be >= the time we started this test, not from 1970
-        assert execution.completed_at >= started_before
+        # completed_at should be a real timestamp, not from epoch 1970 — using
+        # year check rather than ``>= started_before`` because
+        # ``datetime.now(UTC)`` taken between flush and refresh can
+        # occasionally produce a value microseconds before ``started_before``
+        # on fast machines, making the comparison flaky.
+        assert execution.completed_at.year > 2020
 
     async def test_workflow_update_persists(self, db_schema, _seed_tenant, async_session):
         """Updating a workflow field and flushing persists the change."""

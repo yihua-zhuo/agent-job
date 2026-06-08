@@ -58,9 +58,16 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Drop the composite index (CONCURRENTLY to avoid an ACCESS
-    EXCLUSIVE lock on a populated table during rollback)."""
-    op.drop_index(
-        op.f("ix_workflows_tenant_id_status"),
-        table_name="workflows",
-        postgresql_concurrently=True,
-    )
+    EXCLUSIVE lock on a populated table during rollback). Guarded for
+    partial-application scenarios where the index is already absent."""
+    bind = op.get_bind()
+    exists = bind.execute(
+        text("SELECT 1 FROM pg_indexes WHERE indexname = :name"),
+        {"name": "ix_workflows_tenant_id_status"},
+    ).first()
+    if exists is not None:
+        op.drop_index(
+            op.f("ix_workflows_tenant_id_status"),
+            table_name="workflows",
+            postgresql_concurrently=True,
+        )

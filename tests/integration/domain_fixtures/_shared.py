@@ -11,12 +11,14 @@ from __future__ import annotations
 import uuid
 from typing import TYPE_CHECKING
 
+from services.user_service import UserService
+
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
 
 
 async def seed_user(
-    async_session: "AsyncSession",
+    async_session: AsyncSession,
     tenant_id: int,
     *,
     username_prefix: str = "user",
@@ -27,8 +29,6 @@ async def seed_user(
     Used by several integration test classes that need a real user
     record (e.g. for created_by FK enforcement).
     """
-    from services.user_service import UserService
-
     user_svc = UserService(async_session)
     suffix = uuid.uuid4().hex[:8]
     reg = await user_svc.create_user(
