@@ -9,6 +9,7 @@ from fastapi.testclient import TestClient
 
 from api.exception_handlers import register_exception_handlers
 from api.routers.recommendations import recommendations_router
+from db.connection import get_db
 from internal.middleware.fastapi_auth import AuthContext, require_auth
 from pkg.errors.app_exceptions import NotFoundException
 from services.recommendation_service import CachedRecommendationResult
@@ -24,11 +25,19 @@ def _build_app(auth_ctx: AuthContext | None = None) -> FastAPI:
 
     `auth_ctx=None` means require_auth is NOT overridden (to test 401).
     The DB session is not exercised: RecommendationService is monkeypatched
-    away in the test fixture, so get_db is never invoked.
+    away in the test fixture, so get_db is overridden to a no-op async
+    generator that yields a MagicMock session (it is never actually awaited
+    because the service is replaced before the session is used).
     """
     app = FastAPI()
     app.include_router(recommendations_router)
     register_exception_handlers(app)
+
+    async def _noop_session():
+        session = AsyncMock()
+        yield session
+
+    app.dependency_overrides[get_db] = _noop_session
 
     if auth_ctx is not None:
         app.dependency_overrides[require_auth] = lambda: auth_ctx

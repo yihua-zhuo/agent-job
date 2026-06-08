@@ -65,13 +65,13 @@ class WorkflowExecutionModel(Base):
     tenant_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    trigger_type: Mapped[str] = mapped_column(String(50), default="manual", nullable=False)
+    trigger_type: Mapped[str] = mapped_column(String(50), default="manual", server_default="manual", nullable=False)
     triggered_by: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
     )
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="running", nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="running", server_default="running", nullable=False)
     result: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
 
     def to_dict(self) -> dict:
@@ -104,12 +104,14 @@ class WorkflowNodeModel(Base):
     tenant_id: Mapped[int] = mapped_column(
         Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    node_type: Mapped[str] = mapped_column(String(50), default="action", nullable=False)
-    definition_json: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
-    input: Mapped[dict] = mapped_column(JSONB, default=dict, nullable=False)
+    node_type: Mapped[str] = mapped_column(String(50), default="action", server_default="action", nullable=False)
+    definition_json: Mapped[dict] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False
+    )
+    input: Mapped[dict] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
     output: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
-    status: Mapped[str] = mapped_column(String(50), default="pending", nullable=False)
-    execution_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    status: Mapped[str] = mapped_column(String(50), default="pending", server_default="pending", nullable=False)
+    execution_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False

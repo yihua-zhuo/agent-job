@@ -30,23 +30,25 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
+# Run each statement outside Alembic's per-migration transaction so that
+# CREATE INDEX CONCURRENTLY (which PostgreSQL rejects inside a transaction
+# block) works correctly. Required for online mode on populated tables.
+transaction_per_migration = False
+
+
 def upgrade() -> None:
     # 1. Add the composite index declared in WorkflowModel.__table_args__.
-    # Use CREATE INDEX CONCURRENTLY outside a transaction to avoid an
-    # ACCESS EXCLUSIVE lock on a populated workflows table.
-    if not op.get_context().as_sql:
-        op.create_index(
-            op.f("ix_workflows_tenant_id_status"),
-            "workflows",
-            ["tenant_id", "status"],
-            unique=False,
-            postgresql_concurrently=True,
-        )
-    else:
-        op.execute(
-            "CREATE INDEX CONCURRENTLY IF NOT EXISTS "
-            "ix_workflows_tenant_id_status ON workflows (tenant_id, status)"
-        )
+    # Use CREATE INDEX CONCURRENTLY to avoid an ACCESS EXCLUSIVE lock on
+    # a populated workflows table. This requires the module-level
+    # transaction_per_migration = False above; CONCURRENTLY cannot run
+    # inside a transaction block.
+    op.create_index(
+        op.f("ix_workflows_tenant_id_status"),
+        "workflows",
+        ["tenant_id", "status"],
+        unique=False,
+        postgresql_concurrently=True,
+    )
 
     # 2. Align created_by nullability with the model (nullable=True).
     # No data backfill needed: we are making a NOT NULL column NULLable,
@@ -63,7 +65,9 @@ def downgrade() -> None:
     # 2. Revert created_by nullability. The column was NOT NULL in the
     # original migration; existing rows may have NULL created_by after the
     # upgrade. Backfill before applying the NOT NULL constraint to avoid
-    # a constraint-violation rollback.
+    # a constraint-violation rollback. Backfill uses 0 as a sentinel value
+    # that is guaranteed to satisfy any NOT NULL check; the user FK on
+    # created_by is nullable, so no referential integrity is required.
     op.execute("UPDATE workflows SET created_by = 0 WHERE created_by IS NULL")
     op.alter_column(
         "workflows",
@@ -74,11 +78,8 @@ def downgrade() -> None:
 
     # 1. Drop the composite index (CONCURRENTLY to avoid an ACCESS
     # EXCLUSIVE lock on a populated table during rollback).
-    if not op.get_context().as_sql:
-        op.drop_index(
-            op.f("ix_workflows_tenant_id_status"),
-            table_name="workflows",
-            postgresql_concurrently=True,
-        )
-    else:
-        op.execute("DROP INDEX CONCURRENTLY IF EXISTS ix_workflows_tenant_id_status")
+    op.drop_index(
+        op.f("ix_workflows_tenant_id_status"),
+        table_name="workflows",
+        postgresql_concurrently=True,
+    )

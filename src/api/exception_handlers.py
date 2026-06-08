@@ -54,9 +54,9 @@ def register_exception_handlers(app: FastAPI) -> None:
         logger.error(
             "unhandled_exception",
             type=type(exc).__name__,
-            detail=str(exc),
             request_id=request_id,
             path=request.url.path,
+            exc_info=True,
         )
         return JSONResponse(
             status_code=500,

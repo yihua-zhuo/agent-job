@@ -29,6 +29,10 @@ def upgrade() -> None:
         "workflow_executions",
         type_="foreignkey",
     )
+    # ondelete='CASCADE' is intentional: workflow_executions are operational
+    # state, not audit data. When a tenant is removed, all of its execution
+    # rows are removed automatically — matching the model definition and
+    # avoiding orphan rows. No audit/retention policy applies here.
     op.create_foreign_key(
         "fk_workflow_executions_tenant_id",
         "workflow_executions",
@@ -45,6 +49,9 @@ def downgrade() -> None:
         "workflow_executions",
         type_="foreignkey",
     )
+    # Restore the FK to the pre-drift state defined by migration 9e805b1493a6
+    # (no ondelete behavior specified — i.e. default NO ACTION). This matches
+    # the original definition before this migration added CASCADE.
     op.create_foreign_key(
         "fk_workflow_executions_tenant_id",
         "workflow_executions",
