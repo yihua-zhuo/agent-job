@@ -5,6 +5,7 @@ JSON envelopes without pulling in the full application stack.
 """
 
 import uuid
+import weakref
 
 from fastapi import FastAPI, Request
 from fastapi.encoders import jsonable_encoder
@@ -131,8 +132,10 @@ def _resolve_request_id(request: Request) -> str:
 # ── Idempotent registration ───────────────────────────────────────────────
 # Module-level handler references let callers re-register safely without
 # FastAPI's exception-handler dict accumulating duplicates for a second
-# app instance.
-_REGISTERED_APPS: set[int] = set()
+# app instance. WeakSet holds app references so we don't pin them in memory
+# after the test/app goes out of scope, and uses object identity (not `id()`)
+# so a recycled id from a freed object can't accidentally mask a fresh app.
+_REGISTERED_APPS: weakref.WeakSet[FastAPI] = weakref.WeakSet()
 
 
 def register_exception_handlers(app: FastAPI) -> None:
@@ -140,10 +143,10 @@ def register_exception_handlers(app: FastAPI) -> None:
 
     Idempotent: a second call against the same app instance is a no-op.
     """
-    if id(app) in _REGISTERED_APPS:
+    if app in _REGISTERED_APPS:
         return
     app.add_exception_handler(AppException, app_exception_handler)
     app.add_exception_handler(IntegrityError, integrity_error_handler)
     app.add_exception_handler(RequestValidationError, request_validation_error_handler)
     app.add_exception_handler(Exception, generic_exception_handler)
-    _REGISTERED_APPS.add(id(app))
+    _REGISTERED_APPS.add(app)

@@ -370,11 +370,12 @@ class TestWorkflowModelIntegration:
     async def test_json_fields_default_values_when_omitted(self, db_schema, _seed_tenant, async_session):
         """JSONB columns with non-Optional type annotation default to empty values.
 
-        Verifies Python-side default values for the JSONB fields. The model
-        declares nullable=False with default=dict / default=list at the
-        column level, so the ORM populates empty containers when a
-        WorkflowModel is constructed without specifying those fields. NULL
-        values cannot be persisted because the column is NOT NULL.
+        Verifies that the Python-side defaults on the JSONB column definitions
+        fire when a `WorkflowModel` is constructed without specifying those
+        fields. Because the columns are NOT NULL, this test exercises the
+        default-application path, not a NULL round-trip — the ORM populates
+        `trigger_config={}`, `actions=[]`, and `conditions=[]` from the
+        `default=dict` / `default=list` column arguments before flush.
         """
         tid = _seed_tenant
         # Construct without specifying JSONB fields — defaults take over
