@@ -77,10 +77,13 @@ def downgrade() -> None:
     constraint. We use a per-tenant min(user_id) backfill so the
     inserted id is always a real, referentially-valid user row.
     """
+    import logging
+
     bind = op.get_bind()
     # Diagnostic: log the per-tenant NULL row counts *before* the backfill
     # so operators can see which tenants will be affected if the backfill
-    # is unable to find a user.
+    # is unable to find a user. Uses the alembic logger so the message
+    # surfaces in CI logs and operator dashboards, not just stdout.
     null_counts = bind.execute(
         text(
             """
@@ -94,12 +97,31 @@ def downgrade() -> None:
     ).fetchall()
     if null_counts:
         summary = ", ".join(f"tenant_id={row.tenant_id} count={row.null_count}" for row in null_counts)
-        print(f"workflows downgrade: NULL created_by rows present: {summary}")
+        logging.getLogger("alembic.runtime.migration").warning(
+            "workflows downgrade: NULL created_by rows present: %s", summary
+        )
 
     # CTE-based backfill: precompute the per-tenant minimum user id once,
     # then JOIN. This is O(N + M) where N = workflows with NULL
     # created_by and M = users — a correlated subquery would be O(N × M)
     # on a large tenant.
+    # Pre-check: ensure the users table exists before running the CTE,
+    # so a missing table produces an actionable error instead of a
+    # raw relation-does-not-exist.
+    users_exists = bind.execute(
+        text(
+            """
+            SELECT 1 FROM information_schema.tables
+            WHERE table_name = 'users'
+            """
+        )
+    ).first()
+    if users_exists is None:
+        raise RuntimeError(
+            "Cannot downgrade workflows.created_by: the 'users' table "
+            "does not exist in this database. Backfill cannot resolve "
+            "real user ids without it."
+        )
     bind.execute(
         text(
             """

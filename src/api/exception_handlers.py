@@ -87,11 +87,23 @@ async def integrity_error_handler(request: Request, exc: IntegrityError) -> JSON
     dependency already rolls back the session in its ``except`` branch
     before re-raising into this handler, so no additional rollback is
     needed here.
+
+    Transaction boundary: the handler returns a response without
+    re-raising, so the request-scoped transaction in ``get_db()`` has
+    already been rolled back by the dependency before the exception
+    propagated to FastAPI's handler chain. If a service ever catches
+    the IntegrityError and re-raises a different exception, the
+    rollback is still handled by the dependency's ``except`` block.
     """
     request_id = _resolve_request_id(request)
+    constraint_name = None
+    diag = getattr(exc.orig, "diag", None)
+    if diag is not None:
+        constraint_name = getattr(diag, "constraint_name", None)
     logger.error(
         "integrity_error",
-        type=type(exc).__name__,
+        exception_type=type(exc).__name__,
+        constraint_name=constraint_name,
         path=request.url.path,
         request_id=request_id,
     )
@@ -132,11 +144,14 @@ async def request_validation_error_handler(request: Request, exc: RequestValidat
 async def generic_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     """Catch-all for any unhandled exception.
 
-    AppException is registered separately and dispatched first by FastAPI
-    based on the MRO. StarletteHTTPException is also handled by a
-    dedicated handler (registered above the bare ``Exception`` handler)
-    and dispatched by MRO before this catch-all runs, so this handler
-    only ever sees non-HTTPException errors.
+    AppException and StarletteHTTPException are each registered against
+    their own concrete class (see ``register_exception_handlers``). The
+    generic ``Exception`` handler is registered last; FastAPI's
+    ``add_exception_handler`` stores handlers in a dict keyed by class
+    and dispatches via isinstance against the registered class, so the
+    more specific handlers run first. NOTE: this depends on the
+    StarletteHTTPException handler being registered before this one —
+    if handler registration order changes, verify dispatch still works.
 
     For everything else we log the exception class name plus a sanitised
     message string and request_id to give operators enough diagnostic
@@ -149,7 +164,7 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     message = _sanitise_message(str(exc))
     logger.error(
         "unhandled_exception",
-        type=type(exc).__name__,
+        exception_type=type(exc).__name__,
         message=message,
         path=request.url.path,
         request_id=request_id,
@@ -166,10 +181,19 @@ async def generic_exception_handler(request: Request, exc: Exception) -> JSONRes
     )
 
 
-# Pattern to detect hex-encoded API keys or secrets (32+ hex characters
-# in a row). Catches things like long random tokens that don't start with
-# a known prefix.
-_HEX_SECRET_RE = re.compile(r"\b[0-9a-f]{32,}\b", re.IGNORECASE)
+# Pattern to detect hex-encoded API keys or secrets. 64+ chars (not 32)
+# to avoid collision with UUIDs (32 hex chars) and short SHA-256 prefixes.
+_HEX_SECRET_RE = re.compile(r"\b[0-9a-f]{64,}\b", re.IGNORECASE)
+
+# JWT compact-serialisation pattern: header.payload.signature, where
+# header and payload are both base64url-encoded JSON objects. Matches
+# only the full three-segment JWT shape so a stray "eyj" in another
+# context isn't redacted.
+_JWT_RE = re.compile(r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
+
+# Redact only URLs that carry userinfo credentials (scheme://user:pass@host),
+# not bare URLs like postgresql+asyncpg://localhost:5432/db.
+_URL_CREDS_RE = re.compile(r"://[^\s@/:]+:[^\s@/]+@")
 
 
 def _sanitise_message(message: str) -> str:
@@ -181,17 +205,17 @@ def _sanitise_message(message: str) -> str:
     is still emitted via ``exc_info=True``; this only controls the
     structured fields.
     """
+    if _JWT_RE.search(message):
+        return "[message redacted — contains secret-like content]"
+    if _URL_CREDS_RE.search(message):
+        return "[message redacted — contains secret-like content]"
     lower = message.lower()
     for marker in (
         "password=",
         "passwd=",
-        "://",
         "secret=",
-        "token=",
         "api_key=",
         "bearer ",
-        # JWTs start with "eyJ" (base64-encoded JSON header)
-        "eyj",
     ):
         if marker in lower:
             return "[message redacted — contains secret-like content]"
@@ -216,11 +240,14 @@ def _resolve_request_id(request: Request) -> str:
 
 
 # ── Idempotent registration ───────────────────────────────────────────────
-# Module-level handler references let callers re-register safely without
-# FastAPI's exception-handler dict accumulating duplicates for a second
-# app instance. WeakSet holds app references so we don't pin them in memory
-# after the test/app goes out of scope, and uses object identity (not `id()`)
-# so a recycled id from a freed object can't accidentally mask a fresh app.
+# Track registered (id(app), app) pairs so a recycled id from a freed
+# object cannot mask a freshly-created test app. The module-level handler
+# references are reused for every registration — FastAPI's
+# ``add_exception_handler`` stores the handler object itself, not a
+# closure, so re-registering the same callable against a new app does
+# not accumulate duplicate handlers in FastAPI's dict (each app has its
+# own handler dict). The guard here avoids the dict-growing side effect
+# of unnecessary add_exception_handler calls on hot test paths.
 _REGISTERED_APPS: weakref.WeakSet[FastAPI] = weakref.WeakSet()
 
 

@@ -60,7 +60,15 @@ class NodeStatus(StrEnum):
 
 
 class WorkflowModel(Base):
-    """Workflow entity mapped to the `workflows` table."""
+    """Workflow entity mapped to the `workflows` table.
+
+    Cascade chain: deleting a tenant cascades to its workflows (tenant_id
+    FK, ondelete=CASCADE) and then to child rows (WorkflowNodeModel and
+    WorkflowExecutionModel) via their workflow_id FK. PostgreSQL
+    handles the double-cascade without double-delete errors, but the
+    deletion order is not guaranteed — operators relying on a specific
+    sequence should pre-emptively delete child rows.
+    """
 
     __tablename__ = "workflows"
     __table_args__ = (Index("ix_workflows_tenant_id_status", "tenant_id", "status"),)
@@ -73,10 +81,16 @@ class WorkflowModel(Base):
     trigger_config: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False
     )
-    actions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
-    conditions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False)
+    actions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False
+    )
+    conditions: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, default=list, server_default=text("'[]'::jsonb"), nullable=False
+    )
     status: Mapped[str] = mapped_column(String(50), default="draft", server_default="draft", nullable=False)
-    created_by: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    created_by: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
@@ -109,12 +123,8 @@ class WorkflowExecutionModel(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    workflow_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
-    )
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
+    workflow_id: Mapped[int] = mapped_column(Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     trigger_type: Mapped[str] = mapped_column(String(50), default="manual", server_default="manual", nullable=False)
     triggered_by: Mapped[int | None] = mapped_column(
         Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True
@@ -148,17 +158,15 @@ class WorkflowNodeModel(Base):
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    workflow_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False
-    )
-    tenant_id: Mapped[int] = mapped_column(
-        Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
-    )
+    workflow_id: Mapped[int] = mapped_column(Integer, ForeignKey("workflows.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
     node_type: Mapped[str] = mapped_column(String(50), default="action", server_default="action", nullable=False)
     definition_json: Mapped[dict[str, Any]] = mapped_column(
         JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False
     )
-    input: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False)
+    input: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, default=dict, server_default=text("'{}'::jsonb"), nullable=False
+    )
     output: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
     status: Mapped[str] = mapped_column(String(50), default="pending", server_default="pending", nullable=False)
     execution_order: Mapped[int] = mapped_column(Integer, default=0, server_default="0", nullable=False)

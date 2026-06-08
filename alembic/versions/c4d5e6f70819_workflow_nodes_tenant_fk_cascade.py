@@ -5,9 +5,13 @@ Revises: b3c4d5e6f708
 Create Date: 2026-06-08 12:30:00.000000
 
 Aligns the workflow_nodes.tenant_id foreign key with WorkflowNodeModel by
-recreating it with ondelete='CASCADE'. Migration 185055a0d4f0 created the
-column as a plain Integer without an FK / ondelete; the model declares
-ForeignKey("tenants.id", ondelete="CASCADE").
+recreating it with ondelete='CASCADE'.
+
+Drift context: the original 185055a0d4f0 migration created the
+workflow_nodes.tenant_id column as a plain Integer with no FK constraint
+at all, leaving the column unconstrained at the DB level. WorkflowNodeModel
+declares ForeignKey("tenants.id", ondelete="CASCADE"). This migration
+closes the gap by adding the FK with CASCADE semantics.
 
 Retention policy: workflow_nodes are operational state, not audit data.
 When a tenant is removed, all of its node rows are removed automatically —
@@ -43,6 +47,11 @@ def _find_existing_fk_name(table_name: str) -> str | None:
     column. Returns None if no constraint exists. The downgrade path uses
     this to drop an FK that may have been added by a different migration
     under a different name (the original 185055a0d4f0 created no FK at all).
+
+    Note: ``table_name`` is bound as a regclass parameter, which is safe
+    for literal table names. All callers in this module pass hardcoded
+    strings — if this ever changes, validate the value against an
+    allowlist of expected table names.
     """
     bind = op.get_bind()
     row = bind.execute(
@@ -82,7 +91,7 @@ def upgrade() -> None:
             """
             SELECT 1 FROM workflow_nodes wn
             LEFT JOIN tenants t ON t.id = wn.tenant_id
-            WHERE t.id IS NULL
+            WHERE t.id IS NULL AND wn.tenant_id IS NOT NULL
             LIMIT 1
             """
         )

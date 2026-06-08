@@ -35,7 +35,11 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 # CONCURRENTLY cannot run inside a transaction block, so this migration
-# must skip Alembic's per-migration transaction wrapping.
+# must skip Alembic's per-migration transaction wrapping. The guard query
+# against pg_indexes on L44-L48 also runs outside a transaction — this is
+# safe because pg_indexes is a system catalog whose reads are inherently
+# non-transactional and the DDL it guards (CREATE INDEX CONCURRENTLY)
+# also runs non-transactionally.
 transaction_per_migration = False
 
 
@@ -52,6 +56,7 @@ def upgrade() -> None:
             "workflows",
             ["tenant_id", "status"],
             postgresql_concurrently=True,
+            if_not_exists=True,
         )
 
 

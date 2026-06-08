@@ -30,9 +30,10 @@ branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
 
-# Fallback FK name used when no existing FK can be resolved. The drop+create
-# pair in upgrade()/downgrade() both reference the same name (PostgreSQL
-# renames the constraint to whatever create_foreign_key supplies).
+# FK name shared by both upgrade and downgrade. Both the drop+create
+# pair reference the same name so the constraint identity is preserved
+# across the drop+create cycle, regardless of what name the original
+# 9e805b1493a6 migration used.
 _FK_NAME = "fk_workflow_executions_tenant_id"
 
 
@@ -44,6 +45,11 @@ def _find_existing_fk_name() -> str | None:
     passing a hardcoded fallback to ``drop_constraint`` would fail with
     'constraint does not exist' on databases where the FK was never
     created (e.g. partial application state).
+
+    Note: this query is single-column-only. It hardcodes ``tenant_id``
+    in the attname check, so composite FKs (multi-column) will not
+    match. If a future FK on workflow_executions becomes composite,
+    generalise the query to compare against the full ``conkey`` array.
     """
     bind = op.get_bind()
     name = bind.execute(
@@ -65,8 +71,9 @@ def _find_existing_fk_name() -> str | None:
 def upgrade() -> None:
     """Drop and recreate the FK with ondelete='CASCADE'.
 
-    The drop and create run in the same Alembic transaction, so the
-    column is never left without referential integrity.
+    The drop and create run in the same Alembic migration transaction
+    (transaction_per_migration is True by default for this revision),
+    so the column is never left without referential integrity.
     """
     fk_name = _find_existing_fk_name()
     with op.batch_alter_table("workflow_executions") as batch_op:
@@ -91,11 +98,13 @@ def downgrade() -> None:
     with op.batch_alter_table("workflow_executions") as batch_op:
         if fk_name:
             batch_op.drop_constraint(fk_name, type_="foreignkey")
-        # The ondelete value here matches the original pre-drift
-        # state from 9e805b1493a6 (no ondelete = NO ACTION).
+        # Explicit ondelete='NO ACTION' documents intent: matches the
+        # pre-drift state from 9e805b1493a6 where the column had no
+        # ondelete specified (which defaults to NO ACTION in PostgreSQL).
         batch_op.create_foreign_key(
             _FK_NAME,
             "tenants",
             ["tenant_id"],
             ["id"],
+            ondelete="NO ACTION",
         )

@@ -1,5 +1,3 @@
-Now I have everything I need. The `WorkflowModel` already exists at `src/db/models/workflow.py` with all requested fields plus a few extras (`description`, `trigger_config`, `created_by`). The `workflows` table was created in migration `b2c3dce4b714`. The model is auto-discovered via `db.models.__init__`. The task is to verify alignment and add tests.
-
 # Implementation Plan — Issue #461
 
 ## Goal
@@ -61,7 +59,13 @@ Verify the existing `WorkflowModel` at `src/db/models/workflow.py` contains ever
   - `conditions` and `actions` default to `[]` when `None`
   - `status` default is `"draft"`
   - `trigger_type` default is `"manual"`
-  - Column-type assertion (`JSONB` for `conditions` and `actions`) is **deferred to the integration test** because unit tests construct the model without a session; the integration test inspects `pg_catalog` for the column type.
+  - Column-type assertion (`JSONB` for `conditions` and `actions`) is **deferred to the integration test** because unit tests construct the model without a session; the integration test inspects `pg_catalog` for the column type. The exact assertion query is:
+    ```sql
+    SELECT data_type FROM information_schema.columns
+    WHERE table_name = 'workflows'
+      AND column_name IN ('conditions', 'actions', 'trigger_config')
+    -- expected: data_type = 'jsonb' for all three rows
+    ```
   - Tenant isolation: a query constructed without `tenant_id` in the `WHERE` clause returns no rows (mocks preserve the tenant predicate)
   - Follows the bare-model test pattern from `test_tenant_model.py` — no domain handler required.
 

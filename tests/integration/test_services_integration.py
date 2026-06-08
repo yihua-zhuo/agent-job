@@ -26,6 +26,7 @@ from services.task_service import TaskService
 from services.tenant_service import TenantService
 from services.workflow_service import WorkflowService
 from tests.integration.domain_fixtures._shared import seed_user
+from tests.integration.domain_fixtures.customer import seed_customer
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -386,13 +387,7 @@ class TestActivityIntegration:
     """Full activity lifecycle via the real DB."""
 
     async def _seed_customer(self, tenant_id: int, async_session) -> int:
-        cust_svc = CustomerService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        result = await cust_svc.create_customer(
-            data={"name": f"Activity Cust {suffix}", "email": f"act_{suffix}@example.com"},
-            tenant_id=tenant_id,
-        )
-        return result.id
+        return await seed_customer(async_session, tenant_id)
 
     async def test_create_and_get_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
