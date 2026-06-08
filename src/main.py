@@ -9,7 +9,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from api import iter_routers
 from api.exception_handlers import register_exception_handlers
 from configs.settings import settings
-from internal.db.engine import dispose_async_engine
+from db.connection import dispose_async_engine, ensure_engine
 from internal.middleware.tenant_context import TenantContextMiddleware
 from middleware.logging import LoggingMiddleware, logger
 
@@ -17,8 +17,6 @@ from middleware.logging import LoggingMiddleware, logger
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup / shutdown lifecycle — keep async engine warm."""
-    from db.connection import ensure_engine
-
     ensure_engine()
     app.state.llm_http_client = httpx.AsyncClient(timeout=30.0)
     logger.info("app_started", env=settings.env, app_name=settings.app_name)

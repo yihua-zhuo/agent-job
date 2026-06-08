@@ -103,8 +103,29 @@ def ensure_engine():
     _lazy_init()
 
 
+async def dispose_async_engine():
+    """Dispose the async engine pool and reset the singletons.
+
+    Async variant — call this from within an async lifespan handler::
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            yield
+            await dispose_async_engine()
+    """
+    global engine, async_session_maker
+    if engine is not None:
+        await engine.dispose()
+    engine = None
+    async_session_maker = None
+
+
 def dispose_engine():
-    """Dispose engine pool on FastAPI shutdown."""
+    """Sync dispose of the engine pool on FastAPI shutdown.
+
+    Retained for compatibility with code paths that run outside an
+    event loop. Prefer `dispose_async_engine` from async contexts.
+    """
     global engine, async_session_maker
     if engine is not None:
         import asyncio

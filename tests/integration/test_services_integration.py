@@ -24,8 +24,8 @@ from services.marketing_service import MarketingService
 from services.notification_service import NotificationService
 from services.task_service import TaskService
 from services.tenant_service import TenantService
-from services.user_service import UserService
 from services.workflow_service import WorkflowService
+from tests.integration.domain_fixtures._shared import seed_user
 
 
 # ──────────────────────────────────────────────────────────────────────────────────────
@@ -35,32 +35,9 @@ from services.workflow_service import WorkflowService
 class TestWorkflowIntegration:
     """Full workflow lifecycle via the real DB."""
 
-    async def _seed_tenant(self, async_session):
-        """Insert a tenant record so FK constraints are satisfied."""
-        svc = TenantService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        result = await svc.create_tenant(
-            name=f"WF Tenant {suffix}",
-            plan="pro",
-            admin_email=f"wf_{suffix}@example.com",
-        )
-        return result.id
-
-    async def _seed_user(self, tenant_id: int, async_session) -> int:
-        """Create a user and return their id (needed for created_by)."""
-        user_svc = UserService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        reg = await user_svc.create_user(
-            username=f"wfuser_{suffix}",
-            email=f"wf_{suffix}@example.com",
-            password="Test@Pass1234",
-            tenant_id=tenant_id,
-        )
-        return reg.id
-
-    async def test_create_and_get_workflow(self, db_schema, async_session):
-        tid = await self._seed_tenant(async_session)
-        uid = await self._seed_user(tid, async_session)
+    async def test_create_and_get_workflow(self, db_schema, _seed_tenant, async_session):
+        tid = _seed_tenant
+        uid = await seed_user(async_session, tid, username_prefix="wfuser", email_prefix="wf")
         svc = WorkflowService(async_session)
         result = await svc.create_workflow(
             tenant_id=tid,
@@ -83,9 +60,9 @@ class TestWorkflowIntegration:
         assert fetched.conditions == [{"field": "status", "operator": "==", "value": "new"}]
         assert fetched.actions == [{"type": "email.send", "template": "welcome"}]
 
-    async def test_workflow_activate_and_pause(self, db_schema, async_session):
-        tid = await self._seed_tenant(async_session)
-        uid = await self._seed_user(tid, async_session)
+    async def test_workflow_activate_and_pause(self, db_schema, _seed_tenant, async_session):
+        tid = _seed_tenant
+        uid = await seed_user(async_session, tid, username_prefix="wfuser", email_prefix="wf")
         svc = WorkflowService(async_session)
         created = await svc.create_workflow(
             tenant_id=tid,
@@ -110,9 +87,9 @@ class TestWorkflowIntegration:
         refetched_paused = await svc.get_workflow(created.id, tenant_id=tid)
         assert refetched_paused.status == "paused"
 
-    async def test_workflow_evaluate_conditions(self, db_schema, async_session):
-        tid = await self._seed_tenant(async_session)
-        uid = await self._seed_user(tid, async_session)
+    async def test_workflow_evaluate_conditions(self, db_schema, _seed_tenant, async_session):
+        tid = _seed_tenant
+        uid = await seed_user(async_session, tid, username_prefix="wfuser", email_prefix="wf")
         svc = WorkflowService(async_session)
         created = await svc.create_workflow(
             tenant_id=tid,
@@ -164,25 +141,26 @@ class TestWorkflowIntegration:
         )
         assert empty_match is True
 
-    async def test_workflow_execute_not_found(self, db_schema, async_session):
+    async def test_workflow_execute_not_found(self, db_schema, _seed_tenant, async_session):
         """execute_workflow with a non-existent id raises NotFoundException."""
+        tid = _seed_tenant
         svc = WorkflowService(async_session)
-        # Use a non-existent tenant_id to confirm the lookup fails fast.
+        # Use a real tenant_id with a non-existent workflow_id (Rule 49).
         with pytest.raises(NotFoundException):
             await svc.execute_workflow(
                 workflow_id=999_999_999,
                 context={"amount": 1000},
-                tenant_id=0,
+                tenant_id=tid,
             )
 
-    async def test_workflow_cross_tenant_isolation(
-        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant, _seed_tenant_2
-    ):
+    async def test_workflow_cross_tenant_isolation(self, db_schema, _seed_tenant, _seed_tenant_2, async_session):
         """WorkflowService.get_workflow must raise NotFoundException when called
         with a different tenant_id than the one that owns the workflow (Rule 126)."""
+        tenant_id = _seed_tenant
+        tenant_id_2 = _seed_tenant_2
         svc = WorkflowService(async_session)
-        uid1 = await self._seed_user(tenant_id, async_session)
-        uid2 = await self._seed_user(tenant_id_2, async_session)
+        uid1 = await seed_user(async_session, tenant_id, username_prefix="wfuser1", email_prefix="wf1")
+        uid2 = await seed_user(async_session, tenant_id_2, username_prefix="wfuser2", email_prefix="wf2")
 
         # Create a workflow under tenant 1
         wf1 = await svc.create_workflow(
@@ -230,19 +208,8 @@ class TestWorkflowIntegration:
 class TestMarketingIntegration:
     """Full campaign lifecycle via the real DB."""
 
-    async def _seed_user(self, async_session, tenant_id):
-        user_svc = UserService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        reg = await user_svc.create_user(
-            username=f"mktuser_{suffix}",
-            email=f"mkt_{suffix}@example.com",
-            password="Test@Pass1234",
-            tenant_id=tenant_id,
-        )
-        return reg.id
-
     async def test_create_and_get_campaign(self, db_schema, tenant_id, async_session):
-        uid = await self._seed_user(async_session, tenant_id)
+        uid = await seed_user(async_session, tenant_id, username_prefix="mktuser", email_prefix="mkt")
         svc = MarketingService(async_session)
         result = await svc.create_campaign(
             name="Summer Sale 2026",
@@ -260,7 +227,7 @@ class TestMarketingIntegration:
         assert fetched.name == "Summer Sale 2026"
 
     async def test_launch_and_pause_campaign(self, db_schema, tenant_id, async_session):
-        uid = await self._seed_user(async_session, tenant_id)
+        uid = await seed_user(async_session, tenant_id, username_prefix="mktuser", email_prefix="mkt")
         svc = MarketingService(async_session)
         created = await svc.create_campaign(
             name="Launch Test",
@@ -280,7 +247,7 @@ class TestMarketingIntegration:
         assert paused.status == "paused"
 
     async def test_campaign_stats(self, db_schema, tenant_id, async_session):
-        uid = await self._seed_user(async_session, tenant_id)
+        uid = await seed_user(async_session, tenant_id, username_prefix="mktuser", email_prefix="mkt")
         svc = MarketingService(async_session)
         created = await svc.create_campaign(
             name="Stats Test",
@@ -299,7 +266,7 @@ class TestMarketingIntegration:
         assert "click_count" in stats
 
     async def test_list_campaigns(self, db_schema, tenant_id, async_session):
-        uid = await self._seed_user(async_session, tenant_id)
+        uid = await seed_user(async_session, tenant_id, username_prefix="mktuser", email_prefix="mkt")
         svc = MarketingService(async_session)
         suffix = uuid.uuid4().hex[:8]
         await svc.create_campaign(
@@ -334,20 +301,9 @@ class TestMarketingIntegration:
 class TestTaskIntegration:
     """Full task lifecycle via the real DB."""
 
-    async def _seed_user(self, tenant_id: int, async_session) -> int:
-        user_svc = UserService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        reg = await user_svc.create_user(
-            username=f"taskuser_{suffix}",
-            email=f"task_{suffix}@example.com",
-            password="Test@Pass1234",
-            tenant_id=tenant_id,
-        )
-        return reg.id
-
     async def test_create_and_get_task(self, db_schema, tenant_id, async_session):
         svc = TaskService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="taskuser", email_prefix="task")
         result = await svc.create_task(
             title="Review PR #42",
             description="Review the new feature PR",
@@ -366,7 +322,7 @@ class TestTaskIntegration:
 
     async def test_update_and_complete_task(self, db_schema, tenant_id, async_session):
         svc = TaskService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="taskuser", email_prefix="task")
         created = await svc.create_task(
             title="Original Task",
             description="",
@@ -385,7 +341,7 @@ class TestTaskIntegration:
 
     async def test_delete_task(self, db_schema, tenant_id, async_session):
         svc = TaskService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="taskuser", email_prefix="task")
         created = await svc.create_task(
             title="To Delete",
             description="",
@@ -400,7 +356,7 @@ class TestTaskIntegration:
 
     async def test_list_tasks(self, db_schema, tenant_id, async_session):
         svc = TaskService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="taskuser", email_prefix="task")
         suffix = uuid.uuid4().hex[:8]
         await svc.create_task(
             title=f"List Task 1 {suffix}",
@@ -429,17 +385,6 @@ class TestTaskIntegration:
 class TestActivityIntegration:
     """Full activity lifecycle via the real DB."""
 
-    async def _seed_user(self, tenant_id: int, async_session) -> int:
-        user_svc = UserService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        reg = await user_svc.create_user(
-            username=f"actuser_{suffix}",
-            email=f"act_{suffix}@example.com",
-            password="Test@Pass1234",
-            tenant_id=tenant_id,
-        )
-        return reg.id
-
     async def _seed_customer(self, tenant_id: int, async_session) -> int:
         cust_svc = CustomerService(async_session)
         suffix = uuid.uuid4().hex[:8]
@@ -451,7 +396,7 @@ class TestActivityIntegration:
 
     async def test_create_and_get_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="actuser", email_prefix="act")
         cid = await self._seed_customer(tenant_id, async_session)
         result = await svc.create_activity(
             customer_id=cid,
@@ -470,7 +415,7 @@ class TestActivityIntegration:
 
     async def test_update_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="actuser", email_prefix="act")
         cid = await self._seed_customer(tenant_id, async_session)
         created = await svc.create_activity(
             customer_id=cid,
@@ -487,7 +432,7 @@ class TestActivityIntegration:
 
     async def test_list_activities(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="actuser", email_prefix="act")
         cid = await self._seed_customer(tenant_id, async_session)
         suffix = uuid.uuid4().hex[:8]
         await svc.create_activity(
@@ -504,7 +449,7 @@ class TestActivityIntegration:
 
     async def test_get_customer_activities(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="actuser", email_prefix="act")
         cid = await self._seed_customer(tenant_id, async_session)
         await svc.create_activity(
             customer_id=cid,
@@ -526,7 +471,7 @@ class TestActivityIntegration:
 
     async def test_delete_activity(self, db_schema, tenant_id, async_session):
         svc = ActivityService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="actuser", email_prefix="act")
         cid = await self._seed_customer(tenant_id, async_session)
         created = await svc.create_activity(
             customer_id=cid, activity_type="note", content="To Delete", created_by=uid, tenant_id=tenant_id
@@ -544,20 +489,9 @@ class TestActivityIntegration:
 class TestNotificationIntegration:
     """Notification and reminder lifecycle via the real DB."""
 
-    async def _seed_user(self, tenant_id: int, async_session) -> int:
-        user_svc = UserService(async_session)
-        suffix = uuid.uuid4().hex[:8]
-        reg = await user_svc.create_user(
-            username=f"notif_{suffix}",
-            email=f"notif_{suffix}@example.com",
-            password="Test@Pass1234",
-            tenant_id=tenant_id,
-        )
-        return reg.id
-
     async def test_send_and_get_notification(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="notif", email_prefix="notif")
         result = await svc.send_notification(
             user_id=uid,
             notification_type="in_app",
@@ -574,7 +508,7 @@ class TestNotificationIntegration:
 
     async def test_mark_notification_as_read(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="notif", email_prefix="notif")
 
         # Verify truncation guarantees a clean baseline before making assertions
         # that depend on zero pre-existing unread notifications.
@@ -597,7 +531,7 @@ class TestNotificationIntegration:
 
     async def test_unread_count(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="notif", email_prefix="notif")
         await svc.send_notification(
             user_id=uid, notification_type="in_app", title="N1", content="m", tenant_id=tenant_id
         )
@@ -610,7 +544,7 @@ class TestNotificationIntegration:
 
     async def test_create_and_cancel_reminder(self, db_schema, tenant_id, async_session, _seed_tenant):
         svc = NotificationService(async_session)
-        uid = await self._seed_user(tenant_id, async_session)
+        uid = await seed_user(async_session, tenant_id, username_prefix="notif", email_prefix="notif")
         result = await svc.create_reminder(
             user_id=uid,
             tenant_id=tenant_id,
@@ -630,19 +564,19 @@ class TestNotificationIntegration:
         result_check = await async_session.execute(select(ReminderModel).where(ReminderModel.id == result.id))
         assert result_check.scalar_one_or_none() is None
 
-    async def test_notification_cross_tenant_isolation(
-        self, db_schema, tenant_id, tenant_id_2, async_session, _seed_tenant, _seed_tenant_2
-    ):
+    async def test_notification_cross_tenant_isolation(self, db_schema, _seed_tenant, _seed_tenant_2, async_session):
         svc = NotificationService(async_session)
+        tenant_id = _seed_tenant
+        tenant_id_2 = _seed_tenant_2
 
         # Create user and notification under tenant 1
-        uid1 = await self._seed_user(tenant_id, async_session)
+        uid1 = await seed_user(async_session, tenant_id, username_prefix="notif1", email_prefix="notif1")
         notif1 = await svc.send_notification(
             user_id=uid1, notification_type="in_app", title="T1", content="m", tenant_id=tenant_id
         )
 
         # Create user under tenant 2 and send a notification to them
-        uid2 = await self._seed_user(tenant_id_2, async_session)
+        uid2 = await seed_user(async_session, tenant_id_2, username_prefix="notif2", email_prefix="notif2")
         notif2 = await svc.send_notification(
             user_id=uid2, notification_type="in_app", title="T2", content="m", tenant_id=tenant_id_2
         )

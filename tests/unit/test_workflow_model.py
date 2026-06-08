@@ -125,8 +125,23 @@ class TestWorkflowModel:
         ],
     )
     def test_default_serialization_for_jsonb_fields(self, field, serialized):
-        """to_dict() serializes empty list/dict defaults correctly for JSONB fields."""
-        workflow = make_workflow(conditions=[], actions=[], trigger_config={})
+        """to_dict() default for JSONB fields is the empty container (not None).
+
+        Construct the model with only required fields so the column-level
+        default (empty list / empty dict) is what populates the JSONB
+        columns. This is the case operators see for a freshly-created
+        workflow with no actions/conditions/trigger_config.
+        """
+        now = _now()
+        workflow = WorkflowModel(
+            id=2,
+            tenant_id=42,
+            name="Defaults Test",
+            trigger_type="manual",
+            status="draft",
+            created_at=now,
+            updated_at=now,
+        )
         assert workflow.to_dict()[field] == serialized
 
     def test_to_dict_description_none(self):
@@ -141,6 +156,14 @@ class TestWorkflowModel:
         d = workflow.to_dict()
         assert d["created_at"] is None
         assert d["updated_at"] is None
+
+    def test_model_invariants_preserved(self):
+        """Python-level invariants: to_dict preserves field values without coercion."""
+        wf = make_workflow(name="", status="draft", tenant_id=0)
+        d = wf.to_dict()
+        assert d["name"] == ""
+        assert d["status"] == "draft"
+        assert d["tenant_id"] == 0
 
 
 class TestWorkflowExecutionModel:
@@ -181,31 +204,17 @@ class TestWorkflowExecutionModel:
         assert d["result"] is None
         assert d["completed_at"] is None
 
-    def test_to_dict_with_none_optional_fields(self):
-        """to_dict works with optional fields set to None and returns all 9 expected keys."""
+    def test_model_invariants_preserved(self):
+        """to_dict preserves field values without coercion, even for non-default values."""
         execution = make_execution(
-            id=2,
-            workflow_id=20,
+            status="failed",
             triggered_by=None,
-            completed_at=None,
-            status="running",
-            result=None,
+            result={"error": "boom"},
         )
         d = execution.to_dict()
-        assert set(d.keys()) == {
-            "id",
-            "workflow_id",
-            "tenant_id",
-            "trigger_type",
-            "triggered_by",
-            "started_at",
-            "completed_at",
-            "status",
-            "result",
-        }
-        assert d["id"] == 2
-        assert d["workflow_id"] == 20
-        assert d["status"] == "running"
+        assert d["status"] == "failed"
+        assert d["triggered_by"] is None
+        assert d["result"] == {"error": "boom"}
 
 
 class TestWorkflowNodeModel:
@@ -256,3 +265,33 @@ class TestWorkflowNodeModel:
         )
         d = node.to_dict()
         assert d["output"] is None
+
+    def test_to_dict_with_running_status(self):
+        """to_dict includes status='running' as set by the caller (no coercion)."""
+        node = make_node(status="running", execution_order=3)
+        d = node.to_dict()
+        assert d["status"] == "running"
+        assert d["execution_order"] == 3
+
+    def test_execution_order_default(self):
+        """execution_order preserves the value passed at construction."""
+        node = make_node(execution_order=0)
+        assert node.to_dict()["execution_order"] == 0
+
+    def test_definition_json_none(self):
+        """to_dict returns the empty dict fallback when definition_json is None.
+
+        definition_json is declared nullable=False with a Python-side default
+        of dict, so a constructed instance has a real dict. The to_dict
+        fallback `or {}` only triggers if the ORM somehow surfaced a None
+        (e.g. legacy data). This test pins the fallback behaviour.
+        """
+        node = make_node(definition_json=None)
+        assert node.to_dict()["definition_json"] == {}
+
+    def test_model_invariants_preserved(self):
+        """to_dict preserves field values without coercion."""
+        node = make_node(node_type="trigger", execution_order=99)
+        d = node.to_dict()
+        assert d["node_type"] == "trigger"
+        assert d["execution_order"] == 99

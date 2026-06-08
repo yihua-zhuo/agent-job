@@ -10,34 +10,23 @@ Tests use the db_schema fixture which auto-creates and drops tables per test
 
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
 
 import pytest
 from sqlalchemy import select
 
 from db.models.workflow import WorkflowExecutionModel, WorkflowModel
-from services.tenant_service import TenantService
-
-
-async def _create_tenant(async_session) -> int:
-    """Insert a tenant record so FK constraints are satisfied."""
-    suffix = uuid.uuid4().hex[:8]
-    result = await TenantService(async_session).create_tenant(
-        name=f"Test Tenant {suffix}",
-        plan="pro",
-        admin_email=f"admin_{suffix}@example.com",
-    )
-    return result.id
+from pkg.errors.app_exceptions import NotFoundException
+from services.workflow_service import WorkflowService
 
 
 @pytest.mark.integration
 class TestWorkflowModelIntegration:
     """CRUD round-trip tests for WorkflowModel using real DB."""
 
-    async def test_create_and_fetch_workflow(self, db_schema, async_session):
+    async def test_create_and_fetch_workflow(self, db_schema, _seed_tenant, async_session):
         """Insert a WorkflowModel and retrieve it back — all scalar fields persist."""
-        tid = await _create_tenant(async_session)
+        tid = _seed_tenant
         workflow = WorkflowModel(
             tenant_id=tid,
             name="Send Welcome Email",
@@ -66,9 +55,9 @@ class TestWorkflowModelIntegration:
         assert workflow.created_at is not None
         assert workflow.updated_at is not None
 
-    async def test_json_fields_roundtrip_complex_structure(self, db_schema, async_session):
+    async def test_json_fields_roundtrip_complex_structure(self, db_schema, _seed_tenant, async_session):
         """JSONB fields (conditions, actions, trigger_config) round-trip nested structures correctly."""
-        tid = await _create_tenant(async_session)
+        tid = _seed_tenant
         complex_actions = [
             {"type": "email.send", "template": "onboard", "vars": {"name": "{{customer.name}}"}},
             {"type": "task.create", "title": "Follow up in 3 days", "assign_to": 5},
@@ -114,10 +103,12 @@ class TestWorkflowModelIntegration:
         assert fetched.conditions == complex_conditions
         assert fetched.trigger_config == complex_trigger_config
 
-    async def test_tenant_isolation_wrong_tenant_returns_none(self, db_schema, async_session):
+    async def test_tenant_isolation_wrong_tenant_returns_none(
+        self, db_schema, _seed_tenant, _seed_tenant_2, async_session
+    ):
         """Querying with a different tenant_id returns None (no data leak across tenants)."""
-        tid = await _create_tenant(async_session)
-        other_tid = await _create_tenant(async_session)
+        tid = _seed_tenant
+        other_tid = _seed_tenant_2
         workflow = WorkflowModel(
             tenant_id=tid,
             name="Tenant A Workflow",
@@ -149,14 +140,15 @@ class TestWorkflowModelIntegration:
         )
         assert result.scalar_one_or_none() is None
 
-    async def test_workflow_execution_roundtrip(self, db_schema, async_session):
+    async def test_workflow_execution_roundtrip(self, db_schema, _seed_tenant, async_session):
         """ORM-level round-trip test for WorkflowExecutionModel.
 
-        This is an integration test of the ORM layer, not of the service layer.
-        Service-level tenant isolation for executions is covered by
-        test_workflow_service_cross_tenant_isolation above.
+        This is an integration test of the ORM layer, not of the service
+        layer. Service-level tenant isolation for executions is covered
+        by TestWorkflowIntegration.test_workflow_cross_tenant_isolation
+        in tests/integration/test_services_integration.py.
         """
-        tid = await _create_tenant(async_session)
+        tid = _seed_tenant
         # Create a workflow first
         workflow = WorkflowModel(
             tenant_id=tid,
@@ -206,9 +198,9 @@ class TestWorkflowModelIntegration:
         # completed_at should be >= the time we started this test, not from 1970
         assert execution.completed_at >= started_before
 
-    async def test_workflow_update_persists(self, db_schema, async_session):
+    async def test_workflow_update_persists(self, db_schema, _seed_tenant, async_session):
         """Updating a workflow field and flushing persists the change."""
-        tid = await _create_tenant(async_session)
+        tid = _seed_tenant
         workflow = WorkflowModel(
             tenant_id=tid,
             name="Update Test",
@@ -231,9 +223,9 @@ class TestWorkflowModelIntegration:
         assert fetched.status == "active"
         assert fetched.name == "Updated Name"
 
-    async def test_workflow_delete(self, db_schema, async_session):
+    async def test_workflow_delete(self, db_schema, _seed_tenant, async_session):
         """Deleting a workflow removes it from the DB."""
-        tid = await _create_tenant(async_session)
+        tid = _seed_tenant
         workflow = WorkflowModel(
             tenant_id=tid,
             name="Delete Me",
@@ -256,9 +248,9 @@ class TestWorkflowModelIntegration:
         result = await async_session.execute(select(WorkflowModel).where(WorkflowModel.id == wf_id))
         assert result.scalar_one_or_none() is None
 
-    async def test_json_fields_empty_values_roundtrip(self, db_schema, async_session):
+    async def test_json_fields_empty_values_roundtrip(self, db_schema, _seed_tenant, async_session):
         """Empty dicts, empty lists, and None for JSONB columns round-trip without corruption."""
-        tid = await _create_tenant(async_session)
+        tid = _seed_tenant
         workflow = WorkflowModel(
             tenant_id=tid,
             name="Edge Case Workflow",
@@ -283,7 +275,7 @@ class TestWorkflowModelIntegration:
         assert fetched.actions == []
         assert fetched.conditions == []
 
-    async def test_workflow_service_owner_tenant_can_fetch(self, db_schema, async_session):
+    async def test_workflow_service_owner_tenant_can_fetch(self, db_schema, _seed_tenant, async_session):
         """WorkflowService.get_workflow returns the workflow when called by the
         owning tenant (Rule 126).
 
@@ -291,9 +283,7 @@ class TestWorkflowModelIntegration:
         that test exercises the ORM/SQL layer; this test exercises the service
         layer's tenant_id enforcement.
         """
-        from services.workflow_service import WorkflowService
-
-        tid = await _create_tenant(async_session)
+        tid = _seed_tenant
 
         workflow = WorkflowModel(
             tenant_id=tid,
@@ -313,15 +303,12 @@ class TestWorkflowModelIntegration:
         fetched = await svc.get_workflow(wf_id, tenant_id=tid)
         assert fetched.id == wf_id
 
-    async def test_workflow_service_cross_tenant_blocked(self, db_schema, async_session):
+    async def test_workflow_service_cross_tenant_blocked(self, db_schema, _seed_tenant, _seed_tenant_2, async_session):
         """WorkflowService.get_workflow must raise NotFoundException when called
         with a different tenant_id than the one that owns the workflow (Rule 126).
         """
-        from pkg.errors.app_exceptions import NotFoundException
-        from services.workflow_service import WorkflowService
-
-        tid = await _create_tenant(async_session)
-        other_tid = await _create_tenant(async_session)
+        tid = _seed_tenant
+        other_tid = _seed_tenant_2
 
         workflow = WorkflowModel(
             tenant_id=tid,
@@ -341,16 +328,14 @@ class TestWorkflowModelIntegration:
         with pytest.raises(NotFoundException):
             await svc.get_workflow(wf_id, tenant_id=other_tid)
 
-    async def test_boolean_condition_evaluates_correctly(self, db_schema, async_session):
+    async def test_boolean_condition_evaluates_correctly(self, db_schema, _seed_tenant, async_session):
         """The condition evaluator must support boolean values in JSONB conditions.
 
         test_json_fields_roundtrip_complex_structure above persists a boolean
         condition; this test verifies the service-level evaluator can match
         against boolean context values.
         """
-        from services.workflow_service import WorkflowService
-
-        tid = await _create_tenant(async_session)
+        tid = _seed_tenant
         svc = WorkflowService(async_session)
         workflow = WorkflowModel(
             tenant_id=tid,
@@ -382,16 +367,16 @@ class TestWorkflowModelIntegration:
         )
         assert no_match is False
 
-    async def test_json_fields_default_values_when_omitted(self, db_schema, async_session):
+    async def test_json_fields_default_values_when_omitted(self, db_schema, _seed_tenant, async_session):
         """JSONB columns with non-Optional type annotation default to empty values.
 
-        Verifies that even if a row is fetched from DB where the column
-        might be NULL (edge case from pre-existing data), the model's
-        __table_args__ default values ensure consistent behaviour.
-        The model declares nullable=False with default=dict, so None
-        is never persisted.
+        Verifies Python-side default values for the JSONB fields. The model
+        declares nullable=False with default=dict / default=list at the
+        column level, so the ORM populates empty containers when a
+        WorkflowModel is constructed without specifying those fields. NULL
+        values cannot be persisted because the column is NOT NULL.
         """
-        tid = await _create_tenant(async_session)
+        tid = _seed_tenant
         # Construct without specifying JSONB fields — defaults take over
         workflow = WorkflowModel(
             tenant_id=tid,
