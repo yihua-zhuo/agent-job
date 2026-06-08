@@ -2,11 +2,32 @@
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Callable
 from datetime import UTC, datetime
 from typing import Any
 
 from tests.unit.conftest import MockResult, MockRow, MockState
+
+
+class _MutableNotificationRow(MockRow):
+    """MockRow that shares its mapping with the store dict.
+
+    Allows mark_as_read's in-place mutation (notification.read_at = ...)
+    to propagate to the store without requiring a flush round-trip.
+    """
+
+    def __init__(self, store_dict: dict):
+        super().__init__(store_dict)
+        self._store_ref = store_dict
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        if name.startswith("_") or name in ("_mapping", "_is_sequence", "_scalar", "_store_ref"):
+            object.__setattr__(self, name, value)
+        elif name in self._mapping:
+            self._mapping[name] = value
+        else:
+            object.__setattr__(self, name, value)
 
 
 def _notification_to_row(n: dict):
@@ -97,9 +118,12 @@ def make_notification_handler(state):
             existing_id = params.get("id")
             if existing_id is not None and existing_id in state._notifications:
                 n = state._notifications[existing_id]
+                # Map ORM Python attribute names to store keys (e.g. payload_params → params_).
+                _attr_to_store = {"payload_params": "params_"}
                 for k, v in params.items():
-                    if k in n and v is not None:
-                        n[k] = v
+                    store_key = _attr_to_store.get(k, k)
+                    if store_key in n and v is not None:
+                        n[store_key] = v
                 return MockResult([_notification_to_row(n)])
             nid = state._notifications_next_id
             state._notifications_next_id += 1
@@ -109,7 +133,7 @@ def make_notification_handler(state):
                 "user_id": params.get("user_id"),
                 "channel": params.get("channel"),
                 "template": params.get("template"),
-                "params_": params.get("params_"),
+                "params_": params.get("params_") or params.get("payload_params"),
                 "status": params.get("status", "pending"),
                 "priority": params.get("priority", "normal"),
                 "created_at": params.get("created_at"),
@@ -129,7 +153,9 @@ def make_notification_handler(state):
                 # only enforce match when the query explicitly binds it.
                 if user_id is not None and n.get("user_id") != user_id:
                     return MockResult([])
-                return MockResult([_notification_to_row(n)])
+                # Return a mutable row that shares the store dict so mark_as_read's
+                # in-place mutation (read_at, status) propagates to the store.
+                return MockResult([_MutableNotificationRow(n)])
             return MockResult([])
 
         if "count(" in sql_text_lower and "from notifications" in sql_text_lower:
@@ -171,7 +197,6 @@ def make_notification_handler(state):
             # to None so other handlers can respond, rather than crashing here.
             # Logging helps diagnose handler routing bugs in test failures.
             if "_unread_only" not in params:
-                import logging
                 logging.getLogger(__name__).debug(
                     "list-notifications: _unread_only not in params, falling through"
                 )
