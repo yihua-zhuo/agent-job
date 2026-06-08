@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from typing import Annotated
+from urllib.parse import quote, unquote, urlparse
 
-from fastapi import Depends
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
 # Lazily-initialised singletons exposed as public module-level names.
@@ -19,21 +20,19 @@ def _build_engine(url: str) -> AsyncEngine:
     """Create the async engine from *url*."""
     connect_args: dict = {}
     if "pooler.supabase.com" in url:
-        # Use string slicing since URL has # in password making stdlib parsing fragile
-        creds_start = url.index("://") + 3
-        creds_end = url.rfind("@")
-        credentials = url[creds_start:creds_end]
-        user_part, password = credentials.rsplit(":", 1)
-        host_port = url[creds_end + 1 :]
+        # Parse the URL with urllib so we correctly handle percent-encoded
+        # passwords (e.g. '#' encoded as %23). Manual index/rfind slicing
+        # is fragile when the password contains reserved characters.
+        parsed = urlparse(url)
+        user_part = unquote(parsed.username or "")
+        password = unquote(parsed.password or "")
+        host_port = parsed.netloc.split("@")[-1] if "@" in parsed.netloc else parsed.netloc
         last_colon = host_port.rfind(":")
-        _host = host_port[:last_colon]
-        port_and_path = host_port[last_colon + 1 :]
-        if "/" in port_and_path:
-            port, path = port_and_path.split("/", 1)
-            path = "/" + path
+        if last_colon == -1:
+            port, path = "", parsed.path or ""
         else:
-            port = port_and_path
-            path = ""
+            port = host_port[last_colon + 1 :]
+            path = parsed.path or ""
         connect_args = {
             "host": "13.114.6.6",
             "user": user_part,
@@ -42,8 +41,9 @@ def _build_engine(url: str) -> AsyncEngine:
             "timeout": 10,
             "statement_cache_size": 0,
         }
-        # Pass credentials via connect_args only; URL carries no password
-        url = f"postgresql+asyncpg://{user_part}@13.114.6.6:{port}{path}"
+        # Re-quote the user portion so any reserved characters survive
+        # the round-trip into the driver URL.
+        url = f"postgresql+asyncpg://{quote(user_part, safe='')}@13.114.6.6:{port}{path}"
     elif url.startswith("postgresql://"):
         url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
     elif url.startswith("postgres://"):
@@ -103,17 +103,56 @@ def ensure_engine():
     _lazy_init()
 
 
-def dispose_engine():
-    """Dispose engine pool on FastAPI shutdown."""
+async def dispose_async_engine():
+    """Dispose the async engine pool and reset the singletons.
+
+    Async variant — call this from within an async lifespan handler::
+
+        @asynccontextmanager
+        async def lifespan(app: FastAPI):
+            yield
+            await dispose_async_engine()
+    """
+    global engine, async_session_maker
+    if engine is not None:
+        await engine.dispose()
+    engine = None
+    async_session_maker = None
+
+
+def _dispose_engine_unsafe():
+    """Synchronous engine disposer — UNSAFE inside a running event loop.
+
+    Private helper: only intended for the atexit hook that runs after
+    the main event loop has already stopped. Calling
+    ``asyncio.new_event_loop()`` and ``run_until_complete`` from inside
+    an already-running loop will deadlock the loop and the caller will
+    block forever. Always prefer ``dispose_async_engine`` from async
+    code.
+
+    Raises ``RuntimeError`` if called from inside a running event loop.
+    Detection has a TOCTOU window — concurrent threads starting a
+    loop between the check and the new_event_loop call can still
+    cause a hang, so callers must ensure single-threaded use.
+    """
     global engine, async_session_maker
     if engine is not None:
         import asyncio
 
         try:
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
         except RuntimeError:
-            loop = asyncio.new_event_loop()
-        loop.run_until_complete(engine.dispose())
+            pass
+        else:
+            raise RuntimeError(
+                "_dispose_engine_unsafe() called from within a running event loop; "
+                "use await dispose_async_engine() instead."
+            )
+        loop = asyncio.new_event_loop()
+        try:
+            loop.run_until_complete(engine.dispose())
+        finally:
+            loop.close()
     engine = None
     async_session_maker = None
 
@@ -133,10 +172,17 @@ def reset_engine(database_url: str):
 # ---------------------------------------------------------------------------
 
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
+async def get_db(request: Request) -> AsyncGenerator[AsyncSession, None]:
     """FastAPI dependency that provides an async SQLAlchemy session.
 
     Commits on normal exit, rolls back on exception, always closes the session.
+
+    The active session is attached to ``request.state.db`` so it is
+    available to FastAPI dependencies and middleware that need
+    access to the live session outside the dependency-injection scope
+    (e.g. for logging or observability hooks). The state is cleared
+    in the ``finally`` block to avoid stale references on the request
+    object if the response is re-used.
 
     Usage::
 
@@ -146,6 +192,7 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
     """
     ensure_engine()
     session: AsyncSession = async_session_maker()  # type: ignore
+    request.state.db = session
     try:
         yield session
         await session.commit()
@@ -154,6 +201,8 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         raise
     finally:
         await session.close()
+        if getattr(request.state, "db", None) is session:
+            request.state.db = None
 
 
 # Convenience type alias for route dependency injection
