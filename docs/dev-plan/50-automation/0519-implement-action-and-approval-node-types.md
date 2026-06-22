@@ -57,7 +57,7 @@ TBD - 待验证：`src/workflow/nodes/`目录及基础节点骨架（#518 成果
 ### 2.3 缺什么
 
 - [ ] `action.py` Node 子类：根据 node config 中的 `action_name` 和 `params` 调用注入的 service 方法- [ ] `approval.py` Node 子类：执行时返回 `Pending`状态并持久化；提供 `resume()` 方法由 engine 在审批通过后触发
-- [ ] `WorkflowEngine.approve(execution_id, approver_id)` 方法：调用 approval node 的 resume，完成执行链路
+- [ ] `WorkflowEngine.approve(execution_id: int, approver_id: int)` 方法：调用 approval node 的 resume，完成执行链路
 - [ ] `tests/unit/test_nodes.py` 对两种新 node 的全覆盖测试---
 
 ## 3. 目标产物（终点）
@@ -130,8 +130,7 @@ TBD - 待验证：`src/workflow/nodes/`目录及基础节点骨架（#518 成果
 操作：
 - a) 定义 `class ActionNode(BaseNode):`
 - b) `config_schema`包含 `action_name: str`, `service_name: str`, `params: dict`
-- c) `validate_config()`校验 service 在 registry 中存在- d) `execute(ctx)` 调用 `ctx.services[service_name](**params)` 并返回 `NodeResult(status="completed", output={...})`
-- e) 执行出错返回 `NodeResult(status="failed", error="...")`
+- c) `validate_config()`校验 service 在 registry 中存在- d) `execute(ctx)` 调用 `ctx.services[TBD - 待验证：service_name 配置字段](**params)` 并返回 `NodeResult(status="completed", output={...})`
 
 示例代码：
 
