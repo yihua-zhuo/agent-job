@@ -319,4 +319,4 @@ gh pr create --base master --title "feat(#624): wire agent_tasks router in main.
 
 ---
 
-**Note**: The two broken `[text](path)` links on line 322 (in the "修复说明" paragraph) were dropped per option (b) — the literal `path` targets could not be resolved to any existing file. The "修复说明" paragraph was a meta-commentary about a prior repair attempt and was removed along with its broken links.
+**Note**: The two broken `TBD - 待验证：placeholder path（无可解析目标）` links on line 322 (in the "修复说明" paragraph) were dropped per option (b) — the literal `path` targets could not be resolved to any existing file. The "修复说明" paragraph was a meta-commentary about a prior repair attempt and was removed along with its broken links.

@@ -130,7 +130,7 @@ TBD - 待验证：`src/workflow/nodes/`目录及基础节点骨架（#518 成果
 操作：
 - a) 定义 `class ActionNode(BaseNode):`
 - b) `config_schema`包含 `action_name: str`, `service_name: str`, `params: dict`
-- c) `validate_config()`校验 service 在 registry 中存在- d) `execute(ctx)` 调用 `ctx.services[TBD - 待验证：service_name 配置字段](**params)` 并返回 `NodeResult(status="completed", output={...})`
+- c) `validate_config()`校验 service 在 registry 中存在- d) `execute(ctx)` 调用 `ctx.services`TBD - 待验证：service_name 配置字段 并返回 `NodeResult(status="completed", output={...})`
 
 示例代码：
 
